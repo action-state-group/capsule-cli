@@ -126,7 +126,7 @@ func TestTheDealPageShowsTheJourney(t *testing.T) {
 	// A row whose step did not verify says so on the row itself.
 	withheld := renderJourney(t, id, false, "withhold")
 	require.Empty(t, withheld["refusal"])
-	assert.Equal(t, "You · Switched to eBay · step not verified in this report", withheld["rows"].([]any)[5])
+	assert.Equal(t, "You · Switched to eBay · step not verified in this report", withheld["rows"].([]any)[5], "and gives no time")
 }
 
 // The sealed report's journey is facts only: no word from a wording pack,

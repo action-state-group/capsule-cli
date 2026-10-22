@@ -471,11 +471,12 @@ const dealViewRender = (model, regions) => {
     let said;
     journey.forEach((m) => {
       const step = byId.get(m.step);
-      const when = step && typeof step.at === "string" ? local(step.at) : "";
+      // A step that did not verify gives no time either: only its row says so.
+      const when = step && typeof step.at === "string" && matched.has(m.step) ? local(step.at) : "";
       const at = when && when !== said ? `${when} · ` : "";
       said = when || said;
       const label = dealJourneyLabel(words, m);
-      const row = item(`${at}${movers[m.by] || "Someone"}${label ? ` · ${label}` : ""}`, [m.step], undefined, m.step);
+      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [m.step], undefined, m.step);
       row.dataset.journey = label;
       host.append(row);
     });
