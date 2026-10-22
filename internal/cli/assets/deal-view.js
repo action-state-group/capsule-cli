@@ -457,17 +457,6 @@ const dealViewRender = (model, regions) => {
   } else {
     host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
   }
-  host.append(
-    el(
-      "p",
-      sealed
-        ? "The summary lines below, and each step's line, were written by capsulectl on this device and sealed with this page: " +
-            "this page checked they were not changed since, not that they are right. Open an item to see the steps it was read from; each step's sealed record is checked."
-        : "The summary lines below, and each step's line, are written by capsulectl on this device and are not checked by this page. " +
-            "Open an item to see the steps it was read from; each step's sealed record is checked, not its line.",
-      "deal-note",
-    ),
-  );
 
   // How it went (capsule-cli#370): the errand's moves in order, read from
   // the sealed report and worded from the pack this page carries, as
@@ -493,13 +482,24 @@ const dealViewRender = (model, regions) => {
     host.append(
       el(
         "p",
-        "The names, items and amounts in these rows are sealed in this file and checked. The words around them come from the wording this page was made with, which is not sealed.",
+        "Who moved and the names, items and amounts in each row are sealed in this file and checked. The other words come from the wording this page was made with, which is not sealed.",
         "deal-note",
       ),
     );
   }
 
   host.append(el("h2", "What the agent did"));
+  host.append(
+    el(
+      "p",
+      sealed
+        ? "The summary lines below, and each step's line, were written by capsulectl on this device and sealed with this page: " +
+            "this page checked they were not changed since, not that they are right. Open an item to see the steps it was read from; each step's sealed record is checked."
+        : "The summary lines below, and each step's line, are written by capsulectl on this device and are not checked by this page. " +
+            "Open an item to see the steps it was read from; each step's sealed record is checked, not its line.",
+      "deal-note",
+    ),
+  );
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   listed = new Set();
