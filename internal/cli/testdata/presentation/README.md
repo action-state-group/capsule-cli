@@ -33,8 +33,8 @@ through the real CLI. Run it only to change a fixture on purpose.
 | `1-rules-comparison` | a `report/v1` root, three rule rows (same / different / same) citing their sealed records; record type `example.rules_compare/v0`, a neutral stand-in | `disclose --root … --html` | written |
 | `2-unilateral-receipt` | a deal receipt (`x-deal-v0`), audience `keep`, from the synthetic retail-checkout demo | `deal report --html` | written |
 | `3-bilateral-composed` | `composed/v1`, two responders joined on a pre-agreed identifier, one mismatch (their transcript digests differ; declared and derived `mismatch`), built with agent-action-capsule's own composed/v1 vector generator and its published test seeds | none | **refused** |
-| `4-monthly-outcome` | a month of judged support conversations: a Result v0 root citing 32 `evaluation-report/v1` records over 8 days, opted into the outcome card (calendar, drill-down) | `report build --card outcome` | written |
-| `5-monthly-compliance` | a month of judged sessions against an example obligations pack, opted into the EU AI Act obligations card | `report build --card obligation` | written |
+| `4-monthly-outcome` | a month of judged support conversations: a Result v0 root citing 32 `evaluation-report/v1` records over 8 days, opted into the outcome card (calendar, drill-down) | `book report build --card outcome` | written |
+| `5-monthly-compliance` | a month of judged sessions against an example obligations pack, opted into the EU AI Act obligations card | `book report build --card obligation` | written |
 | `6-generic-fallback` | a plain record with no report and no aggregate: the viewer's fallback | `disclose --root … --html` | written |
 | `6-generic-fallback-unknown-extension` | fixture 6's bundle with an extension no reader knows (`x-example-unknown/v1`) | the same gate and viewer, in the test | written |
 | `7-receipt-declared-rules` | fixture 2's deal receipt with a pinned stub rules checker that allows the purchase and reports three rules its ruleset declares but does not measure (`declared, not measured`); the check line says them quietly beside "no differences" | `deal report --html` | written |
@@ -52,8 +52,12 @@ through the real CLI. Run it only to change a fixture on purpose.
   `result build` seals only into a jsonl evidence book, and when these fixtures were
   taken that book's bundles left out producer signatures, so `verify --bundle` called
   them INCOMPLETE and `report build` wrote no page for them (capsule-cli#148). Since
-  evidencebook v0.7.0 they carry them, verify VALID and get a page; the fixtures are
-  unchanged.
+  evidencebook v0.7.0 they carry them, verify VALID and get a page.
+- **Fixtures 1, 4 and 5 cited their records with `digest_alg` `sha256`.** A closure
+  follows a capsule reference only when it reads `SHA-256`, so they verified VALID
+  without their citations being walked. They were rebuilt to cite with `SHA-256`
+  (capsule-cli#352), and `TestPresentationGoldensCiteWhatTheyCarry` holds every
+  golden to citing that way and carrying each record it cites.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
 - **No page overflows** a 390px viewport, 1280px or print in CI's pinned environment
@@ -98,7 +102,7 @@ What `presentation build` shows, against these goldens (built through other comm
 | `1-rules-comparison` | yes | |
 | `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`). `presentation list` names the deal view, but `presentation build` does not carry it, so the page falls back to `aac.builtin.no-aggregate/v0`. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
 | `3-bilateral-composed` | yes: refused | Both record the page as refused. |
-| `4-monthly-outcome` | yes, less the card | `report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
+| `4-monthly-outcome` | yes, less the card | `book report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
 | `5-monthly-compliance` | yes, less the card | As fixture 4. |
 | `6-generic-fallback` | yes | |
 | `6-generic-fallback-unknown-extension` | yes | The extension row reads "Integrity verified; meaning not interpreted by this viewer", which the test asserts. |

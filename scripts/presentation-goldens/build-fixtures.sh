@@ -245,9 +245,10 @@ meta 3-bilateral-composed "$(jq -n --arg v "$(verdict bundle.json)" --arg c "$aa
   refused_because: "no capsulectl command renders a bundle file to a page; the page gate refuses this bundle (verify --bundle: INCOMPLETE, no checkpoint), as it does every published composed/v1 vector; the vendored viewer has no composed/v1 view"}')"
 
 # --- 4 and 5. monthly outcome and compliance reports: Result v0 roots ------
-# A Result v0 sealed as the payload of a SQLite record: `result build` seals
-# only into a jsonl book, whose bundles leave producer signatures out, and
-# the page gate refuses those (INCOMPLETE).
+# A Result v0 sealed as the payload of a SQLite record. When these fixtures
+# were first taken, `result build` sealed only into a jsonl book whose
+# bundles left producer signatures out, and the page gate refused those
+# (capsule-cli#148); the fixtures keep the SQLite route.
 month() { # fixture dir, kind, card
   fixture "$1"
   sqlite_profile
