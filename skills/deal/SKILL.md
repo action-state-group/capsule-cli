@@ -729,18 +729,19 @@ not offer, commit or share.
 Words you say without such a check are still sealed, marked as said without
 the user's authority. Never do that on purpose.
 
-When you sell, note each buyer message as it arrives, with `"from":
-"counterparty"`. When the platform shows when the buyer sent it, add that time
-as `sent_at` (RFC 3339, for example `2026-10-06T09:14:00Z`): the user's rules
-hold an offer to the age of the message it answers, and without `sent_at` a
-message counts from when you noted it. When an offer answers a buyer's
-message (their price, their question), name that message in the offer's check
-with `"answering": "<the capsule_id the message note returned>"`. A first offer
-before the buyer wrote anything names none. Once the buyer has written, an
-offer that names no message asks the user first. Only an offer takes
-`answering`. A
-buyer's price is answered with an offer, which the buyer then accepts; a
-commit rests on that acceptance and never names a message.
+When you sell, note every buyer message (`deal note --kind message`, `"from":
+"counterparty"`) as it arrives, before your next check; an offer checked
+before you note it is treated as answering no message. When the platform shows
+when the buyer sent it, add that time as `sent_at` (RFC 3339, for example
+`2026-10-06T09:14:00Z`): the user's rules hold an offer to the age of the
+message it answers, and without `sent_at` a message counts from when you noted
+it. When an offer answers a buyer's message (their price, their question),
+name that message in the offer's check with `"answering": "<the capsule_id the
+message note returned>"`. A first offer before the buyer wrote anything names
+none. Once the buyer has written, an offer that names no message asks the user
+first. Only an offer takes `answering`. A buyer's price is answered with an
+offer, which the buyer then accepts; a commit rests on that acceptance and
+never names a message.
 
 Seal an `intent` whenever the user changes what they asked (for example,
 "go ahead and share my number"), picks from options you offered (see "The
