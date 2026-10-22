@@ -290,6 +290,63 @@ func TestPluginInstallHealsAGroupWritableHome(t *testing.T) {
 	assert.NotContains(t, out, "plugin_root_healed")
 }
 
+func TestPluginInstallHealsADirectoryALinkIsLookedUpIn(t *testing.T) {
+	// ~/.local/lib links to ~/.libs, so the canonical path skips ~/.local;
+	// the walk still looks lib up in it, and the first install heals it.
+	home, root := installHome(t)
+	local := filepath.Join(home, ".local")
+	require.NoError(t, os.Mkdir(local, 0o755))
+	require.NoError(t, os.Mkdir(filepath.Join(home, ".libs"), 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(home, ".libs"), filepath.Join(local, "lib")))
+	require.NoError(t, os.Chmod(local, 0o775))
+	out, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err, out)
+	r := installOut(t, out)
+	require.NotNil(t, r.RootHealed, out)
+	assert.Equal(t, []string{filepath.Join(resolved(t, home), ".local")}, r.RootHealed.ChmodGoW)
+	assert.FileExists(t, filepath.Join(root, "capsulectl-acme"))
+}
+
+func TestPluginInstallSaysWhatItHealedWhenItFails(t *testing.T) {
+	t.Run("a chmod fails", func(t *testing.T) {
+		home, root := installHome(t)
+		local := filepath.Join(home, ".local")
+		require.NoError(t, os.Mkdir(local, 0o775))
+		require.NoError(t, os.Chmod(local, 0o775))
+		require.NoError(t, os.Chmod(home, 0o775))
+		calls := 0
+		seam(t, &healChmod, func(fd int, mode uint32) error {
+			if calls++; calls == 2 {
+				return errors.New("injected")
+			}
+			return unix.Fchmod(fd, mode)
+		})
+		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+		require.ErrorIs(t, err, ErrInput)
+		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+resolved(t, home))
+		assert.Equal(t, uint32(0o755), modeOf(t, home))
+		assert.NoDirExists(t, root)
+	})
+	t.Run("the launcher fails", func(t *testing.T) {
+		home, _ := installHome(t)
+		require.NoError(t, os.Chmod(home, 0o775))
+		bad := filepath.Join(t.TempDir(), "broken")
+		require.NoError(t, os.WriteFile(bad, []byte("#!/bin/sh\nexit 1\n"), 0o755))
+		_, err := invoke(t, "", "plugin", "install", bad)
+		require.ErrorIs(t, err, ErrInput)
+		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+resolved(t, home))
+		assert.Equal(t, uint32(0o755), modeOf(t, home))
+	})
+}
+
+// resolved is path with its symlinks resolved, as the heal reports it.
+func resolved(t *testing.T, path string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(path)
+	require.NoError(t, err)
+	return r
+}
+
 func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
 	t.Run("sticky home", func(t *testing.T) {
 		home, root := installHome(t)
@@ -297,6 +354,7 @@ func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
 		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 		require.ErrorIs(t, err, ErrInput)
 		assert.Contains(t, SafeError(err), "group-writable")
+		assert.Contains(t, SafeError(err), "not healed: "+resolved(t, home)+" is sticky")
 		assert.NotContains(t, SafeError(err), "already removed")
 		assert.Equal(t, uint32(0o1775), modeOf(t, home))
 		assert.NoDirExists(t, root)
@@ -317,7 +375,7 @@ func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
 		assert.Equal(t, uint32(0o775), modeOf(t, home))
 		assert.NoDirExists(t, root)
 	})
-	t.Run("as root, a shallow HOME", func(t *testing.T) {
+	t.Run("as root, a shallow HOME (the shared heal's guard)", func(t *testing.T) {
 		home, _ := installHome(t)
 		require.NoError(t, os.Chmod(home, 0o775))
 		seam(t, &healProcess, func() (int, int, []int) { return 0, 0, nil })

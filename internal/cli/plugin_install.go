@@ -623,51 +623,9 @@ func pluginInstallCommand() *cobra.Command {
 				return InputError("there is no release build of the plugins for " + platform + " (releases ship " + strings.Join(releasePlatforms, ", ") + "); build it and install the file")
 			}
 			heal := healInstallPath(home)
-			root, err := installRoot(home, true)
+			result, err := installOperand(c, home, operand, allow)
 			if err != nil {
-				// Say what the heal already changed, since it stays changed.
-				var hint *hintError
-				if len(heal.ChmodGoW) > 0 && errors.As(err, &hint) {
-					return Hint(hint.class, hint.message+"; install had already removed group and other write from "+strings.Join(heal.ChmodGoW, " "))
-				}
-				return err
-			}
-			r, err := os.OpenRoot(root)
-			if err != nil {
-				return err
-			}
-			defer r.Close()
-			var staged string
-			defer func() {
-				if staged != "" {
-					_ = r.Remove(staged)
-				}
-			}()
-			var checks []string
-			expected := ""
-			if strings.Contains(operand, "/") {
-				src, err := os.Open(operand)
-				if err != nil {
-					return InputError(operand + " cannot be read")
-				}
-				defer src.Close()
-				if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
-					return err
-				}
-				checks = []string{"handshake (cli-plugin-metadata)"}
-			} else {
-				expected = operand
-				base, _ := c.Flags().GetString("release-url")
-				if staged, checks, err = fetchFirstParty(c.Context(), r, root, base, operand); err != nil {
-					return err
-				}
-			}
-			result, err := finishInstall(r, root, staged, expected, allow, checks)
-			if err == nil || errors.Is(err, errPluginDurability) {
-				staged = ""
-			}
-			if err != nil {
-				return err
+				return heal.explain(c, err)
 			}
 			if len(heal.ChmodGoW)+len(heal.Failed) > 0 {
 				result.RootHealed = &heal
@@ -679,6 +637,50 @@ func pluginInstallCommand() *cobra.Command {
 	cmd.Flags().String("release-url", pluginReleaseBase, "Base URL of the release downloads (tests)")
 	_ = cmd.Flags().MarkHidden("release-url")
 	return cmd
+}
+
+// installOperand installs operand on the per-user root, after the operand
+// checks and install's heal.
+func installOperand(c *cobra.Command, home, operand string, allow bool) (pluginInstallResult, error) {
+	root, err := installRoot(home, true)
+	if err != nil {
+		return pluginInstallResult{}, err
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return pluginInstallResult{}, err
+	}
+	defer r.Close()
+	var staged string
+	defer func() {
+		if staged != "" {
+			_ = r.Remove(staged)
+		}
+	}()
+	var checks []string
+	expected := ""
+	if strings.Contains(operand, "/") {
+		src, err := os.Open(operand)
+		if err != nil {
+			return pluginInstallResult{}, InputError(operand + " cannot be read")
+		}
+		defer src.Close()
+		if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
+			return pluginInstallResult{}, err
+		}
+		checks = []string{"handshake (cli-plugin-metadata)"}
+	} else {
+		expected = operand
+		base, _ := c.Flags().GetString("release-url")
+		if staged, checks, err = fetchFirstParty(c.Context(), r, root, base, operand); err != nil {
+			return pluginInstallResult{}, err
+		}
+	}
+	result, err := finishInstall(r, root, staged, expected, allow, checks)
+	if err == nil || errors.Is(err, errPluginDurability) {
+		staged = ""
+	}
+	return result, err
 }
 
 // fetchFirstParty downloads this release's plugin asset into the root,

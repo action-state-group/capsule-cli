@@ -197,11 +197,13 @@ sticky bit set (`/tmp`), as in the per-user root check, never for the walk
 from a launcher up to its root. A symlinked `~/.local` is
 judged by where it leads. Before checking, install heals the path as the
 cadence and `doctor` do (below), over the existing part of the path from `/`
-and, once the root exists, the walk's ancestry; it heals all of it or none.
-Its output then carries `plugin_root_healed`, in `doctor`'s `user_root`
-shape, naming each directory with its mode before and after. Anything the
-heal leaves is refused: one refusal lists every failing component and the
-fix, and says which directories install had already tightened.
+and every directory the walk looks a name up in so far; if any of them
+cannot be healed, it changes none. Its output then carries
+`plugin_root_healed`, in `doctor`'s `user_root` shape, naming each directory
+with its mode before and after. Anything the heal leaves is refused: one
+refusal lists every failing component and the fix, why the heal did not
+apply, and which directories install had already tightened, since those
+stay so (as when install fails later for another reason).
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
 

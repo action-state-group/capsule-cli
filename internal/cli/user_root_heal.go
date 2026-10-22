@@ -32,6 +32,8 @@ type userRootHeal struct {
 	Failed        map[string]string    `json:"failed,omitempty"`
 	Reason        string               `json:"reason,omitempty"`
 	Error         string               `json:"error,omitempty"`
+	// why is a refusal's reason alone, for install to add to its own.
+	why string
 }
 
 const userRootHealedReason = "these directories on the plugin root's path were group- or other-writable and owned by this user; plugin install required them not to be, and a host may reset them (for example on VM replacement), so write access for group and others was removed"
@@ -73,7 +75,7 @@ func healUserRoot(home string) userRootHeal {
 // root's path; reason is reported when it heals.
 func healProblems(home string, problems []unsafePathProblem, reason string) userRootHeal {
 	refuse := func(why string) userRootHeal {
-		return userRootHeal{State: "refused", Error: newAncestryError("the plugin root "+userPluginRoot(home), problems).Error() + "; not healed: " + why}
+		return userRootHeal{State: "refused", Error: newAncestryError("the plugin root "+userPluginRoot(home), problems).Error() + "; not healed: " + why, why: why}
 	}
 	realHome, err := filepath.EvalSymlinks(home)
 	if err != nil || realHome == string(os.PathSeparator) {
@@ -193,29 +195,49 @@ const installPathHealedReason = "these directories on the plugin root's path wer
 // healInstallPath is healUserRoot for plugin install, run before its own
 // checks: a host that makes HOME group-writable would otherwise stop every
 // fresh install (capsule-cli#354). The root may not exist yet, so it judges
-// the existing part of the path from / down as install does, plus the walk's
-// ancestry once the root exists. A problem above HOME refuses the whole heal,
-// and installRoot then refuses as before.
+// the existing part of the path from / down as install does, plus the
+// directories the walk looks names up in so far. A problem above HOME
+// refuses the whole heal, and installRoot then refuses as before.
 func healInstallPath(home string) userRootHeal {
 	if !userRootIsTrusted(home) {
 		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " is not one of the plugin roots"}
 	}
-	_, existing, missing, err := canonicalPath(userPluginRoot(home))
+	_, existing, _, err := canonicalPath(userPluginRoot(home))
 	if err != nil {
 		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " does not resolve"}
 	}
 	problems := fullPathCheck(existing)
-	if len(missing) == 0 {
-		for _, p := range userRootAncestryProblems(home) {
-			if !slices.ContainsFunc(problems, func(q unsafePathProblem) bool { return q.path == p.path }) {
-				problems = append(problems, p)
-			}
+	for _, p := range userRootAncestryProblems(home) {
+		if !slices.ContainsFunc(problems, func(q unsafePathProblem) bool { return q.path == p.path }) {
+			problems = append(problems, p)
 		}
 	}
 	if len(problems) == 0 {
 		return userRootHeal{State: "ok"}
 	}
 	return healProblems(home, problems, installPathHealedReason)
+}
+
+// explain adds to install's error what its heal did: why it healed nothing,
+// and which directories it tightened, since they stay so. A message
+// SafeError hides goes to stderr instead.
+func (h userRootHeal) explain(c *cobra.Command, err error) error {
+	var notes []string
+	if h.why != "" {
+		notes = append(notes, "not healed: "+h.why)
+	}
+	if len(h.ChmodGoW) > 0 {
+		notes = append(notes, "install had already removed group and other write from "+strings.Join(h.ChmodGoW, " "))
+	}
+	if len(notes) == 0 {
+		return err
+	}
+	var hint *hintError
+	if errors.As(err, &hint) {
+		return Hint(hint.class, hint.message+"; "+strings.Join(notes, "; "))
+	}
+	fmt.Fprintln(c.ErrOrStderr(), "capsulectl: "+strings.Join(notes, "; "))
+	return err
 }
 
 // doctorUserRoot is healUserRoot for doctor, which the user ran.
