@@ -71,10 +71,11 @@ func newDealListChecks() dealListChecks {
 }
 
 // newDealListAnomalies lists the act- and disclosure-level anomaly kinds of
-// `deal report`, each at zero. Counterparty-side kinds and the causes of a
-// check's pause are not counted: the verdicts count the pauses.
+// `deal report`, and a seller's representation nothing authorized, each at
+// zero. Counterparty-side kinds and the causes of a check's pause are not
+// counted: the verdicts count the pauses.
 func newDealListAnomalies() map[string]int {
-	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0}
+	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0, "unapproved_representation": 0}
 }
 
 // dealRulesAnswer is what a check's sealed rules answered: unrecorded on a
@@ -385,7 +386,8 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 // count adds one step sealed in the range to the check and anomaly counts:
 // a check under its verdict and its rules' answer (and an evaluated one under
 // its ruleset, keyed with Checks zero), an act sealed without a valid check
-// under its kind, and a disclosure no approval covered.
+// under its kind, a disclosure no approval covered, and a seller's claim
+// nothing authorized.
 func (t *dealListTotals) count(ev dealEvent, rulesets map[dealListRuleset]int) {
 	switch {
 	case ev.Kind == "check" && ev.Check != nil:
@@ -400,6 +402,10 @@ func (t *dealListTotals) count(ev dealEvent, rulesets map[dealListRuleset]int) {
 		}
 	case ev.Kind == "disclosure" && ev.Disclosure != nil && ev.Disclosure.AuthorizedBy == "":
 		t.Anomalies["unapproved_disclosure"]++
+	case ev.Kind == "claim" && ev.Claim != nil && ev.Claim.Unchecked:
+		// An agent's claim to a buyer that no represent check authorized,
+		// sealed anyway (deal_representations.go).
+		t.Anomalies["unapproved_representation"]++
 	}
 }
 

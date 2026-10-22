@@ -344,6 +344,9 @@ user's own and is never sent by default.
   - `differs_from_check`: an act other than what was checked (`deal
     report`'s `asked_vs_did`).
   - `unapproved_disclosure`: a disclosure no approval covered.
+  - `unapproved_representation`: something the agent told a buyer about the
+    sale that no check or approval covered (sealed anyway, since the words
+    may already be said). `deal report` does not list these as anomalies.
 
   Each act or disclosure counts once, in the range it was sealed in. A
   check's pauses are in its verdict, and steps the other party took are not
@@ -370,7 +373,7 @@ the array it always was):
       "rules": { "evaluated": 3, "not_configured": 0, "not_evaluated": 0, "partly_unanswered": 0, "unrecorded": 1 },
       "rulesets": [ { "ruleset_id": "asg/everyday/0.3.7", "definition_digest": "c1ce…", "checks": 3 } ]
     },
-    "anomalies": { "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unsealed_approval": 0 }
+    "anomalies": { "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0, "unsealed_approval": 0 }
   },
   "disclosures": [ { "class": "address", "recipients": 4, "to_sellers": 3, "to_buyers": 1, "to_others": 0 } ]
 }

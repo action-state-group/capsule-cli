@@ -33,6 +33,10 @@ func countsTold(day int, authorizedBy string) sealedEvent {
 	return countsStep(day, dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{To: "counterparty", AuthorizedBy: authorizedBy}})
 }
 
+func countsClaim(day int, unchecked bool) sealedEvent {
+	return countsStep(day, dealEvent{Kind: "claim", Claim: &dealClaim{Text: "covered for 90 days", SourceKind: "agent", Unchecked: unchecked}})
+}
+
 func evaluated(id, digest, verdict string, findings ...dealRulesFinding) *dealRules {
 	return &dealRules{Status: "evaluated", RulesetID: id, DefinitionDigest: digest, Verdict: verdict, Findings: findings}
 }
@@ -49,7 +53,7 @@ func TestDealListCountsEmptyRange(t *testing.T) {
 		"checks":{"verdicts":{"pass":0,"pause":0,"deny":0},
 			"rules":{"evaluated":0,"partly_unanswered":0,"not_evaluated":0,"not_configured":0,"unrecorded":0},
 			"rulesets":[]},
-		"anomalies":{"skipped_check":0,"unsealed_approval":0,"differs_from_check":0,"unapproved_disclosure":0}}`, string(raw))
+		"anomalies":{"skipped_check":0,"unsealed_approval":0,"differs_from_check":0,"unapproved_disclosure":0,"unapproved_representation":0}}`, string(raw))
 }
 
 func TestDealListCountsChecks(t *testing.T) {
@@ -130,6 +134,8 @@ func TestDealListCountsAnomalies(t *testing.T) {
 			countsAct(13, true, "approval_already_used"),
 			countsTold(13, ""),
 			countsTold(13, "approval-1"),
+			countsClaim(13, true),
+			countsClaim(13, false),
 		}},
 		{id: "b", events: []sealedEvent{
 			countsOpen(15),
@@ -141,12 +147,12 @@ func TestDealListCountsAnomalies(t *testing.T) {
 	}
 	r, err := dealListInRange(logs, countsRange)
 	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"skipped_check": 1, "unsealed_approval": 3, "differs_from_check": 1, "unapproved_disclosure": 1}, r.Totals.Anomalies)
+	assert.Equal(t, map[string]int{"skipped_check": 1, "unsealed_approval": 3, "differs_from_check": 1, "unapproved_disclosure": 1, "unapproved_representation": 1}, r.Totals.Anomalies)
 	assert.Equal(t, 1, r.Totals.Checks.Verdicts["pass"])
 
 	later, err := dealListInRange(logs, dealListBounds{since: countsRange.until})
 	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 1, "unapproved_disclosure": 0}, later.Totals.Anomalies)
+	assert.Equal(t, map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0}, later.Totals.Anomalies)
 	assert.Equal(t, 0, later.Totals.Checks.Verdicts["pass"])
 }
 
