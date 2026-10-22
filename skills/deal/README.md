@@ -333,16 +333,19 @@ user's own and is never sent by default.
   reported, so a mid-period upgrade shows as two. A re-check is another
   check.
 - **Anomalies.** The steps sealed in the range that `deal report` lists as
-  the agent's: an act sealed with no check in force (`skipped_check`: none,
-  one gone stale or made before the details changed, or, for a seller's
-  commit, no accepted offer), with no approval of the user's own to go
-  ahead (`unsealed_approval`: an answer not to proceed, none, one already
-  used, or only the agent's card answer to a check that asked), or other
-  than what was checked (`differs_from_check`, `deal report`'s
-  `asked_vs_did` on an act), and a disclosure no approval covered
-  (`unapproved_disclosure`). Each act
-  or disclosure counts once, in the range it was sealed in. A check's
-  pauses are in its verdict, and steps the other party took are not
+  the agent's, one key per kind:
+  - `skipped_check`: an act with no check in force: none, a stale one, one
+    made before the details changed, or a seller's commit with no accepted
+    offer.
+  - `unsealed_approval`: an act without the user's own go-ahead: the user
+    said not to proceed, gave no answer, gave one already used up, or the
+    only answer was the agent's own.
+  - `differs_from_check`: an act other than what was checked (`deal
+    report`'s `asked_vs_did`).
+  - `unapproved_disclosure`: a disclosure no approval covered.
+
+  Each act or disclosure counts once, in the range it was sealed in. A
+  check's pauses are in its verdict, and steps the other party took are not
   counted.
 - **Whose view.** The output is the user's own, like `deal list --json`:
   each row's `summary` names the counterparty and repeats the user's words.

@@ -109,6 +109,10 @@ func TestASellerCommitsToTheOfferTheBuyerAccepted(t *testing.T) {
 	}
 	assert.Contains(t, cited, "source "+stepDigest(t, id, acc["capsule_id"].(string)))
 	checkerPasses(t, id)
+
+	// A sale on the accepted offer is no anomaly in a period's counts.
+	r, _ := listRange(t, "--since", "2000-01-01")
+	assert.Equal(t, newDealListAnomalies(), r.Totals.Anomalies)
 }
 
 func TestASellerCannotCommitWithoutAnAcceptedOffer(t *testing.T) {
@@ -124,6 +128,10 @@ func TestASellerCannotCommitWithoutAnAcceptedOffer(t *testing.T) {
 	assert.Equal(t, true, commit["unchecked"])
 	assert.Equal(t, "offer_not_accepted", commit["rule"])
 	checkerPasses(t, id)
+	// Each commit that rests on no accepted offer counts as one with no
+	// check in force.
+	r, _ := listRange(t, "--since", "2000-01-01")
+	assert.Equal(t, 2, r.Totals.Anomalies["skipped_check"])
 }
 
 func TestACounterofferSupersedesTheOfferBeforeIt(t *testing.T) {
