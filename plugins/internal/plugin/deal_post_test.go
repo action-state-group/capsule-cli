@@ -513,7 +513,7 @@ func TestTheProfileCheckerHoldsAPost(t *testing.T) {
 			b := r["body"].(map[string]any)
 			b["authority"] = "card_answer"
 			delete(b, "said_commitment")
-		}}, "a card answer does not"},
+		}}, "an answer without the user's words does not"},
 		"a post that did not ask": {map[int]func(map[string]any){at["action-evaluation/v0"]: func(r map[string]any) {
 			r["body"].(map[string]any)["disposition"] = "DO"
 		}}, "every post check asks"},

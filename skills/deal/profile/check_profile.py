@@ -677,7 +677,7 @@ def check_sale_chain(records):
             ab = typed_view(records[ja])["body"]
             jv = digests.index(records[ja]["refs"][0]["digest"])
             if ab.get("approver") != "user" or not ab.get("proceed"):
-                fail(i, "only the user's own approval, in their words, authorizes a post: a card answer does not")
+                fail(i, "only the user's own approval, in their words, authorizes a post: an answer without the user's words does not")
             if ja in stale or jv != latest_verdict:
                 fail(i, "a newer post check superseded the one this post rests on: show the user the newer card and post only after their yes")
             if first_answer.get(jv) != ja or ja in used:
