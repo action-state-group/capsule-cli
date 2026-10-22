@@ -51,7 +51,9 @@
   to count is zero (`rulesets` is `[]`). In `checks`, a verdict or rules word
   outside the known ones is counted under its own key, never dropped; an act
   sealed without a valid check whose rule is none of these counts as
-  `skipped_check`, as `deal report` names it.
+  `skipped_check`, as `deal report` names it. `acted_against_answer` is an act that
+  went ahead after the user answered not to proceed; `deal report` lists it
+  under `unsealed_approval`.
 - **Changed:** the agent answering an ask's card itself
   (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
   where it read `skipped_check`; the check was made.
