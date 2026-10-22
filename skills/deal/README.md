@@ -315,8 +315,9 @@ user's own and is never sent by default.
   counts only, never a value or a recipient's name, and lists every class,
   so `0` says no one was told it in the range.
 - **Checks.** Every check sealed in the range, in any deal, sale or buyer
-  thread, counted twice over: once by its verdict (`pass`, `pause`,
-  `deny`), and once by what the profile's rules answered:
+  thread, counted in two ways: once by its verdict (`pass`; `pause`,
+  where the check asked the user first; `deny`), and once by what the
+  profile's rules answered:
   - `evaluated`: the rules checker answered every rule it measures (a rule
     the ruleset only declares is not one);
   - `partly_unanswered`: the rules ran, but a measured rule, or the overall
@@ -335,9 +336,10 @@ user's own and is never sent by default.
   the agent's: an act sealed with no check (`skipped_check`), without a
   sealed approval to go ahead (`unsealed_approval`), or other than what was
   checked (`differs_from_check`, `deal report`'s `asked_vs_did` on an act),
-  and a telling no approval covered (`unapproved_disclosure`). Each act or
-  telling counts once, in the range it was sealed in. A check's pauses are
-  in its verdict, and the other side's signals are not counted.
+  and a disclosure no approval covered (`unapproved_disclosure`). Each act
+  or disclosure counts once, in the range it was sealed in. A check's
+  pauses are in its verdict, and steps the other party took are not
+  counted.
 - **Whose view.** The output is the user's own, like `deal list --json`:
   each row's `summary` names the counterparty and repeats the user's words.
   `totals` and `disclosures` carry no name or value.
@@ -381,7 +383,7 @@ the array it always was):
   member means a capsulectl that does not count it, never zero. Keys are in
   name order; `rulesets` is in `ruleset_id`, then `definition_digest`,
   order. A verdict or rules answer this list does not name is counted under
-  its own word, never dropped.
+  its own key, never dropped.
 - `disclosures`: one entry per class, in class order.
 
 ## Report

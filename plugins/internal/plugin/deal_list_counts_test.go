@@ -68,6 +68,9 @@ func TestDealListCountsChecks(t *testing.T) {
 			// Overall not_evaluable with no single rule marked.
 			countsCheck(13, "pause", evaluated("asg/everyday/0.3.8", "d2", "not_evaluable")),
 			countsCheck(14, "deny", evaluated("asg/everyday/0.3.7", "d1", "deny", dealRulesFinding{ID: "r3", Verdict: "fail"})),
+			// A deny that also left a measured rule undecided.
+			countsCheck(14, "deny", evaluated("asg/everyday/0.3.7", "d1", "deny",
+				dealRulesFinding{ID: "r3", Verdict: "fail"}, dealRulesFinding{ID: "r4", Verdict: "not_evaluable", Reason: "no history"})),
 			// After the range: not counted.
 			countsCheck(21, "deny", nil),
 		}},
@@ -80,10 +83,10 @@ func TestDealListCountsChecks(t *testing.T) {
 	r, err := dealListInRange(logs, countsRange)
 	require.NoError(t, err)
 	c := r.Totals.Checks
-	assert.Equal(t, map[string]int{"pass": 3, "pause": 4, "deny": 1}, c.Verdicts)
-	assert.Equal(t, map[string]int{"evaluated": 3, "partly_unanswered": 2, "not_evaluated": 1, "not_configured": 1, "unrecorded": 1}, c.Rules)
+	assert.Equal(t, map[string]int{"pass": 3, "pause": 4, "deny": 2}, c.Verdicts)
+	assert.Equal(t, map[string]int{"evaluated": 3, "partly_unanswered": 3, "not_evaluated": 1, "not_configured": 1, "unrecorded": 1}, c.Rules)
 	assert.Equal(t, []dealListRuleset{
-		{RulesetID: "asg/everyday/0.3.7", DefinitionDigest: "d1", Checks: 3},
+		{RulesetID: "asg/everyday/0.3.7", DefinitionDigest: "d1", Checks: 4},
 		{RulesetID: "asg/everyday/0.3.8", DefinitionDigest: "d2", Checks: 2},
 	}, c.Rulesets)
 	// Each partitions the checks; the rulesets sum to the evaluated ones.
@@ -93,8 +96,8 @@ func TestDealListCountsChecks(t *testing.T) {
 		}
 		return n
 	}
-	assert.Equal(t, 8, total(c.Verdicts))
-	assert.Equal(t, 8, total(c.Rules))
+	assert.Equal(t, 9, total(c.Verdicts))
+	assert.Equal(t, 9, total(c.Rules))
 	assert.Equal(t, c.Rules["evaluated"]+c.Rules["partly_unanswered"], c.Rulesets[0].Checks+c.Rulesets[1].Checks)
 }
 
