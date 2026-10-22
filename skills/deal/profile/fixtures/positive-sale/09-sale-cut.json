@@ -1,5 +1,5 @@
 {
-  "fixture": "07-sale-cut.json",
+  "fixture": "09-sale-cut.json",
   "expect": "valid",
   "story": "A sale bundle's cut: each opened thread's last record then, as a commitment. A cut follows the close too, since every bundle moves the threads' heads.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "sale-3c9e1a7b5d2f8064",
       "record_type": "sale_cut",
-      "seq": 7,
+      "seq": 9,
       "at": "2026-10-06T08:00:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "5d53772e767c027a01d4ad3723ec6d4ba2bf68b0d99afc974ecef5aabc9ec4ad"
+        "digest": "e12b4fa121cf75632ff14f37e49805829c45357bea0573c08a2800ccc5df896d"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -29,10 +29,10 @@
             "digest_alg": "SHA-256",
             "digest": "da5a33fe208f7360791b8cba62b49e78daf7c52053274a07289246b48152c00f"
           },
-          "head_commitment": "24f09ef86d3a624012ddfe465a11980af593737db28afa54e81f43efd5ee650f"
+          "head_commitment": "27c13e6c70ef226be26f62b0c784da370bd8c2843db42421609b8bd5cfe3c979"
         }
       ]
     }
   },
-  "expected_digest": "dd68498a081d2f50d01714e3053a000c2db7f2609ee185fac9fb57732dd35e34"
+  "expected_digest": "1e12ad4b4f6bbacfc9802f24879bae0045994091e3ae67e0120512e965d6dc1d"
 }

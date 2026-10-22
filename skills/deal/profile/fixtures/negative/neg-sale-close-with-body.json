@@ -10,7 +10,11 @@
     "02-task-authority.json",
     "03-thread.json",
     "04-thread-opened.json",
-    "05-sale-cut.json"
+    "05-post-check.json",
+    "06-post-evaluation.json",
+    "07-post-approval.json",
+    "08-post-action.json",
+    "09-sale-cut.json"
   ],
   "record": {
     "x-deal-v0": {
@@ -18,12 +22,12 @@
       "canonicalization": "jcs",
       "deal_id": "sale-3c9e1a7b5d2f8064",
       "record_type": "sale_close",
-      "seq": 6,
+      "seq": 10,
       "at": "2026-10-06T08:00:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "d0655121c458635d71b671905557b9eb986aba4f0d983048c23b6d12dd777814"
+        "digest": "1e12ad4b4f6bbacfc9802f24879bae0045994091e3ae67e0120512e965d6dc1d"
       },
       "baseline_ref": {
         "type": "deal-record",

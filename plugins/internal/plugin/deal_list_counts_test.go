@@ -51,7 +51,7 @@ func TestDealListCountsEmptyRange(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"deals":0,"sales":0,"outcomes":{"bought":0,"sold":0,"called_off":0,"not_chosen":0,"open":0},"money":[],
 		"checks":{"verdicts":{"pass":0,"pause":0,"deny":0},
-			"rules":{"evaluated":0,"partly_unanswered":0,"not_evaluated":0,"not_configured":0,"unrecorded":0},
+			"rules":{"evaluated":0,"partly_unanswered":0,"not_evaluated":0,"not_configured":0,"not_applicable":0,"unrecorded":0},
 			"rulesets":[]},
 		"anomalies":{"acted_against_answer":0,"skipped_check":0,"unsealed_approval":0,"differs_from_check":0,"unapproved_disclosure":0,"unapproved_representation":0}}`, string(raw))
 }
@@ -90,7 +90,7 @@ func TestDealListCountsChecks(t *testing.T) {
 	require.NoError(t, err)
 	c := r.Totals.Checks
 	assert.Equal(t, map[string]int{"pass": 3, "pause": 5, "deny": 2}, c.Verdicts)
-	assert.Equal(t, map[string]int{"evaluated": 3, "partly_unanswered": 4, "not_evaluated": 1, "not_configured": 1, "unrecorded": 1}, c.Rules)
+	assert.Equal(t, map[string]int{"evaluated": 3, "partly_unanswered": 4, "not_evaluated": 1, "not_configured": 1, "not_applicable": 0, "unrecorded": 1}, c.Rules)
 	assert.Equal(t, []dealListRuleset{
 		{RulesetID: "asg/everyday/0.3.7", DefinitionDigest: "d1", Checks: 4},
 		{RulesetID: "asg/everyday/0.3.8", DefinitionDigest: "d2", Checks: 3},

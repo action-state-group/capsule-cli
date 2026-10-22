@@ -905,8 +905,9 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 		if dealID == "" {
 			return cli.InputError("--deal is required: a deal id as printed by `deal open`")
 		}
-		// A sale's log is not a deal: only `deal sale` commands read it.
-		if !cli.DealIDPattern.MatchString(dealID) {
+		// A sale's log is not a deal: only `deal sale` commands read it, and
+		// the steps of its listing post (deal_post.go).
+		if !cli.DealIDPattern.MatchString(dealID) && !(isSaleLog(dealID) && c.Annotations[saleStepsAnnotation] != "") {
 			return cli.InputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 		}
 	}
@@ -1269,6 +1270,8 @@ type dealActInput struct {
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
 	FeeMinor *int64 `json:"fee_minor,omitempty"`
+	// Posting is, on a sale's post act, the listing as its check approved it.
+	Posting *dealPosting `json:"posting,omitempty"`
 }
 
 func dealNoteCommand() *cobra.Command {
@@ -1486,6 +1489,15 @@ func dealNoteCommand() *cobra.Command {
 			return cli.InputError("change needs its source and at least one of who, terms or recourse")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			if isSaleLog(dealID) {
+				if deferred != nil || wrapped != nil || settlementKind != "" || htmlPath != "" {
+					return cli.InputError("a sale's own log takes only a post's approval and act: note evidence on the buyer's thread")
+				}
+				return s.notePost(ctx, c, dealID, events, ev, act)
+			}
+			if act.Posting != nil {
+				return cli.InputError("posting goes with the post act on the sale's own log (deal note --deal sale-…)")
+			}
 			if ev.Intent != nil && ev.Intent.PartyRole != "" && ev.Intent.PartyRole != dealRole(events) {
 				return cli.InputError("this deal's party_role is " + dealRole(events) + ", set when it opened; a note cannot change it")
 			}
@@ -1866,7 +1878,8 @@ func dealNoteCommand() *cobra.Command {
 			return cli.Output(c, out)
 		})
 	}}
-	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
+	cmd.Annotations = map[string]string{saleStepsAnnotation: "post"}
+	cmd.Flags().String("deal", "", "Deal ID from `deal open`, or a sale id from `deal sale new` for a listing post's approval and act")
 	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
 	cmd.Flags().String("html", "", "With --kind act or --kind evidence --email: also write the updated receipt page (your own copy) to this new file, as `deal report --html` does")
 	addSettlementNoteFlags(cmd)
@@ -1999,6 +2012,9 @@ func dealCheckCommand() *cobra.Command {
 			return cli.InputError("--stale-after must be at least one minute")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			if isSaleLog(dealID) {
+				return s.checkPost(ctx, c, dealID, events, snap, staleAfter)
+			}
 			if dealFinallyClosed(events) {
 				return cli.InputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
@@ -2011,6 +2027,9 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			open := events[0].Event.Open
+			if snap.Posting != nil {
+				return cli.InputError("posting goes with a post check on the sale's own log (deal check --deal sale-…)")
+			}
 			// represent is a check, never an act: admitted beside the points
 			// of no return, on a deal where the user sells.
 			if err := checkRepresenting(events, &snap); err != nil {
@@ -2031,6 +2050,15 @@ func dealCheckCommand() *cobra.Command {
 			snap.ItemRef = open.ItemRef
 			if err := s.saleUnchanged(ctx, events); err != nil {
 				return err
+			}
+			// On a sale's thread, an offer or commit carries the classes
+			// every live listing of the sale states now: read from the
+			// sale's log, never from the input file.
+			snap.ListingClasses = nil
+			if open.Sale != "" && (snap.Action == offerAction || snap.Action == "commit") {
+				if snap.ListingClasses, err = s.listingClasses(ctx, open.Sale); err != nil {
+					return err
+				}
 			}
 			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
 				return err
@@ -2290,7 +2318,8 @@ func dealCheckCommand() *cobra.Command {
 			return cli.Output(c, out)
 		})
 	}}
-	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
+	cmd.Annotations = map[string]string{saleStepsAnnotation: "post"}
+	cmd.Flags().String("deal", "", "Deal ID from `deal open`, or a sale id from `deal sale new` for a listing's post check")
 	cmd.Flags().String("input", "", "Snapshot JSON: the action and exactly what is about to happen")
 	cmd.Flags().Duration("stale-after", 15*time.Minute, "How long the check stays current; the approval text says when it goes stale")
 	return cmd

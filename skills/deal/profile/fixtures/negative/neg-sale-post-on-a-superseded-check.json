@@ -1,0 +1,139 @@
+{
+  "fixture": "neg-sale-post-on-a-superseded-check",
+  "expect": "invalid",
+  "description": "A newer post proposal sealed between a post's evaluation and the user's answer to it: the answer is to a superseded check, and authorizes no post.",
+  "expected_stage": "chain",
+  "expected_error_contains": "superseded",
+  "chain_dir": "positive-sale",
+  "chain_prefix": [
+    "01-sale.json",
+    "02-task-authority.json",
+    "03-thread.json",
+    "04-thread-opened.json",
+    "05-post-check.json",
+    "06-post-evaluation.json"
+  ],
+  "chain_between": [
+    {
+      "type": "proposed-action/v0",
+      "canonicalization": "jcs",
+      "chain_id": "sale-3c9e1a7b5d2f8064",
+      "seq": 7,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+      },
+      "chain_root": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+      },
+      "body": {
+        "action": "post",
+        "action_class": "communication.publish",
+        "taxonomy_version": "6",
+        "spend_minor": 0,
+        "posting": {
+          "text_commitment": "f8cc15bb76897fc352f28124c563fd01f03740e9bd601cc663ec9526096fa071",
+          "classes": [
+            "condition"
+          ],
+          "platform": "marketplace.example"
+        },
+        "task_authority_ref": {
+          "type": "record",
+          "digest_alg": "SHA-256",
+          "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+        }
+      }
+    },
+    {
+      "type": "action-approval/v0",
+      "canonicalization": "jcs",
+      "chain_id": "sale-3c9e1a7b5d2f8064",
+      "seq": 8,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4d2f2b21578e3c4161a0461ea4f21d84d2f074f25cf7ba23d7134df0d2197e48"
+      },
+      "chain_root": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "record",
+          "digest_alg": "SHA-256",
+          "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+        }
+      ],
+      "body": {
+        "authority": "user_approval",
+        "choice": "proceed",
+        "proceed": true,
+        "said_commitment": "7551520de07a9da0842bcf667deab519f49ce6bb5ae2ac72bdd9ffe6a0fb43a7",
+        "rendering_commitment": "6088b04c7cb51304b84b18bf97589e4b196d710f21c718f9caea5f67c0aff173"
+      }
+    }
+  ],
+  "record": {
+    "type": "action-record/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 9,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "dbd734e85cdbdbf40867da3c3b34e812f9b79c0b278380d8c4fb2c67e1c129bd"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+    },
+    "refs": [
+      {
+        "rel": "authorized_by",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "dbd734e85cdbdbf40867da3c3b34e812f9b79c0b278380d8c4fb2c67e1c129bd"
+      }
+    ],
+    "body": {
+      "action": "post",
+      "action_class": "communication.publish",
+      "taxonomy_version": "6",
+      "spend_minor": 0,
+      "evaluation_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+      },
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+          }
+        },
+        {
+          "type": "user_approval",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "dbd734e85cdbdbf40867da3c3b34e812f9b79c0b278380d8c4fb2c67e1c129bd"
+          }
+        }
+      ]
+    }
+  }
+}

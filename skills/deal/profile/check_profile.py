@@ -576,8 +576,9 @@ def check_handover(rec, party_role):
 
 def check_sale_chain(records):
     """A sale's own log (section 6, rule 10): its root, its one task authority, then
-    its thread registrations, their openings and its cuts, and at most one sale_close,
-    after which only cuts follow. Raises StageError('chain')."""
+    its thread registrations, their openings and its cuts, a listing post's check,
+    evaluation, approval and action (rule 15), and at most one sale_close, after which
+    only cuts follow. Raises StageError('chain')."""
     def fail(i, msg):
         raise StageError("chain", f"seq position {i + 1}: {msg}")
 
@@ -603,21 +604,93 @@ def check_sale_chain(records):
         fail(1, "a sale's own task authority names no other sale")
     if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
         fail(1, "the sale's task authority carries the floor its root states")
-    prev, at = record_digest(ta), ta["at"]
+    sale_ta = record_digest(ta)
+    prev, at = sale_ta, ta["at"]
+    digests = [record_digest(r) for r in records]
     registrations, opened, closed = set(), set(), False
+    # A listing post (rule 15): every post check asks, and only the user's own
+    # approval, first and unused, of the latest post check authorizes the act.
+    kind_at, first_answer, used, stale = {}, {}, set(), set()
+    latest_verdict, latest_check = None, None
     for i in range(2, len(records)):
         r = records[i]
-        t = None if is_typed(r) else r["x-deal-v0"]["record_type"]
-        if t not in ("thread", "thread_opened", "sale_cut", "sale_close"):
-            fail(i, "after its task authority, a sale's log holds only thread registrations, their openings, cuts and its close")
+        if is_typed(r):
+            view = typed_view(r)
+            b, body = view["x-deal-v0"], view["body"]
+            t = "post_" + b["record_type"]
+        else:
+            b, body = r["x-deal-v0"], r["body"]
+            t = b["record_type"]
+        if t not in ("thread", "thread_opened", "sale_cut", "sale_close", "post_check", "post_verdict", "post_approval", "post_action"):
+            fail(i, "after its task authority, a sale's log holds only thread registrations, their openings, cuts and its close, "
+                    "and a listing post's check, evaluation, approval and action")
         if closed and t != "sale_cut":
             fail(i, "after a sale's close, its log holds only cuts")
         closed = closed or t == "sale_close"
-        b = r["x-deal-v0"]
         if b["seq"] != i + 1 or b["deal_id"] != blk["deal_id"] or b.get("prev") != _ref(prev) \
                 or b.get("baseline_ref") != _ref(d0) or b["at"] < at:
             fail(i, "a sale's record follows its previous record in the same log")
-        if t == "thread_opened":
+        kind_at[i] = t
+
+        def ref_to(rel, kind):
+            js = [x for x in b.get("refs", []) if x["rel"] == rel]
+            others = [x for x in b.get("refs", []) if x["rel"] != rel]
+            j = digests.index(js[0]["digest"]) if len(js) == 1 and js[0]["digest"] in digests[:i] else None
+            if others or j is None or kind_at.get(j) != kind:
+                fail(i, f"a post's {t[5:]} names exactly one earlier {kind[5:]} of this sale ({rel})")
+            return j
+
+        if t == "post_check":
+            if body.get("action") != "post":
+                fail(i, "a sale's own log checks only a listing post (action post)")
+            if body.get("task_authority_ref", {}).get("digest") != sale_ta:
+                fail(i, "a post check names the sale's one task authority")
+            # A newer proposal supersedes every earlier post check: no answer
+            # sealed after it covers an earlier one (capsulectl's approvalChanged).
+            latest_verdict, latest_check = None, i
+        elif t == "post_verdict":
+            j = ref_to("checks", "post_check")
+            if j != latest_check:
+                fail(i, "a post's evaluation evaluates the post proposal sealed right before it, never an earlier one")
+            if body["result"] != "pause":
+                fail(i, "every post check asks: its evaluation is ASK")
+            if body.get("proposed_action_digest") != digests[j] or body.get("task_authority_ref", {}).get("digest") != sale_ta:
+                fail(i, "a post's evaluation names its check and the sale's one task authority")
+            if body.get("rules_status") != "not_applicable" or "rules_checks" in body:
+                fail(i, "no rules checker runs on a post: its evaluation says rules_status not_applicable")
+            latest_verdict = i
+        elif t == "post_approval":
+            j = ref_to("approves", "post_verdict")
+            # What the user was shown is what the post check rendered, as on a
+            # thread: the same rendering commitment, required on their own answer.
+            shown = r["body"].get("rendering_commitment")
+            if (body.get("approver") == "user" and shown is None) or \
+                    (shown is not None and shown != records[j]["body"].get("rendering_commitment")):
+                fail(i, "what was shown (rendering_commitment) is not the card the post check rendered")
+            if j != latest_verdict:
+                stale.add(i)
+            first_answer.setdefault(j, i)
+        elif t == "post_action":
+            if body.get("action") != "post":
+                fail(i, "a sale's own log takes only the post act")
+            ja = ref_to("authorized_by", "post_approval")
+            ab = typed_view(records[ja])["body"]
+            jv = digests.index(records[ja]["refs"][0]["digest"])
+            if ab.get("approver") != "user" or not ab.get("proceed"):
+                fail(i, "only the user's own approval, in their words, authorizes a post: a card answer does not")
+            if ja in stale or jv != latest_verdict:
+                fail(i, "a newer post check superseded the one this post rests on: show the user the newer card and post only after their yes")
+            if first_answer.get(jv) != ja or ja in used:
+                fail(i, "a post rests on the first answer to its check, and an approval posts once")
+            used.add(ja)
+            if b["at"] > records[jv]["body"]["valid_until"]:
+                fail(i, f"the post check was valid until {records[jv]['body']['valid_until']}: a post after that needs a new check")
+            if body.get("evaluation_ref", {}).get("digest") != digests[jv]:
+                fail(i, "evaluation_ref is the post's evaluation")
+            if [(e["type"], e["ref"]["digest"]) for e in body.get("authority_basis", [])] != \
+                    [("task_authority", sale_ta), ("user_approval", digests[ja])]:
+                fail(i, "a post's authority_basis is the sale's task authority, then the user's approval")
+        elif t == "thread_opened":
             reg = b["refs"][0]["digest"]
             if reg not in registrations or reg in opened:
                 fail(i, "a thread's opening names an earlier registration of this sale, once")
@@ -626,9 +699,62 @@ def check_sale_chain(records):
             heads = [h["registration"]["digest"] for h in r["body"]["thread_heads"]]
             if len(set(heads)) != len(heads) or not set(heads) <= opened:
                 fail(i, "a sale cut names each opened thread at most once, and only opened threads")
-        prev, at = record_digest(r), b["at"]
+        prev, at = digests[i], b["at"]
         if t == "thread":
             registrations.add(prev)
+
+
+def is_sale_log(records):
+    return bool(records) and not is_typed(records[0]) and records[0]["x-deal-v0"]["record_type"] == "sale"
+
+
+def sale_listings(sale):
+    """The sale's post acts, in log order: (at, platform, classes), each read from
+    the post check its approval answers (section 8, listing_classes)."""
+    digests = [record_digest(r) for r in sale]
+    out = []
+    for r in sale:
+        if not is_typed(r) or r["type"] != "action-record/v0" or r["body"].get("action") != "post":
+            continue
+        approval = sale[digests.index(r["refs"][0]["digest"])]
+        verdict = sale[digests.index(approval["refs"][0]["digest"])]
+        check = sale[digests.index(verdict["refs"][0]["digest"])]
+        p = check["body"]["posting"]
+        out.append((r["at"], p["platform"], p["classes"]))
+    return out
+
+
+def listing_classes_report(sale, thread):
+    """Recompute each listing_classes a sale's thread sealed, from the sale's log
+    (section 8): the intersection over the latest post act per platform before the
+    check, by sealed at. Two logs have no ordering reference finer than at: a post act
+    in the same second as the check, or a copy of the sale's log with no record after
+    the check (it may not hold every post act before it), leave the value not
+    independently established, never a match or a mismatch. Yields (seq, status,
+    sealed, recomputed); status is match, mismatch or not_established. A thread that
+    is not this sale's yields nothing."""
+    regs = {record_digest(r) for r in sale if not is_typed(r) and r["x-deal-v0"]["record_type"] == "thread"}
+    ta = thread[1] if len(thread) > 1 and is_typed(thread[1]) else None
+    if ta is None or not any(x["rel"] == "registration" and x["digest"] in regs for x in ta.get("refs", [])):
+        return
+    posts = sale_listings(sale)
+    last_at = max(r["x-deal-v0"]["at"] if not is_typed(r) else r["at"] for r in sale)
+    for r in thread:
+        if not is_typed(r) or r["type"] != "proposed-action/v0" or r["body"].get("action") not in ("offer", "commit"):
+            continue
+        sealed, at = r["body"].get("listing_classes"), r["at"]
+        if any(p_at == at for p_at, _, _ in posts) or last_at <= at:
+            yield r["seq"], "not_established", sealed, None
+            continue
+        latest = {}
+        for p_at, platform, classes in posts:
+            if p_at < at:
+                latest[platform] = classes
+        want = None
+        if latest:
+            sets = [set(c) for c in latest.values()]
+            want = sorted(set.intersection(*sets))
+        yield r["seq"], "match" if sealed == want else "mismatch", sealed, want
 
 
 def check_chain(records):
@@ -709,6 +835,12 @@ def check_chain(records):
         t = b["record_type"]
         if b.get("typed") and not typed_chain:
             fail(i, "a typed record in a chain that did not open with a task authority")
+        if t == "check" and "listing_classes" in body and "sale_authority_commitment" not in records[task_idx]["body"]:
+            fail(i, "listing_classes is a rule input of a sale's thread only")
+        if t in ("check", "action") and body.get("action") == "post":
+            fail(i, "a post is a step of a sale's own log (section 6, rule 15), never of a deal's chain")
+        if t == "verdict" and "rules_status" in body:
+            fail(i, "rules_status not_applicable is a sale's post evaluation only: a deal's checks state their rules_checks")
         late_answer = t == "approval" and body.get("choice") == "confirm_limits" and not body.get("proceed")
         if typed_chain and not b.get("typed") and t in ("check", "verdict", "approval", "action", "outcome") and not late_answer:
             fail(i, f"in a chain of typed records a {t} step is a typed record")
@@ -1405,6 +1537,7 @@ def check_openings(recs, openings) -> None:
 
 def check_files(paths, openings=None) -> int:
     bad = 0
+    chains = []
     for p in paths:
         data = load(p)
         recs = data if isinstance(data, list) else [data]
@@ -1414,6 +1547,7 @@ def check_files(paths, openings=None) -> int:
                 check_record(r)
             if isinstance(data, list):
                 check_chain(recs)
+                chains.append((p, recs))
             if openings is not None:
                 check_openings(recs, openings)
                 print(f"ok   {p}: {len(openings)} claim opening(s) match")
@@ -1421,6 +1555,33 @@ def check_files(paths, openings=None) -> int:
         except StageError as e:
             bad += 1
             print(f"FAIL {p}: {e}")
+    return bad + check_listing_classes(chains)
+
+
+def check_listing_classes(chains) -> int:
+    """listing_classes (section 8) on each sale thread given beside its sale's log is
+    recomputed from that log; given alone, it is a producer input. Returns the
+    mismatches."""
+    bad = 0
+    sales = [recs for _, recs in chains if is_sale_log(recs)]
+    for p, recs in chains:
+        if is_sale_log(recs):
+            continue
+        sealed_at = [r["seq"] for r in recs if is_typed(r) and "listing_classes" in r["body"]]
+        reports = [x for sale in sales for x in listing_classes_report(sale, recs)]
+        if not reports:
+            for seq in sealed_at:
+                print(f"note {p}: listing_classes at seq {seq} is a producer input: give the sale's log beside it to recompute it")
+            continue
+        for seq, status, sealed, want in reports:
+            if status == "mismatch":
+                bad += 1
+                print(f"FAIL {p}: listing_classes at seq {seq} is {sealed}, but the sale's listings in force then state {want}")
+            elif status == "match":
+                print(f"ok   {p}: listing_classes at seq {seq} matches the sale's listings in force then")
+            else:
+                print(f"note {p}: listing_classes at seq {seq} is not independently established: a post act in the same "
+                      f"second, or the sale's log copy ends before the check, leaves the two logs unordered")
     return bad
 
 
@@ -1754,10 +1915,45 @@ def regen():
     sale_opened = sale_step(4, "thread_opened", sale_thread,
                             {"task_authority_commitment": commitment(nonce("sale-thread-ta"), nonce("sale-thread-ta-digest"))},
                             refs=[{"rel": "registration", **_ref(registration)}])
-    sale_cut = sale_step(5, "sale_cut", sale_opened, {"thread_heads": [
+    # The listing's post (rule 15): its check, which always asks; the user's own
+    # "post it" on the card; and the post act, under the sale's one task authority.
+    sale_ta_ref = {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(sale_authority)}
+
+    def sale_typed(seq, type_name, prev, body, refs=None):
+        r = {"type": type_name, "canonicalization": "jcs", "chain_id": sale_id, "seq": seq, "at": "2026-10-06T08:00:00Z",
+             "prev": {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(prev)}, "chain_root": root_ref}
+        if refs:
+            r["refs"] = [{"rel": rel, "type": "record", "digest_alg": "SHA-256", "digest": record_digest(x)} for rel, x in refs]
+        r["body"] = body
+        return r
+    post_card = "PAUSED FOR YOU\nPost this listing on marketplace.example: \"Example bicycle, ridden twice.\"?"
+    post_check = sale_typed(5, "proposed-action/v0", sale_opened, {
+        "action": "post", "action_class": "communication.publish", "taxonomy_version": "6", "spend_minor": 0,
+        "posting": {"text_commitment": commitment(nonce("sale-post-text"), "Example bicycle, ridden twice."),
+                    "classes": ["condition"], "platform": "marketplace.example"},
+        "task_authority_ref": sale_ta_ref})
+    post_eval = sale_typed(6, "action-evaluation/v0", post_check, {
+        "disposition": "ASK", "findings": [{"question": "asked", "rule": "public_post", "field": "posting"}],
+        "options": ["hold", "proceed"], "rendering_commitment": commitment(nonce("sale-post-card"), post_card),
+        "judge": {"kind": "rules"}, "proposed_action_digest": record_digest(post_check), "task_authority_ref": sale_ta_ref,
+        "ruleset_digest": record_digest(rules), "materiality": "predicate", "materiality_digest": materiality,
+        "valid_until": "2026-10-06T08:15:00Z", "authority_basis": [{"type": "task_authority", "ref": sale_ta_ref}],
+        "rules_status": "not_applicable"}, refs=[("checks", post_check)])
+    post_approval = sale_typed(7, "action-approval/v0", post_eval, {
+        "authority": "user_approval", "choice": "proceed", "proceed": True,
+        "said_commitment": commitment(nonce("sale-post-said"), "post it"),
+        "rendering_commitment": commitment(nonce("sale-post-card"), post_card)}, refs=[("approves", post_eval)])
+    post_act = sale_typed(8, "action-record/v0", post_approval, {
+        "action": "post", "action_class": "communication.publish", "taxonomy_version": "6", "spend_minor": 0,
+        "evaluation_ref": {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(post_eval)},
+        "authority_basis": [{"type": "task_authority", "ref": sale_ta_ref},
+                            {"type": "user_approval", "ref": {"type": "record", "digest_alg": "SHA-256",
+                                                              "digest": record_digest(post_approval)}}]},
+        refs=[("authorized_by", post_approval)])
+    sale_cut = sale_step(9, "sale_cut", post_act, {"thread_heads": [
         {"registration": _ref(registration), "head_commitment": commitment(nonce("sale-head-1"), nonce("sale-head-1-digest"))}]})
-    sale_close = sale_step(6, "sale_close", sale_cut, {})
-    sale_late_cut = sale_step(7, "sale_cut", sale_close, {"thread_heads": [
+    sale_close = sale_step(10, "sale_close", sale_cut, {})
+    sale_late_cut = sale_step(11, "sale_cut", sale_close, {"thread_heads": [
         {"registration": _ref(registration), "head_commitment": commitment(nonce("sale-head-2"), nonce("sale-head-2-digest"))}]})
     sale_stories = {"sale": "Where the user sells one item to one of several buyers: the sale's own log opens with what is "
                             "for sale and the seller's request, before any buyer, the item reference only as a commitment.",
@@ -1767,13 +1963,21 @@ def regen():
                     "sale_cut": "A sale bundle's cut: each opened thread's last record then, as a commitment. A cut follows "
                                 "the close too, since every bundle moves the threads' heads.",
                     "sale_close": "The sale ends: no buyer's thread opens on it after this. It names no buyer; a thread "
-                                  "already open goes on and closes on its own."}
+                                  "already open goes on and closes on its own.",
+                    "proposed-action/v0": "The listing about to be posted: its words by commitment, the classes it states "
+                                          "and its platform. Every post check asks.",
+                    "action-evaluation/v0": "The post check asks (ASK), with capsulectl's own public_post difference: no rules "
+                                            "checker runs on a post.",
+                    "action-approval/v0": "The user's own \"post it\", in their words, on the card that quoted the listing.",
+                    "action-record/v0": "The listing posted, resting on the user's approval of the latest post check."}
     (FIX / "positive-sale").mkdir(parents=True, exist_ok=True)
     for old in (FIX / "positive-sale").glob("*.json"):
         old.unlink()
     sale_files = (("01-sale.json", sale_root), ("02-task-authority.json", sale_authority), ("03-thread.json", sale_thread),
-                  ("04-thread-opened.json", sale_opened), ("05-sale-cut.json", sale_cut), ("06-sale-close.json", sale_close),
-                  ("07-sale-cut.json", sale_late_cut))
+                  ("04-thread-opened.json", sale_opened), ("05-post-check.json", post_check),
+                  ("06-post-evaluation.json", post_eval), ("07-post-approval.json", post_approval),
+                  ("08-post-action.json", post_act), ("09-sale-cut.json", sale_cut), ("10-sale-close.json", sale_close),
+                  ("11-sale-cut.json", sale_late_cut))
     for n, r in sale_files:
         d = record_digest(r)
         digests.append((f"positive-sale/{n}", d))
@@ -1999,6 +2203,38 @@ def regen():
                        "can be attributed to the user (attributed_to).",
         "expected_stage": "schema", "expected_error_contains": "authenticity",
         "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sk], "record": r})
+    # A post is a step of a sale's own log (section 6, rule 15): a seller's deal chain
+    # holds no post check, and a task authority never allows a post.
+    r = json.loads(json.dumps(records2[sk]))
+    r["body"] = {"action": "post", "posting": {"text_commitment": com2["seller-area"], "classes": ["condition"],
+                                               "platform": "marketplace.example"}}
+    dump(FIX / "negative" / "neg-typed-seller-post-in-a-deal.json", {
+        "fixture": "neg-typed-seller-post-in-a-deal", "expect": "invalid",
+        "description": "A post check in a seller's deal: a listing is posted on the sale's own log only.",
+        "expected_stage": "chain", "expected_error_contains": "a step of a sale's own log",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sk], "record": r})
+    r = json.loads(json.dumps(records2[sv]))
+    r["body"]["rules_status"] = "not_applicable"
+    dump(FIX / "negative" / "neg-typed-seller-rules-not-applicable-in-a-deal.json", {
+        "fixture": "neg-typed-seller-rules-not-applicable-in-a-deal", "expect": "invalid",
+        "description": "A deal check's evaluation saying no rules checker ran: only a sale's post evaluation says that.",
+        "expected_stage": "chain", "expected_error_contains": "sale's post evaluation only",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sv], "record": r})
+    r = json.loads(json.dumps(records2[sta]))
+    r["body"]["preconditions"] = [{"action": "post", "citing": "listing"}]
+    dump(FIX / "negative" / "neg-typed-task-authority-preconditions-post.json", {
+        "fixture": "neg-typed-task-authority-preconditions-post", "expect": "invalid",
+        "description": "A task authority whose precondition names post: no task authority names a post.",
+        "expected_stage": "schema", "expected_error_contains": "preconditions",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sta], "record": r})
+    for member in ("allowed", "allowed_actions"):
+        r = json.loads(json.dumps(records2[sta]))
+        r["body"][member] = ["offer", "post"]
+        dump(FIX / "negative" / f"neg-typed-task-authority-{member.replace('_', '-')}-post.json", {
+            "fixture": f"neg-typed-task-authority-{member.replace('_', '-')}-post", "expect": "invalid",
+            "description": f"A task authority whose {member} names post: every post asks, and no task authority allows one.",
+            "expected_stage": "schema", "expected_error_contains": member,
+            "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sta], "record": r})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")
@@ -2246,18 +2482,82 @@ def regen():
             "expected_error_contains": contains, "chain_dir": "positive-sale",
             "chain_prefix": [n for n, _ in sale_files[:prefix_upto]], "record": record})
 
-    def after_close(record_type, body, refs=None):
-        return sale_step(7, record_type, sale_close, body, refs)
+    closed_at = [r for _, r in sale_files].index(sale_close) + 1
 
-    negs("neg-sale-closed-twice", "chain", "only cuts", after_close("sale_close", {}), 6,
+    def after_close(record_type, body, refs=None):
+        return sale_step(closed_at + 1, record_type, sale_close, body, refs)
+
+    negs("neg-sale-closed-twice", "chain", "only cuts", after_close("sale_close", {}), closed_at,
          "A second sale_close: after a sale's close, only cuts follow.")
     negs("neg-sale-thread-after-close", "chain", "only cuts",
-         after_close("thread", {"thread_ref_commitment": commitment(nonce("sale-late-thread"), "deal-7b2d4f6a8c1e3509")}), 6,
+         after_close("thread", {"thread_ref_commitment": commitment(nonce("sale-late-thread"), "deal-7b2d4f6a8c1e3509")}), closed_at,
          "A thread registered after the sale closed.")
     negs("neg-sale-opening-after-close", "chain", "only cuts",
          after_close("thread_opened", {"task_authority_commitment": commitment(nonce("sale-late-ta"), nonce("sale-late-ta-digest"))},
-                     refs=[{"rel": "registration", **_ref(registration)}]), 6,
+                     refs=[{"rel": "registration", **_ref(registration)}]), closed_at,
          "A thread's opening sealed after the sale closed: the close seals every missing opening first.")
+    # A listing post (rule 15): each edit of the post act, the last post record.
+    acted_at = [r for _, r in sale_files].index(post_act)
+    shown_at = [r for _, r in sale_files].index(post_approval)
+    # A newer proposal between the evaluated post and its answer: the answer and
+    # the act rest on a superseded check (capsulectl's approvalChanged).
+    newer = sale_typed(7, "proposed-action/v0", post_eval, {
+        "action": "post", "action_class": "communication.publish", "taxonomy_version": "6", "spend_minor": 0,
+        "posting": {"text_commitment": commitment(nonce("sale-post-text-2"), "Example bicycle, ridden twice. Pickup only."),
+                    "classes": ["condition"], "platform": "marketplace.example"},
+        "task_authority_ref": sale_ta_ref})
+    late_approval = sale_typed(8, "action-approval/v0", newer, dict(post_approval["body"]), refs=[("approves", post_eval)])
+    late_act = sale_typed(9, "action-record/v0", late_approval, {
+        **post_act["body"], "authority_basis": [{"type": "task_authority", "ref": sale_ta_ref},
+                                               {"type": "user_approval", "ref": {"type": "record", "digest_alg": "SHA-256",
+                                                                                 "digest": record_digest(late_approval)}}]},
+        refs=[("authorized_by", late_approval)])
+    # Proposal A, proposal B, then an evaluation of A: it evaluates a superseded
+    # proposal.
+    newer_first = sale_typed(6, "proposed-action/v0", post_check, dict(newer["body"]))
+    eval_of_a = sale_typed(7, "action-evaluation/v0", newer_first, dict(post_eval["body"]), refs=[("checks", post_check)])
+    dump(FIX / "negative" / "neg-sale-post-evaluation-of-an-earlier-proposal.json", {
+        "fixture": "neg-sale-post-evaluation-of-an-earlier-proposal", "expect": "invalid",
+        "description": "Post proposal A, then proposal B, then an evaluation of A: an evaluation evaluates the post "
+                       "proposal sealed right before it.",
+        "expected_stage": "chain", "expected_error_contains": "sealed right before it",
+        "chain_dir": "positive-sale", "chain_prefix": [n for n, _ in sale_files[:[r for _, r in sale_files].index(post_check) + 1]],
+        "chain_between": [newer_first], "record": eval_of_a})
+    # The answer first, then a newer proposal whose evaluation never sealed (an
+    # interrupted check), then the post: the act rests on a superseded check.
+    newer_after = sale_typed(8, "proposed-action/v0", post_approval, dict(newer["body"]))
+    act_after = sale_typed(9, "action-record/v0", newer_after, dict(post_act["body"]), refs=[("authorized_by", post_approval)])
+    dump(FIX / "negative" / "neg-sale-post-after-a-newer-proposal.json", {
+        "fixture": "neg-sale-post-after-a-newer-proposal", "expect": "invalid",
+        "description": "Evaluation, the user's approval, then a newer post proposal with no evaluation, then the post: "
+                       "the newer proposal superseded the approved check.",
+        "expected_stage": "chain", "expected_error_contains": "superseded",
+        "chain_dir": "positive-sale", "chain_prefix": [n for n, _ in sale_files[:shown_at + 1]],
+        "chain_between": [newer_after], "record": act_after})
+    dump(FIX / "negative" / "neg-sale-post-on-a-superseded-check.json", {
+        "fixture": "neg-sale-post-on-a-superseded-check", "expect": "invalid",
+        "description": "A newer post proposal sealed between a post's evaluation and the user's answer to it: the "
+                       "answer is to a superseded check, and authorizes no post.",
+        "expected_stage": "chain", "expected_error_contains": "superseded",
+        "chain_dir": "positive-sale", "chain_prefix": [n for n, _ in sale_files[:shown_at]],
+        "chain_between": [newer, late_approval], "record": late_act})
+    r = copy.deepcopy(post_approval)
+    r["body"]["rendering_commitment"] = commitment(nonce("sale-post-card"), post_card + " Pickup only.")
+    negs("neg-sale-post-approval-on-another-card", "chain", "not the card the post check rendered", r, shown_at,
+         "The user's answer to a post check given on a card other than the one it rendered.")
+    for name, edit, contains, desc in (
+            ("on-an-approval-not-on-the-log", lambda r: r["refs"][0].update(digest=record_digest(sale_typed(
+                7, "action-approval/v0", post_eval, {"authority": "card_answer", "choice": "proceed", "proceed": True,
+                                                     "rendering_commitment": post_approval["body"]["rendering_commitment"]},
+                refs=[("approves", post_eval)]))), "names exactly one earlier approval",
+             "A post act naming an approval the log does not hold."),
+            ("without-the-users-approval", lambda r: r["body"].update(authority_basis=[{"type": "task_authority", "ref": sale_ta_ref}]),
+             "authority_basis", "A post act resting on the task authority alone: every post needs the user's own approval."),
+            ("of-an-offer", lambda r: r["body"].update(action="offer"), "only the post act",
+             "An offer act on a sale's own log: offers are made on a buyer's thread.")):
+        r = copy.deepcopy(post_act)
+        edit(r)
+        negs(f"neg-sale-post-{name}", "chain", contains, r, acted_at, desc)
     for name, edit, contains, desc in (
             ("refs", lambda r: r["x-deal-v0"].update(refs=[{"rel": "about", **_ref(registration)}]), "x-deal-v0",
              "A sale_close that names a record: it carries nothing."),
@@ -2268,7 +2568,7 @@ def regen():
              "A sale_close with a body: which buyer bought is in that thread's own close.")):
         r = copy.deepcopy(sale_close)
         edit(r)
-        negs(f"neg-sale-close-with-{name}", "schema", contains, r, 5, desc)
+        negs(f"neg-sale-close-with-{name}", "schema", contains, r, closed_at - 1, desc)
 
     # --- negatives on the typed chain (section 9) ------------------------------------
     def negt(name, stage, contains, record, prefix_upto, desc, **extra_fields):

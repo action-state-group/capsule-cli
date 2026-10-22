@@ -73,7 +73,7 @@
       "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut", "sale_close", "agent_move"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
-    "check_action": { "description": "What a check is of: a point of no return, or represent (where the user sells: what the agent is about to tell the buyer). represent is a check only: never an act, never in allowed.", "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer", "represent"] },
+    "check_action": { "description": "What a check is of: a point of no return, represent (where the user sells: what the agent is about to tell the buyer), or post (on a sale's own log: a listing about to be posted). represent is a check only: never an act, never in allowed. post is never in allowed: every post check asks.", "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer", "represent", "post"] },
     "representation_class": { "description": "A seller's representation classes.", "enum": ["price", "condition", "features", "authenticity", "availability", "delivery_date", "service_scope", "warranty", "refund_terms", "payment_methods", "pickup", "deadline", "address", "other"] },
     "authority_entry": {
       "description": "One authority layer a seller's representation relied on, in the shape a typed record's authority_basis takes: task_authority -> the task-authority/v0 in force at its check; user_approval, platform_approval -> an action-approval/v0 of that check.",
@@ -448,9 +448,26 @@
       "type": "object", "additionalProperties": false,
       "required": ["action"],
       "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"], "reverses_ref": ["direction", "amount_minor"] },
-      "if": { "properties": { "action": { "const": "represent" } } }, "then": { "required": ["representing"] }, "else": { "not": { "required": ["representing"] } },
+      "allOf": [
+        { "if": { "properties": { "action": { "const": "represent" } } }, "then": { "required": ["representing"] }, "else": { "not": { "required": ["representing"] } } },
+        { "if": { "properties": { "action": { "const": "post" } } }, "then": { "required": ["posting"] }, "else": { "not": { "required": ["posting"] } } },
+        { "if": { "properties": { "action": { "enum": ["offer", "commit"] } } }, "else": { "not": { "required": ["listing_classes"] } } }
+      ],
       "properties": {
         "action": { "$ref": "#/$defs/check_action" },
+        "posting": {
+          "description": "On a post check (a sale's own log): the listing about to be posted. Its exact words as a salted commitment; the representation classes it states (the agent's label, shown on the card the user approves) and the platform it goes on, by the site's registrable domain, in the clear. A later post on the same platform replaces the earlier one there.",
+          "type": "object", "additionalProperties": false, "required": ["text_commitment", "classes", "platform"],
+          "properties": {
+            "text_commitment": { "$ref": "#/$defs/hex64" },
+            "classes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/representation_class" } },
+            "platform": { "type": "string", "minLength": 3, "maxLength": 253, "pattern": "^[^\\s/@]+\\.[^\\s/@]+$" }
+          }
+        },
+        "listing_classes": {
+          "description": "Rule input, on an offer or commit check of a sale's thread: the representation classes every live listing of the sale states when the check is made, the intersection over the latest post act per platform on the sale's log ([] when they state no class in common). Absent when the sale has no post act. Class names only, never a reference to the post.",
+          "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/representation_class" }
+        },
         "representing": {
           "description": "On a represent check: what the agent is about to tell the buyer. Its class in the clear; its exact words, and where they will be said when given, as salted commitments. An approval covers a claim of exactly these words.",
           "type": "object", "additionalProperties": false, "required": ["class", "text_commitment"],
@@ -502,7 +519,7 @@
           "description": "What the profile's rules said: evaluated by its pinned external checker (the ruleset it reported, by id and definition digest, its verdict and every finding, and the history it was given), not evaluated (a configured checker that could not answer, and why), or not configured. Absent on verdicts sealed before it was recorded.",
           "type": "object", "additionalProperties": false, "required": ["status"],
           "properties": {
-            "status": { "enum": ["evaluated", "not_evaluated", "not_configured"] },
+            "status": { "enum": ["evaluated", "not_evaluated", "not_configured", "not_applicable"], "description": "not_configured: no checker is pinned. not_applicable: no checker runs on this check, pinned or not (a sale's post, which always asks)." },
             "cause": { "enum": ["checker_unavailable", "checker_changed", "refused", "timeout", "unreadable", "ruleset_changed"], "description": "Why a configured checker's answer was not evaluated. The checker's own words are not sealed in the clear; the card that showed them is committed to." },
             "ruleset_id": { "type": "string", "minLength": 1, "maxLength": 200 },
             "definition_digest": { "$ref": "#/$defs/hex64" },

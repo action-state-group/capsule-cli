@@ -1,0 +1,77 @@
+{
+  "fixture": "neg-typed-seller-rules-not-applicable-in-a-deal",
+  "expect": "invalid",
+  "description": "A deal check's evaluation saying no rules checker ran: only a sale's post evaluation says that.",
+  "expected_stage": "chain",
+  "expected_error_contains": "sale's post evaluation only",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-proposed-action.json"
+  ],
+  "record": {
+    "type": "action-evaluation/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 4,
+    "at": "2026-10-07T10:05:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "refs": [
+      {
+        "rel": "checks",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774"
+      }
+    ],
+    "body": {
+      "disposition": "ASK",
+      "findings": [
+        {
+          "question": "who",
+          "rule": "first_disclosure",
+          "field": "pickup_area"
+        }
+      ],
+      "options": [
+        "hold",
+        "proceed"
+      ],
+      "rendering_commitment": "f43a55257b38badef0135c24bfe063cb3d9420612e6464eaf2d2eeb0471badbc",
+      "judge": {
+        "kind": "rules"
+      },
+      "proposed_action_digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774",
+      "task_authority_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+      },
+      "ruleset_digest": "0a2a70b102a3c1a08f7a18db0c30ef991aff18a93c4cdcfea0fc6aec5088d60a",
+      "materiality": "predicate",
+      "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
+      "valid_until": "2026-10-07T10:20:00Z",
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+          }
+        }
+      ],
+      "rules_status": "not_applicable"
+    }
+  }
+}

@@ -98,7 +98,7 @@ func dealTexts(ev dealEvent) map[string]string {
 		if w := ev.Evidence.Wrapped; w != nil && w.Headers != nil {
 			t["carrier_headers"] = headersText(w.Headers)
 		}
-	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != "" || ev.Snapshot.Representing != nil):
+	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != "" || ev.Snapshot.Representing != nil || ev.Snapshot.Posting != nil):
 		if ev.Snapshot.Description != "" {
 			t["description"] = ev.Snapshot.Description
 		}
@@ -110,6 +110,9 @@ func dealTexts(ev dealEvent) map[string]string {
 			if rp.Source != "" {
 				t["representing_source"] = rp.Source
 			}
+		}
+		if p := ev.Snapshot.Posting; p != nil {
+			t["posting_text"] = p.Text
 		}
 	case ev.Check != nil && ev.Check.Card != "":
 		t["card"] = ev.Check.Card
@@ -1067,6 +1070,28 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 			body["representing"] = r
 		}
+		// A sale's listing about to be posted: its words by commitment, the
+		// classes it states and its platform in the clear.
+		if p := sn.Posting; p != nil {
+			classes := make([]interface{}, len(p.Classes))
+			for i, c := range p.Classes {
+				classes[i] = c
+			}
+			posting := map[string]interface{}{"classes": classes, "platform": p.Platform}
+			if posting["text_commitment"], err = commit("posting_text"); err != nil {
+				return nil, err
+			}
+			body["posting"] = posting
+		}
+		// The rule input listing_classes: on a sale's thread, the classes
+		// every live listing states when the check was made.
+		if lc := sn.ListingClasses; lc != nil {
+			classes := make([]interface{}, len(*lc))
+			for i, c := range *lc {
+				classes[i] = c
+			}
+			body["listing_classes"] = classes
+		}
 		if sn.Terms != nil {
 			if t := termsBody(*sn.Terms); len(t) > 0 {
 				body["terms"] = t
@@ -1082,7 +1107,8 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
-		if ev.RuleInputs != "" {
+		// A sale's post is no thread's step: no thread rule input applies.
+		if ev.RuleInputs != "" && sn.Action != postAction {
 			sealRuleInputs(body, events, sn, ev.RuleInputs)
 		}
 		// An offer that answers no proposal: decided by `deal check` from

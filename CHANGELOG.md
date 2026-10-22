@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### A sale's listing post, and the classes its listings state (capsule-engine#187, #190)
+
+- **Added:** `deal check --deal sale-…` takes a listing post: `{"action":
+  "post", "posting": {"text", "classes", "platform"}}`, classed
+  `communication.publish`, sealing the words as `posting.text_commitment`
+  and the classes and platform (the site's domain) in the clear. Every post
+  check asks with capsulectl's own `public_post` difference, on a card that
+  quotes the exact words and names the classes ("This listing states the
+  item's condition and price"). No rules checker runs on it, pinned or not:
+  the verdict's rules status is the new `not_applicable` (and the typed
+  evaluation carries `rules_status: not_applicable`), which `deal list`
+  counts under `totals.checks.rules.not_applicable` (always present).
+- **Added:** `deal note --deal sale-…` takes the user's answer to a post
+  check and the post act (`{"action": "post", "posting": ...}`). Only the
+  user's own approval, in their words, on the card shown, authorizes the
+  post, of exactly the words checked; anything else is refused and nothing
+  is sealed. A sale's own log admits a check, evaluation, approval and
+  action for `post` only.
+- **Added:** a post whose words say, outside the seller's attributed
+  template ("The seller says … (unverified)", one sentence), a word that
+  reads as an authenticity claim (authentic*, genuine*, legit*,
+  counterfeit*, replica*, fake*, knockoff, knock-off or knock off,
+  certified, original, in any case, read through NFKD, format characters
+  and look-alike letters) is refused, naming the word and both ways out.
+  `authenticity` is in the post's classes exactly when such a sentence
+  claims it: either one without the other is refused. A task authority's
+  `allowed`, `allowed_actions` and `preconditions` never name `post`
+  (`record-common-v0` `plan_action`).
+- **Added:** each offer and commit check on a sale's thread seals the rule
+  input `listing_classes`: the intersection over the latest post act per
+  platform on the sale's log when the check is made (`[]` when they share
+  no class, absent with no post). The x-deal-v0 and typed schemas
+  (`record-common-v0` `post`, `proposed-action-v0` `posting` and
+  `listing_classes`), PROFILE.md (section 6 rule 15, section 8) and
+  `check_profile.py` follow: given a sale's log beside its threads, it
+  recomputes each `listing_classes`, and reports one it cannot order (a post
+  act in the same second, or a copy of the sale's log that ends before the
+  check) as not independently established.
+
 ### The proposal a seller's offer answers (capsule-cli#364, capsule-engine#193)
 
 - **Added:** `deal check` takes `answering` on an offer only: the capsule id

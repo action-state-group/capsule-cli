@@ -1,0 +1,43 @@
+{
+  "fixture": "neg-typed-task-authority-allowed-post",
+  "expect": "invalid",
+  "description": "A task authority whose allowed names post: every post asks, and no task authority allows one.",
+  "expected_stage": "schema",
+  "expected_error_contains": "allowed",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json"
+  ],
+  "record": {
+    "type": "task-authority/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 2,
+    "at": "2026-10-07T10:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "refs": [
+      {
+        "rel": "source",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+      }
+    ],
+    "body": {
+      "verbatim_commitment": "9a3aef02e0939194a740f2dba465ab0a6a7291ba48243394caa7bc7e09319a32",
+      "allowed": [
+        "offer",
+        "post"
+      ]
+    }
+  }
+}

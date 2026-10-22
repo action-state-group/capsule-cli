@@ -1,0 +1,60 @@
+{
+  "fixture": "08-post-action.json",
+  "expect": "valid",
+  "story": "The listing posted, resting on the user's approval of the latest post check.",
+  "record": {
+    "type": "action-record/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 8,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "ee46c3cf75e1190c23d62b68fb8b8a2a672588b595e7463ef3003e4ea39de074"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+    },
+    "refs": [
+      {
+        "rel": "authorized_by",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "ee46c3cf75e1190c23d62b68fb8b8a2a672588b595e7463ef3003e4ea39de074"
+      }
+    ],
+    "body": {
+      "action": "post",
+      "action_class": "communication.publish",
+      "taxonomy_version": "6",
+      "spend_minor": 0,
+      "evaluation_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+      },
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+          }
+        },
+        {
+          "type": "user_approval",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "ee46c3cf75e1190c23d62b68fb8b8a2a672588b595e7463ef3003e4ea39de074"
+          }
+        }
+      ]
+    }
+  },
+  "expected_digest": "e12b4fa121cf75632ff14f37e49805829c45357bea0573c08a2800ccc5df896d"
+}
