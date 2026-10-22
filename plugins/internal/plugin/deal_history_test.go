@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -444,8 +446,9 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 
 	path, _ := writeHistory(t, all, sentTo, picked...)
 	raw := string(mustRead(t, path))
+	texts := historyTexts(t, []byte(raw))
 	for _, v := range append(buyerA, private...) {
-		assert.NotContains(t, raw, v, "the History sent to buyer B, whole file")
+		assertNoneSays(t, texts, v, "the History sent to buyer B, whole file")
 	}
 	verdict, _, findings, err := verifyHistory(t, path)
 	require.NoError(t, err, "%v", findings)
@@ -465,6 +468,214 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 	assert.Equal(t, "VALID", verdict)
 	assert.Equal(t, cli.DealAudienceKeep, entry["audience"], "verify says the file is the keep copy")
 	assert.NotContains(t, entry, "not_proven", "a keep copy discloses every payload")
+}
+
+// historyTexts is everything a History file says that a reader could take a
+// value from, so a check that a value is absent reads all of it except the
+// bundle's own cryptographic fields, outside every disclosed payload (an
+// entry of a disclosures map, or a deal report extension, read whole,
+// whatever its field names): a 64-hex
+// digest under a field that holds one (historyDigestFields), a digest map key
+// under memberships or disclosures, and the nonce in the History's own
+// log_id (its checkpoint's). A
+// record's hex signature envelope is read decoded to its bytes; any other hex
+// string, and the COSE statements, both as written and decoded; numbers as
+// written. The file is read as JSON, field by field: a random digest no longer
+// matches a short digit string by chance (capsule-cli#403's run found a
+// six-digit amount that way), and no value outside those fields is skipped.
+func historyTexts(t *testing.T, raw []byte) []string {
+	t.Helper()
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var doc any
+	require.NoError(t, dec.Decode(&doc))
+	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	hexBytes := regexp.MustCompile(`^(?:[0-9a-f]{2})+$`)
+	// ownLog is the History's own log id, the one log_id whose digest is
+	// skipped: any other log_id (a cadence log a profile configures) is read.
+	ownLog := ""
+	if top, ok := doc.(map[string]any); ok {
+		if cp, ok := top["checkpoint"].(map[string]any); ok {
+			ownLog, _ = cp["log_id"].(string)
+		}
+	}
+	var out []string
+	// readString reads one key or value; inPayload is anywhere inside a
+	// disclosed payload (an entry of a disclosures map), where a field name
+	// is the producer's or the user's and nothing is skipped.
+	readString := func(key, v string, inPayload bool) {
+		switch {
+		case inPayload:
+			out = append(out, v)
+			if len(v) >= 16 && hexBytes.MatchString(v) {
+				b, err := hex.DecodeString(v)
+				require.NoError(t, err)
+				out = append(out, string(b))
+			}
+		case historyDigestFields[key] && digest.MatchString(v):
+			// a digest: no value to read
+		case key == "log_id" && v == ownLog && historyLogIDOfDigest.MatchString(v):
+			out = append(out, v[:strings.IndexByte(v, '/')])
+		case len(v) >= 16 && hexBytes.MatchString(v):
+			b, err := hex.DecodeString(v)
+			require.NoError(t, err)
+			if key != "signature" {
+				// a signature's hex is random, like a digest's
+				out = append(out, v)
+			}
+			out = append(out, string(b))
+		case key == "cose" || key == "statement":
+			out = append(out, v, string(base64Bytes(t, v)))
+		default:
+			out = append(out, v)
+		}
+	}
+	var walk func(key string, v any, inPayload bool)
+	walk = func(key string, v any, inPayload bool) {
+		switch v := v.(type) {
+		case map[string]any:
+			for k, e := range v {
+				if inPayload || !(digest.MatchString(k) && (key == "memberships" || key == "disclosures")) {
+					readString("", k, inPayload)
+				}
+				walk(k, e, inPayload || key == "disclosures" || historyPayloadExtensions[k])
+			}
+		case []any:
+			for _, e := range v {
+				walk(key, e, inPayload)
+			}
+		case string:
+			readString(key, v, inPayload)
+		case json.Number:
+			out = append(out, v.String())
+		default:
+			out = append(out, fmt.Sprint(v))
+		}
+	}
+	walk("", doc, false)
+	return out
+}
+
+// historyPayloadExtensions are the extensions a History carries disclosed
+// content in, read whole like a disclosures entry: a deal's report, inline
+// (x-deal-v0) or standalone (x-deal-report/v0).
+var historyPayloadExtensions = map[string]bool{"x-deal-v0": true, "x-deal-report/v0": true}
+
+// historyLogIDOfDigest is the log id of a History selection: its own log's
+// kind and the History's random 64-hex nonce.
+var historyLogIDOfDigest = regexp.MustCompile(`^deal-history/[0-9a-f]{64}$`)
+
+// historyDigestFields are the fields of a History file that hold a sha256
+// digest, a capsule or key id, or a salted commitment: 64 hex digits that
+// carry no readable value.
+var historyDigestFields = map[string]bool{
+	"agent_input_digest": true, "amount": true, "body_digests": true, "bundle_digest": true,
+	"capsule_id": true, "currency": true, "deal_local": true, "key_id": true, "nonce": true,
+	"parent_capsule_id": true, "payload_commitments": true, "peaks_left": true, "peaks_right": true,
+	"prev_root": true, "range_root": true, "root": true, "selection_record": true, "target": true,
+	"witness": true,
+}
+
+// base64Bytes decodes a COSE statement, written in base64url or standard
+// base64, padded or not.
+func base64Bytes(t *testing.T, v string) []byte {
+	t.Helper()
+	for _, enc := range []*base64.Encoding{base64.RawURLEncoding, base64.RawStdEncoding} {
+		if b, err := enc.DecodeString(strings.TrimRight(v, "=")); err == nil {
+			return b
+		}
+	}
+	require.Failf(t, "not base64", "%.40s", v)
+	return nil
+}
+
+// assertNoneSays fails when any text names v.
+func assertNoneSays(t *testing.T, texts []string, v, msg string) {
+	t.Helper()
+	for _, s := range texts {
+		if strings.Contains(s, v) {
+			assert.Failf(t, msg, "%q is in %q", v, s)
+			return
+		}
+	}
+}
+
+// Only a digest field, a digest key under memberships or disclosures, and
+// the History log's nonce are skipped: a value next to hex, in long plain
+// text, digest-shaped in any other field or key, encoded in hex or a COSE
+// statement, or a long number, is still read.
+func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
+	enc := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+	doc := `{"a":"abcdef170000abcdef","b":"Avery` + strings.Repeat("x", 40) + `","c":"170000170000170000",` +
+		`"d":"` + hex.EncodeToString([]byte("private amount 170000 belongs to Avery")) + `",` +
+		`"cose":"` + enc("private amount 170000 belongs to Avery") + `",` +
+		`"price_minor":170000,"checkpoint":{"log_id":"deal-history/` + strings.Repeat("170000", 10) + `abcd"},` +
+		`"capsule_id":"` + strings.Repeat("170000", 10) + `abcd","memberships":{"` + strings.Repeat("170000", 10) + `abcd":1}}`
+	texts := historyTexts(t, []byte(doc))
+	n := 0
+	for _, s := range texts {
+		n += strings.Count(s, "170000")
+	}
+	// a: 1, c: 3, d: 1, cose: 1, price_minor: 1; the capsule_id, the
+	// History's log_id nonce and the memberships key: 0.
+	assert.Equal(t, 7, n)
+	// Digest-shaped values outside a digest field, a digest key outside the
+	// maps that use them, and a big number are read too.
+	padded := hex.EncodeToString(append([]byte("Avery 170000"), make([]byte, 20)...))
+	more := historyTexts(t, []byte(`{"recipient":"170000`+strings.Repeat("a", 58)+`","text":"`+padded+`",`+
+		`"selection":{"`+padded+`":1},"price_minor":170000170000170000,"log_id":"deal/170000`+strings.Repeat("a", 58)+`"}`))
+	hits := 0
+	for _, s := range more {
+		if strings.Contains(s, "170000") {
+			hits++
+		}
+	}
+	// recipient, text (decoded), the selection key (decoded), price_minor,
+	// log_id
+	assert.Equal(t, 5, hits, "%q", more)
+	// Inside a disclosed payload a reserved name is the user's: nothing is
+	// skipped there, while the same names outside one still are.
+	val := "170000" + strings.Repeat("a", 58)
+	inside := historyTexts(t, []byte(`{"disclosures":{"`+strings.Repeat("ab", 32)+`":{"agent_input":{"terms":{"conditions":{`+
+		`"amount":"`+val+`","capsule_id":"`+val+`","log_id":"deal-history/`+val+`","signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`",`+
+		`"memberships":{"`+val+`":1}}}}}},"capsule_id":"`+val+`","memberships":{"`+val+`":1}}`))
+	got := 0
+	for _, s := range inside {
+		got += strings.Count(s, "170000")
+	}
+	// amount, capsule_id, log_id, the signature (raw hex has none; decoded:
+	// 1) and the memberships key inside the payload; none outside it.
+	assert.Equal(t, 5, got, "%q", inside)
+	// A log_id other than the History's own checkpoint's is read, even in the
+	// History log's shape (a cadence log a profile configures).
+	own := "deal-history/" + strings.Repeat("ab", 32)
+	logs := historyTexts(t, []byte(`{"checkpoint":{"log_id":"`+own+`"},"deals":{"x":{"extensions":{"x-cadence-witness/v0":`+
+		`{"cadence":{"log_id":"deal-history/`+val+`"}}}}},"completeness_certificate":{"log_id":"`+own+`"}}`))
+	hit := 0
+	for _, s := range logs {
+		hit += strings.Count(s, "170000")
+	}
+	assert.Equal(t, 1, hit, "%q", logs)
+	assert.NotContains(t, logs, own, "the History's own log id is read as its kind only")
+	// So is a deal report, inline or standalone.
+	for _, ext := range []string{"x-deal-v0", "x-deal-report/v0"} {
+		report := historyTexts(t, []byte(`{"extensions":{"`+ext+`":{"agent_input":{"report":{"money":{"currency":"`+val+`"}}}}},`+
+			`"capsule_id":"`+val+`"}`))
+		n := 0
+		for _, s := range report {
+			n += strings.Count(s, "170000")
+		}
+		assert.Equal(t, 1, n, "%s: the report's currency, not the record's capsule_id", ext)
+	}
+	sig := historyTexts(t, []byte(`{"signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`"}`))
+	assert.Contains(t, sig, "Avery 170000", "a signature envelope is read decoded")
+	found := 0
+	for _, s := range texts {
+		if strings.Contains(s, "Avery") {
+			found++
+		}
+	}
+	assert.Equal(t, 3, found, "b, d and cose")
 }
 
 // A step sealed after the deal's latest checkpoint is not in the copy (no
