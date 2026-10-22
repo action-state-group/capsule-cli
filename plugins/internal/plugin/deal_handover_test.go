@@ -129,7 +129,7 @@ func TestASellerStatesTheHandoverOnlyOnACheckOrTheOpening(t *testing.T) {
 	} {
 		_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", kind, "--input", writeJSON(t, input))
 		require.ErrorIs(t, err, cli.ErrInput, kind)
-		assert.Contains(t, err.Error(), "nowhere else", kind)
+		assert.Contains(t, err.Error(), "Leave it out of other checks", kind)
 	}
 	_, err := invoke(t, "", "--profile", "deal", "deal", "close", "--deal", id, "--input", writeJSON(t,
 		`{"status":"received","delivered":{"item":"example bicycle","handover":"in_person"}}`))
@@ -209,11 +209,11 @@ func TestOnlyAnOfferOrACommitCheckStatesTheHandover(t *testing.T) {
 		_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, check))
 		require.ErrorIs(t, err, cli.ErrInput, name)
 		if name != "represent" { // a represent check refuses any terms first
-			assert.Contains(t, err.Error(), "nowhere else", name)
+			assert.Contains(t, err.Error(), "Leave it out of other checks", name)
 		}
 	}
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t,
 		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["phone"],"terms":{"handover":"in_person"}}`))
-	assert.Contains(t, err.Error(), "nowhere else")
+	assert.Contains(t, err.Error(), "Leave it out of other checks")
 	assert.Len(t, records(t, id), before, "a refused check seals nothing")
 }

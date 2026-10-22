@@ -777,7 +777,8 @@ pays and how the item reaches them: `recourse` with the `rail` (for example
 `"handover"` in `terms`: `"in_person"` when the buyer collects it, `"shipped"`
 when it is sent. A commit seals exactly the accepted offer's terms, so the
 offer states them first. The user's rules ask at a commit that states no
-payment method, and pass cash only when the item is handed over in person.
+payment method, and pass cash only when `handover` is `in_person`; cash with
+no handover stated asks too.
 `handover` is the seller's term: never state it where the user buys.
 
 Every check also returns `approval_text` (the one block you show),

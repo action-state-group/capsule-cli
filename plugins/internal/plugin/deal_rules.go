@@ -84,7 +84,7 @@ func sellersHandover(role string, where bool, terms ...*dealTerms) error {
 			return cli.InputError("terms.handover is how a sold item reaches the buyer: state it only where the user sells (intent.party_role seller)")
 		}
 		if !where {
-			return cli.InputError("terms.handover goes on a seller's offer or commit check, or in the opening terms of a seller's deal or sale, and nowhere else: not on another check, what the user asked, a change or a close")
+			return cli.InputError("terms.handover goes only on a seller's offer or commit check, or in the opening terms of a seller's deal or sale. Leave it out of other checks, what the user asked, a change and a close.")
 		}
 	}
 	return nil
