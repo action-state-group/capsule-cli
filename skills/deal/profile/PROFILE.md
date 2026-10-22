@@ -343,7 +343,10 @@ Field details:
   `recourse`, `safety`, `delivered`. `rule` is the id of the rule that found the difference.
   `capsulectl`'s deal check writes its own built-in rules, among them `not_asked`, `over_limit`,
   `under_floor` (a price below the user's floor, rule 6), `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
-  and `delivered_differs`. Any change of
+  and `delivered_differs`. On a sale's thread, a share made after the seller cancels the
+  buyer's acceptance is an `acceptance_called_off` difference (`safety`): the acceptance no
+  longer releases anything in that thread until the buyer accepts again (a later acceptance
+  ends it). Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is
   **not** in the record. The verdict carries `card_commitment` instead, and the text stays

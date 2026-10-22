@@ -78,6 +78,10 @@ type dealRulesHistory struct {
 	Days     int  `json:"days"`
 	Acts     int  `json:"acts"`
 	Complete bool `json:"complete"`
+	// Since is the cutoff the history was read from (acts sealed before it
+	// were left out), so the card tells the same window apart: never
+	// sealed or sent.
+	Since time.Time `json:"-"`
 }
 
 // externalCheckResult is the neutral shape a checker prints.
@@ -323,6 +327,31 @@ const rulesDeclaredNotMeasured = "declared, not measured"
 
 func isDeclaredRule(f dealRulesFinding) bool {
 	return f.Verdict == "not_evaluable" && f.Reason == rulesDeclaredNotMeasured
+}
+
+// acceptanceRuleVerdict is how the user's rules decided the rule that
+// releases a seller's details on the buyer's acceptance
+// (seller.release_on_acceptance, s13): "fail", "not_evaluable", or "" when
+// it passed or was not reported. Only then can the card speak of the
+// acceptance, and only a fail can be the cause of a deny (capsule-engine#179).
+func acceptanceRuleVerdict(r *dealRules) string {
+	if r == nil || r.Status != "evaluated" {
+		return ""
+	}
+	verdict := ""
+	for _, f := range r.Findings {
+		if isDeclaredRule(f) || (f.Verdict != "fail" && f.Verdict != "not_evaluable") {
+			continue
+		}
+		name, _, _ := strings.Cut(f.Check, "/")
+		if name == "release_on_acceptance" || strings.HasSuffix(name, ".release_on_acceptance") {
+			if f.Verdict == "fail" {
+				return "fail"
+			}
+			verdict = f.Verdict
+		}
+	}
+	return verdict
 }
 
 // declaredRules are the ids of the rules the ruleset declares and the checker
@@ -790,7 +819,7 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		acts = append(acts, act{deal, id, at})
 	}
 	sort.SliceStable(acts, func(i, j int) bool { return acts[i].at.After(acts[j].at) })
-	scope := &dealRulesHistory{Days: cli.RulesHistoryDays, Complete: true}
+	scope := &dealRulesHistory{Days: cli.RulesHistoryDays, Complete: true, Since: since}
 	if len(acts) > rulesHistoryMax {
 		acts, scope.Complete = acts[:rulesHistoryMax], false
 	}

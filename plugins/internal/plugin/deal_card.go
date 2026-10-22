@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -43,6 +44,14 @@ type cardFacts struct {
 	// askedOver is an over-limit purchase the user named themselves, item
 	// and price: the rule still asks, as an exception.
 	askedOver bool
+	// acceptanceOld is a seller's share to the buyer of a thread whose
+	// acceptance is older than the history the rules checker is given: the
+	// checker sees none, though the thread holds one.
+	acceptanceOld bool
+	// acceptanceRefused is acceptanceOld with the acceptance rule's own
+	// finding a fail, so a deny can be put down to it; a not_evaluable s13
+	// beside another rule's deny says nothing about why that rule denied.
+	acceptanceRefused bool
 }
 
 // cardReasons is the collapse table, in priority order: a card shows the
@@ -55,7 +64,20 @@ var cardReasons = []cardReason{
 	{key: "card.why.payee_changed", rules: []string{"payee_or_contact_changed"}},
 	{key: "card.why.credentials_requested", rules: []string{"credentials_requested", "verification_code_request"}},
 	{key: "card.why.pay_before_seeing", rules: []string{"pay_before_seeing"}},
-	{key: "card.why.rules_deny", rules: []string{"rules_deny"}},
+	{key: "card.why.acceptance_called_off", rules: []string{"acceptance_called_off"}},
+	// Why the user's rules found no acceptance: capsulectl holds the whole
+	// thread, the checker only its window. Under a deny it is the deny's
+	// own reason; where the rules could not be fully checked it stands
+	// alone. An escalation is the rules asking for something else.
+	{key: "card.why.rules_deny.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.acceptanceRefused && hasRule(r, "rules_deny")
+	}},
+	{key: "card.why.rules_deny", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return hasRule(r, "rules_deny") && !f.acceptanceRefused
+	}},
+	{key: "card.why.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.acceptanceOld && !hasRule(r, "rules_deny") && hasRule(r, "rules_not_evaluable")
+	}},
 	{key: "card.why.over_limit_asked", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
 		return f.askedOver && hasRule(r, "over_limit")
 	}},
@@ -121,12 +143,28 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		if row.key == "card.why.first_disclosure.some" {
 			what = f.told
 		}
-		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what})
+		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what, "days": strconv.Itoa(cli.RulesHistoryDays)})
 		if text != "" && !slices.Contains(why, text) {
 			why = append(why, text)
 		}
+		// A refusal for an acceptance past the window ends on what to do:
+		// nothing is said after it.
+		if row.key == "card.why.rules_deny.acceptance_too_old" && text != "" {
+			break
+		}
 		if len(why) == 2 {
 			break
+		}
+	}
+	// The refusal for an old acceptance is always said: it takes the
+	// second place when two reasons above it apply.
+	if f.acceptanceRefused && hasRule(r, "rules_deny") {
+		refusal := w.Line("card.why.rules_deny.acceptance_too_old", cli.V{"days": strconv.Itoa(cli.RulesHistoryDays)})
+		if refusal != "" && !slices.Contains(why, refusal) {
+			if len(why) == 2 {
+				why = why[:1]
+			}
+			why = append(why, refusal)
 		}
 	}
 	return why
@@ -206,6 +244,12 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	vals := cli.V{"amount": amount, "payee": payee, "where": where, "item": item,
 		"what": disclosureWords(w, snap.Disclosing), "description": snap.Description}
 	ask.Question = cardQuestion(w, snap, vals)
+	// A seller's cancel on a sale's thread with a live acceptance records
+	// that the buyer backed out: the user confirms that, not a cancellation
+	// with a merchant.
+	if snap.Action == "cancel" && state.saleThread() && state.buyerAccepted && !state.calledOff {
+		ask.Question = w.Line("card.question.cancel.acceptance", vals)
+	}
 	if r.Verdict == "deny" {
 		// A deny takes no yes: it says what will not happen, and why it
 		// stopped (u245: "will not do it and will not ask").
@@ -221,7 +265,12 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	if r.Recipient != nil {
 		told = r.Recipient.First
 	}
-	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver})
+	// A share to the thread's buyer of something the acceptance releases
+	// (a platform's or anyone else's is not its to release, and the public
+	// pickup area needs none).
+	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo == "counterparty" && slices.ContainsFunc(snap.Disclosing, func(c string) bool { return c != "pickup_area" }) &&
+		state.saleThread() && state.acceptanceOutsideHistory(state.historySince) && acceptanceRuleVerdict(r.Rules) != ""
+	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld, acceptanceRefused: acceptanceOld && acceptanceRuleVerdict(r.Rules) == "fail"})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
 	// known yet, so the line names none.

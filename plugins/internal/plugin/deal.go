@@ -2119,6 +2119,9 @@ func dealCheckCommand() *cobra.Command {
 					return err
 				}
 				rules = runRulesChecker(ctx, s.p, input, history)
+				// The card reads the thread's acceptance against the same
+				// cutoff the checker's history was read from.
+				state.historySince = history.Since
 				rules = sealableRules(rules, dealLocalValues(events, dealEvent{}))
 			}
 			result.Rules = &rules

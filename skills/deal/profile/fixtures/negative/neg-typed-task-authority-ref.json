@@ -59,7 +59,7 @@
         "digest_alg": "SHA-256",
         "digest": "3c5054ec2b99b6ea3bee414c1d14df7a383adc5d8cd8f85583c748a9e0400095"
       },
-      "ruleset_digest": "037602503c17825b2b8ef2d45ff75ca8d8808fdcd536bfd385445e5d92153597",
+      "ruleset_digest": "0a2a70b102a3c1a08f7a18db0c30ef991aff18a93c4cdcfea0fc6aec5088d60a",
       "materiality": "predicate",
       "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
       "valid_until": "2026-10-06T09:28:00Z",
