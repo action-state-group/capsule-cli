@@ -356,6 +356,7 @@
                   "home_address",
                   "address",
                   "pickup_location",
+                  "pickup_area",
                   "other_contact",
                   "credential",
                   "verification_code",

@@ -54,12 +54,13 @@ RECORD_TYPES = json.loads(SCHEMA_PATH.read_text())["$defs"]["record_type"]["enum
 UNFIXTURED_TYPES = {"counterparty_profile"}
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
-                                                  "pickup_location", "other_contact")}
+                                                  "pickup_location", "pickup_area", "other_contact")}
 DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
                                                            "payment_card", "id_document")})
 # What an offer covers, and a seller's commit must equal: the material terms.
 OFFER_TERMS = ("amount_minor", "currency", "terms", "recourse")
 # The classes that give a place: a seller gives one out only for an accepted offer.
+# pickup_area, the public area a listing shows, is not one of them.
 ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
 # The actions an ordered representation must come before (section 6): every
 # action that moves toward or carries out a commitment, and every share.

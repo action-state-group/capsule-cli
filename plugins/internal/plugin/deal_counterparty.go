@@ -265,7 +265,7 @@ func disclosureAction(classes []string) (string, error) {
 	for _, c := range classes {
 		a, ok := disclosureClasses[c]
 		if !ok {
-			return "", cli.InputError("disclosing names a class that is not one of name, phone, email, home_address, address, pickup_location, other_contact, credential, verification_code, payment_card, id_document: " + c)
+			return "", cli.InputError("disclosing names a class that is not one of name, phone, email, home_address, address, pickup_location, pickup_area, other_contact, credential, verification_code, payment_card, id_document: " + c)
 		}
 		if action != "" && a != action {
 			return "", cli.InputError("disclosing mixes contact details and credentials: check each with its own action")

@@ -114,6 +114,7 @@
     "class.other_contact": "contact details",
     "class.payment_card": "payment card",
     "class.phone": "phone",
+    "class.pickup_area": "pickup area",
     "class.pickup_location": "pickup location",
     "class.verification_code": "verification code",
     "journey.agent.act.cancel": "Cancelled",

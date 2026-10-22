@@ -2523,13 +2523,13 @@ type dealToldItem struct {
 var disclosureClasses = map[string]string{
 	"name": "share_contact", "phone": "share_contact", "email": "share_contact",
 	"home_address": "share_contact", "address": "share_contact", "pickup_location": "share_contact",
-	"other_contact": "share_contact",
-	"credential":    "share_credentials", "verification_code": "share_credentials",
+	"pickup_area": "share_contact", "other_contact": "share_contact",
+	"credential": "share_credentials", "verification_code": "share_credentials",
 	"payment_card": "share_credentials", "id_document": "share_credentials",
 }
 
 var disclosureClassWords = map[string]string{
-	"home_address": "home address", "address": "street address", "pickup_location": "pickup location", "other_contact": "contact details",
+	"home_address": "home address", "address": "street address", "pickup_location": "pickup location", "pickup_area": "pickup area", "other_contact": "contact details",
 	"verification_code": "verification code", "payment_card": "payment card", "id_document": "ID document",
 }
 
@@ -2546,7 +2546,8 @@ func (d dealDisclosure) action() string {
 }
 
 // addressed is whether the disclosure gives a place: a street or home
-// address, or a pickup location.
+// address, or a pickup location. A pickup_area (the public area a listing
+// shows) is not a place in this sense: it needs no acceptance first.
 func (d dealDisclosure) addressed() bool {
 	for _, f := range d.Fields {
 		switch f.Class {
@@ -2615,10 +2616,13 @@ func (d dealDisclosure) validate() error {
 	for _, f := range d.Fields {
 		a, ok := disclosureClasses[f.Class]
 		if !ok {
-			return cli.InputError("disclosure field class must be one of name, phone, email, home_address, address, pickup_location, other_contact, credential, verification_code, payment_card, id_document: " + f.Class)
+			return cli.InputError("disclosure field class must be one of name, phone, email, home_address, address, pickup_location, pickup_area, other_contact, credential, verification_code, payment_card, id_document: " + f.Class)
 		}
 		if strings.TrimSpace(f.Value) == "" {
 			return cli.InputError("every disclosed field needs the value that was given (kept on this device only)")
+		}
+		if f.Class == "pickup_area" && readsAsStreetAddress(f.Value) {
+			return cli.InputError("a pickup_area is a neighborhood, city, region or ZIP, and this value reads as a street address: give an exact spot as pickup_location, which waits for an accepted offer")
 		}
 		if action != "" && a != action {
 			return cli.InputError("seal contact details and credentials as separate disclosures: each is covered by its own check")
@@ -2626,6 +2630,27 @@ func (d dealDisclosure) validate() error {
 		action = a
 	}
 	return nil
+}
+
+// pickupAreaZIP is a US ZIP or ZIP+4, which is an area, not a house number.
+var pickupAreaZIP = regexp.MustCompile(`\b\d{5}(-\d{4})?\b`)
+
+// pickupAreaHouseNumber is a house number: one to six digits, with an
+// optional letter ("12", "1600", "12B"), not an ordinal ("5th").
+var pickupAreaHouseNumber = regexp.MustCompile(`(?i)\b\d{1,6}[a-z]?\b`)
+
+// pickupAreaStreetWord is a street type as a whole word; an abbreviation's
+// period ("St.") falls outside the word.
+var pickupAreaStreetWord = regexp.MustCompile(`(?i)\b(st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|way|pl|place)\b`)
+
+// readsAsStreetAddress is whether a pickup_area value looks like a street
+// address rather than a public area: a house number and a street type. The
+// agent picks the class label, so an address labelled pickup_area would reach
+// everyone a public area may go to. A street named without a number ("Main
+// St corridor", "Oak Lane neighborhood") and a ZIP are areas.
+func readsAsStreetAddress(v string) bool {
+	rest := pickupAreaZIP.ReplaceAllString(v, " ")
+	return pickupAreaHouseNumber.MatchString(rest) && pickupAreaStreetWord.MatchString(rest)
 }
 
 // recordsTyped is the record set of a deal sealed in the typed action

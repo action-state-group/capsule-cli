@@ -468,7 +468,7 @@ func listWords(words []string, conj string) string {
 
 // spokenClassOrder is the order a sentence lists what is shared in: who you
 // are, how to reach you, where you are, then the rest.
-var spokenClassOrder = []string{"name", "email", "phone", "home_address", "address", "pickup_location", "other_contact", "credential", "verification_code", "payment_card", "id_document"}
+var spokenClassOrder = []string{"name", "email", "phone", "home_address", "address", "pickup_location", "pickup_area", "other_contact", "credential", "verification_code", "payment_card", "id_document"}
 
 func classRank(c string) int {
 	if i := slices.Index(spokenClassOrder, c); i >= 0 {
