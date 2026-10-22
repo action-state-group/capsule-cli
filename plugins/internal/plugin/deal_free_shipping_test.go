@@ -10,7 +10,10 @@ import (
 // r09 (material_fields_changed/1.1.0, max_changed 0) asks when the pay
 // check changes what was agreed. Rule inputs "2" count terms.conditions as
 // one material field, a key added included, so a condition the agent adds
-// on the pay check is a change of terms (capsule-engine#191).
+// on the pay check is a change of terms (capsule-engine#191). These tests
+// pin the count capsulectl seals and sends; the checker here is a stub that
+// allows, and r09's decision on the count is pinned by the engine's and
+// Muse's everyday fixtures.
 
 const freeShippingPay = `{"action":"pay","amount_minor":454,"authorized_max_minor":454,"terms":{"item":"otter sticker","price_minor":454,"conditions":{"shipping":"Free shipping"}},"recourse":{"rail":"card","refundable":true}}`
 
@@ -64,8 +67,10 @@ func TestAConditionOnAnApprovedShareIsAdoptedWithoutAnAsk(t *testing.T) {
 	require.Equal(t, "pause", share["verdict"], share["card"])
 	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
 	require.NoError(t, err)
-	sealed, _, _ := ruleInputs(t, id, freeShippingPay)
-	assert.Equal(t, float64(0), sealed["material_fields_changed"], "adopted by the share's approval (capsule-cli#380)")
+	sealed, given, _ := ruleInputs(t, id, freeShippingPay)
+	for _, b := range []map[string]any{sealed, given} {
+		assert.Equal(t, float64(0), b["material_fields_changed"], "adopted by the share's approval (capsule-cli#380)")
+	}
 	bodies := checkBodies(t, id)
 	require.Len(t, bodies, 2)
 	assert.Equal(t, float64(1), bodies[0]["material_fields_changed"], "measured at the share, where r09 does not apply")
