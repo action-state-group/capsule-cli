@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -324,7 +325,7 @@ func TestPluginInstallSaysWhatItHealedWhenItFails(t *testing.T) {
 		})
 		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 		require.ErrorIs(t, err, ErrInput)
-		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+resolved(t, home))
+		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+strconv.Quote(resolved(t, home)))
 		assert.Contains(t, SafeError(err), "chmod go-w on "+filepath.Join(resolved(t, home), ".local")+": injected")
 		assert.Equal(t, uint32(0o755), modeOf(t, home))
 		assert.NoDirExists(t, root)
@@ -349,7 +350,7 @@ func TestPluginInstallSaysWhatItHealedWhenItFails(t *testing.T) {
 		plain := errors.New("disk full")
 		h := userRootHeal{ChmodGoW: []string{"/home/x"}}
 		assert.Same(t, plain, h.explain(c, plain))
-		assert.Equal(t, "capsulectl: install had already removed group and other write from /home/x\n", stderr.String())
+		assert.Equal(t, "capsulectl: install had already removed group and other write from \"/home/x\"\n", stderr.String())
 		assert.NoError(t, h.explain(c, nil))
 	})
 	t.Run("the launcher fails", func(t *testing.T) {
@@ -359,7 +360,7 @@ func TestPluginInstallSaysWhatItHealedWhenItFails(t *testing.T) {
 		require.NoError(t, os.WriteFile(bad, []byte("#!/bin/sh\nexit 1\n"), 0o755))
 		_, err := invoke(t, "", "plugin", "install", bad)
 		require.ErrorIs(t, err, ErrInput)
-		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+resolved(t, home))
+		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+strconv.Quote(resolved(t, home)))
 		assert.Equal(t, uint32(0o755), modeOf(t, home))
 	})
 }

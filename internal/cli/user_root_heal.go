@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -191,7 +192,7 @@ func homeDeepEnoughForRoot(realHome string) bool {
 	return len(strings.Split(strings.Trim(realHome, string(os.PathSeparator)), string(os.PathSeparator))) >= 2
 }
 
-const installPathHealedReason = "these directories on the plugin root's path were group- or other-writable and owned by this user; plugin install requires them not to be, so write access for group and others was removed"
+const installPathHealedReason = "group and other write was removed from these directories: they belong to this user, and plugin install refuses a path another user could change"
 
 // healInstallPath is healUserRoot for plugin install, run before its own
 // checks: a host that makes HOME group-writable would otherwise stop every
@@ -234,7 +235,12 @@ func (h userRootHeal) explain(c *cobra.Command, err error) error {
 		notes = append(notes, "chmod go-w on "+path+": "+h.Failed[path])
 	}
 	if len(h.ChmodGoW) > 0 {
-		notes = append(notes, "install had already removed group and other write from "+strings.Join(h.ChmodGoW, " "))
+		// Quoted, since a path may contain spaces.
+		quoted := make([]string, len(h.ChmodGoW))
+		for i, path := range h.ChmodGoW {
+			quoted[i] = strconv.Quote(path)
+		}
+		notes = append(notes, "install had already removed group and other write from "+strings.Join(quoted, ", "))
 	}
 	if len(notes) == 0 {
 		return err
