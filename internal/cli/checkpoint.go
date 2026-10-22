@@ -134,26 +134,76 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		if !errors.As(e, &answered) || answered.StatusCode == http.StatusProxyAuthRequired {
 			return r, &witness.HTTPError{StatusCode: 503, Body: WitnessNotReached}
 		}
+		// A 403 may come from a network gate on this host rather than the
+		// witness (capsule-cli#335), and such a gate opens once the host
+		// grants the site, so it is retried like an outage.
 		status := 400
-		if witness.IsRetryable(e) {
+		if witness.IsRetryable(e) || answered.StatusCode == http.StatusForbidden {
 			status = 503
 		}
-		// The witness's own status (never its body) is kept, so a pending
-		// delivery can say what the witness answered.
+		// The answered status (never the body) is kept, so a pending
+		// delivery can say what came back.
 		return r, &witness.HTTPError{StatusCode: status, Body: WitnessFailureBody(answered.StatusCode)}
 	}
 	return r, nil
 }
 
-// witnessFailureBody is what a delivery the witness answered with an error
-// records: its HTTP status, never its body.
+// witnessFailureBody is what a delivery answered with an error records: its
+// HTTP status, never its body. Rows stored before capsule-cli#335 read "the
+// witness answered HTTP N" and are still read the same way.
 func WitnessFailureBody(status int) string {
-	return fmt.Sprintf("checkpoint submission failed (the witness answered HTTP %d); response details suppressed", status)
+	return fmt.Sprintf("checkpoint submission failed (answered HTTP %d); response details suppressed", status)
 }
 
-// witnessAnswered reads the witness's own HTTP status from a delivery's
-// recorded error (safeSubmitter keeps it, never the response body).
-var witnessAnswered = regexp.MustCompile(`the witness answered HTTP (\d{3})`)
+// witnessAnswered reads the answered HTTP status from a delivery's recorded
+// error (safeSubmitter keeps it, never the response body).
+var witnessAnswered = regexp.MustCompile(`answered HTTP (\d{3})`)
+
+// answeredStatus is the HTTP status a delivery's recorded error says came
+// back, or "" when it records none.
+func answeredStatus(state cll.WitnessState) string {
+	if m := witnessAnswered.FindStringSubmatch(state.LastError); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// RearmRefused makes a delivery that a build before capsule-cli#335 stored
+// as failed for good after a 403 due again, so a host that has since granted
+// the witness's site delivers it. Such a row is re-armed once: a 403 is now
+// stored as retryable, so no build writes another.
+func RearmRefused(ctx context.Context, store cll.WitnessStateStore, state cll.WitnessState, now time.Time) (cll.WitnessState, error) {
+	if !state.Permanent || state.Receipt != nil || answeredStatus(state) != "403" {
+		return state, nil
+	}
+	next := state
+	next.Permanent = false
+	// Whole seconds: a store that rounds the time it keeps must not move
+	// it past now, or a delivery run at now would skip the row.
+	next.NextAttemptAt = now.Truncate(time.Second)
+	if e := store.CommitWitness(ctx, state.Attempts, next); e != nil {
+		return state, e
+	}
+	return next, nil
+}
+
+// RearmRefusedLog re-arms every refused delivery to service on log
+// (RearmRefused).
+func RearmRefusedLog(ctx context.Context, log cll.Backend, service string, now time.Time) error {
+	state, e := log.LoadCLL(ctx)
+	if e != nil {
+		return e
+	}
+	for _, w := range state.Witnesses {
+		if w.WitnessID != service {
+			continue
+		}
+		if _, e = RearmRefused(ctx, log, w, now); e != nil {
+			return e
+		}
+	}
+	return nil
+}
 
 // witnessNotReached marks a delivery whose request never got an answer from
 // the witness.
@@ -195,6 +245,10 @@ func WitnessConsentReached(endpoint string) string {
 	return "Reached from this command. " + WitnessGrantText(endpoint)
 }
 
+// WitnessNotDelivered starts the text of a delivery failed for good: it is
+// not pending, since it is never retried.
+const WitnessNotDelivered = "not delivered: "
+
 // witnessPendingReason classifies a pending delivery from its stored error.
 func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
 	if strings.Contains(state.LastError, WitnessNotReached) {
@@ -203,8 +257,20 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 	if state.Attempts == 0 {
 		return "not_attempted", "pending: not sent yet; it goes at the next tick."
 	}
-	if m := witnessAnswered.FindStringSubmatch(state.LastError); m != nil {
-		return "witness_error", "pending: the witness answered with an error (HTTP " + m[1] + "); it is retried at every tick."
+	status := answeredStatus(state)
+	if status == "403" {
+		// A refused delivery stored as failed for good is re-armed at the
+		// next tick (RearmRefused), so it is retried either way.
+		return "refused", "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; it is retried at every tick. " + WitnessGrantText(endpoint)
+	}
+	if state.Permanent {
+		if status != "" {
+			return "witness_error", WitnessNotDelivered + "the witness answered with an error (HTTP " + status + "); this delivery is not retried."
+		}
+		return "witness_error", WitnessNotDelivered + "the delivery failed; it is not retried."
+	}
+	if status != "" {
+		return "witness_error", "pending: the witness answered with an error (HTTP " + status + "); it is retried at every tick."
 	}
 	return "witness_error", "pending: the witness answered with an error; it is retried at every tick."
 }
@@ -518,11 +584,19 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
+	now := time.Now().UTC()
+	if state, e := store.GetWitness(ctx, service, size); e == nil {
+		if _, e = RearmRefused(ctx, store, state, now); e != nil {
+			return cll.WitnessState{}, e
+		}
+	} else if !errors.Is(e, cll.ErrNotFound) {
+		return cll.WitnessState{}, e
+	}
 	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	if _, e = runner.RunOnce(ctx, time.Now().UTC(), 1); e != nil {
+	if _, e = runner.RunOnce(ctx, now, 1); e != nil {
 		return cll.WitnessState{}, e
 	}
 	return store.GetWitness(ctx, service, size)

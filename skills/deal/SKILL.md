@@ -595,7 +595,11 @@ leaves every later tick pending. Say plainly that the grant covers the
 witness's whole site: for the default witness, witness.agentactioncapsule.org,
 that is agentactioncapsule.org and all its subdomains.
 A tick that could not reach the witness says so: "pending: network consent
-needed, or no network".
+needed, or no network". A tick refused with HTTP 403 says "pending: the
+request was refused (HTTP 403), by the witness or by a network gate on this
+host": on an agent host that asks before network access, that too is most
+likely a missing standing grant, and the tick names the site. It is retried
+at every tick.
 
 Tell the user, in one message, exactly what this does: their deal steps are
 sealed on this device; once an hour, whether or not anything happened, one

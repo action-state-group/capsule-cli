@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
@@ -168,7 +169,7 @@ func TestDealWitnessStatesAreShownAsTheyAre(t *testing.T) {
 	pending := report("down")
 	assert.Equal(t, "pending", pending["assurance"].(map[string]any)["witness_state"])
 	assert.Equal(t, "self_attested", pending["assurance"].(map[string]any)["rung"], "pending is never shown as witnessed")
-	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "Witness pending. This checkpoint was sent at a cadence tick")
+	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "This checkpoint was sent at a cadence tick, but no receipt has come back yet. Witness pending")
 
 	deliver(t, p, cadenceSize(t, p), key)
 	witnessed := report("up")
@@ -350,6 +351,49 @@ func TestDealBlockedDeliveryIsShownAsNetworkConsent(t *testing.T) {
 	assert.Contains(t, assurance["text"], "Witness pending: network consent needed")
 }
 
+// A delivery the witness failed for good is not said to be retried, on
+// the tick or on the receipt (capsule-cli#335).
+func TestDealPermanentDeliveryIsNotSaidToBeRetried(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	p := cadenceFixture(t, "https://127.0.0.1:1", public, "1h", "0s", 0)
+	dealID := retailDeal(t)
+	tick := dealRun(t, "tick")
+	size := uint64(tick["checkpoint"].(float64))
+	service, err := cli.ServiceID(p)
+	require.NoError(t, err)
+	target, err := cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
+	require.NoError(t, err)
+	state, err := target.Log.GetWitness(t.Context(), service, size)
+	require.NoError(t, err)
+	conflict := state
+	conflict.Permanent = true
+	conflict.LastError = "witness returned HTTP 400: " + cli.WitnessFailureBody(409)
+	require.NoError(t, target.Log.CommitWitness(t.Context(), state.Attempts, conflict))
+	require.NoError(t, target.Close())
+
+	withBundle := dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))
+	assurance := withBundle["assurance"].(map[string]any)
+	assert.Equal(t, "pending", assurance["witness_state"])
+	assert.NotContains(t, assurance, "witness_reason")
+	assert.Contains(t, assurance["text"], "This checkpoint was sent at a cadence tick. Witness not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.")
+	assert.NotContains(t, assurance["text"], "retried at every tick")
+
+	// A refused delivery is said with its reason and the standing grant.
+	target, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
+	require.NoError(t, err)
+	refused := conflict
+	refused.Permanent = false
+	refused.LastError = "witness returned HTTP 503: " + cli.WitnessFailureBody(403)
+	require.NoError(t, target.Log.CommitWitness(t.Context(), conflict.Attempts, refused))
+	require.NoError(t, target.Close())
+	withBundle = dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))
+	assurance = withBundle["assurance"].(map[string]any)
+	assert.Equal(t, "refused", assurance["witness_reason"])
+	assert.Contains(t, assurance["text"], "Witness pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; it is retried at every tick.")
+	assert.Contains(t, assurance["text"], `a standing grant ("Always allow this site")`)
+}
+
 func TestWitnessPendingReasons(t *testing.T) {
 	reason, text := cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: " + cli.WitnessNotReached}, cli.DealDefaultWitness)
 	assert.Equal(t, "network_consent_needed", reason)
@@ -360,9 +404,71 @@ func TestWitnessPendingReasons(t *testing.T) {
 	reason, _ = cli.WitnessPendingReason(cll.WitnessState{}, cli.DealDefaultWitness)
 	assert.Equal(t, "not_attempted", reason)
 	// What the witness answered is kept (its status, never its body) and said.
-	reason, text = cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 400: " + cli.WitnessFailureBody(409)}, cli.DealDefaultWitness)
+	reason, text = cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: " + cli.WitnessFailureBody(429)}, cli.DealDefaultWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "pending: the witness answered with an error (HTTP 409); it is retried at every tick.", text)
+	assert.Equal(t, "pending: the witness answered with an error (HTTP 429); it is retried at every tick.", text)
+	// A conflict is failed for good, and not said to be retried.
+	reason, text = cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, Permanent: true, LastError: "witness returned HTTP 400: " + cli.WitnessFailureBody(409)}, cli.DealDefaultWitness)
+	assert.Equal(t, "witness_error", reason)
+	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.", text)
+	// A 403 may be a network gate on this host (capsule-cli#335): it is not
+	// said as the witness's answer, and it names the standing grant, whether
+	// stored now or by an earlier build.
+	for _, stored := range []string{"witness returned HTTP 503: " + cli.WitnessFailureBody(403), "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 403); response details suppressed"} {
+		reason, text = cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: stored}, cli.DealDefaultWitness)
+		assert.Equal(t, "refused", reason)
+		assert.True(t, strings.HasPrefix(text, "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host;"))
+		assert.NotContains(t, text, "the witness answered")
+		assert.Contains(t, text, `a standing grant ("Always allow this site") for agentactioncapsule.org`)
+	}
+}
+
+// A cadence delivery a build before capsule-cli#335 stored as failed for
+// good after a 403 is re-armed by the next tick and delivered.
+func TestTickRearmsARefusedDelivery(t *testing.T) {
+	public, witnessKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	p := cadenceFixture(t, "https://127.0.0.1:1", public, "1h", "0s", 0)
+	retailDeal(t)
+	tick := dealRun(t, "tick")
+	require.Equal(t, "ticked", tick["state"])
+	size := uint64(tick["checkpoint"].(float64))
+	service, err := cli.ServiceID(p)
+	require.NoError(t, err)
+	target, err := cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
+	require.NoError(t, err)
+	state, err := target.Log.GetWitness(t.Context(), service, size)
+	require.NoError(t, err)
+	refused := state
+	refused.Permanent = true
+	refused.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 403); response details suppressed"
+	require.NoError(t, target.Log.CommitWitness(t.Context(), state.Attempts, refused))
+	require.NoError(t, target.Close())
+
+	old := dealDeliverWitness
+	t.Cleanup(func() { dealDeliverWitness = old })
+	var sent []uint64
+	dealDeliverWitness = func(_ context.Context, p cli.Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
+		state, err := store.GetWitness(t.Context(), service, size)
+		require.NoError(t, err)
+		require.False(t, state.Permanent, "re-armed before delivery")
+		record, err := checkpoint.ParseRecord(state.Checkpoint)
+		require.NoError(t, err)
+		entry, err := record.EntryHash()
+		require.NoError(t, err)
+		next := state
+		next.Attempts++
+		next.LastError = ""
+		next.Receipt = &cll.WitnessReceiptState{Bytes: mintReceipt(t, entry, witnessKey), EntryHash: hex.EncodeToString(entry), EntryHashScheme: witness.EntryHashSchemeCheckpointDigest, LeafIndex: ptr(int64(0)), TreeSize: ptr(int64(1))}
+		require.NoError(t, store.CommitWitness(t.Context(), state.Attempts, next))
+		sent = append(sent, size)
+		return next, nil
+	}
+	again := dealRun(t, "tick")
+	assert.Equal(t, "not_due", again["state"])
+	assert.Equal(t, []uint64{size}, sent)
+	assert.Equal(t, []any{float64(size)}, again["delivered"])
+	assert.Empty(t, again["pending"])
 }
 
 func TestDoctorExplainsWitnessConsent(t *testing.T) {
