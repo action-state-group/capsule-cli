@@ -210,6 +210,11 @@ type dealMessage struct {
 	Channel string   `json:"channel,omitempty"`
 	Text    string   `json:"text"`
 	Who     *dealWho `json:"who,omitempty"`
+	// SentAt is the platform's own time for the message, when the agent can
+	// read it (RFC 3339, kept in UTC, whole seconds): sealed beside the
+	// note's own at, which is when the message was noted. An offer answering
+	// the message is held to this time when it is set (proposalAt).
+	SentAt string `json:"sent_at,omitempty"`
 }
 
 type dealEvidence struct {
@@ -298,6 +303,16 @@ type dealSnapshot struct {
 	// about to tell the buyer: its class and its exact words (sealed as
 	// commitments), so the approval covers those words only.
 	Representing *dealRepresenting `json:"representing,omitempty"`
+	// Answering is, on an offer only, the capsule id of the counterparty's
+	// message the offer answers: a message of this deal sealed before the
+	// check. The check seals a source ref to it, and the rules checker is
+	// told when it was sent (proposalAt).
+	Answering string `json:"answering,omitempty"`
+	// NoProposal is set by `deal check`, never from the input file, on an
+	// offer when no counterparty message is sealed before it in this deal:
+	// the offer answers no proposal, so there is none to go stale. Sealed as
+	// the rule input no_proposal; never beside Answering.
+	NoProposal bool `json:"no_proposal,omitempty"`
 }
 
 type dealDifference struct {

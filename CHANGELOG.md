@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### The proposal a seller's offer answers (capsule-cli#364, capsule-engine#193)
+
+- **Added:** `deal check` takes `answering` on an offer only: the capsule id
+  of the buyer's message the offer answers, a `message` from the counterparty
+  sealed earlier in the same deal. The check seals a `source` ref to it
+  (x-deal-v0, and the typed `proposed-action/v0` refs), and the rules checker
+  is given `proposal_at` on the offer: the message's `sent_at` when sealed,
+  else its sealed `at`. `answering` on any other action, or naming a message
+  from the user or the agent, one in another deal or one not sealed, is
+  refused; nothing is sealed.
+- **Added:** an offer on a deal with no message from the counterparty sealed
+  before it carries the rule input `no_proposal: true`, decided by
+  capsulectl from its own log and never from the input file, and never beside
+  a `source` ref. An offer naming no message on a deal that has buyer
+  messages carries neither, so a rule on the proposal's age still cannot
+  establish it.
+- **Added:** a `message` note may carry `sent_at`, the platform's own time
+  for the message (RFC 3339, sealed in UTC at whole seconds, never in the
+  future), beside the note's own `at`.
+- **Changed:** the x-deal-v0 and typed record schemas, PROFILE.md (sections
+  3, 6 rule 9 and 8), `external-check-input/v0`'s `proposal_at`,
+  `check_profile.py` (a check's `source` names a counterparty message, on an
+  offer only, never beside `no_proposal`; `no_proposal` never after such a
+  message) with fixtures, and the deal skill (note each buyer message as it
+  arrives, with `sent_at` when visible; `answering` on offers). A commit keeps
+  the accepted offer's time.
+
 ### A seller states how the item reaches the buyer (capsule-engine#192)
 
 - **Added:** `terms.handover`, `in_person` or `shipped`: how a sold item

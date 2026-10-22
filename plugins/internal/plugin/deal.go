@@ -1983,6 +1983,10 @@ func dealCheckCommand() *cobra.Command {
 			if snap.Action == offerAction && dealRole(events) != dealRoleSeller {
 				return cli.InputError("an offer is made on a deal where the user sells (intent.party_role seller)")
 			}
+			// The proposal an offer answers: a buyer's message, or none.
+			if err := checkAnswering(events, &snap); err != nil {
+				return err
+			}
 			// On a sale's thread, the check is about the sale's item, under
 			// the sale's task authority as it was when the thread opened.
 			snap.ItemRef = open.ItemRef

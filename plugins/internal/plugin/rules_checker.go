@@ -519,8 +519,15 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 		}
 	}
 	// proposal_at: on a seller's commit resting on an accepted offer, when
-	// that offer was made, so a rule can hold the offer to its expiry.
+	// that offer was made; on an offer answering the buyer's message, when
+	// that message was sent (deal_proposal.go). A rule holds the proposal to
+	// its expiry.
 	if at, err := s.acceptedProposalAt(ctx, capsuleID, events); err != nil {
+		return nil, nil, err
+	} else if at != "" {
+		record["proposal_at"] = at
+	}
+	if at, err := s.answeredProposalAt(ctx, capsuleID, events); err != nil {
 		return nil, nil, err
 	} else if at != "" {
 		record["proposal_at"] = at

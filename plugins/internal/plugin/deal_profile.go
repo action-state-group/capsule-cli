@@ -838,6 +838,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if body["content_commitment"], err = commit("content"); err != nil {
 			return nil, err
 		}
+		if ev.Message.SentAt != "" {
+			body["sent_at"] = ev.Message.SentAt
+		}
 	case "claim":
 		rtype = "claim"
 		if ev.ClaimCommit == "" {
@@ -988,6 +991,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				}
 			}
 		}
+		// The counterparty's message the offer answers (deal_proposal.go).
+		if sn.Answering != "" {
+			refs, _ := block["refs"].([]interface{})
+			block["refs"] = append(refs, relRef("source", digestOf(sn.Answering)))
+		}
 		setIDs(snapshotCounterpartyIDs(key, events, ev))
 		body["action"] = sn.Action
 		// On a sale's thread, the item it is about, salted per check: equal
@@ -1073,6 +1081,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		if ev.RuleInputs != "" {
 			sealRuleInputs(body, events, sn, ev.RuleInputs)
+		}
+		// An offer that answers no proposal: decided by `deal check` from
+		// the whole log and kept with the step, so it re-derives as sealed.
+		if sn.NoProposal {
+			body["no_proposal"] = true
 		}
 	case "counterparty_profile":
 		// A companion of the check it is about: only the payee's
@@ -1468,6 +1481,9 @@ func normalizeNote(ev *dealEvent) error {
 		err = d.validate()
 	case ev.Message != nil:
 		ev.Message.Channel = channelToken(ev.Message.Channel)
+		if ev.Message.SentAt, err = messageSentAt(ev.Message.SentAt); err != nil {
+			return err
+		}
 	case ev.Claim != nil:
 		err = normalizeClaim(ev.Claim)
 	case ev.Evidence != nil:

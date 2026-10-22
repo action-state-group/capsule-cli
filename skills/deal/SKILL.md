@@ -685,7 +685,7 @@ a step that would carry one is refused. Keep the returned `deal_id`.
 **2. Note** everything that happens, as it happens:
 
 ```sh
-capsulectl --profile deal deal note --deal ID --kind message  --input m.json   # {"from":"counterparty","channel":"...","text":"..."}
+capsulectl --profile deal deal note --deal ID --kind message  --input m.json   # {"from":"counterparty","channel":"...","text":"...","sent_at":"2026-10-06T09:14:00Z"}
 capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}; selling: {"text":"...","source_kind":"agent","class":"condition"} with --check CHECK_ID (a represent check)
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
@@ -728,6 +728,17 @@ not offer, commit or share.
 
 Words you say without such a check are still sealed, marked as said without
 the user's authority. Never do that on purpose.
+
+When you sell, note each buyer message as it arrives, with `"from":
+"counterparty"`. When the platform shows when the buyer sent it, add that time
+as `sent_at` (RFC 3339, for example `2026-10-06T09:14:00Z`): the user's rules
+hold an offer to the age of the message it answers, and without `sent_at` a
+message counts from when you noted it. When an offer answers a buyer's
+message (their price, their question), name that message in the offer's check
+with `"answering": "<the capsule_id the message note returned>"`. A first offer
+before the buyer wrote anything names none. Only an offer takes `answering`. A
+buyer's price is answered with an offer, which the buyer then accepts; a
+commit rests on that acceptance and never names a message.
 
 Seal an `intent` whenever the user changes what they asked (for example,
 "go ahead and share my number"), picks from options you offered (see "The
