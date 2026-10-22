@@ -1099,7 +1099,9 @@ func domainWords(signer, apex string) string {
 
 // approvedAmount is what the user approved, from our own sealed steps: the
 // amount on the last check that went ahead, else the user's limit, else the
-// agreed price. limit is true when only a ceiling is known.
+// agreed price. limit is true when only a ceiling is known. An answer with no
+// words of the user's (agent_card) is not their approval (capsule-cli#421):
+// every renderer calls this amount "You approved", so it is skipped.
 func approvedAmount(events []sealedEvent, state dealState) (amount *int64, currency, basis string, steps []string, limit bool) {
 	byID := map[string]sealedEvent{}
 	for _, se := range events {
@@ -1115,7 +1117,7 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 				a = &dealApproval{Check: act.AuthorizedBy, Proceed: true, Approver: "standing_intent"}
 			}
 		}
-		if a == nil || !a.Proceed || a.Reason != "" {
+		if a == nil || !a.Proceed || a.Reason != "" || a.Approver == "agent_card" {
 			continue
 		}
 		check, ok := byID[a.Check]
@@ -1135,9 +1137,6 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 			if dealRecordSet(dealEvent{}, events) == recordsTyped {
 				basis = "the amount checked against what you had already asked for"
 			}
-		}
-		if a.Approver == "agent_card" {
-			basis = "the amount on the card that was approved"
 		}
 		return snap.Event.Snapshot.AmountMinor, currency, basis, []string{snap.CapsuleID, check.CapsuleID, events[i].CapsuleID}, false
 	}

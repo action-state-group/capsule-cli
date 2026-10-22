@@ -254,6 +254,35 @@ func TestApprovedAmountOnATypedDO(t *testing.T) {
 	assert.Equal(t, "the amount checked against what you had already asked for", basis)
 }
 
+// An answer with no words of the user's is not what they approved
+// (capsule-cli#421): the merchant's email is set beside their limit, not
+// the card's amount. The same answer with the tapped label is theirs.
+func TestApprovedAmountSkipsAnAnswerWithoutWords(t *testing.T) {
+	approved := func(said string) (int64, string, bool) {
+		id := stickerDeal(t, "card", false)
+		pay := checkPay(t, id, 480)
+		require.Equal(t, "pause", pay["verdict"], pay["card"])
+		_, err := answerCheck(t, id, pay["check_id"].(string), said, pay["card"].(string))
+		require.NoError(t, err)
+		events := chainSteps(t, id)
+		state, err := foldDeal(events)
+		require.NoError(t, err)
+		amount, _, basis, _, limit := approvedAmount(events, state)
+		require.NotNil(t, amount)
+		return *amount, basis, limit
+	}
+
+	amount, basis, limit := approved("")
+	assert.EqualValues(t, 500, amount, "the user's limit, not the card's $4.80")
+	assert.Equal(t, dealBasisYourLimit, basis)
+	assert.True(t, limit)
+
+	amount, basis, limit = approved("Pay $4.80")
+	assert.EqualValues(t, 480, amount)
+	assert.Equal(t, "the amount you approved at the check", basis)
+	assert.False(t, limit)
+}
+
 // The rule still asks when the user named this very purchase over their
 // limit, and the card says why it is an exception; naming the item without
 // its price is not that.
