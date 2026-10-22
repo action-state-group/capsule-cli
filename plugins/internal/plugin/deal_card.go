@@ -48,6 +48,10 @@ type cardFacts struct {
 	// acceptance is older than the history the rules checker is given: the
 	// checker sees none, though the thread holds one.
 	acceptanceOld bool
+	// acceptanceRefused is acceptanceOld with the acceptance rule's own
+	// finding a fail, so a deny can be put down to it; a not_evaluable s13
+	// beside another rule's deny says nothing about why that rule denied.
+	acceptanceRefused bool
 }
 
 // cardReasons is the collapse table, in priority order: a card shows the
@@ -66,10 +70,10 @@ var cardReasons = []cardReason{
 	// own reason; where the rules could not be fully checked it stands
 	// alone. An escalation is the rules asking for something else.
 	{key: "card.why.rules_deny.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return f.acceptanceOld && hasRule(r, "rules_deny")
+		return f.acceptanceRefused && hasRule(r, "rules_deny")
 	}},
 	{key: "card.why.rules_deny", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return hasRule(r, "rules_deny") && !f.acceptanceOld
+		return hasRule(r, "rules_deny") && !f.acceptanceRefused
 	}},
 	{key: "card.why.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
 		return f.acceptanceOld && !hasRule(r, "rules_deny") && hasRule(r, "rules_not_evaluable")
@@ -154,7 +158,7 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 	}
 	// The refusal for an old acceptance is always said: it takes the
 	// second place when two reasons above it apply.
-	if f.acceptanceOld && hasRule(r, "rules_deny") {
+	if f.acceptanceRefused && hasRule(r, "rules_deny") {
 		refusal := w.Line("card.why.rules_deny.acceptance_too_old", cli.V{"days": strconv.Itoa(cli.RulesHistoryDays)})
 		if refusal != "" && !slices.Contains(why, refusal) {
 			if len(why) == 2 {
@@ -265,8 +269,8 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	// (a platform's or anyone else's is not its to release, and the public
 	// pickup area needs none).
 	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo == "counterparty" && slices.ContainsFunc(snap.Disclosing, func(c string) bool { return c != "pickup_area" }) &&
-		state.saleThread() && state.acceptanceOutsideHistory(state.historySince) && acceptanceRuleFailed(r.Rules)
-	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld})
+		state.saleThread() && state.acceptanceOutsideHistory(state.historySince) && acceptanceRuleVerdict(r.Rules) != ""
+	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld, acceptanceRefused: acceptanceOld && acceptanceRuleVerdict(r.Rules) == "fail"})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
 	// known yet, so the line names none.

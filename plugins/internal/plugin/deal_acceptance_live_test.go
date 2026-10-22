@@ -152,7 +152,7 @@ func TestAnAcceptanceOutsideTheHistoryWindowIsTold(t *testing.T) {
 func TestTheCardSaysWhyTheRulesFoundNoAcceptance(t *testing.T) {
 	w := cli.BuiltinWording()
 	share := dealSnapshot{Action: "share_contact"}
-	old := cardFacts{acceptanceOld: true}
+	old := cardFacts{acceptanceOld: true, acceptanceRefused: true}
 	assert.Equal(t, []string{"your rules don't allow this, because the buyer's acceptance is older than 31 days. Ask them to accept again"},
 		cardWhy(w, dealCheckResult{Differences: diffs("rules_deny", "first_disclosure")}, share, old), "the refusal first, then why, and nothing after")
 	assert.Equal(t, []string{"your rules don't allow this"}, cardWhy(w, dealCheckResult{Differences: diffs("rules_deny")}, share, cardFacts{}),
@@ -180,14 +180,26 @@ func TestOnlyTheAcceptanceRuleFailingNamesTheAcceptance(t *testing.T) {
 		return &dealRules{Status: "evaluated", Verdict: "deny", Findings: findings}
 	}
 	s13 := dealRulesFinding{ID: "s13", Check: "seller.release_on_acceptance/1.2.0", Verdict: "fail"}
-	assert.True(t, acceptanceRuleFailed(rules(s13)))
-	assert.True(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: "release_on_acceptance", Verdict: "not_evaluable", Reason: "no history"})))
-	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "pass"})), "it passed")
-	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "not_evaluable", Reason: rulesDeclaredNotMeasured})), "declared, not measured")
-	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "r01", Check: "caps/1", Verdict: "fail"})), "another rule")
-	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "x", Check: "seller.release_on_acceptance_extra/1", Verdict: "fail"})))
-	assert.False(t, acceptanceRuleFailed(&dealRules{Status: "not_evaluated"}))
-	assert.False(t, acceptanceRuleFailed(nil))
+	assert.Equal(t, "fail", acceptanceRuleVerdict(rules(s13)))
+	assert.Equal(t, "not_evaluable", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "s13", Check: "release_on_acceptance", Verdict: "not_evaluable", Reason: "no history"})))
+	assert.Equal(t, "", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "pass"})), "it passed")
+	assert.Equal(t, "", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "not_evaluable", Reason: rulesDeclaredNotMeasured})), "declared, not measured")
+	assert.Equal(t, "", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "r01", Check: "caps/1", Verdict: "fail"})), "another rule")
+	assert.Equal(t, "", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "x", Check: "seller.release_on_acceptance_extra/1", Verdict: "fail"})))
+	assert.Equal(t, "", acceptanceRuleVerdict(&dealRules{Status: "not_evaluated"}))
+	assert.Equal(t, "", acceptanceRuleVerdict(nil))
+	// A not_evaluable s13 beside another rule's deny names the age, but
+	// never as the deny's cause.
+	f := cardFacts{acceptanceOld: true, acceptanceRefused: false}
+	deny := dealCheckResult{Differences: diffs("rules_deny", "rules_not_evaluable")}
+	for _, row := range cardReasons {
+		if row.when != nil && row.key == "card.why.rules_deny.acceptance_too_old" {
+			assert.False(t, row.when(deny, dealSnapshot{}, f), "a deny s13 didn't cause")
+		}
+		if row.when != nil && row.key == "card.why.rules_deny" {
+			assert.True(t, row.when(deny, dealSnapshot{}, f), "the plain deny reason")
+		}
+	}
 }
 
 // setClock replaces the deal clock for the rest of the test.

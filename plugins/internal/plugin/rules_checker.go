@@ -329,24 +329,29 @@ func isDeclaredRule(f dealRulesFinding) bool {
 	return f.Verdict == "not_evaluable" && f.Reason == rulesDeclaredNotMeasured
 }
 
-// acceptanceRuleFailed is whether the user's rules failed, or could not
-// evaluate, the rule that releases a seller's details on the buyer's
-// acceptance (seller.release_on_acceptance, s13): only then can the card
-// say the acceptance is why (capsule-engine#179).
-func acceptanceRuleFailed(r *dealRules) bool {
+// acceptanceRuleVerdict is how the user's rules decided the rule that
+// releases a seller's details on the buyer's acceptance
+// (seller.release_on_acceptance, s13): "fail", "not_evaluable", or "" when
+// it passed or was not reported. Only then can the card speak of the
+// acceptance, and only a fail can be the cause of a deny (capsule-engine#179).
+func acceptanceRuleVerdict(r *dealRules) string {
 	if r == nil || r.Status != "evaluated" {
-		return false
+		return ""
 	}
+	verdict := ""
 	for _, f := range r.Findings {
 		if isDeclaredRule(f) || (f.Verdict != "fail" && f.Verdict != "not_evaluable") {
 			continue
 		}
 		name, _, _ := strings.Cut(f.Check, "/")
 		if name == "release_on_acceptance" || strings.HasSuffix(name, ".release_on_acceptance") {
-			return true
+			if f.Verdict == "fail" {
+				return "fail"
+			}
+			verdict = f.Verdict
 		}
 	}
-	return false
+	return verdict
 }
 
 // declaredRules are the ids of the rules the ruleset declares and the checker
