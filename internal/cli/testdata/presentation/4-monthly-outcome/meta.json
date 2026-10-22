@@ -1,6 +1,6 @@
 {
   "card": "outcome",
-  "emitted_by": "capsulectl report build --bundle bundle.json --card outcome --out page.html",
+  "emitted_by": "capsulectl book report build --bundle bundle.json --card outcome --out page.html",
   "kind": "monthly-outcome",
   "page": "written",
   "rerender": "report-build",
