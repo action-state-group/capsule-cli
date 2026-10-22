@@ -93,6 +93,8 @@
     "card.terms.refundable": "refunds allowed",
     "card.terms.was": "(was {value})",
     "card.terms.when": "the timing: {value}",
+    "card.why.acceptance_called_off": "the buyer's acceptance was called off",
+    "card.why.acceptance_too_old": "the buyer's acceptance is older than {days} days; ask them to accept again",
     "card.why.agent_picked": "I picked {what}, not you",
     "card.why.credentials_requested": "they asked for a login or a code",
     "card.why.first_dealing": "first time dealing with this seller",

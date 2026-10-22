@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -43,6 +44,10 @@ type cardFacts struct {
 	// askedOver is an over-limit purchase the user named themselves, item
 	// and price: the rule still asks, as an exception.
 	askedOver bool
+	// acceptanceOld is a seller's share to the buyer of a thread whose
+	// acceptance is older than the history the rules checker is given: the
+	// checker sees none, though the thread holds one.
+	acceptanceOld bool
 }
 
 // cardReasons is the collapse table, in priority order: a card shows the
@@ -55,6 +60,12 @@ var cardReasons = []cardReason{
 	{key: "card.why.payee_changed", rules: []string{"payee_or_contact_changed"}},
 	{key: "card.why.credentials_requested", rules: []string{"credentials_requested", "verification_code_request"}},
 	{key: "card.why.pay_before_seeing", rules: []string{"pay_before_seeing"}},
+	{key: "card.why.acceptance_called_off", rules: []string{"acceptance_called_off"}},
+	// Why the user's rules found no acceptance, said before they refuse:
+	// capsulectl holds the whole thread, the checker only its window.
+	{key: "card.why.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.acceptanceOld && (hasRule(r, "rules_deny") || hasRule(r, "rules_escalate") || hasRule(r, "rules_not_evaluable"))
+	}},
 	{key: "card.why.rules_deny", rules: []string{"rules_deny"}},
 	{key: "card.why.over_limit_asked", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
 		return f.askedOver && hasRule(r, "over_limit")
@@ -121,7 +132,7 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		if row.key == "card.why.first_disclosure.some" {
 			what = f.told
 		}
-		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what})
+		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what, "days": strconv.Itoa(cli.RulesHistoryDays)})
 		if text != "" && !slices.Contains(why, text) {
 			why = append(why, text)
 		}
@@ -221,7 +232,10 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	if r.Recipient != nil {
 		told = r.Recipient.First
 	}
-	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver})
+	// A share to the thread's buyer (a platform's is not the acceptance's
+	// to release).
+	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo != "platform" && state.saleThread() && state.acceptanceOutsideHistory(cli.DealClock())
+	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
 	// known yet, so the line names none.

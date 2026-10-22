@@ -151,6 +151,25 @@
   Pkwy, or a numbered unit such as Apt 4 or #5), naming `pickup_location`
   for an exact spot; nothing is sealed.
 
+### A buyer's acceptance releases a seller's details only while the deal is live (capsule-engine#179)
+
+- **Added:** on a sale's thread, after the seller's `cancel` act that
+  follows the buyer's acceptance, every later share check asks: a new
+  built-in difference `acceptance_called_off` (question `safety`), with the
+  card reason "the buyer's acceptance was called off" (wording key
+  `card.why.acceptance_called_off`). It joins the rule table, so
+  `ruleset_digest` changes and the profile's typed fixtures are
+  regenerated.
+- **Added:** when the user's rules refuse or ask on a seller's share to
+  the thread's buyer and every commit of that thread is older than the
+  31-day history the rules checker is given, the card says why: "the
+  buyer's acceptance is older than 31 days; ask them to accept again"
+  (wording key `card.why.acceptance_too_old`, with `{days}`). capsulectl
+  holds the whole thread, so it tells this from no acceptance at all.
+- **Changed:** the deal skill has the agent record the seller's `cancel`
+  in the thread when a buyer who accepted withdraws, rather than closing
+  it, and make the offer again when the acceptance is too old.
+
 ## v0.1.0-rc19
 
 ### The deal page's as-of line (capsule-cli#362)

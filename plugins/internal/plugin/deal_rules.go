@@ -955,6 +955,14 @@ type dealState struct {
 	// evaluated and the terms its card named: what an approval of it may
 	// adopt (adoptChecked).
 	checked map[string]checkedTerms
+	// On a sale's thread where the user sells: buyerAccepted is that the
+	// buyer accepted an offer, calledOff that the seller's cancel act came
+	// after it (the deal is no longer live, capsule-engine#179), and
+	// commitsAt when each accepted commit act that a rules history carries
+	// (it states its amount) was sealed.
+	buyerAccepted bool
+	calledOff     bool
+	commitsAt     []string
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1019,6 +1027,18 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				}
 				s.checked[se.CapsuleID] = c
 			}
+		case "acceptance":
+			s.buyerAccepted = s.saleThread()
+		case "act":
+			if e.Act == nil || !s.saleThread() {
+				continue
+			}
+			if e.Act.Action == "cancel" && s.buyerAccepted {
+				s.calledOff = true
+			}
+			if e.Act.Action == "commit" && e.Act.Accepted != "" && e.Act.AmountMinor != nil {
+				s.commitsAt = append(s.commitsAt, e.At)
+			}
 		case "approval":
 			// The user's confirmation of proposed limits is the new version of
 			// them; the note it answers stays sealed as the proposal.
@@ -1062,6 +1082,29 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		}
 	}
 	return s, nil
+}
+
+// saleThread is whether the deal is a thread of a sale where the user sells.
+func (s dealState) saleThread() bool {
+	return s.open.ItemRef != "" && s.open.Intent.PartyRole == dealRoleSeller
+}
+
+// acceptanceOutsideHistory is whether the thread's buyer accepted, the seller
+// committed, and every such commit is older than the history window the
+// rules checker is given (cli.RulesHistoryDays): the checker then reads no
+// acceptance at all, though the thread holds one (capsule-engine#179).
+func (s dealState) acceptanceOutsideHistory(now time.Time) bool {
+	if len(s.commitsAt) == 0 {
+		return false
+	}
+	since := now.Add(-cli.RulesHistoryDays * 24 * time.Hour)
+	for _, at := range s.commitsAt {
+		t, err := time.Parse(time.RFC3339, at)
+		if err != nil || !t.Before(since) {
+			return false
+		}
+	}
+	return true
 }
 
 // laterIntent folds a later intent note over the one in force. The note is
@@ -1555,6 +1598,12 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	}
 	if who.DomainAgeDays != nil && *who.DomainAgeDays < recentDomainDays {
 		add("safety", "domain_recent", "domain", "Site registered "+ageText(*who.DomainAgeDays))
+	}
+	// The buyer accepted and the seller then called the deal off: their
+	// acceptance releases nothing more in this thread, so every later share
+	// asks, whatever the user's rules say (capsule-engine#179).
+	if isShare(snap.Action) && s.calledOff {
+		add("safety", "acceptance_called_off", "", "The buyer's acceptance was called off")
 	}
 
 	// 4. Checked claims, and a way back?
@@ -2780,7 +2829,7 @@ var dealBuiltinRules = []struct {
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},
-	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent", "materiality_changed"}},
+	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent", "materiality_changed", "acceptance_called_off"}},
 }
 
 // rulesetDigest is the digest of what evaluated: the built-in rule table and

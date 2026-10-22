@@ -49,7 +49,7 @@
         "digest_alg": "SHA-256",
         "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
       },
-      "ruleset_digest": "037602503c17825b2b8ef2d45ff75ca8d8808fdcd536bfd385445e5d92153597",
+      "ruleset_digest": "0a2a70b102a3c1a08f7a18db0c30ef991aff18a93c4cdcfea0fc6aec5088d60a",
       "materiality": "predicate",
       "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
       "valid_until": "2026-10-07T10:20:00Z",
@@ -65,5 +65,5 @@
       ]
     }
   },
-  "expected_digest": "3dbf2e9e572c2e25bf948ef4c98da58d9b6ab84ac303dba23e7905f48708c281"
+  "expected_digest": "ef03752e0bf86b683d83bea52ec2c820c26a6f22191a2674d4567257fb1f9dce"
 }

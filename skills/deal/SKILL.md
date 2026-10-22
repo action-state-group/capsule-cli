@@ -174,7 +174,16 @@ not at the final review. Keep it for the whole errand: one deal per errand.
    buy-shaped deal with the marketplace as the counterparty.
 7. **Called off.** When the user drops the errand before anything is done,
    close it with `{"status": "called_off"}`.
-8. **Find deals with `deal list`**, never from memory.
+8. **A buyer who backs out.** When a buyer who accepted your offer
+   withdraws ("never mind"), record your `cancel` in their thread:
+   `deal check` with `"action": "cancel"`, and once it proceeds,
+   `deal note --kind act` with `{"action": "cancel"}`. Until it is
+   recorded, their acceptance stays live; after it, every share in that
+   thread asks first. Do not close the thread instead: after an offer or a
+   commit, `deal close` refuses `called_off` and `not_selected`. When a
+   share's card says the buyer's acceptance is older than 31 days, make
+   the offer again and record their new acceptance before you share.
+9. **Find deals with `deal list`**, never from memory.
 
 ### Booking
 

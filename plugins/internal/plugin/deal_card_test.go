@@ -55,7 +55,7 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 	}
 	// Every row says something in the built-in pack.
 	for _, row := range cardReasons {
-		assert.NotEmpty(t, w.Line(row.key, cli.V{"limit": "$2", "floor": "$1", "what": "size small"}), row.key)
+		assert.NotEmpty(t, w.Line(row.key, cli.V{"limit": "$2", "floor": "$1", "what": "size small", "days": "31"}), row.key)
 	}
 	// A purchase the user named, over their limit, is asked as an exception.
 	assert.Equal(t, []string{"you asked for this one, but it's over your $2 limit"}, cardWhy(w, dealCheckResult{Differences: diffs("over_limit")}, pay, cardFacts{limit: "$2", askedOver: true}))
