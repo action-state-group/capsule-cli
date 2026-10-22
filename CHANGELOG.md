@@ -63,9 +63,9 @@
   retryable, not permanent, so the delivery is tried again on the delivery
   backoff (up to an hour apart) and goes through once the host lets the
   request out; if the witness itself keeps refusing, it stays pending. Its pending reason is
-  `refused`: "pending: the request was refused (HTTP 403), by the witness or
-  by a network gate on this host; it is retried at every tick.", followed
-  by the text for granting the witness's site. 407 and transport errors
+  `refused`, and its pending text says the request was refused (HTTP 403)
+  by the witness or by a network gate on this host, then how to grant the
+  witness's site. 407 and transport errors
   stay `network_consent_needed`.
 - **Fixed:** a delivery that an earlier version stored as permanent after a
   403 is made due again, once: `cll checkpoint publish` re-arms its own row, and
