@@ -69,9 +69,10 @@ through the real CLI. Run it only to change a fixture on purpose.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
 - **One page overflows** in CI's pinned environment: the composed page (fixture 3) is
-  2091px wide at 1280px and in print, because its members table holds unbroken 64-hex
-  ids (capsule-viewer#57); it fits at 390px. `known-overflow.json` lists those two
-  views. No other page overflows. Four did when the fixtures were taken: the
+  2267px wide at 1280px and 2091px in print, because its members table holds unbroken
+  64-hex ids (capsule-viewer#57); it fits at 390px. It was 2091px at 1280px too until
+  capsule-viewer's page shell gave every page a 60rem frame (capsule-viewer#60).
+  `known-overflow.json` lists those two views. No other page overflows. Four did when the fixtures were taken: the
   compliance page (793px), the fallback page (686px, fixtures 6 and 6-unknown-extension),
   the rules comparison (682px) and the outcome report (421px, fixed in
   agent-action-capsule#323; capsule-cli#150).

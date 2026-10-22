@@ -103,7 +103,8 @@ portable_checks() {
   check "the page loads nothing from the network" no_remote page.html
   render page.html
   check "the page ran offline with no console.error, uncaught error or unhandled rejection" no_render_errors page.html.dom
-  check "the page says its bundle verified" contains page.html.dom '<p data-verify="verified"'
+  # The pill element itself: the page's stylesheet names data-verify values too.
+  check "the page says its bundle verified" contains page.html.dom 'class="cv-pill" data-verify="verified"'
   check "the page renders the deal" contains page.html.dom '<h1>Deal report</h1>'
   check "the page says its text is sealed and checked" contains page.html.dom 'data-sealed="x-deal-v0"'
   page_bundle page.html >bundle.json
@@ -231,7 +232,7 @@ broken() { # name, page, records, then the checks that must fail
 # refused PAGE: opened offline, the page itself says its bundle failed.
 refused() {
   render "$1"
-  contains "$1.dom" 'Bundle verification failed' && lacks "$1.dom" '<p data-verify="verified"'
+  contains "$1.dom" 'class="cv-pill" data-verify="failed"' && lacks "$1.dom" 'class="cv-pill" data-verify="verified"'
 }
 cd "$work/out"
 page_bundle recipient.html >bundle.json

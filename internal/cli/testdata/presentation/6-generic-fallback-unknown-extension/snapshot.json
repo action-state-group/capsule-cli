@@ -22,8 +22,10 @@
     "df875e430164fc87dcf6e1c31979a732f87d40c2491573ea65f4f65696bd262f"
   ],
   "text": [
-    "Bundle verification passed",
+    "Contents checked",
     "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.",
+    "How this page was checked",
+    "· 10 of 10 checks passed · 1 record · signatures not checked here",
     "Verification",
     "bundle digest",
     "\"df875e430164fc87dcf6e1c31979a732f87d40c2491573ea65f4f65696bd262f\"",

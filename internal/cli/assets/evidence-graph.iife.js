@@ -2012,10 +2012,10 @@ var EvidenceGraph = (() => {
   }
   function leafCount(size) {
     if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) return void 0;
-    const count = (n) => 2n * n - BigInt(n.toString(2).replaceAll("0", "").length);
+    const count2 = (n) => 2n * n - BigInt(n.toString(2).replaceAll("0", "").length);
     let lo = 0n, hi = size + 1n;
     while (lo <= hi) {
-      const n = lo + hi >> 1n, c = count(n);
+      const n = lo + hi >> 1n, c = count2(n);
       if (c === size) return n;
       if (c < size) lo = n + 1n;
       else hi = n - 1n;
@@ -2522,6 +2522,7 @@ var EvidenceGraph = (() => {
   __export(capsulectl_report_runtime_exports, {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
     AGENT_INPUT_ORIGINALS_EXTENSION: () => AGENT_INPUT_ORIGINALS_EXTENSION,
+    BANNER_LINES: () => BANNER_LINES,
     BOOK_PAYLOADS_EXTENSION: () => BOOK_PAYLOADS_EXTENSION,
     BUILTIN_MANIFESTS: () => BUILTIN_MANIFESTS,
     BUILTIN_MANIFEST_COMPOSED: () => BUILTIN_MANIFEST_COMPOSED,
@@ -2536,6 +2537,7 @@ var EvidenceGraph = (() => {
     BUILTIN_SECTION_MANIFESTS: () => BUILTIN_SECTION_MANIFESTS,
     BundleBuildError: () => BundleBuildError,
     CHECKED_ON_THIS_PAGE: () => CHECKED_ON_THIS_PAGE,
+    CHECKED_SECTION_TITLE: () => CHECKED_SECTION_TITLE,
     CHECKPOINT_NOT_CHECKED_NOTE: () => CHECKPOINT_NOT_CHECKED_NOTE,
     CHECKS_SCOPE_LINE: () => CHECKS_SCOPE_LINE,
     CLAIM_REQUIRED: () => CLAIM_REQUIRED,
@@ -2546,6 +2548,9 @@ var EvidenceGraph = (() => {
     COUNTERSIGN_RESULTS: () => COUNTERSIGN_RESULTS,
     COUNTERSIGN_V1: () => COUNTERSIGN_V1,
     CURRENT_SPEC_VERSION: () => CURRENT_SPEC_VERSION,
+    DEFAULT_PACKS: () => DEFAULT_PACKS,
+    DEFAULT_PACK_SHA256: () => DEFAULT_PACK_SHA256,
+    DEFAULT_WORDS: () => DEFAULT_WORDS,
     DISCLOSED_STATUSES: () => DISCLOSED_STATUSES,
     DISCLOSURE_INELIGIBLE_FIELD: () => DISCLOSURE_INELIGIBLE_FIELD,
     DISCLOSURE_MATCH: () => DISCLOSURE_MATCH,
@@ -2568,6 +2573,7 @@ var EvidenceGraph = (() => {
     JcsFloatError: () => JcsFloatError,
     JcsUnsafeIntegerError: () => JcsUnsafeIntegerError,
     JsonNumber: () => JsonNumber,
+    LOCKED_ENTRIES: () => LOCKED_ENTRIES,
     NOT_CHECKED_ON_THIS_PAGE: () => NOT_CHECKED_ON_THIS_PAGE,
     PRESENTATION_API_V0: () => PRESENTATION_API_V0,
     PRESENTATION_DEPTHS: () => PRESENTATION_DEPTHS,
@@ -2591,6 +2597,7 @@ var EvidenceGraph = (() => {
     SELECTION_PRODUCER_SELECTED: () => SELECTION_PRODUCER_SELECTED,
     STATES_OF_RECORD: () => STATES_OF_RECORD,
     SUFFICIENCIES: () => SUFFICIENCIES,
+    SUMMARY_NOT_VERIFIED: () => SUMMARY_NOT_VERIFIED,
     Sha256UnavailableError: () => Sha256UnavailableError,
     TIERS: () => TIERS,
     UNABLE_TO_VERIFY_LINES: () => UNABLE_TO_VERIFY_LINES,
@@ -2599,6 +2606,8 @@ var EvidenceGraph = (() => {
     VERIFICATION_CHECK_IDS: () => VERIFICATION_CHECK_IDS,
     VERIFICATION_CHECK_WORDS: () => VERIFICATION_CHECK_WORDS,
     VERIFY_INDEPENDENTLY_LINE: () => VERIFY_INDEPENDENTLY_LINE,
+    WORDING_PACK_VERSION: () => WORDING_PACK_VERSION,
+    WordingPackError: () => WordingPackError,
     asJsonObject: () => asJsonObject,
     buildDisclosureEnvelope: () => buildDisclosureEnvelope,
     buildEvidenceBundle: () => buildEvidenceBundle,
@@ -2611,11 +2620,15 @@ var EvidenceGraph = (() => {
     carriedCapsuleCommitment: () => carriedCapsuleCommitment,
     carriesResultDocument: () => carriesResultDocument,
     checkPresentationFragment: () => checkPresentationFragment,
+    checkWordingPackInput: () => checkWordingPackInput,
+    checkedSummaryLine: () => checkedSummaryLine,
     classifyCountersignatures: () => classifyCountersignatures,
     composedBlockProblem: () => composedBlockProblem,
     composedDigest: () => composedDigest,
     composedDigestPreimage: () => composedDigestPreimage,
     computeCapsuleId: () => computeCapsuleId,
+    contractReportWords: () => contractReportWords,
+    conversationStatus: () => conversationStatus,
     counterpartyLinks: () => counterpartyLinks,
     countersignV1SigningInput: () => countersignV1SigningInput,
     coverageStatement: () => coverageStatement,
@@ -2650,8 +2663,10 @@ var EvidenceGraph = (() => {
     manifestsCoMatchable: () => manifestsCoMatchable,
     mountPresentation: () => mountPresentation,
     mountPresentationFragment: () => mountPresentationFragment,
+    obligationStatus: () => obligationStatus,
     parseCapsule: () => parseCapsule,
     pinnedCountersignerSource: () => pinnedCountersignerSource,
+    placeholders: () => placeholders,
     presentationRefusalLine: () => presentationRefusalLine,
     presentationRefusalNotices: () => presentationRefusalNotices,
     presentationRefusalReason: () => presentationRefusalReason,
@@ -2659,10 +2674,12 @@ var EvidenceGraph = (() => {
     probeEd25519: () => probeEd25519,
     proofSourceFromCll: () => proofSourceFromCll,
     readPresentationBlock: () => readPresentationBlock,
+    readWordingPack: () => readWordingPack,
     recomputeCounts: () => recomputeCounts,
     registerPresentation: () => registerPresentation,
     registries: () => registries,
     renderCompliancePage: () => renderCompliancePage,
+    renderContractReport: () => renderContractReport,
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     renderUnableToVerify: () => renderUnableToVerify,
@@ -2670,6 +2687,7 @@ var EvidenceGraph = (() => {
     resolveDisclosure: () => resolveDisclosure,
     resolveModules: () => resolveModules,
     resolvePresentation: () => resolvePresentation,
+    rowStatus: () => rowStatus,
     scopeDisclosures: () => scopeDisclosures,
     sealCapsule: () => sealCapsule,
     setMember: () => setMember,
@@ -2689,7 +2707,9 @@ var EvidenceGraph = (() => {
     verifyProducerEnvelope: () => verifyProducerEnvelope,
     verifyRecordSignature: () => verifyRecordSignature,
     verifyStore: () => verifyStore,
-    withCountersigners: () => withCountersigners
+    withCountersigners: () => withCountersigners,
+    wordingProblems: () => wordingProblems,
+    wordsOf: () => wordsOf
   });
 
   // agent-action-capsule/ts/src/producer-envelope-wire.ts
@@ -3178,23 +3198,23 @@ var EvidenceGraph = (() => {
     return typeof value === "string" && value.length > 0;
   }
   function indexCountersigners(source) {
-    const names = /* @__PURE__ */ new Map();
+    const names2 = /* @__PURE__ */ new Map();
     const ambiguous = /* @__PURE__ */ new Set();
-    if (!Array.isArray(source)) return names;
+    if (!Array.isArray(source)) return names2;
     for (const raw of source) {
       const listing = object(raw);
       if (listing === void 0 || !nonEmptyString(listing.name)) continue;
       if (!Array.isArray(listing.key_ids)) continue;
       for (const key of listing.key_ids) {
         if (typeof key !== "string" || !KEY_ID.test(key)) continue;
-        const existing = names.get(key);
+        const existing = names2.get(key);
         if (existing !== void 0 && existing !== listing.name)
           ambiguous.add(key);
-        names.set(key, listing.name);
+        names2.set(key, listing.name);
       }
     }
-    ambiguous.forEach((key) => names.delete(key));
-    return names;
+    ambiguous.forEach((key) => names2.delete(key));
+    return names2;
   }
   async function pinnedCountersignerSource(bytes, expectedSha256) {
     if (!KEY_ID.test(expectedSha256)) return void 0;
@@ -5470,14 +5490,14 @@ var EvidenceGraph = (() => {
     return k;
   }
   function expectedPathLength(size, index) {
-    let count = 0;
+    let count2 = 0;
     while (size > 1n) {
       const k = largestPowerOfTwoBelow(size);
       if (index < k) size = k;
       else [size, index] = [size - k, index - k];
-      count += 1;
+      count2 += 1;
     }
-    return count;
+    return count2;
   }
   async function rootFromInclusion(entry, index, size, path2) {
     const siblings = [...path2];
@@ -8059,14 +8079,14 @@ ${body}
           );
       }
     for (const [id, verdict2] of verdictById) {
-      const count = appearances.get(id) ?? 0;
-      if (count === 0)
+      const count2 = appearances.get(id) ?? 0;
+      if (count2 === 0)
         findings.push(
           `aggregate.buckets: ${id} (${verdict2}) appears in no bucket`
         );
-      else if (count > 1)
+      else if (count2 > 1)
         findings.push(
-          `aggregate.buckets: ${id} appears ${count} times across the buckets`
+          `aggregate.buckets: ${id} appears ${count2} times across the buckets`
         );
     }
     if (entries !== verdictById.size)
@@ -8673,13 +8693,13 @@ ${body}
     });
   }
   function nonUnboundFindings(verified) {
-    const names = [];
+    const names2 = [];
     for (const finding of verified.perRecordMembership.findings) {
       if (finding.startsWith(UNBOUND)) continue;
       const name = finding.split(":", 1)[0];
-      if (!names.includes(name)) names.push(name);
+      if (!names2.includes(name)) names2.push(name);
     }
-    return names;
+    return names2;
   }
   function coverageStatement(verified) {
     const claim = verified.perRecordMembership;
@@ -9788,28 +9808,28 @@ ${body}
         state: "mismatch",
         reason: "the reports do not agree on one case record"
       };
-    const caseRecord2 = records.find(
+    const caseRecord3 = records.find(
       (r) => r.carriedCapsuleId === sourceCapsuleId
     );
-    if (caseRecord2?.carriedInputDigest === void 0)
+    if (caseRecord3?.carriedInputDigest === void 0)
       return {
         state: "mismatch",
         reason: `the case record the reports name (${sourceCapsuleId}) is not cited, so the transcript cannot be tied to it`
       };
     if (caseFrom === "claims") {
       const ordered = [
-        ...carriers.filter((c) => c === caseRecord2),
-        ...carriers.filter((c) => c !== caseRecord2)
+        ...carriers.filter((c) => c === caseRecord3),
+        ...carriers.filter((c) => c !== caseRecord3)
       ];
       for (const carrier of ordered) {
         const payload = carrier.carriedInput.payload;
-        if ((carrier === caseRecord2 || carrier.carriedInputDigest === caseRecord2.carriedInputDigest) && sealedCaseIds(payload).includes(conversationId))
+        if ((carrier === caseRecord3 || carrier.carriedInputDigest === caseRecord3.carriedInputDigest) && sealedCaseIds(payload).includes(conversationId))
           return {
             state: "cited",
             turns: transcriptTurns(payload),
             transcriptRecordId: carrier.capsuleId,
-            caseRecordId: caseRecord2.capsuleId,
-            inputDigest: caseRecord2.carriedInputDigest,
+            caseRecordId: caseRecord3.capsuleId,
+            inputDigest: caseRecord3.carriedInputDigest,
             reason: "the claims cite this case; the judge's reports are withheld, so which conversation the judge read is not shown"
           };
       }
@@ -9821,13 +9841,13 @@ ${body}
     for (const carrier of carriers) {
       const payload = carrier.carriedInput.state === "disclosed" ? carrier.carriedInput.payload : void 0;
       if (payload === void 0) continue;
-      if (carrier.carriedInputDigest === caseRecord2.carriedInputDigest && sealedCaseIds(payload).includes(conversationId))
+      if (carrier.carriedInputDigest === caseRecord3.carriedInputDigest && sealedCaseIds(payload).includes(conversationId))
         return {
           state: "verified",
           turns: transcriptTurns(payload),
           transcriptRecordId: carrier.capsuleId,
-          caseRecordId: caseRecord2.capsuleId,
-          inputDigest: caseRecord2.carriedInputDigest
+          caseRecordId: caseRecord3.capsuleId,
+          inputDigest: caseRecord3.carriedInputDigest
         };
     }
     return {
@@ -10297,8 +10317,8 @@ ${body}
       if (!isObject(raw)) continue;
       const rowId = asString(raw.row_id);
       const label = asString(raw.label);
-      const rowStatus = asString(raw.status);
-      if (rowId === void 0 || label === void 0 || rowStatus === void 0)
+      const rowStatus2 = asString(raw.status);
+      if (rowId === void 0 || label === void 0 || rowStatus2 === void 0)
         continue;
       const reason = asString(raw.reason);
       const citations2 = [];
@@ -10318,7 +10338,7 @@ ${body}
       rows.push({
         rowId,
         label,
-        status: rowStatus,
+        status: rowStatus2,
         ...reason === void 0 ? {} : { reason },
         citations: citations2
       });
@@ -10337,1237 +10357,59 @@ ${body}
     };
   }
 
-  // capsule-viewer/ts/src/outcome-report-styles.ts
-  var OUTCOME_REPORT_CSS = `
-.oi{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
-  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#EEF0F3;display:block}
-.oi *{box-sizing:border-box}
-.oi h1,.oi h2,.oi h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
-.oi a{color:var(--navy)}
-.oi .sheet{background:#fff;max-width:1080px;margin:26px auto;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 10px 30px rgba(0,0,0,.06);position:relative;overflow:hidden}
-.oi .sheet .pad{padding:64px 72px 56px}
-.oi .ih-row{display:flex;justify-content:space-between;align-items:flex-start;gap:40px;margin-bottom:48px}
-.oi .ih-title{text-align:right}
-.oi .ih-title .inv-title{font-size:28px}
-.oi .inv-title{font-family:Georgia,serif;font-size:30px;color:var(--navy);margin:0}
-.oi .inv-sub{color:var(--slate);font-size:14px;margin-top:4px}
-.oi .party .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;font-weight:700;color:var(--navy)}
-.oi .party .v{font-weight:600;color:var(--navy);font-size:16px}
-.oi .party .d{font-size:14px;color:var(--slate);line-height:1.7;margin-top:4px}
-.oi .meta{width:320px;flex:none;font-size:14px}
-.oi .meta div{display:grid;grid-template-columns:130px 1fr}
-.oi .meta span:first-child{color:var(--slate)}
-.oi .meta span:last-child{text-align:right;word-break:break-all;min-width:0}
-.oi .meta code{font-size:12.5px}
-.oi table.lines{width:100%;border-collapse:collapse;margin-top:40px;font-size:14.5px}
-.oi table.lines th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:8px 10px}
-.oi table.lines td{border-bottom:1px solid var(--line);padding:16px 10px;vertical-align:top}
-.oi table.lines td.n,.oi table.lines th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.oi table.lines .desc b{color:var(--navy)}
-.oi table.lines .desc small{display:block;color:var(--slate);font-size:12.5px}
-.oi table.lines .src{font-size:11.5px;color:var(--slate);white-space:normal}
-.oi .notes{font-size:13px;color:var(--slate);margin-top:44px;max-width:640px}
-.oi .notes p{margin:0 0 8px;font-size:14px;color:var(--ink)}
-.oi .notes .nh{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:6px}
-.oi .stamps.inl{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;margin-top:24px;gap:14px}
-.oi .stamp{border:3px solid;border-radius:8px;padding:6px 12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:13px;transform:rotate(-6deg)}
-.oi .stamp.rec{color:var(--ok);border-color:var(--ok)}
-.oi .stamp.hollow{color:#9AA1AC;border:3px dashed #BFC4CC;transform:rotate(-3deg);font-size:11.5px}
-.oi .stamp small{display:block;font-weight:600;letter-spacing:0;text-transform:none;font-size:11px}
-.oi .tamper-note{margin-top:24px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#FAF8F4;font-size:13.5px;color:var(--slate)}
-.oi .sec{background:#fff;max-width:1080px;margin:0 auto 22px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:30px 42px}
-.oi .sec h2{font-size:22px}
-.oi .sec .lede{color:var(--slate);margin:6px 0 16px}
-.oi .cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
-.oi .day{border:1px solid var(--line);border-radius:10px;padding:8px 9px;min-height:84px;background:#fff;position:relative}
-.oi .day .dn{font-size:12px;color:var(--slate)}
-.oi .day .v{font-weight:700;font-size:17px;color:var(--navy);font-variant-numeric:tabular-nums}
-.oi .day .v small{font-weight:400;color:var(--slate);font-size:12px}
-.oi .day .amt{font-size:11px;color:var(--slate);font-variant-numeric:tabular-nums}
-.oi .mini{height:6px;border-radius:99px;background:var(--bad-l);overflow:hidden;margin-top:6px}
-.oi .mini i{display:block;height:100%;background:var(--ok)}
-.oi .day .sealed{font-size:11px;color:var(--slate);margin-top:6px}
-.oi .day .src-says{display:inline-block;font-size:10.5px;font-weight:700;color:var(--navy);background:var(--gold-l);border:1px solid var(--gold);border-radius:999px;padding:0 6px;margin-top:2px}
-.oi .day .tz{font-size:11px;color:var(--bad);margin-top:2px}
-.oi p.date-note{font-size:13.5px;color:var(--ink);background:#FAF8F4;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:8px;padding:10px 14px;margin:14px 0 0}
-.oi .sec p.date-note{margin:0 0 14px}
-.oi .flag{position:absolute;top:7px;right:8px;font-size:11px;color:var(--gold)}
-.oi .flag:before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;background:var(--gold);transform:rotate(45deg);vertical-align:1px}
-.oi .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--slate);margin-top:12px}
-.oi .legend span i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-.oi .hc-top{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
-.oi .hc-top div{padding:12px 14px;border-right:1px solid var(--line)}
-.oi .hc-top div:last-child{border-right:0}
-.oi .hc-top b{display:block;font-size:22px;color:var(--navy);font-variant-numeric:tabular-nums}
-.oi .hc-top span{font-size:12.5px;color:var(--slate)}
-.oi table.hct{width:100%;border-collapse:collapse;font-size:14px}
-.oi table.hct th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:7px 10px}
-.oi table.hct td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
-.oi table.hct .n{text-align:right}
-.oi .bars{display:grid;gap:12px;margin-bottom:26px}
-.oi .bar{display:grid;grid-template-columns:260px 1fr 190px;gap:16px;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:#fff}
-.oi .bar .nm{font-weight:600;color:var(--navy)}
-.oi .track{height:14px;background:var(--bad-l);border-radius:99px;overflow:hidden}
-.oi .track i{display:block;height:100%;background:var(--ok);border-radius:99px}
-.oi .bar .num{text-align:right;font-variant-numeric:tabular-nums;font-size:15px}
-.oi .reasons{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-.oi .rsn{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--bad-l);border-radius:10px;font-size:15px}
-.oi .rsn .c{font-weight:700;color:var(--bad);font-variant-numeric:tabular-nums}
-.oi h3{font-size:19px;margin:26px 0 12px}
-.oi .pack{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
-.oi .pk{padding:10px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-.oi .pk:nth-child(3n){border-right:0}
-.oi .pk .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
-.oi .pk .v{color:var(--navy);font-weight:600;font-size:14px}
-.oi .outcome{border:2px solid var(--navy);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;display:flex;gap:16px;align-items:center}
-.oi .outcome .t{font-size:13px;color:var(--slate);text-transform:uppercase;letter-spacing:.06em}
-.oi .outcome .v{font-family:Georgia,Cambria,serif;font-size:22px;color:var(--navy)}
-.oi .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.oi .check{border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;background:#fff}
-.oi .check .ic{width:34px;height:34px;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center;margin-bottom:8px}
-.oi .outcome .oic{width:40px;height:40px;flex:none;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center}
-.oi svg{display:block}
-.oi .check .q{font-weight:700;color:var(--navy);font-size:17px}
-.oi .check .d{color:var(--slate);font-size:14px;margin-top:4px}
-.oi ul.subs{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
-.oi ul.subs li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
-.oi ul.subs li b{display:block;color:var(--navy);font-size:13px}
-.oi ul.subs li b:before{content:"";display:inline-block;width:5px;height:5px;margin-right:6px;border:1.5px solid var(--gold);border-radius:50%;vertical-align:2px}
-.oi ul.subs li span{color:var(--slate)}
-.oi .rule{margin-top:14px;font-size:14px;color:var(--slate)}
-.oi .rule b{color:var(--ink)}
-.oi .ran{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.oi .ran .it{background:var(--cream);border-radius:12px;padding:12px 14px}
-.oi .ran .k{font-size:13px;color:var(--slate)}
-.oi .ran .v{font-weight:600;color:var(--navy);word-break:break-word}
-.oi .ran .v code{font-size:13px}
-.oi .lock{margin-top:12px;font-size:14px;color:var(--slate)}
-.oi .tech{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin-top:12px;font-size:13px}
-.oi .tech .k{color:var(--slate)}
-.oi .tech .v{font-family:ui-monospace,Menlo,monospace;word-break:break-all;min-width:0}
-.oi .note{font-size:13px;color:var(--slate);margin-top:12px}
-.oi.oi-banner{max-width:1080px;margin:26px auto 0;padding:12px 18px;border-radius:6px;font-weight:700;font-size:15px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.oi.oi-banner-ok{background:var(--ok-l);color:var(--ok);border:1px solid var(--ok)}
-.oi.oi-banner-failed{background:var(--bad-l);color:var(--bad);border:1px solid var(--bad)}
-.oi.oi-vp{padding:0 0 26px}
-.oi.oi-vp .sec{margin-bottom:0}
-.oi.oi-vp h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:22px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
-.oi.oi-vp h2 + dl{margin-top:14px}
-.oi.oi-vp dl{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin:0;font-size:13px}
-.oi.oi-vp dt{color:var(--slate)}
-.oi.oi-vp dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
-.oi.oi-vp p{font-size:14px;margin:6px 0}
-.oi.oi-vp ul,.oi.oi-vp ol{margin:6px 0;padding-left:22px;font-size:14px}
-.oi.oi-vp li{padding:2px 0}
-.oi.oi-vp ol li strong{color:var(--navy)}
-.oi.oi-vp [data-check-status="pass"] span,.oi.oi-vp [data-check-status="passed"] span{color:var(--ok)}
-.oi.oi-vp details{margin-top:8px;font-size:13px}
-.oi.oi-vp summary{cursor:pointer;color:var(--navy);font-weight:600}
-.oi.oi-vp details ul{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;max-height:420px;overflow:auto}
-.oi.oi-vp .seal-checkpointed{color:var(--ok)}
-.oi.oi-vp .seal-uncheckpointed,.oi.oi-vp .seal-membership_invalid{color:var(--bad)}
-.oi.oi-vp > .sec > p:last-child{margin-top:18px;padding:12px 14px;border-radius:10px;background:var(--cream);color:var(--slate)}
-.oi details.drill{margin-top:8px}
-.oi details.drill > summary{cursor:pointer;color:var(--navy);font-size:13px;font-weight:600;list-style:none}
-.oi details.drill > summary::-webkit-details-marker,.oi summary.rsn::-webkit-details-marker,.oi summary.conv-s::-webkit-details-marker{display:none}
-.oi details.drill[open] > summary{margin-bottom:8px}
-.oi .reasons details.rsn-d[open]{grid-column:1/-1}
-.oi summary.rsn{cursor:pointer;list-style:none}
-.oi summary.rsn .c{white-space:nowrap}
-.oi details.rsn-d > .convs{margin-top:8px}
-.oi .convs{display:grid;gap:6px}
-.oi details.conv{border:1px solid var(--line);border-radius:10px;background:#fff}
-.oi details.conv[open]{border-color:var(--navy);box-shadow:0 1px 6px rgba(0,0,0,.06)}
-.oi summary.conv-s{cursor:pointer;list-style:none;display:grid;grid-template-columns:76px 86px 1fr auto;gap:10px;align-items:center;padding:8px 12px;font-size:13.5px;font-weight:400}
-.oi summary.conv-s .cid{font-weight:700;color:var(--navy)}
-.oi summary.conv-s .cwhy{color:var(--slate)}
-.oi summary.conv-s .go{color:var(--navy);font-weight:600;white-space:nowrap}
-.oi .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;text-align:center}
-.oi .pill.ok{background:var(--ok-l);color:var(--ok)}
-.oi .pill.bad{background:var(--bad-l);color:var(--bad)}
-.oi .pill.na{background:#EEF0F3;color:var(--slate);border:1px dashed #BFC4CC}
-.oi .pill.ne{background:var(--gold-l);color:#8A5A12}
-.oi .conv-b{padding:4px 16px 16px;border-top:1px solid var(--line);font-size:13.5px;font-weight:400;color:var(--ink)}
-.oi .conv-b h4{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:16px 0 6px}
-.oi .conv-b .small{font-size:12.5px;color:var(--slate);margin:6px 0}
-.oi .conv-b .muted{color:var(--slate)}
-.oi .conv-b .absent{margin:0;padding:10px 12px;border:1px dashed #BFC4CC;border-radius:10px;background:#FAF8F4;color:var(--slate);word-break:break-word}
-.oi .tscroll{overflow-x:auto}
-.oi table.crit{width:100%;border-collapse:collapse;margin:0;font-size:12.5px}
-.oi table.lines table.crit th,.oi table.crit th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:1px solid var(--navy);padding:5px 8px}
-.oi table.lines table.crit td,.oi table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
-.oi table.crit td.cn{width:30%}
-.oi table.crit td.cn b{display:block;color:var(--navy);font-size:13px}
-.oi table.crit td.cn small{display:block;color:var(--slate);font-size:11.5px}
-.oi small.wsrc{display:block;font-style:italic;color:var(--slate);font-size:11px;margin-top:2px}
-.oi .pnote{max-width:1080px;margin:26px auto 0;box-sizing:border-box;background:var(--gold-l);border:1px solid var(--gold);border-left:6px solid var(--gold);border-radius:6px;padding:18px 26px}
-.oi .pnote .pn-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);font-weight:700}
-.oi .pnote .pn-t{font-size:20px;color:var(--navy);margin:4px 0 8px}
-.oi .pnote .pn-l{margin:0;padding-left:20px;font-size:14.5px;line-height:1.55}
-.oi .pnote .pn-l li{margin:4px 0}
-.oi .pnote .pn-src{font-size:12px;color:var(--slate);margin:10px 0 0;font-style:italic}
-.oi span.edited{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:var(--gold-l);border:1px solid var(--gold);color:var(--navy);font-size:10.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
-.oi p[data-wording-note]{font-size:12.5px;color:var(--slate);margin:10px 0}
-.oi table.crit td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.oi table.crit td.rat code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--slate);word-break:break-word;white-space:normal}
-.oi ul.why{margin:0;padding-left:20px}
-.oi ul.why li{padding:2px 0}
-.oi dl.chk{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;margin:0;font-size:12px}
-.oi dl.chk dt{color:var(--slate)}
-.oi dl.chk dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
-.oi ol.turns{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px;max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;background:#FAF8F4}
-.oi li.turn{border-radius:10px;padding:6px 10px;max-width:88%;background:#fff;border:1px solid var(--line)}
-.oi li.turn.user{justify-self:end;background:var(--person-l);border-color:transparent}
-.oi li.turn.assistant{justify-self:start}
-.oi li.turn.tool{justify-self:center;max-width:96%;border-style:dashed}
-.oi li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
-.oi li.turn .say{white-space:pre-wrap;word-break:break-word}
-.oi li.turn pre{margin:4px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;color:var(--slate)}
-.oi li.turn pre.call{color:var(--navy);background:var(--gold-l);padding:3px 6px;border-radius:6px}
-@media (max-width:820px){
-  .oi .ih-row{flex-direction:column;gap:16px}
-  .oi .ih-row .party:empty{display:none}
-  .oi .ih-title{text-align:left}
-  .oi .meta{width:100%}
-  .oi .sheet .pad,.oi .sec{padding:22px}
-  .oi .hc-top{grid-template-columns:1fr 1fr}
-}
-@media (max-width:760px){
-  .oi .checks,.oi .ran,.oi .reasons{grid-template-columns:1fr}
-  .oi .bar{grid-template-columns:1fr}
-  .oi .bar .num{text-align:left}
-  .oi .cal{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px}
-  .oi .day{min-height:64px;padding:6px 4px;min-width:0}
-  .oi .day .dn{font-size:11px}
-  .oi .day .v{font-size:14px}
-  .oi .tech,.oi.oi-vp dl,.oi dl.chk{grid-template-columns:1fr}
-  .oi summary.conv-s{grid-template-columns:1fr auto}
-}
-@media print{
-  .oi{background:#fff}
-  .oi .sheet,.oi .sec{box-shadow:none;margin:0 0 12px}
-}
-`;
-
-  // capsule-viewer/ts/src/outcome-report-view.ts
-  function element2(tag, text2) {
-    const value = document.createElement(tag);
-    if (text2 !== void 0) value.textContent = text2;
-    return value;
+  // capsule-viewer/ts/src/record-dating.ts
+  var STATED_DAY2 = /^(\d{4}-\d{2}-\d{2})/u;
+  function caseRecord2(result, claims, sourceCapsuleId) {
+    if (sourceCapsuleId === void 0) return void 0;
+    for (const claim of claims)
+      for (const ref of claim.evidence) {
+        const record = result.records.get(ref.digest);
+        if (record === void 0 || record.stated === void 0) continue;
+        if (record.carriedCapsuleId === sourceCapsuleId || record.carriedCapsuleId === void 0 && record.bookRecordId === void 0 && record.capsuleId === sourceCapsuleId)
+          return record;
+      }
+    return void 0;
   }
-  function el(tag, className, text2) {
-    const value = element2(tag, text2);
-    value.className = className;
-    return value;
-  }
-  var SVG_NS = ["http", "://www.w3.org/2000/svg"].join("");
-  var ICON_PATHS = {
-    // an open rulebook
-    book: [
-      "M4 5.5C4 4.7 4.7 4 5.5 4H11v15H5.5C4.7 19 4 18.3 4 17.5Z",
-      "M20 5.5C20 4.7 19.3 4 18.5 4H13v15h5.5c.8 0 1.5-.7 1.5-1.5Z",
-      "M6.5 8h2.5M6.5 11h2.5M15 8h2.5M15 11h2.5"
-    ],
-    // a ticked circle
-    check: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z", "M7.5 12.5l3 3l6-6.5"],
-    // a receipt with a torn foot
-    receipt: [
-      "M6 3h12v18l-2-1.5l-2 1.5l-2-1.5l-2 1.5l-2-1.5L6 21Z",
-      "M9 8h6M9 11.5h6M9 15h4"
-    ],
-    // a target
-    target: [
-      "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z",
-      "M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10Z",
-      "M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2Z"
-    ]
-  };
-  function icon(name) {
-    const paths = ICON_PATHS[name];
-    if (paths === void 0) return void 0;
-    const svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "20");
-    svg.setAttribute("height", "20");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "1.6");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
-    svg.setAttribute("aria-hidden", "true");
-    svg.dataset.icon = name;
-    for (const d of paths) {
-      const path2 = document.createElementNS(SVG_NS, "path");
-      path2.setAttribute("d", d);
-      svg.append(path2);
+  function conversationDate2(record, judgedDay) {
+    const judged = { basis: "judged", date: judgedDay };
+    const stated = record?.stated;
+    if (stated === void 0) return judged;
+    const mode = stated.provenanceMode;
+    if (asString(mode?.mode) === "backfilled") {
+      const source = asString(mode?.source_asserted_at);
+      const day2 = source === void 0 ? void 0 : STATED_DAY2.exec(source)?.[1];
+      if (source === void 0 || day2 === void 0) return judged;
+      const importedAt = asString(mode?.imported_at);
+      return {
+        basis: "source",
+        date: day2,
+        stated: source,
+        zone: zoneStatement(source),
+        ...importedAt === void 0 ? {} : { importedAt }
+      };
     }
-    return svg;
-  }
-  var fmtCount = (n) => n.toLocaleString();
-  function fmtShare(count, total, percentages) {
-    if (percentages)
-      return total === 0 ? "\u2013" : `${Math.round(count / total * 100)}%`;
-    return `${fmtCount(count)} of ${fmtCount(total)}`;
-  }
-  var TIER_LABEL = {
-    judged: "judged",
-    recomputed: "recomputed",
-    unknown: "tier unknown \u2014 no claims observed",
-    mixed: "tier differs across conversations"
-  };
-  var VERDICT_TEXT = {
-    met: "met",
-    not_met: "not met",
-    not_evaluable: "not evaluable",
-    failed: "failed verification",
-    unsupported: "unsupported",
-    not_applicable: "not applicable"
-  };
-  function caseLabel(conversationId) {
-    const match = /task-([0-9]+)/u.exec(conversationId);
-    return match === null ? conversationId : `task ${match[1]}`;
-  }
-  function criterionLabel(model, checkId, criterionId) {
-    const check = model.terms.checks.find((c) => c.id === checkId);
-    const criterion = check?.criteria.find((c) => c.id === criterionId);
-    const wording = model.criterionWording.get(`${checkId}.${criterionId}`);
+    const timestamp = stated.timestamp;
+    const day = timestamp === void 0 ? void 0 : STATED_DAY2.exec(timestamp)?.[1];
+    if (timestamp === void 0 || day === void 0) return judged;
     return {
-      label: criterion?.label ?? `${checkId}.${criterionId}`,
-      text: wording?.text ?? criterion?.text ?? "",
-      question: check?.question ?? checkId,
-      source: wording?.source ?? "unstated"
+      basis: "record",
+      date: day,
+      stated: timestamp,
+      zone: zoneStatement(timestamp)
     };
   }
-  var WORDING_FALLBACK_LABEL = {
-    sealed: "",
-    unstated: "Wording not stated: no report in this bundle states it.",
-    mixed: "Wording not shown: the reports in this bundle state different wordings."
-  };
-  function wordingNote(model) {
-    const sources = new Set(
-      [...model.criterionWording.values()].map((w) => w.source)
+  function buildDating2(conversations) {
+    const counts = { source: 0, record: 0, judged: 0 };
+    for (const c of conversations) counts[c.dated.basis] += 1;
+    const used = Object.keys(counts).filter(
+      (basis) => counts[basis] > 0
     );
-    if (sources.size === 1 && sources.has("sealed"))
-      return "Rule wording as sealed in the judge's reports (the text the judge was given).";
-    if (!sources.has("sealed"))
-      return "Rule wording not stated: the reports in this bundle do not state it.";
-    return "Rule wording as sealed in the judge's reports; where the reports do not state it (or disagree), marked as such.";
-  }
-  function editedBadge(model, ref) {
-    const edited = model.options.editedCriteria?.find((e) => e.criterion === ref);
-    if (edited === void 0) return void 0;
-    const badge = el("span", "edited", edited.badge);
-    badge.dataset.edited = ref;
-    badge.title = "Producer's note (presentation extension), not evidence";
-    return badge;
-  }
-  function renderProducerNote(host, model) {
-    const note = model.options.producerNote;
-    if (note === void 0) return;
-    const box = el("aside", "pnote");
-    box.dataset.producerNote = "true";
-    box.append(
-      el("div", "pn-k", "Producer's note \xB7 presentation text, not evidence")
-    );
-    box.append(el("h2", "pn-t", note.title));
-    const list = el("ul", "pn-l");
-    for (const line of note.lines) list.append(element2("li", line));
-    box.append(list);
-    box.append(
-      el(
-        "p",
-        "pn-src",
-        "Carried on this bundle's outcome-report/v1 presentation extension, outside the signed records: no claim backs this note and no number on this page is computed from it. Everything below is drawn only from the verified bundle."
-      )
-    );
-    host.append(box);
-  }
-  function isMiss(verdict2) {
-    return verdict2 === "not_met" || verdict2 === "failed" || verdict2 === "unsupported";
-  }
-  function pill(verdict2) {
-    const text2 = verdict2 === "resolved" ? "resolved" : verdict2 === "missed" ? "missed" : VERDICT_TEXT[verdict2];
-    const tone = verdict2 === "met" || verdict2 === "resolved" ? "ok" : verdict2 === "not_applicable" ? "na" : verdict2 === "not_evaluable" ? "ne" : "bad";
-    const value = el("span", `pill ${tone}`, text2);
-    value.dataset.pill = verdict2;
-    return value;
-  }
-  var fmtP = (p) => p.toFixed(2);
-  function verdictProbability(criterion) {
-    const probs = criterion.probabilities;
-    if (probs === void 0) return void 0;
-    const key = criterion.claim?.verdict ?? criterion.verdict;
-    return probs[key];
-  }
-  var COUNT_WORDS = [
-    "zero",
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-    "eleven",
-    "twelve"
-  ];
-  function countWord(n) {
-    return COUNT_WORDS[n] ?? String(n);
-  }
-  function allCriteriaMet(n) {
-    if (n === 1) return "its one criterion met or not applicable";
-    return `all ${countWord(n)} criteria met or not applicable`;
-  }
-  function renderConversation(conversation, model, runInfo) {
-    const resolved = conversation.verdict === "met";
-    const details = el("details", "conv");
-    details.dataset.conversation = conversation.conversationId;
-    details.dataset.conversationVerdict = conversation.verdict;
-    const misses = conversation.criteria.filter((c) => isMiss(c.verdict));
-    const unjudged = conversation.criteria.filter(
-      (c) => c.verdict === "not_evaluable"
-    );
-    const na = conversation.criteria.filter(
-      (c) => c.verdict === "not_applicable"
-    );
-    const summary = el("summary", "conv-s");
-    summary.append(el("span", "cid", caseLabel(conversation.conversationId)));
-    summary.append(pill(resolved ? "resolved" : "missed"));
-    summary.append(
-      el(
-        "span",
-        "cwhy",
-        resolved ? `${allCriteriaMet(conversation.criteria.length)}${na.length > 0 ? ` (${na.length} not applicable)` : ""}` : `missed on: ${[...misses, ...misses.length === 0 ? unjudged : []].map((c) => criterionLabel(model, c.checkId, c.criterionId).label).join(", ")}`
-      )
-    );
-    summary.append(el("span", "go", "open \u203A"));
-    details.append(summary);
-    let built = false;
-    details.addEventListener("toggle", () => {
-      if (built || !details.open) return;
-      built = true;
-      details.append(
-        conversationBody(conversation, model, runInfo, {
-          resolved,
-          misses,
-          unjudged,
-          na
-        })
-      );
-    });
-    return details;
-  }
-  function renderTranscript(conversation) {
-    const t = conversation.transcript;
-    const wrap = el("div", "tx");
-    wrap.dataset.transcript = t.state;
-    if (t.state !== "verified") {
-      wrap.append(
-        el(
-          "p",
-          "absent",
-          t.state === "absent" ? `Not in this bundle. The conversation and its tool calls are sealed in the case record ${conversation.sourceCapsuleId ?? "(not stated by the reports)"}, which this Result does not cite, so this page cannot show them and does not vouch for them.` : `Not shown: ${t.reason ?? "the cited transcript does not check"}.`
-        )
-      );
-      return wrap;
-    }
-    wrap.append(
-      el(
-        "p",
-        "small",
-        `Sealed in record ${t.transcriptRecordId}. Its content digest equals what the judged case capsule ${conversation.sourceCapsuleId} committed to (${t.inputDigest}), checked on this page: this is the conversation the judge read. ${t.turns.length} messages, in order.`
-      )
-    );
-    const list = el("ol", "turns");
-    t.turns.forEach((turn, index) => {
-      const item = el(
-        "li",
-        `turn ${turn.role === "user" || turn.role === "assistant" || turn.role === "tool" ? turn.role : "other"}`
-      );
-      item.dataset.turn = String(index);
-      item.dataset.role = turn.role;
-      const head2 = el("div", "who", `msg[${index}] ${turn.role}`);
-      item.append(head2);
-      if (turn.content !== void 0 && turn.content.length > 0)
-        item.append(
-          el(turn.role === "tool" ? "pre" : "div", "say", turn.content)
-        );
-      for (const call of turn.toolCalls) {
-        const callEl = el("pre", "call", `${call.name}(${call.arguments})`);
-        callEl.dataset.toolCall = call.name;
-        item.append(callEl);
-      }
-      list.append(item);
-    });
-    wrap.append(list);
-    return wrap;
-  }
-  function conversationBody(conversation, model, runInfo, parts) {
-    const { resolved, misses, unjudged, na } = parts;
-    const body = el("div", "conv-b");
-    body.append(el("h4", "", "What the agent did"));
-    body.append(renderTranscript(conversation));
-    body.append(el("h4", "", "The criteria"));
-    const contractRefs = new Set(
-      conversation.criteria.flatMap(
-        (c) => c.claim === void 0 ? [] : [c.claim.contractRef]
-      )
-    );
-    body.append(
-      el(
-        "p",
-        "small",
-        `Judged under ${[...contractRefs].join(", ") || "no stated contract"}. ${wordingNote(model)} P is the probability the judge gave the verdict it returned.`
-      )
-    );
-    const table2 = el("table", "crit");
-    table2.dataset.criteriaTable = conversation.conversationId;
-    const head2 = element2("thead");
-    const headRow = element2("tr");
-    headRow.append(
-      element2("th", "Criterion"),
-      element2("th", "Verdict"),
-      el("th", "n", "P"),
-      element2("th", "Rationale, as sealed")
-    );
-    head2.append(headRow);
-    table2.append(head2);
-    const tbody = element2("tbody");
-    for (const criterion of conversation.criteria) {
-      const tr = element2("tr");
-      tr.dataset.crit = `${criterion.checkId}.${criterion.criterionId}`;
-      tr.dataset.critVerdict = criterion.verdict;
-      const names = criterionLabel(
-        model,
-        criterion.checkId,
-        criterion.criterionId
-      );
-      const nameCell = el("td", "cn");
-      nameCell.append(el("b", "", names.label));
-      const rowBadge = editedBadge(
-        model,
-        `${criterion.checkId}.${criterion.criterionId}`
-      );
-      if (rowBadge !== void 0) nameCell.append(rowBadge);
-      const wordingCell = el("small", "", names.text);
-      wordingCell.dataset.wording = names.source;
-      nameCell.append(wordingCell);
-      if (names.source !== "sealed")
-        nameCell.append(
-          el("small", "wsrc", WORDING_FALLBACK_LABEL[names.source])
-        );
-      tr.append(nameCell);
-      const verdictCell = element2("td");
-      verdictCell.append(pill(criterion.verdict));
-      tr.append(verdictCell);
-      const p = verdictProbability(criterion);
-      const pCell = el("td", "n", p === void 0 ? "\u2013" : fmtP(p));
-      if (p !== void 0) pCell.dataset.p = fmtP(p);
-      tr.append(pCell);
-      const rationaleCell = el("td", "rat");
-      if (criterion.verdict === "not_applicable") {
-        rationaleCell.append(
-          el(
-            "span",
-            "muted",
-            "No claim: Result v0 excludes a not-applicable judgment from its claims, so this bundle cites no report for it."
-          )
-        );
-      } else if (criterion.rationale !== void 0) {
-        const sealed = el("code", "sealed", criterion.rationale);
-        sealed.dataset.rationale = "sealed";
-        rationaleCell.append(sealed);
-      } else {
-        rationaleCell.append(
-          el("span", "muted", "no rationale in the cited report")
-        );
-      }
-      tr.append(rationaleCell);
-      tbody.append(tr);
-    }
-    table2.append(tbody);
-    const scroll = el("div", "tscroll");
-    scroll.append(table2);
-    body.append(scroll);
-    const honest = el(
-      "p",
-      "small",
-      "Rationale: derived from the judge's probabilities; the judge returns no free-text reasoning."
-    );
-    honest.dataset.rationaleLabel = "derived";
-    body.append(honest);
-    body.append(el("h4", "", "Why"));
-    const why = el("ul", "why");
-    why.dataset.why = resolved ? "resolved" : "missed";
-    if (resolved) {
-      const met = conversation.criteria.filter((c) => c.verdict === "met").length;
-      const n = conversation.criteria.length;
-      why.append(
-        element2(
-          "li",
-          `Resolved: ${met} ${met === 1 ? "criterion" : "criteria"} met and ${na.length} not applicable. The rule bills a conversation only when ${n === 1 ? "its one criterion passes" : `all ${countWord(n)} pass`}, and not applicable counts as passing.`
-        )
-      );
-    } else {
-      for (const criterion of misses.length > 0 ? misses : unjudged) {
-        const names = criterionLabel(
-          model,
-          criterion.checkId,
-          criterion.criterionId
-        );
-        const p = verdictProbability(criterion);
-        const item = element2(
-          "li",
-          `${names.label} (${names.question}): ${VERDICT_TEXT[criterion.verdict]}${p === void 0 ? "" : `, P ${fmtP(p)}`}${criterion.confidence === void 0 ? "" : `, confidence ${fmtP(criterion.confidence)}`}.`
-        );
-        item.dataset.whyCriterion = `${criterion.checkId}.${criterion.criterionId}`;
-        why.append(item);
-      }
-    }
-    why.append(
-      el(
-        "li",
-        "muted",
-        "Turns cited: none. The judge returns a verdict and probabilities per criterion, with no reference to any turn of the conversation."
-      )
-    );
-    body.append(why);
-    body.append(el("h4", "", "Check it"));
-    const check = el("dl", "chk");
-    check.dataset.checkIt = conversation.conversationId;
-    const row2 = (label, value) => {
-      check.append(element2("dt", label), element2("dd", value));
+    return {
+      basis: used.length === 1 ? used[0] : used.length === 0 ? "judged" : "mixed",
+      counts,
+      judgedDays: [...new Set(conversations.map((c) => c.judgedDay))].sort(),
+      zoneNotStated: conversations.filter((c) => c.dated.zone === "not-stated").length
     };
-    row2("Case", conversation.conversationId);
-    row2(
-      "Case record",
-      conversation.sourceCapsuleId ?? "not stated by the reports"
-    );
-    const dated = conversation.dated;
-    if (dated.basis !== "judged") {
-      row2(
-        "Dated by",
-        `${dated.stated ?? dated.date}${dated.zone === "not-stated" ? " (timezone not stated)" : ""}: ${BASIS_TEXT[dated.basis]}`
-      );
-      check.lastElementChild.setAttribute("data-dated", dated.basis);
-      if (dated.importedAt !== void 0) row2("Imported", dated.importedAt);
-      row2("Judged and sealed", conversation.judgedDay);
-    }
-    row2("Result capsule", model.capsuleId);
-    if (conversation.transcript.state === "verified") {
-      row2("Transcript record", conversation.transcript.transcriptRecordId);
-      row2("Case input digest", conversation.transcript.inputDigest);
-    }
-    row2(
-      "Judge pin",
-      runInfo.judgePinDigest === void 0 ? "not stated" : `${runInfo.judgePinDigest}${runInfo.judgePinRecomputes === true && runInfo.judgePin !== void 0 ? ` = ${runInfo.judgePin.modelId}, prompt ${runInfo.judgePin.promptDigest}, axes ${runInfo.judgePin.axesDigest} (recomputed on this page)` : ""}`
-    );
-    for (const criterion of conversation.criteria) {
-      if (criterion.claim === void 0) continue;
-      row2(
-        `Report: ${criterionLabel(model, criterion.checkId, criterion.criterionId).label}`,
-        `${criterion.reportCapsuleId ?? "not cited"}${criterion.reportRecordId === void 0 ? "" : ` (book record ${criterion.reportRecordId})`}`
-      );
-    }
-    body.append(check);
-    body.append(
-      el(
-        "p",
-        "small",
-        `To recompute: read each report above from the book, check its digest, and take the AND of the ${conversation.criteria.length === 1 ? "one verdict" : `${countWord(conversation.criteria.length)} verdicts`} (not applicable passes). To re-judge, run the pinned judge on the case record and compare.`
-      )
-    );
-    return body;
-  }
-  function renderConversationList(conversations, model, runInfo, key) {
-    const list = el("div", "convs");
-    list.dataset.conversationsFor = key;
-    list.dataset.conversationCount = String(conversations.length);
-    if (conversations.length === 0)
-      list.append(el("p", "small", "no conversations"));
-    for (const conversation of conversations)
-      list.append(renderConversation(conversation, model, runInfo));
-    return list;
-  }
-  function drill(label, conversations, model, runInfo, key) {
-    const details = el("details", "drill");
-    details.dataset.drill = key;
-    details.append(el("summary", "", label));
-    details.append(renderConversationList(conversations, model, runInfo, key));
-    return details;
-  }
-  function packLine(model) {
-    const { id, version } = model.terms.pack;
-    return id === NOT_STATED ? NOT_STATED : `${id} v${version}`;
-  }
-  function span(days) {
-    const first = days[0];
-    const last = days[days.length - 1];
-    if (first === void 0 || last === void 0) return "unknown";
-    return first === last ? first : `${first} \u2013 ${last}`;
-  }
-  var BASIS_TEXT = {
-    source: "source says (backfilled record; the source's own timestamp, self-attested)",
-    record: "the case record's own timestamp",
-    judged: "the day the judgments were sealed (no case record date to read)"
-  };
-  function datingNote(model) {
-    const { basis, counts, judgedDays, zoneNotStated } = model.dating;
-    if (basis === "judged") return void 0;
-    const sealed = `Sealed ${span(judgedDays)}.`;
-    const parts = [];
-    if (basis === "source")
-      parts.push(
-        `Dates are the source's own timestamps for backfilled records ("source says"), as given, not when the records were sealed.`
-      );
-    else if (basis === "record")
-      parts.push(
-        "Dates are each conversation's own record date (the time its case record states), as given, not when the judgments were sealed."
-      );
-    else {
-      parts.push(
-        "Dates are each conversation's own date, as given, not when the judgments were sealed:"
-      );
-      if (counts.source > 0)
-        parts.push(
-          `${counts.source} backfilled by the source's own timestamp ("source says");`
-        );
-      if (counts.record > 0)
-        parts.push(`${counts.record} by the case record's own timestamp;`);
-      if (counts.judged > 0)
-        parts.push(
-          `${counts.judged} with no case record date to read, by the day they were judged.`
-        );
-    }
-    parts.push(sealed);
-    if (counts.source > 0)
-      parts.push(
-        "A backfilled record's source time is self-attested: carrying it does not make it witnessed."
-      );
-    if (zoneNotStated > 0)
-      parts.push(
-        `Timezone not stated on ${zoneNotStated} of ${model.totalCount}; no zone is assumed.`
-      );
-    return parts.join(" ");
-  }
-  function renderMeta(host, model) {
-    const section = el("section", "");
-    section.dataset.section = "meta";
-    const row1 = el("div", "ih-row");
-    const bill = el("div", "party");
-    bill.append(el("div", "k", "Outcomes pack"));
-    bill.append(el("div", "v", packLine(model)));
-    row1.append(bill);
-    const title = el("div", "ih-title");
-    title.append(el("h1", "inv-title", "Outcome report"));
-    title.append(
-      el("div", "inv-sub", `Terms locked: ${model.terms.pack.locked}`)
-    );
-    row1.append(title);
-    section.append(row1);
-    const row2 = el("div", "ih-row");
-    const details = el("div", "meta");
-    const first = model.days[0]?.date;
-    const last = model.days[model.days.length - 1]?.date;
-    const metaRow = (label, value) => {
-      const line = element2("div");
-      line.append(element2("span", label), element2("span", value));
-      details.append(line);
-    };
-    metaRow(
-      "Period",
-      first === void 0 || last === void 0 ? "no conversations" : `${first} \u2013 ${last}`
-    );
-    const note = datingNote(model);
-    if (note !== void 0) {
-      metaRow("Sealed", span(model.dating.judgedDays));
-      details.lastElementChild.setAttribute("data-sealed", "");
-    }
-    metaRow("Conversations", fmtCount(model.totalCount));
-    metaRow("Result capsule", model.capsuleId);
-    row2.append(el("div", "party"), details);
-    section.append(row2);
-    if (note !== void 0) {
-      const label = el("p", "date-note", note);
-      label.dataset.dateNote = model.dating.basis;
-      section.append(label);
-    }
-    host.append(section);
-  }
-  function renderLines(host, model, runInfo) {
-    const section = el("section", "");
-    section.dataset.section = "lines";
-    const table2 = document.createElement("table");
-    table2.className = "lines";
-    table2.dataset.rows = "report-lines";
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    headRow.append(element2("th", "Description"), element2("th", "Count"));
-    thead.append(headRow);
-    table2.append(thead);
-    const tbody = document.createElement("tbody");
-    const lines = [
-      [
-        "resolved",
-        "Conversations resolved correctly",
-        model.resolvedCount,
-        fmtShare(
-          model.resolvedCount,
-          model.totalCount,
-          model.options.percentages
-        )
-      ],
-      [
-        "missed",
-        "Conversations missed",
-        model.missedCount,
-        fmtShare(model.missedCount, model.totalCount, model.options.percentages)
-      ],
-      [
-        "held",
-        "Held pending adjudication",
-        model.heldCount,
-        fmtCount(model.heldCount)
-      ],
-      [
-        "added",
-        "Added after adjudication",
-        model.addedCount,
-        fmtCount(model.addedCount)
-      ],
-      [
-        "not-applicable",
-        "Criterion judgments not applicable",
-        model.notApplicableCount,
-        fmtCount(model.notApplicableCount)
-      ]
-    ];
-    for (const [key, label, count, shown2] of lines) {
-      const tr = document.createElement("tr");
-      tr.dataset.line = key;
-      tr.dataset.count = String(count);
-      const desc = el("td", "desc");
-      desc.append(el("b", "", label));
-      const behind = key === "resolved" ? model.conversations.filter((c) => c.verdict === "met") : key === "missed" ? model.conversations.filter((c) => c.verdict !== "met") : key === "not-applicable" ? model.conversations.filter(
-        (c) => c.criteria.some((cr) => cr.verdict === "not_applicable")
-      ) : void 0;
-      if (behind !== void 0 && behind.length > 0)
-        desc.append(
-          drill(
-            `open \u203A ${fmtCount(behind.length)} conversation${behind.length === 1 ? "" : "s"}`,
-            behind,
-            model,
-            runInfo,
-            key
-          )
-        );
-      tr.append(desc, el("td", "n", shown2));
-      tbody.append(tr);
-    }
-    table2.append(tbody);
-    section.append(table2);
-    host.append(section);
-    const stamps = el("div", "stamps inl");
-    const stamp = el(
-      "div",
-      "stamp rec",
-      "Verified \xB7 recomputed from the sealed bundle"
-    );
-    stamp.append(
-      el(
-        "small",
-        "",
-        "every count and share above is recomputed from result.claims and the records they cite, never read from a stated total"
-      )
-    );
-    stamps.append(stamp);
-    host.append(stamps);
-    const tamper = el(
-      "p",
-      "tamper-note",
-      'This card only ever renders a bundle that already verified: there is no interactive "try tampering" control here, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and the whole page \u2014 this card included \u2014 is replaced by the verification-failed banner, before anything here is drawn.'
-    );
-    tamper.dataset.tamperNote = "verify-first";
-    host.append(tamper);
-  }
-  function renderCalendar(host, model) {
-    const section = el("section", "sec");
-    section.dataset.section = "calendar";
-    section.append(el("h2", "", "Day by day"));
-    const note = datingNote(model);
-    section.append(
-      el(
-        "p",
-        "lede",
-        note === void 0 ? "Resolved conversations per day, cited by this bundle's claims." : "Resolved conversations per day, by each conversation's own date, cited by this bundle's claims."
-      )
-    );
-    if (note !== void 0) {
-      const label = el("p", "date-note", note);
-      label.dataset.dateNote = model.dating.basis;
-      section.append(label);
-    }
-    const list = el("div", "cal");
-    list.dataset.days = String(model.days.length);
-    for (const day of model.days) {
-      const item = el("div", "day");
-      item.dataset.day = day.date;
-      item.dataset.resolved = String(day.resolvedCount);
-      item.dataset.total = String(day.conversations.length);
-      item.append(el("div", "dn", day.date));
-      if (note !== void 0) {
-        const bases = new Set(day.conversations.map((c) => c.dated.basis));
-        if (bases.has("source")) {
-          const chip = el("div", "src-says", "source says");
-          chip.dataset.sourceSays = String(
-            day.conversations.filter((c) => c.dated.basis === "source").length
-          );
-          item.append(chip);
-        }
-        const notStated = day.conversations.filter(
-          (c) => c.dated.zone === "not-stated"
-        ).length;
-        if (notStated > 0) {
-          const tz = el("div", "tz", "timezone not stated");
-          tz.dataset.tzMarker = "not-stated";
-          item.append(tz);
-        }
-      }
-      item.append(
-        el(
-          "div",
-          "v",
-          fmtShare(
-            day.resolvedCount,
-            day.conversations.length,
-            model.options.percentages
-          )
-        )
-      );
-      const mini = el("div", "mini");
-      const share = day.conversations.length === 0 ? 0 : day.resolvedCount / day.conversations.length;
-      const fill = element2("i");
-      fill.style.width = `${Math.round(share * 100)}%`;
-      mini.append(fill);
-      item.append(mini);
-      if (note !== void 0) {
-        const sealed = el("div", "sealed", `sealed ${span(day.judgedDays)}`);
-        sealed.dataset.sealed = day.judgedDays.join(" ");
-        item.append(sealed);
-      }
-      if (day.policyChanged !== null) {
-        const flag = el("div", "flag", "policy changed");
-        flag.dataset.policyChanged = day.policyChanged;
-        item.append(flag);
-      }
-      list.append(item);
-    }
-    section.append(list);
-    host.append(section);
-  }
-  function renderHumanChecks(host, calibration) {
-    const section = el("section", "sec");
-    section.dataset.section = "human-checks";
-    section.append(el("h2", "", "Human spot checks"));
-    section.append(
-      el(
-        "p",
-        "lede",
-        "Weekly blind re-grades by a person. Disagreements are held."
-      )
-    );
-    if (calibration.length === 0) {
-      section.append(el("p", "", "no calibration-summary/v1 records cited"));
-      host.append(section);
-      return;
-    }
-    const table2 = document.createElement("table");
-    table2.className = "hct";
-    table2.dataset.weeks = String(calibration.length);
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    headRow.append(
-      element2("th", "Week"),
-      el("th", "n", "Agreed"),
-      el("th", "n", "Held"),
-      el("th", "n", "Added")
-    );
-    thead.append(headRow);
-    table2.append(thead);
-    const tbody = document.createElement("tbody");
-    for (const week of calibration) {
-      const tr = document.createElement("tr");
-      tr.dataset.week = week.weekId;
-      tr.dataset.k = String(week.k);
-      tr.dataset.n = String(week.n);
-      tr.append(el("td", "", week.weekId));
-      tr.append(el("td", "n", `${week.k} of ${week.n}`));
-      const held = week.sample.filter(
-        (s) => s.aiVerdict === "met" && s.humanVerdict !== "met"
-      ).length;
-      const added = week.sample.filter(
-        (s) => s.aiVerdict !== "met" && s.humanVerdict === "met"
-      ).length;
-      const heldCell = el("td", "n", String(held));
-      heldCell.dataset.held = String(held);
-      const addedCell = el("td", "n", String(added));
-      addedCell.dataset.added = String(added);
-      tr.append(heldCell, addedCell);
-      tbody.append(tr);
-    }
-    table2.append(tbody);
-    section.append(table2);
-    host.append(section);
-  }
-  function renderWhyMissed(host, model, runInfo) {
-    const section = el("section", "sec");
-    section.dataset.section = "why-missed";
-    section.append(el("h2", "", "Why conversations missed"));
-    const bars = el("div", "bars");
-    bars.dataset.checkBars = "true";
-    for (const check of model.terms.checks) {
-      const count = model.checkPassCounts.get(check.id) ?? 0;
-      const item = el("div", "bar");
-      item.dataset.checkId = check.id;
-      item.dataset.passCount = String(count);
-      const nm = el("div", "nm", check.question);
-      const track = el("div", "track");
-      const share = model.totalCount === 0 ? 0 : count / model.totalCount;
-      const fill = element2("i");
-      fill.style.width = `${Math.round(share * 100)}%`;
-      track.append(fill);
-      const num = el(
-        "div",
-        "num",
-        fmtShare(count, model.totalCount, model.options.percentages)
-      );
-      item.append(nm, track, num);
-      bars.append(item);
-    }
-    section.append(bars);
-    const reasons = el("div", "reasons");
-    reasons.dataset.reasons = String(model.missedReasons.length);
-    for (const group of model.missedReasons) {
-      const item = el("details", "rsn-d");
-      item.dataset.reasonKey = group.key;
-      item.dataset.reasonStructured = String(group.structured);
-      item.dataset.count = String(group.conversations.length);
-      const row2 = el("summary", "rsn");
-      row2.append(
-        element2("span", group.label),
-        el("span", "c", `${fmtCount(group.conversations.length)} \xB7 see them \u203A`)
-      );
-      item.append(row2);
-      item.append(
-        renderConversationList(
-          group.conversations,
-          model,
-          runInfo,
-          `reason:${group.key}`
-        )
-      );
-      reasons.append(item);
-    }
-    section.append(reasons);
-    host.append(section);
-  }
-  function renderTerms(host, model) {
-    const section = el("section", "sec");
-    section.dataset.section = "terms";
-    section.append(el("h2", "", "The terms: what counts as resolved"));
-    const lede = el(
-      "p",
-      "lede",
-      `Agreed with the counterparty: ${model.terms.pack.agreement}. Locked: ${model.terms.pack.locked}. Every term below is read from the sealed claims and reports in this bundle, or marked "${NOT_STATED}".`
-    );
-    lede.dataset.termsSource = "bundle";
-    section.append(lede);
-    const pack = el("div", "pack");
-    const packField = (label, value) => {
-      const box = el("div", "pk");
-      box.append(el("div", "k", label), el("div", "v", value));
-      pack.append(box);
-    };
-    packField("Outcomes pack", model.terms.pack.id);
-    packField(
-      "Version",
-      model.terms.pack.version === NOT_STATED ? NOT_STATED : `${model.terms.pack.version} (from the claims' contract_ref)`
-    );
-    packField("Locked", model.terms.pack.locked);
-    section.append(pack);
-    const outcome = el("div", "outcome");
-    const outcomeIcon = el("div", "oic");
-    const target = icon("target");
-    if (target !== void 0) outcomeIcon.append(target);
-    outcome.append(outcomeIcon);
-    const outcomeBody = element2("div");
-    outcomeBody.append(el("div", "t", "The outcome"));
-    outcomeBody.append(el("div", "v", model.terms.pack.outcomeStatement));
-    outcome.append(outcomeBody);
-    section.append(outcome);
-    const checks = el("div", "checks");
-    checks.dataset.checks = String(model.terms.checks.length);
-    for (const check of model.terms.checks) {
-      const card = el("section", "check");
-      card.dataset.checkId = check.id;
-      const checkIcon = el("div", "ic");
-      const drawn = icon(check.icon);
-      if (drawn !== void 0) checkIcon.append(drawn);
-      card.append(checkIcon);
-      card.append(el("div", "q", check.question));
-      card.append(el("div", "d", check.description));
-      const criteria = el("ul", "subs");
-      for (const criterion of check.criteria) {
-        const ref = `${check.id}.${criterion.id}`;
-        const tier = model.criterionTiers.get(ref) ?? "unknown";
-        const item = element2("li");
-        item.dataset.criterionId = criterion.id;
-        item.dataset.tier = tier;
-        const wording = model.criterionWording.get(ref) ?? {
-          text: criterion.text,
-          source: "unstated"
-        };
-        item.dataset.wording = wording.source;
-        const label = el("b", "", criterion.label);
-        const termsBadge = editedBadge(model, ref);
-        if (termsBadge !== void 0) label.append(termsBadge);
-        item.append(label);
-        item.append(element2("span", `${wording.text} (${TIER_LABEL[tier]})`));
-        if (wording.source !== "sealed")
-          item.append(
-            el("small", "wsrc", WORDING_FALLBACK_LABEL[wording.source])
-          );
-        criteria.append(item);
-      }
-      card.append(criteria);
-      checks.append(card);
-    }
-    section.append(checks);
-    const note = el("p", "small", wordingNote(model));
-    note.dataset.wordingNote = "true";
-    section.append(note);
-    section.append(el("div", "rule", model.terms.pack.resolutionRule));
-    host.append(section);
-  }
-  function renderWhatRan(host, runInfo) {
-    const section = el("section", "sec");
-    section.dataset.section = "what-ran";
-    section.append(el("h2", "", "What ran"));
-    const ran = el("div", "ran");
-    ran.dataset.pinned = String(runInfo.pinned);
-    if (runInfo.judgePinRecomputes !== void 0)
-      ran.dataset.pinRecomputes = String(runInfo.judgePinRecomputes);
-    const box = (label, value, key) => {
-      const item = el("div", "it");
-      item.dataset.ran = key;
-      item.append(el("div", "k", label));
-      item.append(el("div", "v", value));
-      ran.append(item);
-    };
-    const pin = runInfo.judgePinRecomputes === true ? runInfo.judgePin : void 0;
-    box("Contract", runInfo.contract ?? "not stated", "contract");
-    box(
-      "Judge model",
-      pin === void 0 ? "not stated" : pin.modelVersion === void 0 ? pin.modelId : `${pin.modelId} ${pin.modelVersion}`,
-      "judge-model"
-    );
-    box(
-      "Judge pin digest",
-      runInfo.judgePinDigest === void 0 ? "not stated" : pin === void 0 ? runInfo.judgePinDigest : `${runInfo.judgePinDigest} (recomputed from the model, prompt, axes and sampling params shown here)`,
-      "judge-pin-digest"
-    );
-    box(
-      "Judge prompt digest",
-      pin?.promptDigest ?? "not stated",
-      "judge-prompt-digest"
-    );
-    box(
-      "Judge axes digest",
-      pin?.axesDigest ?? "not stated",
-      "judge-axes-digest"
-    );
-    box(
-      "Agent / test suite / human-check protocol",
-      "not stated \u2014 this evaluation-report/v1 shape carries none of these fields",
-      "agent"
-    );
-    section.append(ran);
-    if (runInfo.judgePinRecomputes === false) {
-      const warning = el(
-        "p",
-        "",
-        "the judge pin components the reports carry do not recompute to the sealed judge pin digest \u2014 they are not shown"
-      );
-      warning.dataset.pinComponentsMismatch = "true";
-      section.append(warning);
-    }
-    const lock = el(
-      "div",
-      "lock",
-      "The judge pin digest covers model id, judge prompt and axes, and sampling params (capsulectl judge pin). It does not cover the human-check protocol name: this bundle seals no method lock, and this card never implies one exists."
-    );
-    section.append(lock);
-    if (!runInfo.pinned) {
-      const warning = el(
-        "p",
-        "",
-        "what ran varies across the cited reports \u2014 the values above are drawn only when every one agrees, and are omitted ('not stated') here because they do not"
-      );
-      warning.dataset.pinMismatch = "true";
-      section.append(warning);
-    }
-    host.append(section);
-  }
-  function renderVerificationDetails(host, bundle, verified) {
-    const section = el("section", "sec");
-    section.dataset.section = "verification-details";
-    section.append(el("h2", "", "Verification details"));
-    section.append(
-      el("p", "lede", "Repeat offline with the open-source verifier.")
-    );
-    const model = buildVerificationPageModel(bundle, verified);
-    const tech = el("div", "tech");
-    const field = (label, value) => {
-      tech.append(el("div", "k", label), el("div", "v", value));
-    };
-    field("Bundle digest", model.bundleDigest ?? "uncomputable");
-    field("Checkpoint root", model.checkpointRoot ?? "absent");
-    field("Checkpoint size", String(model.checkpointSize ?? "absent"));
-    section.append(tech);
-    const note = el(
-      "p",
-      "note",
-      "This bundle's own checkpoint \u2014 an append-only Merkle Mountain Range over the sealed records \u2014 not a month-level RFC 6962 tree computed in the browser. Repeat this check offline with the open-source verifier."
-    );
-    note.dataset.checkpointKind = "mmr";
-    section.append(note);
-    host.append(section);
-  }
-  async function renderOutcomeReportPage(result, options, bundle, verified, root) {
-    const model = buildOutcomeReportModel(result, options);
-    const runInfo = await verifyJudgePin(model.runInfo);
-    const wrapper = el("section", "oi");
-    wrapper.dataset.page = "outcome-report";
-    const style = document.createElement("style");
-    style.textContent = OUTCOME_REPORT_CSS;
-    wrapper.append(style);
-    renderProducerNote(wrapper, model);
-    const sheet = el("div", "sheet");
-    const pad = el("div", "pad");
-    renderMeta(pad, model);
-    renderLines(pad, model, runInfo);
-    sheet.append(pad);
-    wrapper.append(sheet);
-    renderCalendar(wrapper, model);
-    renderHumanChecks(wrapper, model.calibration);
-    renderWhyMissed(wrapper, model, runInfo);
-    renderTerms(wrapper, model);
-    renderWhatRan(wrapper, runInfo);
-    renderVerificationDetails(wrapper, bundle, verified);
-    root.append(wrapper);
   }
 
   // capsule-viewer/ts/src/compliance.ts
@@ -11651,7 +10493,7 @@ ${body}
     for (const [conversationId, conversationClaims] of byConversation) {
       const tests = [];
       const sources = /* @__PURE__ */ new Set();
-      let day = NOT_STATED;
+      let judgedDay = NOT_STATED;
       for (const criterionId of testIds) {
         const claim = conversationClaims.find(
           (c) => c.requirementRef === criterionId
@@ -11670,30 +10512,54 @@ ${body}
         const judgePinDigest = asString(payload?.judge_pin_digest);
         const source = asString(payload?.source_capsule_id);
         if (source !== void 0) sources.add(source);
-        if (day === NOT_STATED) day = dayOf2(payload);
+        if (judgedDay === NOT_STATED)
+          judgedDay = reportSealedDay(result.records, claim) ?? dayOf2(payload);
         const reportDigest = claim.evidence[0]?.digest;
         tests.push({
           criterionId,
           verdict: drawnVerdict2(claim),
-          tier: sealedTier(payload),
+          // The report's own epistemic_type when disclosed; when the report
+          // is withheld, the tier the Result's signed claim states.
+          tier: payload === void 0 ? claim.tier : sealedTier(payload),
           claim,
           ...reportDigest === void 0 ? {} : { reportDigest },
           ...rationale === void 0 ? {} : { rationale },
           ...contract === void 0 ? {} : { contract },
-          ...judgePinDigest === void 0 ? {} : { judgePinDigest }
+          ...judgePinDigest === void 0 ? {} : { judgePinDigest },
+          reportState: reportState(result.records, claim)
         });
       }
+      let caseFrom = "reports";
+      if (sources.size === 0) {
+        const cited = claimsCitedCase(
+          result.records,
+          conversationId,
+          conversationClaims,
+          result.claims
+        );
+        if (cited !== void 0) {
+          sources.add(cited);
+          caseFrom = "claims";
+        }
+      }
       const sourceCapsuleId = sources.size === 1 ? [...sources][0] : void 0;
+      const dated = conversationDate2(
+        caseRecord2(result, conversationClaims, sourceCapsuleId),
+        judgedDay
+      );
       sessions.push({
         conversationId,
-        day,
+        day: dated.date,
+        dated,
+        judgedDay,
         tests,
-        ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId },
+        ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId, caseFrom },
         transcript: findTranscript(
           result,
           conversationId,
           conversationClaims,
-          sourceCapsuleId
+          sourceCapsuleId,
+          caseFrom
         )
       });
     }
@@ -11717,19 +10583,21 @@ ${body}
       ["met", []],
       ["not_met", []],
       ["not_evaluable", []],
-      ["not_applicable", []]
+      ["not_applicable", []],
+      ["unverified", []]
     ]);
     const tiers = [];
     for (const session of sessions) {
       const test = session.tests.find((t) => t.criterionId === criterionId);
       if (test === void 0) continue;
       tiers.push(test.tier);
-      const bucket = test.verdict === "failed" || test.verdict === "unsupported" ? "not_met" : test.verdict;
+      const bucket = test.verdict === "failed" || test.verdict === "unsupported" ? "unverified" : test.verdict;
       byVerdict.get(bucket).push(session.conversationId);
     }
     return {
       criterionId,
       name: mapping?.name ?? readableId(criterionId.slice(criterionId.indexOf(".") + 1)),
+      producerName: mapping !== void 0,
       wording,
       tier: agree(tiers, "not stated", "mixed"),
       ...mapping?.notEvaluableNote === void 0 ? {} : { notEvaluableNote: mapping.notEvaluableNote },
@@ -11738,6 +10606,7 @@ ${body}
       notMetCount: byVerdict.get("not_met").length,
       notEvaluableCount: byVerdict.get("not_evaluable").length,
       notApplicableCount: byVerdict.get("not_applicable").length,
+      unverifiedCount: byVerdict.get("unverified").length,
       sessionsByVerdict: byVerdict
     };
   }
@@ -11766,7 +10635,7 @@ ${body}
       rows
     };
   }
-  function buildRunInfo2(sessions) {
+  function buildRunInfo2(result, sessions) {
     const contracts = /* @__PURE__ */ new Set();
     const pins = /* @__PURE__ */ new Set();
     for (const session of sessions)
@@ -11777,7 +10646,23 @@ ${body}
     return {
       ...contracts.size === 1 ? { contract: [...contracts][0] } : {},
       ...pins.size === 1 ? { judgePinDigest: [...pins][0] } : {},
-      pinned: contracts.size <= 1 && pins.size <= 1
+      pinned: contracts.size <= 1 && pins.size <= 1,
+      ...withheldOf(result, sessions)
+    };
+  }
+  function withheldOf(result, sessions) {
+    const counted = withheldReports(
+      result.records,
+      sessions.flatMap(
+        (s) => s.tests.flatMap((t) => t.claim === void 0 ? [] : [t.claim])
+      )
+    );
+    return {
+      ...counted.withheld > 0 ? { reportsWithheld: counted.withheld } : {},
+      ...counted.mismatched > 0 ? { reportsMismatched: counted.mismatched } : {},
+      ...counted.unreadable > 0 ? { reportsUnreadable: counted.unreadable } : {},
+      ...counted.invalid > 0 ? { reportsInvalid: counted.invalid } : {},
+      ...counted.withheld + counted.mismatched + counted.unreadable + counted.invalid > 0 ? { reportsCited: counted.total } : {}
     };
   }
   function buildFindings(obligations) {
@@ -11798,6 +10683,13 @@ ${body}
         });
       }
     return findings;
+  }
+  function complianceDating(sessions) {
+    const days = sessions.map((s) => s.day).filter((d) => d !== NOT_STATED).sort();
+    return {
+      ...buildDating2(sessions),
+      ...days.length === 0 ? {} : { from: days[0], to: days[days.length - 1] }
+    };
   }
   function buildComplianceModel(result, presentation) {
     const { claims, pack } = countedClaims(result, presentation);
@@ -11836,15 +10728,308 @@ ${body}
       sessions,
       findings: buildFindings(obligations),
       totalSessions: sessions.length,
-      runInfo: buildRunInfo2(sessions),
+      dating: complianceDating(sessions),
+      runInfo: buildRunInfo2(result, sessions),
       qualityProtocol: presentation.qualityProtocol,
       capsuleId: result.capsuleId
     };
   }
 
+  // capsule-viewer/ts/src/report-levels.ts
+  function element2(tag, text2) {
+    const value = document.createElement(tag);
+    if (text2 !== void 0) value.textContent = text2;
+    return value;
+  }
+  function el(tag, className, text2) {
+    const value = element2(tag, text2);
+    value.className = className;
+    return value;
+  }
+  function levelToggle(level, summary, build, options = {}) {
+    const details = document.createElement("details");
+    details.className = `lv lv${level}${options.className === void 0 ? "" : ` ${options.className}`}`;
+    details.dataset.level = String(level);
+    const head2 = document.createElement("summary");
+    if (typeof summary === "string") head2.textContent = summary;
+    else head2.append(summary);
+    details.append(head2);
+    let built = false;
+    const fill2 = () => {
+      if (built) return;
+      built = true;
+      details.append(build());
+    };
+    if (options.eager === true) fill2();
+    else
+      details.addEventListener("toggle", () => {
+        if (details.open) fill2();
+      });
+    return details;
+  }
+  function lazyBody(host, build) {
+    host.dataset.body = "pending";
+    const Observer = globalThis.IntersectionObserver;
+    let observer;
+    const fill2 = () => {
+      if (host.dataset.body !== "pending") return;
+      observer?.disconnect();
+      pendingBodies.delete(host);
+      host.dataset.body = "built";
+      host.append(build());
+    };
+    if (Observer === void 0) {
+      fill2();
+      return;
+    }
+    observer = new Observer(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) fill2();
+      },
+      { rootMargin: "1200px 0px" }
+    );
+    observer.observe(host);
+    pendingBodies.set(host, fill2);
+    watchPrint(host.ownerDocument);
+  }
+  var pendingBodies = /* @__PURE__ */ new WeakMap();
+  var printWatched = /* @__PURE__ */ new WeakSet();
+  function watchPrint(doc) {
+    const view = doc.defaultView;
+    if (view === null || printWatched.has(doc)) return;
+    printWatched.add(doc);
+    view.addEventListener("beforeprint", () => {
+      for (const host of doc.querySelectorAll(
+        '[data-body="pending"]'
+      ))
+        pendingBodies.get(host)?.();
+    });
+  }
+  function judgedOf(reportState2, judgePinDigest) {
+    if (reportState2 === "withheld") return "withheld";
+    if (reportState2 !== "disclosed") return "unknown";
+    return judgePinDigest === void 0 ? "no" : "yes";
+  }
+  function ruleWord(verdict2, judged, w) {
+    const v = (key) => w.t(`${w.grouping}.verdict.${key}`);
+    switch (verdict2) {
+      case "failed":
+        return { word: v("failed"), tone: "ne" };
+      case "unsupported":
+        return { word: v("unsupported"), tone: "ne" };
+      case "met":
+        return { word: v("met"), tone: "ok" };
+      case "not_met":
+        return { word: v("not_met"), tone: "bad" };
+      case "not_applicable":
+        return { word: v("not_applicable"), tone: "na" };
+      case "not_evaluable":
+        return {
+          word: v(
+            judged === "yes" ? "not_evaluable.judged" : judged === "no" ? "not_evaluable.unjudged" : judged === "withheld" ? "not_evaluable.withheld" : "not_evaluable.unavailable"
+          ),
+          tone: "ne"
+        };
+    }
+  }
+  function judgeNote(rationale, verdict2, w) {
+    if (!/^jev choice:/u.test(rationale)) return rationale;
+    const probabilities = parseJudgeProbabilities(rationale).probabilities ?? {};
+    const p = Object.hasOwn(probabilities, verdict2) ? probabilities[verdict2] : void 0;
+    return p === void 0 || !Number.isFinite(p) || p < 0 || p > 1 ? rationale : w.t("judge.note.sure", { p: Math.round(p * 100) });
+  }
+  function wordPill(worded, key) {
+    const pill = el("span", `pill ${worded.tone}`, worded.word);
+    pill.dataset.pill = key;
+    return pill;
+  }
+  function caseParts(conversationId, w) {
+    const parts = conversationId.split(":");
+    const at = parts.findIndex((p) => /^task-[0-9]+$/u.test(p));
+    if (at === -1) return { label: conversationId };
+    const task = parts[at].slice("task-".length);
+    const trial = /^trial-([0-9]+)$/u.exec(parts[at + 1] ?? "")?.[1];
+    const model = at > 2 ? parts.slice(2, at).join(":") : void 0;
+    return {
+      label: trial === void 0 ? w.t("case.label", { task }) : w.t("case.label.trial", { task, trial }),
+      ...model === void 0 || model.length === 0 ? {} : { model }
+    };
+  }
+  function roleLabel(role, w) {
+    return role === "user" || role === "assistant" || role === "tool" || role === "system" ? w.t(`chat.role.${role}`) : role;
+  }
+  function jsonWithoutSpace(text2) {
+    let out = "";
+    let inString = false;
+    let escaped = false;
+    for (const ch of text2) {
+      if (inString) {
+        out += ch;
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') {
+        inString = true;
+        out += ch;
+      } else if (!/\s/u.test(ch)) out += ch;
+    }
+    return out;
+  }
+  function exactText(text2) {
+    const trimmed = text2.trim();
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+      return { text: text2, indented: false };
+    }
+    let value;
+    try {
+      value = JSON.parse(trimmed);
+    } catch {
+      return { text: text2, indented: false };
+    }
+    if (JSON.stringify(value) !== jsonWithoutSpace(trimmed))
+      return { text: text2, indented: false };
+    return { text: JSON.stringify(value, null, 2), indented: true };
+  }
+  function renderChat(transcript, caseRecord3, w) {
+    const wrap = el("div", "chat");
+    wrap.dataset.transcript = transcript.state;
+    if (transcript.state !== "verified" && transcript.state !== "cited") {
+      wrap.append(
+        el(
+          "p",
+          "absent",
+          transcript.state === "absent" ? w.t("chat.absent", {
+            record: caseRecord3 ?? w.t("chat.record.not-stated")
+          }) : w.t("chat.not-shown", {
+            reason: transcript.reason ?? w.t("chat.not-shown.default-reason")
+          })
+        )
+      );
+      return wrap;
+    }
+    const turns = transcript.turns ?? [];
+    const calls = turns.reduce((n, t) => n + t.toolCalls.length, 0);
+    wrap.append(
+      el(
+        "p",
+        "chat-k",
+        w.t("chat.lede", {
+          messages: String(turns.length),
+          calls: w.p("chat.calls", calls, { n: String(calls) }),
+          state: w.t(
+            transcript.state === "cited" ? "chat.state.cited" : "chat.state.verified"
+          )
+        })
+      )
+    );
+    const list = el("ol", "turns");
+    turns.forEach((turn, index) => {
+      const role = turn.role === "user" || turn.role === "assistant" || turn.role === "tool" || turn.role === "system" ? turn.role : "other";
+      const item = el("li", `turn ${role}`);
+      item.dataset.turn = String(index);
+      item.dataset.role = turn.role;
+      item.append(el("div", "who", roleLabel(turn.role, w)));
+      if (turn.content !== void 0 && turn.content.length > 0) {
+        if (role === "tool") {
+          const shown2 = exactText(turn.content);
+          const pre = el("pre", "say", shown2.text);
+          pre.dataset.exact = shown2.indented ? "indented" : "verbatim";
+          item.append(pre);
+        } else item.append(el("div", "say", turn.content));
+      }
+      for (const call of turn.toolCalls) {
+        const line = el("div", "call");
+        line.dataset.toolCall = call.name;
+        line.append(el("span", "call-k", w.t("chat.called")));
+        line.append(el("b", "", call.name));
+        if (call.arguments.length > 0) {
+          const args = el("code", "call-a", call.arguments);
+          args.dataset.exact = "as-modelled";
+          line.append(" ", args);
+        }
+        item.append(line);
+      }
+      list.append(item);
+    });
+    wrap.append(list);
+    return wrap;
+  }
+  function proofList(rows) {
+    const dl = el("dl", "pf");
+    for (const [k, v, data] of rows) {
+      const dd = element2("dd", v);
+      for (const [key, value] of Object.entries(data ?? {}))
+        dd.dataset[key] = value;
+      dl.append(element2("dt", k), dd);
+    }
+    return dl;
+  }
+  function levelCss(scope) {
+    const s = `.${scope}`;
+    return `
+${s} details.lv{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:8px;padding:0}
+${s} details.lv > summary{cursor:pointer;list-style:none;padding:8px 12px;font-size:13.5px;font-weight:600;color:var(--navy)}
+${s} details.lv > summary::-webkit-details-marker{display:none}
+${s} details.lv > summary:before{content:"";display:inline-block;width:0;height:0;border-left:5px solid var(--navy);border-top:4px solid transparent;border-bottom:4px solid transparent;margin-right:8px;vertical-align:1px;transition:transform .1s}
+${s} details.lv[open] > summary:before{transform:rotate(90deg)}
+${s} details.lv1.line{border:0;background:transparent;margin-top:4px}
+${s} details.lv1.line > summary{padding:2px 0;font-size:13px}
+${s} details.lv1.line > .convs,${s} details.lv1.line > .why-missed{margin-top:8px}
+${s} tr.drill-row > td{padding:0 10px 12px;border-bottom:1px solid var(--line)}
+${s} details.lv2{background:#FAF8F4;border-style:dashed}
+${s} details.lv2 > summary{color:var(--slate);font-weight:600}
+${s} details.lv2 > .pf-b{padding:4px 14px 14px;font-size:12.5px}
+${s} .convs{display:grid;gap:12px}
+${s} .conv{border:1px solid var(--line);border-radius:10px;background:#fff}
+${s} .conv-h{display:grid;grid-template-columns:110px auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;font-size:13.5px;background:#FAF8F4;border-bottom:1px solid var(--line);border-radius:10px 10px 0 0}
+${s} .conv-h .cid{font-weight:700;color:var(--navy)}
+${s} .conv-h .cwhy{color:var(--slate)}
+${s} .conv-h .cmodel{color:var(--slate);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;white-space:nowrap}
+${s} .conv > [data-body="pending"]{min-height:160px}
+${s} .conv-b{padding:4px 16px 16px;font-size:13.5px;font-weight:400;color:var(--ink)}
+${s} .conv-b h4{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:16px 0 6px}
+${s} .conv-b .small{font-size:12.5px;color:var(--slate);margin:6px 0}
+${s} .conv-b .muted{color:var(--slate)}
+${s} .why-missed h5{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:14px 0 6px}
+${s} .why-missed table{border-collapse:collapse;font-size:13px;margin:0 0 8px}
+${s} .why-missed td{padding:3px 12px 3px 0;border-bottom:1px solid var(--line)}
+${s} .why-missed td.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--bad)}
+${s} .why-missed .rsn-h{margin:16px 0 6px;font-size:13.5px;font-weight:700;color:var(--navy)}
+${s} .chat .absent{margin:0;padding:10px 12px;border:1px dashed #BFC4CC;border-radius:10px;background:#FAF8F4;color:var(--slate);word-break:break-word;font-size:13px}
+${s} .chat .chat-k{font-size:12.5px;color:var(--slate);margin:4px 0 6px}
+${s} .chat ol.turns{list-style:none;margin:0;padding:10px;display:grid;gap:6px;max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#FAF8F4}
+${s} .chat li.turn{border-radius:10px;padding:6px 10px;max-width:86%;background:#fff;border:1px solid var(--line);font-size:13.5px}
+${s} .chat li.turn.user{justify-self:end;background:var(--person-l);border-color:transparent}
+${s} .chat li.turn.assistant{justify-self:start}
+${s} .chat li.turn.tool,${s} .chat li.turn.system{justify-self:center;max-width:96%;border-style:dashed;background:#fff}
+${s} .chat li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:2px}
+${s} .chat li.turn .say{white-space:pre-wrap;word-break:break-word}
+${s} .chat li.turn pre.say{margin:0;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;max-height:180px;overflow:auto;color:var(--slate)}
+${s} .chat li.turn.system .say{max-height:120px;overflow:auto;font-size:12px;color:var(--slate)}
+${s} .chat .call{margin-top:4px;font-size:12.5px;background:var(--gold-l);border-radius:6px;padding:3px 8px;word-break:break-word}
+${s} .chat .call .call-k{color:var(--slate)}
+${s} .chat .call b{font-family:ui-monospace,Menlo,monospace;color:var(--navy);font-size:12px}
+${s} .chat .call .call-a{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--ink);white-space:pre-wrap;word-break:break-all}
+${s} dl.pf{display:grid;grid-template-columns:200px 1fr;gap:4px 12px;margin:6px 0;font-size:12px}
+${s} dl.pf dt{color:var(--slate)}
+${s} dl.pf dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
+${s} .pf-b p{margin:8px 0;color:var(--slate)}
+${s} .pf-b h5{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:14px 0 4px}
+${s} .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;text-align:center}
+${s} .pill.ok{background:var(--ok-l);color:var(--ok)}
+${s} .pill.bad{background:var(--bad-l);color:var(--bad)}
+${s} .pill.na{background:#EEF0F3;color:var(--slate);border:1px dashed #BFC4CC}
+${s} .pill.ne{background:var(--gold-l);color:#8A5A12}
+${s} dl.prov{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;margin:14px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12.5px}
+${s} dl.prov dt{color:var(--slate);font-weight:600}
+${s} dl.prov dd{margin:0;color:var(--ink);word-break:break-word}
+@media (max-width:760px){${s} dl.pf,${s} dl.prov{grid-template-columns:1fr}${s} .chat li.turn{max-width:100%}${s} .conv-h{grid-template-columns:1fr auto}${s} .conv-h .cmodel{display:none}}
+`;
+  }
+
   // capsule-viewer/ts/src/compliance-styles.ts
   var COMPLIANCE_CSS = `
-.cc{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+.cc{--navy:#232F42;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;display:block;max-width:1080px;margin:26px auto;padding:0 28px}
 .cc *{box-sizing:border-box}
 .cc h1,.cc h2,.cc h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
@@ -11869,7 +11054,7 @@ ${body}
 .cc .tx code{font-size:12px;color:var(--slate)}
 .cc .hd .na{color:var(--ink)}
 .cc .st{font-weight:700;font-size:13px}
-.cc .st.ok{color:var(--ok)}.cc .st.exc{color:var(--bad)}.cc .st.ne{color:#8A93A6}.cc .st.future{color:var(--gold)}
+.cc .st.ok{color:var(--ok)}.cc .st.exc{color:var(--bad)}.cc .st.ne{color:#8A93A6}
 .cc .fnd{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:12px}
 .cc .fnd .fh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .cc .fnd .fh b{color:var(--navy)}
@@ -11882,7 +11067,6 @@ ${body}
 .cc .fnd table.fk td{padding:4px 0}
 .cc details{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 14px}
 .cc details > summary{cursor:pointer;color:var(--navy);font-weight:600;font-size:14px}
-.cc details.session{margin:8px 0 0 16px}
 .cc .sessrow{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:14px}
 .cc .sessrow code{font-size:12px;color:var(--slate)}
 .cc .tk{display:inline-block;width:20px;height:20px;border-radius:6px;text-align:center;line-height:20px;font-size:12px;margin-left:3px}
@@ -11898,10 +11082,1786 @@ ${body}
 .cc .ran .k{font-size:12.5px;color:var(--slate)}
 .cc .ran .v{font-weight:600;color:var(--navy);word-break:break-word;font-size:13.5px}
 .cc .applic{font-size:13px;color:var(--slate)}
+.cc table.sum tbody tr.ob td{background:var(--cream);border-top:2px solid var(--navy);padding:12px 10px}
+.cc table.sum .obn{font-size:16px;color:var(--navy)}
+.cc table.sum .obn b{font-family:Georgia,Cambria,serif}
+.cc table.sum .plain{font-size:13.5px;color:var(--ink);margin-top:4px;max-width:720px}
+.cc table.sum tr.test td.tn{padding-left:22px}
+.cc table.sum .tnh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cc table.sum .tnh b{color:var(--navy)}
+.cc table.sum td .applic{margin-top:4px}
+.cc .fnd{margin:8px 0 0;padding:8px 12px;border-color:var(--bad-l);background:#FDF8F6}
+.cc .fnd .fh{margin-bottom:4px}
+.cc .fnd .rec{font-size:13.5px}
+.cc .fnd .own{font-size:12.5px;color:var(--slate);margin-top:2px}
+.cc .ck .h .tname{color:var(--navy)}
+.cc .ck .h .applic{font-weight:400}
+.cc section.rp{padding:16px 24px;border-radius:0 0 var(--r) var(--r)}
+.cc .rp-s{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.cc .rp-s h3{font-size:17px;margin:0 0 8px}
+.cc .pf-b .ev{font-size:12px;color:var(--slate);margin:4px 0;word-break:break-all}
+.cc .pf-b .ev code{background:var(--cream);padding:1px 6px;border-radius:5px;margin-right:4px;font-size:11.5px}
+.cc .obd{margin:10px 0 16px}
 @media (max-width:760px){.cc .ran{grid-template-columns:1fr}}
-`;
+` + levelCss("cc");
 
-  // capsule-viewer/ts/src/compliance-view.ts
+  // capsule-viewer/ts/src/outcome-report-styles.ts
+  var OUTCOME_REPORT_CSS = `
+.oi{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#EEF0F3;display:block}
+.oi *{box-sizing:border-box}
+.oi h1,.oi h2,.oi h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
+.oi a{color:var(--navy)}
+.oi .sheet{background:#fff;max-width:1080px;margin:26px auto;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 10px 30px rgba(0,0,0,.06);position:relative;overflow:hidden}
+.oi .sheet .pad{padding:64px 72px 56px}
+.oi .ih-row{display:flex;justify-content:space-between;align-items:flex-start;gap:40px;margin-bottom:48px}
+.oi .ih-title{text-align:right}
+.oi .ih-title .inv-title{font-size:28px}
+.oi .inv-title{font-family:Georgia,serif;font-size:30px;color:var(--navy);margin:0}
+.oi .inv-sub{color:var(--slate);font-size:14px;margin-top:4px}
+.oi .party .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;font-weight:700;color:var(--navy)}
+.oi .party .v{font-weight:600;color:var(--navy);font-size:16px}
+.oi .party .d{font-size:14px;color:var(--slate);line-height:1.7;margin-top:4px}
+.oi .meta{width:320px;flex:none;font-size:14px}
+.oi .meta div{display:grid;grid-template-columns:130px 1fr}
+.oi .meta span:first-child{color:var(--slate)}
+.oi .meta span:last-child{text-align:right;word-break:break-all;min-width:0}
+.oi .meta code{font-size:12.5px}
+.oi table.lines{width:100%;border-collapse:collapse;margin-top:40px;font-size:14.5px}
+.oi table.lines th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:8px 10px}
+.oi table.lines td{border-bottom:1px solid var(--line);padding:16px 10px;vertical-align:top}
+.oi table.lines td.n,.oi table.lines th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.oi table.lines .desc b{color:var(--navy)}
+.oi table.lines .desc small{display:block;color:var(--slate);font-size:12.5px}
+.oi table.lines .src{font-size:11.5px;color:var(--slate);white-space:normal}
+.oi .notes{font-size:13px;color:var(--slate);margin-top:44px;max-width:640px}
+.oi .notes p{margin:0 0 8px;font-size:14px;color:var(--ink)}
+.oi .notes .nh{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:6px}
+.oi .stamps.inl{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;margin-top:24px;gap:14px}
+.oi .stamp{border:3px solid;border-radius:8px;padding:6px 12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:13px;transform:rotate(-6deg)}
+.oi .stamp.rec{color:var(--ok);border-color:var(--ok)}
+.oi .stamp.hollow{color:#9AA1AC;border:3px dashed #BFC4CC;transform:rotate(-3deg);font-size:11.5px}
+.oi .stamp small{display:block;font-weight:600;letter-spacing:0;text-transform:none;font-size:11px}
+.oi .tamper-note{margin-top:24px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#FAF8F4;font-size:13.5px;color:var(--slate)}
+.oi .sec{background:#fff;max-width:1080px;margin:0 auto 22px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:30px 42px}
+.oi .sec h2{font-size:22px}
+.oi .sec .lede{color:var(--slate);margin:6px 0 16px}
+.oi .cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.oi .day{border:1px solid var(--line);border-radius:10px;padding:8px 9px;min-height:84px;background:#fff;position:relative}
+.oi .day .dn{font-size:12px;color:var(--slate)}
+.oi .day .v{font-weight:700;font-size:17px;color:var(--navy);font-variant-numeric:tabular-nums}
+.oi .day .v small{font-weight:400;color:var(--slate);font-size:12px}
+.oi .day .amt{font-size:11px;color:var(--slate);font-variant-numeric:tabular-nums}
+.oi .mini{height:6px;border-radius:99px;background:var(--bad-l);overflow:hidden;margin-top:6px}
+.oi .mini i{display:block;height:100%;background:var(--ok)}
+.oi .day .sealed{font-size:11px;color:var(--slate);margin-top:6px}
+.oi .day .src-says{display:inline-block;font-size:10.5px;font-weight:700;color:var(--navy);background:var(--gold-l);border:1px solid var(--gold);border-radius:999px;padding:0 6px;margin-top:2px}
+.oi .day .tz{font-size:11px;color:var(--bad);margin-top:2px}
+.oi p.date-note{font-size:13.5px;color:var(--ink);background:#FAF8F4;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:8px;padding:10px 14px;margin:14px 0 0}
+.oi .sec p.date-note{margin:0 0 14px}
+.oi .flag{position:absolute;top:7px;right:8px;font-size:11px;color:var(--gold)}
+.oi .flag:before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;background:var(--gold);transform:rotate(45deg);vertical-align:1px}
+.oi .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--slate);margin-top:12px}
+.oi .legend span i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.oi .hc-top{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.oi .hc-top div{padding:12px 14px;border-right:1px solid var(--line)}
+.oi .hc-top div:last-child{border-right:0}
+.oi .hc-top b{display:block;font-size:22px;color:var(--navy);font-variant-numeric:tabular-nums}
+.oi .hc-top span{font-size:12.5px;color:var(--slate)}
+.oi table.hct{width:100%;border-collapse:collapse;font-size:14px}
+.oi table.hct th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:7px 10px}
+.oi table.hct td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.oi table.hct .n{text-align:right}
+.oi .track{height:14px;background:var(--bad-l);border-radius:99px;overflow:hidden}
+.oi .track i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.oi h3{font-size:19px;margin:26px 0 12px}
+.oi .pack{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.oi .pk{padding:10px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.oi .pk:nth-child(3n){border-right:0}
+.oi .pk .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.oi .pk .v{color:var(--navy);font-weight:600;font-size:14px}
+.oi .outcome{border:2px solid var(--navy);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;display:flex;gap:16px;align-items:center}
+.oi .outcome .t{font-size:13px;color:var(--slate);text-transform:uppercase;letter-spacing:.06em}
+.oi .outcome .v{font-family:Georgia,Cambria,serif;font-size:22px;color:var(--navy)}
+.oi .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.oi .check{border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;background:#fff}
+.oi .check .ic{width:34px;height:34px;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center;margin-bottom:8px}
+.oi .outcome .oic{width:40px;height:40px;flex:none;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center}
+.oi svg{display:block}
+.oi .check .q{font-weight:700;color:var(--navy);font-size:17px}
+.oi .check .d{color:var(--slate);font-size:14px;margin-top:4px}
+.oi ul.subs{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
+.oi ul.subs li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.oi ul.subs li b{display:block;color:var(--navy);font-size:13px}
+.oi ul.subs li b:before{content:"";display:inline-block;width:5px;height:5px;margin-right:6px;border:1.5px solid var(--gold);border-radius:50%;vertical-align:2px}
+.oi ul.subs li span{color:var(--slate)}
+.oi .rule{margin-top:14px;font-size:14px;color:var(--slate)}
+.oi .rule b{color:var(--ink)}
+.oi .ran{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.oi .ran .it{background:var(--cream);border-radius:12px;padding:12px 14px}
+.oi .ran .k{font-size:13px;color:var(--slate)}
+.oi .ran .v{font-weight:600;color:var(--navy);word-break:break-word}
+.oi .ran .v code{font-size:13px}
+.oi .lock{margin-top:12px;font-size:14px;color:var(--slate)}
+.oi .tech{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin-top:12px;font-size:13px}
+.oi .tech .k{color:var(--slate)}
+.oi .tech .v{font-family:ui-monospace,Menlo,monospace;word-break:break-all;min-width:0}
+.oi .note{font-size:13px;color:var(--slate);margin-top:12px}
+.oi.oi-vp{padding:0 0 26px}
+.oi.oi-vp .sec{margin-bottom:0}
+.oi.oi-vp h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:22px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+.oi.oi-vp h2 + dl{margin-top:14px}
+.oi.oi-vp dl{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin:0;font-size:13px}
+.oi.oi-vp dt{color:var(--slate)}
+.oi.oi-vp dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
+.oi.oi-vp p{font-size:14px;margin:6px 0}
+.oi.oi-vp ul,.oi.oi-vp ol{margin:6px 0;padding-left:22px;font-size:14px}
+.oi.oi-vp li{padding:2px 0}
+.oi.oi-vp ol li strong{color:var(--navy)}
+.oi.oi-vp [data-check-status="pass"] span,.oi.oi-vp [data-check-status="passed"] span{color:var(--ok)}
+.oi.oi-vp details{margin-top:8px;font-size:13px}
+.oi.oi-vp summary{cursor:pointer;color:var(--navy);font-weight:600}
+.oi.oi-vp details ul{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;max-height:420px;overflow:auto}
+.oi.oi-vp .seal-checkpointed{color:var(--ok)}
+.oi.oi-vp .seal-uncheckpointed,.oi.oi-vp .seal-membership_invalid{color:var(--bad)}
+.oi.oi-vp > .sec > p:last-child{margin-top:18px;padding:12px 14px;border-radius:10px;background:var(--cream);color:var(--slate)}
+.oi .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;text-align:center}
+.oi .pill.ok{background:var(--ok-l);color:var(--ok)}
+.oi .pill.bad{background:var(--bad-l);color:var(--bad)}
+.oi .pill.na{background:#EEF0F3;color:var(--slate);border:1px dashed #BFC4CC}
+.oi .pill.ne{background:var(--gold-l);color:#8A5A12}
+.oi .tscroll{overflow-x:auto}
+.oi table.crit{width:100%;border-collapse:collapse;margin:0;font-size:12.5px}
+.oi table.lines table.crit th,.oi table.crit th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:1px solid var(--navy);padding:5px 8px}
+.oi table.lines table.crit td,.oi table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
+.oi table.crit td.cn{width:30%}
+.oi table.crit td.cn b{display:block;color:var(--navy);font-size:13px}
+.oi table.crit td.cn small{display:block;color:var(--slate);font-size:11.5px}
+.oi small.wsrc{display:block;font-style:italic;color:var(--slate);font-size:11px;margin-top:2px}
+.oi .pnote{max-width:1080px;margin:26px auto 0;box-sizing:border-box;background:var(--gold-l);border:1px solid var(--gold);border-left:6px solid var(--gold);border-radius:6px;padding:18px 26px}
+.oi .pnote .pn-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.oi .pnote .pn-t{font-size:20px;color:var(--navy);margin:4px 0 8px}
+.oi .pnote .pn-l{margin:0;padding-left:20px;font-size:14.5px;line-height:1.55}
+.oi .pnote .pn-l li{margin:4px 0}
+.oi .pnote .pn-src{font-size:12px;color:var(--slate);margin:10px 0 0;font-style:italic}
+.oi span.edited{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:var(--gold-l);border:1px solid var(--gold);color:var(--navy);font-size:10.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
+.oi p[data-wording-note]{font-size:12.5px;color:var(--slate);margin:10px 0}
+.oi table.crit td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.oi table.crit td.rat code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--slate);word-break:break-word;white-space:normal}
+.oi ul.why{margin:0;padding-left:20px}
+.oi ul.why li{padding:2px 0}
+.oi dl.chk{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;margin:0;font-size:12px}
+.oi dl.chk dt{color:var(--slate)}
+.oi dl.chk dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
+.oi ol.turns{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px;max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;background:#FAF8F4}
+.oi li.turn{border-radius:10px;padding:6px 10px;max-width:88%;background:#fff;border:1px solid var(--line)}
+.oi li.turn.user{justify-self:end;background:var(--person-l);border-color:transparent}
+.oi li.turn.assistant{justify-self:start}
+.oi li.turn.tool{justify-self:center;max-width:96%;border-style:dashed}
+.oi li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.oi li.turn .say{white-space:pre-wrap;word-break:break-word}
+.oi li.turn pre{margin:4px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;color:var(--slate)}
+.oi li.turn pre.call{color:var(--navy);background:var(--gold-l);padding:3px 6px;border-radius:6px}
+.oi p.verdict-line{font-size:14.5px;color:var(--ink);margin:12px 0 4px;font-weight:600}
+.oi table.lines .desc small{margin-top:2px}
+.oi p.na-note{font-size:13px;color:var(--slate);margin:12px 0 0}
+.oi table.rules{width:100%;border-collapse:collapse;font-size:14px}
+.oi table.rules th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:7px 10px}
+.oi table.rules th.n{text-align:right}
+.oi table.rules td{border-bottom:1px solid var(--line);padding:9px 10px;vertical-align:top}
+.oi table.rules td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;width:110px}
+.oi table.rules td.n.ok{color:var(--ok);font-weight:600}
+.oi table.rules td.n.bad{color:var(--bad);font-weight:700}
+.oi table.rules tr.grp td{font-family:Georgia,Cambria,serif;color:var(--navy);font-size:16px;padding-top:18px;border-bottom:1px solid var(--navy)}
+.oi table.rules td.cn b{display:block;color:var(--navy)}
+.oi table.rules td.cn small{display:block;color:var(--slate);font-size:12px;max-width:620px}
+.oi .sec.rp{padding:18px 26px}
+.oi .rp-s{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.oi .rp-s h3{font-size:17px;margin:0 0 8px}
+.oi .rp .tamper-note{margin-top:18px}
+.oi table.crit td.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px;word-break:break-all;color:var(--navy)}
+.oi table.crit td.rat .sealed{font-size:12.5px;color:var(--ink)}
+@media (max-width:820px){
+  .oi .ih-row{flex-direction:column;gap:16px}
+  .oi .ih-row .party:empty{display:none}
+  .oi .ih-title{text-align:left}
+  .oi .meta{width:100%}
+  .oi .sheet .pad,.oi .sec{padding:22px}
+  .oi .hc-top{grid-template-columns:1fr 1fr}
+}
+@media (max-width:760px){
+  .oi .checks,.oi .ran{grid-template-columns:1fr}
+  .oi .cal{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px}
+  .oi .day{min-height:64px;padding:6px 4px;min-width:0}
+  .oi .day .dn{font-size:11px}
+  .oi .day .v{font-size:14px}
+  .oi .tech,.oi.oi-vp dl,.oi dl.chk{grid-template-columns:1fr}
+}
+@media print{
+  .oi{background:#fff}
+  .oi .sheet,.oi .sec{box-shadow:none;margin:0 0 12px}
+}
+` + levelCss("oi");
+
+  // capsule-viewer/ts/src/viewer-build.ts
+  var COMMIT_SHA = /^[0-9a-f]{40}$/u;
+  function commitPrefix(value) {
+    return COMMIT_SHA.test(value) ? value.slice(0, 12) : void 0;
+  }
+  function builtCommit() {
+    if (typeof __CAPSULE_VIEWER_COMMIT__ !== "string") return void 0;
+    return commitPrefix(__CAPSULE_VIEWER_COMMIT__);
+  }
+  var commit = builtCommit();
+  var VIEWER_BUILD = {
+    viewer: "@action-state-group/capsule-viewer",
+    viewerVersion: "0.1.0",
+    verifier: "@action-state-group/agent-action-capsule",
+    verifierVersion: "0.5.0",
+    cllVersion: "0.2.1",
+    ...commit === void 0 ? {} : { commit }
+  };
+
+  // capsule-viewer/ts/src/wording/contract-report-outcomes.en.json
+  var contract_report_outcomes_en_default = {
+    wording_pack_version: "aac.wording-pack/v0",
+    id: "capsule-viewer/contract-report/outcomes@1",
+    locale: "en",
+    entries: {
+      "layout.grouping": "lines",
+      "lines.title": "Outcome report",
+      "lines.share": "{count} of {total}",
+      "lines.share.percent": "{p}%",
+      "lines.tier.judged": "judged",
+      "lines.tier.recomputed": "recomputed",
+      "lines.tier.unknown": "tier unknown \u2014 no claims observed",
+      "lines.tier.mixed": "tier differs across conversations",
+      "lines.wording.unstated": "Wording not stated: no report in this bundle states it.",
+      "lines.wording.mixed": "Wording not shown: the reports in this bundle state different wordings.",
+      "lines.wording-note.sealed": "Rule wording as sealed in the judge's reports (the text the judge was given).",
+      "lines.wording-note.unstated": "Rule wording not stated: the reports in this bundle do not state it.",
+      "lines.wording-note.partly": "Rule wording as sealed in the judge's reports; where the reports do not state it (or disagree), marked as such.",
+      "lines.edited.title": "Producer's note (presentation extension), not evidence",
+      "lines.producer-note.kicker": "Producer's note \xB7 presentation text, not evidence",
+      "lines.producer-note.source": "Carried on this bundle's outcome-report/v1 presentation extension, outside the signed records: no claim backs this note and no number on this page is computed from it. Everything below is drawn only from the verified bundle.",
+      "lines.pf.verdict.met": "met",
+      "lines.pf.verdict.not_met": "not met",
+      "lines.pf.verdict.not_evaluable": "not evaluable",
+      "lines.pf.verdict.failed": "failed verification",
+      "lines.pf.verdict.unsupported": "unsupported",
+      "lines.pf.verdict.not_applicable": "not applicable",
+      "lines.no-note.withheld": "Not in this bundle: the judge's report is withheld.",
+      "lines.no-note.mismatch": "Not shown: the report in this bundle does not match what was sealed.",
+      "lines.no-note.unreadable": "Not shown: the report in this bundle cannot be read.",
+      "lines.no-note.invalid": "Not shown: the report capsule in this bundle is missing or does not check out.",
+      "lines.no-note.none": "The judge left no note.",
+      "lines.count.0": "zero",
+      "lines.count.1": "one",
+      "lines.count.2": "two",
+      "lines.count.3": "three",
+      "lines.count.4": "four",
+      "lines.count.5": "five",
+      "lines.count.6": "six",
+      "lines.count.7": "seven",
+      "lines.count.8": "eight",
+      "lines.count.9": "nine",
+      "lines.count.10": "ten",
+      "lines.count.11": "eleven",
+      "lines.count.12": "twelve",
+      "lines.sentence.na": "{n} did not apply.",
+      "lines.sentence.resolved.one": "Resolved: the {n} rule that applied was met.",
+      "lines.sentence.resolved.other": "Resolved: all {n} rules that applied were met.",
+      "lines.sentence.missed": "Missed: {misses} of {applied} {rule} that applied {was} not met ({names}).",
+      "lines.word.rule.one": "rule",
+      "lines.word.rule.other": "rules",
+      "lines.word.was.one": "was",
+      "lines.word.was.other": "were",
+      "lines.sentence.undecided.none": "Could not decide: this bundle holds no rule result for this conversation.",
+      "lines.sentence.undecided": 'Could not decide: no rule result was "not met", but the judge could not decide {names}. The records do not show whether {thatRuleWas} met.',
+      "lines.sentence.unverified": 'Could not verify: no rule result was "not met", but {clause}{undecidedNote}',
+      "lines.sentence.unverified.undecided-note": " The judge could not decide {names}.",
+      "lines.sentence.unverified.failed": "the claim for {names} failed verification",
+      "lines.sentence.unverified.unsupported": "the evidence cited for {names} is not in this bundle",
+      "lines.word.that-rule-was.one": "that rule was",
+      "lines.word.that-rule-was.other": "those rules were",
+      "lines.sentence.nothing-applied": "No rule applied to this conversation, so nothing was checked. It is neither resolved nor missed.",
+      "lines.why.missed": "not met: {names}",
+      "lines.why.unverified": "failed verification or evidence missing: {names}",
+      "lines.why.undecided.none": "no rule result in this bundle",
+      "lines.why.undecided": "could not decide: {names}",
+      "lines.why.nothing-applied": "no rule applied",
+      "lines.why.resolved": "every rule that applied was met",
+      "lines.h.rule-by-rule": "Rule by rule",
+      "lines.col.rule": "Rule",
+      "lines.col.result": "Result",
+      "lines.col.note": "The judge's note",
+      "lines.note.not-applicable": "This rule did not come up in this conversation.",
+      "lines.gap.wording.mixed": "The rule wording is not shown: the reports in this bundle state different wordings.",
+      "lines.gap.wording.none": "The rule wording is not in this bundle.",
+      "lines.pf.case": "Case",
+      "lines.pf.case-record.from-claims": "{record} (cited by every claim of this conversation; the reports that name it are withheld)",
+      "lines.pf.dated-by": "Dated by",
+      "lines.pf.judge-pin": "Judge pin",
+      "lines.pf.judge-pin.recomputed": "{digest} = {model}, prompt {prompt}, axes {axes} (recomputed on this page)",
+      "lines.pf.h.each-report": "Each rule's sealed report",
+      "lines.pf.col.rule": "Rule",
+      "lines.pf.col.verdict": "Sealed verdict",
+      "lines.pf.col.p": "P",
+      "lines.pf.col.report": "Report capsule (book record)",
+      "lines.pf.col.rationale": "Rationale, as sealed",
+      "lines.pf.no-claim": "no claim: Result v0 carries none for a rule that did not apply",
+      "lines.pf.not-cited": "not cited",
+      "lines.pf.derived": "P is the probability the judge gave the verdict it returned. The judge's note is derived from its probabilities; the judge returns no free-text reasoning and cites no turn of the conversation.",
+      "lines.pf.sealed-rationale": "P is the probability the judge gave the verdict it returned, where its sealed rationale states one. A note that is not the judge's probability line is shown as sealed.",
+      "lines.pf.recompute": "To recompute: read each report above from the book, check its digest, and take the AND of the {verdicts} (a rule that did not apply passes; a conversation where nothing applied is not resolved). To re-judge, run the pinned judge on the case record and compare.",
+      "lines.pf.verdicts.one": "one verdict",
+      "lines.pf.verdicts.other": "{n} verdicts",
+      "lines.pin.differs": "differs across the cited reports, so none is shown",
+      "lines.pin.not-stated": "not stated",
+      "lines.list.empty": "no conversations",
+      "lines.why-missed.h": "Why conversations missed",
+      "lines.why-missed.structured": "Each reason is the reason code the producer sealed in the judge's report, by its label in the terms; a conversation with no labelled code is listed under the first rule it did not meet.",
+      "lines.why-missed.unstructured": "No report in this bundle carries a labelled reason code, so each conversation is listed under the first rule it did not meet.",
+      "lines.why-missed.reason": "{reason} \xB7 {count}",
+      "lines.pack-line": "{id} v{version}",
+      "lines.meta.pack": "Outcomes pack",
+      "lines.meta.locked": "Terms locked: {locked}",
+      "lines.meta.period": "Period",
+      "lines.meta.no-conversations": "no conversations",
+      "lines.meta.sealed": "Sealed",
+      "lines.meta.conversations": "Conversations",
+      "lines.meta.what-checked": "What was checked",
+      "lines.meta.what-checked.text": "Each conversation against {rules} in {groups}: {questions}. A conversation is resolved when every rule that applies to it is met, and at least one applies.",
+      "lines.meta.rules.one": "{n} rule",
+      "lines.meta.rules.other": "{n} rules",
+      "lines.meta.groups.one": "{n} group",
+      "lines.meta.groups.other": "{n} groups",
+      "lines.lines.col.conversations": "Conversations",
+      "lines.line.resolved": "Resolved",
+      "lines.line.resolved.help": "Every rule that applied was met.",
+      "lines.line.missed": "Missed",
+      "lines.line.missed.help": "At least one rule was not met.",
+      "lines.line.undecided": "Neither resolved nor missed",
+      "lines.line.undecided.help": 'No rule result was "not met", but the judge could not decide a rule, or no rule applied. The records do not show whether those rules were met. Neither resolved nor missed.',
+      "lines.line.unverified": "Could not verify",
+      "lines.line.unverified.help": 'No rule result was "not met", but a claim failed verification or the evidence it cites is not in this bundle, so the records do not say whether that rule was met. Neither resolved nor missed.',
+      "lines.line.held": "Held for a person to decide",
+      "lines.line.held.help": "A person's spot check disagreed with a resolved result.",
+      "lines.line.added": "Added after a person's check",
+      "lines.line.added.help": "a person's spot check graded a missed result as resolved",
+      "lines.drill.show.one": "Show the {n} conversation",
+      "lines.drill.show.other": "Show the {n} conversations",
+      "lines.na-note.one": "{n} rule check did not apply to the conversation and count as met beside a met rule.",
+      "lines.na-note.other": "{n} rule checks did not apply to the conversation and count as met beside a met rule.",
+      "lines.stamp": "Verified \xB7 recomputed from the sealed bundle",
+      "lines.stamp.small": "every count on this page is recomputed from the sealed claims and the records they cite",
+      "lines.rules.h": "Results rule by rule",
+      "lines.rules.lede": "How many conversations met each rule. Open a rule to read the conversations where it was not met.",
+      "lines.rules.col.undecided": "could not decide",
+      "lines.rules.col.unverified": "failed verification or evidence missing",
+      "lines.rules.drill": "{notMet} not met{unverified}{undecided}: show them",
+      "lines.rules.drill.unverified-suffix": ", {n} could not be verified",
+      "lines.rules.drill.undecided-suffix": ", {n} undecided",
+      "lines.cal.h": "Day by day",
+      "lines.cal.lede": "Resolved conversations per day, cited by this bundle's claims.",
+      "lines.cal.lede.dated": "Resolved conversations per day, by each conversation's own date, cited by this bundle's claims.",
+      "lines.cal.source-says": "source says",
+      "lines.cal.tz": "timezone not stated",
+      "lines.cal.sealed": "sealed {span}",
+      "lines.cal.policy-changed": "policy changed",
+      "lines.hc.h": "Human spot checks",
+      "lines.hc.lede": "Re-grades by a person, as the calibration-summary records state them.",
+      "lines.hc.none": "no calibration-summary/v1 records cited",
+      "lines.hc.col.week": "Week",
+      "lines.hc.col.agreed": "Agreed",
+      "lines.hc.col.held": "Held",
+      "lines.hc.col.added": "Added",
+      "lines.hc.agreed": "{k} of {n}",
+      "lines.terms.h": "The terms: what counts as resolved",
+      "lines.terms.lede": 'Every term below is read from the sealed claims and reports in this bundle, or marked "not stated".',
+      "lines.terms.lede.agreed": 'Every term below is read from the sealed claims and reports in this bundle, or marked "not stated". Agreed with the counterparty: {agreement}.',
+      "lines.terms.version": "Version",
+      "lines.terms.version.value": "{version} (from the claims' contract_ref)",
+      "lines.terms.locked": "Locked",
+      "lines.terms.outcome": "The outcome",
+      "lines.terms.criterion": "{text} ({tier})",
+      "lines.ran.h": "What ran",
+      "lines.ran.contract": "Contract",
+      "lines.ran.judge-model": "Judge model",
+      "lines.ran.judge-pin": "Judge pin digest",
+      "lines.ran.judge-pin.recomputed": "{digest} (recomputed from the model, prompt, axes and sampling params shown here)",
+      "lines.ran.judge-prompt": "Judge prompt digest",
+      "lines.ran.judge-axes": "Judge axes digest",
+      "lines.ran.agent": "Agent / test suite / human-check protocol",
+      "lines.ran.agent.value": "not stated \u2014 this evaluation-report/v1 shape carries none of these fields",
+      "lines.ran.components-mismatch": "the judge pin components the reports carry do not recompute to the sealed judge pin digest \u2014 they are not shown",
+      "lines.ran.lock": "The judge pin digest covers model id, judge prompt and axes, and sampling params (capsulectl judge pin). It does not cover the human-check protocol name: this bundle seals no method lock, and this card never implies one exists.",
+      "lines.ran.pin-mismatch": "what ran varies across the cited reports \u2014 the values above are drawn only when every one agrees, and are omitted ('not stated') here because they do not",
+      "lines.vd.lede": "Repeat offline with the open-source verifier.",
+      "lines.vd.note": "This bundle's own checkpoint \u2014 an append-only Merkle Mountain Range over the sealed records \u2014 not a month-level RFC 6962 tree computed in the browser. Repeat this check offline with the open-source verifier.",
+      "lines.rp.toggle": "Proofs for this report: the terms, what ran, and how to verify the whole bundle",
+      "lines.rp.tamper": 'This page only ever renders a bundle that already verified: there is no interactive "try tampering" control, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and the whole page is replaced by the verification-failed banner, before anything here is drawn.',
+      "lines.verdict.met": "met",
+      "lines.verdict.not_met": "not met",
+      "lines.verdict.not_applicable": "did not apply",
+      "lines.verdict.failed": "failed verification",
+      "lines.verdict.unsupported": "evidence missing",
+      "lines.verdict.not_evaluable.judged": "could not decide",
+      "lines.verdict.not_evaluable.unjudged": "could not decide",
+      "lines.verdict.not_evaluable.withheld": "could not decide",
+      "lines.verdict.not_evaluable.unavailable": "could not decide",
+      "lines.status.resolved": "resolved",
+      "lines.status.missed": "missed",
+      "lines.status.nothing-applied": "no rule applied",
+      "lines.status.unverified": "could not verify",
+      "lines.status.undecided.judged": "could not decide",
+      "lines.status.undecided.unjudged": "could not decide",
+      "lines.status.undecided.none": "could not decide",
+      "lines.status.undecided.withheld": "could not decide",
+      "lines.status.undecided.unavailable": "could not decide",
+      "judge.note.sure": "The judge gave this verdict a probability of {p}%.",
+      "case.label": "task {task}",
+      "case.label.trial": "task {task}, trial {trial}",
+      "chat.role.user": "User",
+      "chat.role.assistant": "Agent",
+      "chat.role.tool": "Tool result",
+      "chat.role.system": "Instructions given to the agent",
+      "chat.absent": "The conversation is not in this bundle. It is sealed in the case record {record}, which this report does not disclose, so this page cannot show it.",
+      "chat.record.not-stated": "(not stated)",
+      "chat.not-shown": "The conversation is not shown: {reason}.",
+      "chat.not-shown.default-reason": "the transcript in this bundle does not check against the case the judge read",
+      "chat.lede": "{messages} messages, {calls}. {state} Tool results are shown as sealed; JSON is only indented, and only where indenting changes nothing else. Tool arguments are shown as the report model hands them over, re-serialised, so a number JSON cannot hold exactly may already be rounded.",
+      "chat.calls.one": "{n} tool call",
+      "chat.calls.other": "{n} tool calls",
+      "chat.state.cited": "The conversation of the case every claim cites. The judge's reports are withheld, so which conversation the judge read is not shown.",
+      "chat.state.verified": "The exact conversation the judge read, checked on this page (see the proofs).",
+      "chat.called": "called ",
+      "report.not-stated": "not stated",
+      "report.span": "{from} \u2013 {to}",
+      "report.span.unknown": "unknown",
+      "report.basis.source": "source says (backfilled record; the source's own timestamp, self-attested)",
+      "report.basis.record": "the case record's own timestamp",
+      "report.basis.judged": "the day the judgments were sealed (no case record date to read)",
+      "report.dating.sealed": "Sealed {span}.",
+      "report.dating.source": `Dates are the source's own timestamps for backfilled records ("source says"), as given, not when the records were sealed.`,
+      "report.dating.record": "The period is when the conversations happened (each case record's own time, as given), not when they were judged.",
+      "report.dating.mixed": "Dates are each conversation's own date, as given, not when the judgments were sealed:",
+      "report.dating.mixed.source": `{n} backfilled by the source's own timestamp ("source says");`,
+      "report.dating.mixed.record": "{n} by the case record's own timestamp;",
+      "report.dating.mixed.judged": "{n} with no case record date to read, by the day they were judged.",
+      "report.dating.self-attested": "A backfilled record's source time is self-attested: carrying it does not make it witnessed.",
+      "report.dating.tz": "Timezone not stated on {count} of {total}; no zone is assumed.",
+      "report.h.conversation": "The conversation",
+      "report.proofs.toggle": "Proofs: record ids, digests and the judge pin",
+      "report.gap.notes.withheld": "The judge's notes are not in this bundle: its reports are withheld.",
+      "report.gap.notes.unread": "The judge's notes are not shown: some reports in this bundle do not match what was sealed, cannot be read, or do not check out.",
+      "report.gap.notes.some-withheld": "The judge's notes are not in this bundle: some of its reports are withheld.",
+      "report.gap.notes.none": "The judge left no notes.",
+      "report.pf.case-record": "Case record",
+      "report.pf.case-record.not-stated": "not stated by the reports",
+      "report.pf.dated": "{date}: {basis}",
+      "report.pf.dated.no-zone": "{date} (timezone not stated): {basis}",
+      "report.pf.imported": "Imported",
+      "report.pf.judged-sealed": "Judged and sealed",
+      "report.pf.result-capsule": "Result capsule",
+      "report.pf.transcript-record": "Transcript record",
+      "report.pf.input-digest": "Case input digest",
+      "report.pf.input-digest.verified": "{digest} (the transcript's digest equals what the judged case committed to, checked on this page)",
+      "report.pf.input-digest.cited": "{digest} (the case every claim cites; the judge's reports are withheld, so which conversation the judge read is not shown)",
+      "report.pf.transcript": "Transcript",
+      "report.pf.transcript.absent": "not in this bundle",
+      "report.pf.transcript.not-shown": "not shown: {reason}",
+      "report.pf.transcript.default-reason": "does not check",
+      "report.pf.wording": "Words",
+      "report.pf.wording.default": "wording pack {id}, built into this viewer (wording_sha256 {sha256})",
+      "report.pf.wording.supplied.layered": "wording pack {id} (wording_sha256 {sha256}), supplied with the page over the built-in {baseId} (wording_sha256 {baseSha256})",
+      "report.pin.withheld": "the judge's reports that state it are withheld ({count} of {total})",
+      "report.pin.unread": "{count} of {total} reports in this bundle do not match what was sealed, cannot be read, or do not check out",
+      "report.pin.not-in-bundle": "not in this bundle: {reasons}",
+      "report.vd.h": "Verification details",
+      "report.vd.bundle-digest": "Bundle digest",
+      "report.vd.checkpoint-root": "Checkpoint root",
+      "report.vd.checkpoint-size": "Checkpoint size",
+      "report.vd.uncomputable": "uncomputable",
+      "report.vd.absent": "absent",
+      "prov.of": "{count} of {total}",
+      "prov.judge.label": "Judged by",
+      "prov.judge.none": "not stated: no result in this bundle cites a report",
+      "prov.judge.model.does-not-recompute": "model not shown (the model the reports state does not recompute to the pin)",
+      "prov.judge.model.differs": "model not shown (the reports with this pin state different models)",
+      "prov.judge.model.partly-stated": "model not shown (some reports with this pin state no model)",
+      "prov.judge.model.not-stated": "model not stated",
+      "prov.judge.pin": "{model}, pinned, pin {pin} ({of} results)",
+      "prov.judge.all-withheld": "not in this bundle: the judge's reports are withheld ({of})",
+      "prov.judge.some-withheld": "the reports for {of} results are withheld, so their judge is not in this bundle",
+      "prov.judge.not-carried": "the reports for {of} results are not in this bundle, so their judge is not stated",
+      "prov.judge.unread": "{of} reports do not match what was sealed, cannot be read, or do not check out",
+      "prov.judge.checker": "{checker} ({count})",
+      "prov.judge.checker-not-stated": "checker not stated ({count})",
+      "prov.judge.recomputed": "{of} results recomputed, not judged: {by}",
+      "prov.judge.unnamed": "judge not stated for {of} results",
+      "prov.judge.nothing": "not stated in this bundle",
+      "prov.witness.label": "Witnessed by",
+      "prov.witness.stated": "{witnesses}: stated by the bundle, not checked here.",
+      "prov.witness.none": "not stated in this bundle: it carries no witness receipt for its checkpoint.",
+      "prov.witness.entry": "{witness} (tree size {size})",
+      "prov.witness.receipt-not-stated": "a receipt, witness not stated",
+      "prov.witness.stubs.one": "{n} placeholder, not receipts",
+      "prov.witness.stubs.other": "{n} placeholders, not receipts",
+      "prov.witness.malformed.one": "{n} entry that cannot be read",
+      "prov.witness.malformed.other": "{n} entries that cannot be read",
+      "prov.witness.besides": "It also carries {others}.",
+      "prov.witness.both": "{a} and {b}",
+      "prov.witness.log": "log {log}",
+      "prov.witness.size": "size {size}",
+      "prov.witness.root": "root {root}",
+      "prov.witness.about": "The checkpoint: {facts}.",
+      "prov.witness.about.unchecked": "The checkpoint: {facts}; this page did not check its signature.",
+      "prov.witness.about.unsigned": "The checkpoint: {facts}; the bundle carries no signature for it.",
+      "prov.verifier.label": "Verified by",
+      "prov.verifier.text": "{ran}. {built}",
+      "prov.verifier.ran": "this page's code: {viewer} {viewerVersion} at {commit}, verifier {verifier} {verifierVersion}",
+      "prov.verifier.ran.cll": "this page's code: {viewer} {viewerVersion} at {commit}, verifier {verifier} {verifierVersion} with cll {cll}",
+      "prov.verifier.commit.not-stated": "commit not stated",
+      "prov.verifier.ran.not-stated": "this page's code; its viewer and verifier versions are not stated",
+      "prov.verifier.built.not-stated": "The tool that built this bundle is not stated in it.",
+      "prov.verifier.built": "The bundle's own report, which this page does not check, names the tool that built it as {producer}, {version}.",
+      "prov.verifier.version": "version {version}",
+      "prov.verifier.version.not-stated": "version not stated"
+    }
+  };
+
+  // capsule-viewer/ts/src/wording/contract-report-eu-ai-act.en.json
+  var contract_report_eu_ai_act_en_default = {
+    wording_pack_version: "aac.wording-pack/v0",
+    id: "capsule-viewer/contract-report/eu-ai-act@1",
+    locale: "en",
+    entries: {
+      "layout.grouping": "groups",
+      "groups.producer.title": "The producer's mapping, not a sealed record",
+      "groups.count.obligation.one": "{n} obligation",
+      "groups.count.obligation.other": "{n} obligations",
+      "groups.count.session.one": "{n} session",
+      "groups.count.session.other": "{n} sessions",
+      "groups.count.test.one": "{n} test",
+      "groups.count.test.other": "{n} tests",
+      "groups.count.exception.one": "{n} exception",
+      "groups.count.exception.other": "{n} exceptions",
+      "groups.count.result.one": "{n} result",
+      "groups.count.result.other": "{n} results",
+      "groups.tier.judged": "judged",
+      "groups.tier.recomputed": "recomputed",
+      "groups.tier.mixed": "tier differs across reports",
+      "groups.tier.unstated": "tier not stated",
+      "groups.tier.judged.title": "Decided by a pinned model applying a frozen rubric",
+      "groups.tier.recomputed.title": "A fixed check anyone can repeat from the records",
+      "groups.kicker": "EU AI Act obligations report",
+      "groups.pack": "Pack {id} v{version}",
+      "groups.pack.not-stated": "Pack not stated",
+      "groups.sub": "{pack} \xB7 {obligations} \xB7 {sessions}",
+      "groups.sub.judged": "{pack} \xB7 {obligations} \xB7 {sessions} \xB7 judged {period}",
+      "groups.sub.dated": "{pack} \xB7 {obligations} \xB7 {sessions} \xB7 {period}",
+      "groups.ob.unchecked": "Could not be checked",
+      "groups.ob.unchecked-of": " \xB7 {unchecked} of {total} could not be checked",
+      "groups.ob.ok": "No exceptions",
+      "groups.ob.ok.found": "No exceptions found",
+      "groups.ob.ok.unverified": "No exceptions found \xB7 {unverified} could not be verified",
+      "groups.row.nothing": "Not checked: no session has a result",
+      "groups.row.none-decided": "Could not be checked",
+      "groups.row.undecided-note": "{n} could not be decided",
+      "groups.row.unverified-note": "{n} could not be verified (failed verification or evidence missing)",
+      "groups.row.exceptions.one": "{n} exception",
+      "groups.row.exceptions.other": "{n} exceptions",
+      "groups.row.ok.all-decided": "No exceptions",
+      "groups.row.ok": "No exceptions",
+      "groups.summary.h": "What was checked and what we found",
+      "groups.summary.lede": "Each session (one conversation with the agent) was checked against {tests} under {obligations}. Results are counts of sessions: there is no overall score. Open a test to read the sessions behind its exceptions.",
+      "groups.summary.basis": `Every count and result is read from the sealed claims and reports in this bundle, or marked "not stated". The regulation named in the heading, obligation titles, test names, the article, the plain-language summary, applicability, method, finding ids, severities, recommendations and the notes on undecided tests and quality checks are the producer's mapping, set in italics: carried beside the signed records, not in them.`,
+      "groups.summary.col.test": "Obligation and test",
+      "groups.summary.col.checked-in": "Checked in",
+      "groups.summary.col.result": "Result",
+      "groups.drill.mixed": "Show the {sessions} ({kinds})",
+      "groups.drill.kind.exceptions": "exceptions",
+      "groups.drill.kind.unverified": "could not be verified",
+      "groups.drill.kind.undecided": "undecided",
+      "groups.drill.exceptions": "Show the {sessions} with exceptions",
+      "groups.drill.unverified": "Show the {sessions} that could not be verified",
+      "groups.drill.undecided": "Show the {sessions} that could not be decided",
+      "groups.finding": "Finding {id}",
+      "groups.finding.owner": "Owner \xB7 due: ",
+      "groups.session.unverified": "could not verify",
+      "groups.session.undecided": "could not decide",
+      "groups.session.ok": "no exceptions",
+      "groups.session.none": "no test applied",
+      "groups.h.test-by-test": "Test by test",
+      "groups.unverified-note": "no verdict drawn: neither met nor an exception",
+      "groups.pf.dated": "Dated",
+      "groups.pf.session": "Session",
+      "groups.pf.case-record.from-claims": "{record} (cited by every claim of this session; the reports that name it are withheld)",
+      "groups.pf.h.each-report": "Each test's sealed report",
+      "groups.pf.no-claim": "no claim: Result v0 carries none for a test that did not apply",
+      "groups.pf.judge-pin": "judge pin {digest}",
+      "groups.pf.rationale": "Rationale, as sealed: {rationale}",
+      "groups.pf.absent": "absent",
+      "groups.pin.differs": "disagrees across sessions",
+      "groups.pin.none": "no judged sessions cited",
+      "groups.rp.toggle": "Proofs for this report: method, test wording, what ran, and how to verify the whole bundle",
+      "groups.od.h": "Method and the wording each test ran",
+      "groups.od.mapped": "Title, article, summary, method, test names and the undecided-session note: the producer's mapping, in italics, not a sealed record.",
+      "groups.od.unmapped": "The producer's extension does not map this obligation: article, summary and method not stated.",
+      "groups.od.judged-terms": "Judged terms: ",
+      "groups.od.wording.sealed": "Wording run (sealed): {text}",
+      "groups.od.wording.mixed": "Wording not stated: the cited reports state different wordings.",
+      "groups.od.wording.unstated": "Wording not stated: no cited report states it.",
+      "groups.q.h": "Quality of judged results",
+      "groups.q.none": "No quality protocol declared in this pack.",
+      "groups.q.protocol": "Protocol ",
+      "groups.q.unspecified": "unspecified",
+      "groups.q.tail": ". Recomputed tests are not sampled.",
+      "groups.ran.h": "What ran",
+      "groups.ran.contract": "Contract",
+      "groups.ran.contract.none": "no conversations",
+      "groups.ran.contract.differs": "disagrees across sessions",
+      "groups.ran.judge-pin": "Judge pin digest",
+      "groups.ran.sessions": "Sessions",
+      "groups.ran.period": "Period",
+      "groups.ran.sealed": "Sealed",
+      "groups.vd.note": "This bundle's own checkpoint, an append-only Merkle Mountain Range over the sealed records. Repeat every check on this page offline with the open-source verifier. This page only ever renders a bundle that already verified: tamper with any claim, record or checkpoint and the whole page is replaced by the verification-failed banner.",
+      "groups.verdict.met": "met",
+      "groups.verdict.not_met": "not met",
+      "groups.verdict.not_applicable": "did not apply",
+      "groups.verdict.failed": "failed verification",
+      "groups.verdict.unsupported": "evidence missing",
+      "groups.verdict.not_evaluable.judged": "could not decide",
+      "groups.verdict.not_evaluable.unjudged": "could not decide",
+      "groups.verdict.not_evaluable.withheld": "could not decide",
+      "groups.verdict.not_evaluable.unavailable": "could not decide",
+      "judge.note.sure": "The judge gave this verdict a probability of {p}%.",
+      "case.label": "task {task}",
+      "case.label.trial": "task {task}, trial {trial}",
+      "chat.role.user": "User",
+      "chat.role.assistant": "Agent",
+      "chat.role.tool": "Tool result",
+      "chat.role.system": "Instructions given to the agent",
+      "chat.absent": "The conversation is not in this bundle. It is sealed in the case record {record}, which this report does not disclose, so this page cannot show it.",
+      "chat.record.not-stated": "(not stated)",
+      "chat.not-shown": "The conversation is not shown: {reason}.",
+      "chat.not-shown.default-reason": "the transcript in this bundle does not check against the case the judge read",
+      "chat.lede": "{messages} messages, {calls}. {state} Tool results are shown as sealed; JSON is only indented, and only where indenting changes nothing else. Tool arguments are shown as the report model hands them over, re-serialised, so a number JSON cannot hold exactly may already be rounded.",
+      "chat.calls.one": "{n} tool call",
+      "chat.calls.other": "{n} tool calls",
+      "chat.state.cited": "The conversation of the case every claim cites. The judge's reports are withheld, so which conversation the judge read is not shown.",
+      "chat.state.verified": "The exact conversation the judge read, checked on this page (see the proofs).",
+      "chat.called": "called ",
+      "report.not-stated": "not stated",
+      "report.span": "{from} \u2013 {to}",
+      "report.span.unknown": "unknown",
+      "report.basis.source": "source says (backfilled record; the source's own timestamp, self-attested)",
+      "report.basis.record": "the case record's own timestamp",
+      "report.basis.judged": "the day the judgments were sealed (no case record date to read)",
+      "report.dating.sealed": "Sealed {span}.",
+      "report.dating.source": `Dates are the source's own timestamps for backfilled records ("source says"), as given, not when the records were sealed.`,
+      "report.dating.record": "The period is when the conversations happened (each case record's own time, as given), not when they were judged.",
+      "report.dating.mixed": "Dates are each conversation's own date, as given, not when the judgments were sealed:",
+      "report.dating.mixed.source": `{n} backfilled by the source's own timestamp ("source says");`,
+      "report.dating.mixed.record": "{n} by the case record's own timestamp;",
+      "report.dating.mixed.judged": "{n} with no case record date to read, by the day they were judged.",
+      "report.dating.self-attested": "A backfilled record's source time is self-attested: carrying it does not make it witnessed.",
+      "report.dating.tz": "Timezone not stated on {count} of {total}; no zone is assumed.",
+      "report.h.conversation": "The conversation",
+      "report.proofs.toggle": "Proofs: record ids, digests and the judge pin",
+      "report.gap.notes.withheld": "The judge's notes are not in this bundle: its reports are withheld.",
+      "report.gap.notes.unread": "The judge's notes are not shown: some reports in this bundle do not match what was sealed, cannot be read, or do not check out.",
+      "report.gap.notes.some-withheld": "The judge's notes are not in this bundle: some of its reports are withheld.",
+      "report.gap.notes.none": "The judge left no notes.",
+      "report.pf.case-record": "Case record",
+      "report.pf.case-record.not-stated": "not stated by the reports",
+      "report.pf.dated": "{date}: {basis}",
+      "report.pf.dated.no-zone": "{date} (timezone not stated): {basis}",
+      "report.pf.imported": "Imported",
+      "report.pf.judged-sealed": "Judged and sealed",
+      "report.pf.result-capsule": "Result capsule",
+      "report.pf.transcript-record": "Transcript record",
+      "report.pf.input-digest": "Case input digest",
+      "report.pf.input-digest.verified": "{digest} (the transcript's digest equals what the judged case committed to, checked on this page)",
+      "report.pf.input-digest.cited": "{digest} (the case every claim cites; the judge's reports are withheld, so which conversation the judge read is not shown)",
+      "report.pf.transcript": "Transcript",
+      "report.pf.transcript.absent": "not in this bundle",
+      "report.pf.transcript.not-shown": "not shown: {reason}",
+      "report.pf.transcript.default-reason": "does not check",
+      "report.pf.wording": "Words",
+      "report.pf.wording.default": "wording pack {id}, built into this viewer (wording_sha256 {sha256})",
+      "report.pf.wording.supplied.layered": "wording pack {id} (wording_sha256 {sha256}), supplied with the page over the built-in {baseId} (wording_sha256 {baseSha256})",
+      "report.pin.withheld": "the judge's reports that state it are withheld ({count} of {total})",
+      "report.pin.unread": "{count} of {total} reports in this bundle do not match what was sealed, cannot be read, or do not check out",
+      "report.pin.not-in-bundle": "not in this bundle: {reasons}",
+      "report.vd.h": "Verification details",
+      "report.vd.bundle-digest": "Bundle digest",
+      "report.vd.checkpoint-root": "Checkpoint root",
+      "report.vd.checkpoint-size": "Checkpoint size",
+      "report.vd.uncomputable": "uncomputable",
+      "report.vd.absent": "absent",
+      "prov.of": "{count} of {total}",
+      "prov.judge.label": "Judged by",
+      "prov.judge.none": "not stated: no result in this bundle cites a report",
+      "prov.judge.model.does-not-recompute": "model not shown (the model the reports state does not recompute to the pin)",
+      "prov.judge.model.differs": "model not shown (the reports with this pin state different models)",
+      "prov.judge.model.partly-stated": "model not shown (some reports with this pin state no model)",
+      "prov.judge.model.not-stated": "model not stated",
+      "prov.judge.pin": "{model}, pinned, pin {pin} ({of} results)",
+      "prov.judge.all-withheld": "not in this bundle: the judge's reports are withheld ({of})",
+      "prov.judge.some-withheld": "the reports for {of} results are withheld, so their judge is not in this bundle",
+      "prov.judge.not-carried": "the reports for {of} results are not in this bundle, so their judge is not stated",
+      "prov.judge.unread": "{of} reports do not match what was sealed, cannot be read, or do not check out",
+      "prov.judge.checker": "{checker} ({count})",
+      "prov.judge.checker-not-stated": "checker not stated ({count})",
+      "prov.judge.recomputed": "{of} results recomputed, not judged: {by}",
+      "prov.judge.unnamed": "judge not stated for {of} results",
+      "prov.judge.nothing": "not stated in this bundle",
+      "prov.witness.label": "Witnessed by",
+      "prov.witness.stated": "{witnesses}: stated by the bundle, not checked here.",
+      "prov.witness.none": "not stated in this bundle: it carries no witness receipt for its checkpoint.",
+      "prov.witness.entry": "{witness} (tree size {size})",
+      "prov.witness.receipt-not-stated": "a receipt, witness not stated",
+      "prov.witness.stubs.one": "{n} placeholder, not receipts",
+      "prov.witness.stubs.other": "{n} placeholders, not receipts",
+      "prov.witness.malformed.one": "{n} entry that cannot be read",
+      "prov.witness.malformed.other": "{n} entries that cannot be read",
+      "prov.witness.besides": "It also carries {others}.",
+      "prov.witness.both": "{a} and {b}",
+      "prov.witness.log": "log {log}",
+      "prov.witness.size": "size {size}",
+      "prov.witness.root": "root {root}",
+      "prov.witness.about": "The checkpoint: {facts}.",
+      "prov.witness.about.unchecked": "The checkpoint: {facts}; this page did not check its signature.",
+      "prov.witness.about.unsigned": "The checkpoint: {facts}; the bundle carries no signature for it.",
+      "prov.verifier.label": "Verified by",
+      "prov.verifier.text": "{ran}. {built}",
+      "prov.verifier.ran": "this page's code: {viewer} {viewerVersion} at {commit}, verifier {verifier} {verifierVersion}",
+      "prov.verifier.ran.cll": "this page's code: {viewer} {viewerVersion} at {commit}, verifier {verifier} {verifierVersion} with cll {cll}",
+      "prov.verifier.commit.not-stated": "commit not stated",
+      "prov.verifier.ran.not-stated": "this page's code; its viewer and verifier versions are not stated",
+      "prov.verifier.built.not-stated": "The tool that built this bundle is not stated in it.",
+      "prov.verifier.built": "The bundle's own report, which this page does not check, names the tool that built it as {producer}, {version}.",
+      "prov.verifier.version": "version {version}",
+      "prov.verifier.version.not-stated": "version not stated"
+    }
+  };
+
+  // capsule-viewer/ts/src/contract-report-wording.ts
+  var WORDING_PACK_VERSION = "aac.wording-pack/v0";
+  var WORDING_KEY = /^[a-z0-9][a-z0-9._-]*$/u;
+  var LOCALE = /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/u;
+  var PLACEHOLDER = /\{([a-zA-Z][a-zA-Z0-9_]*)\}/gu;
+  var INVISIBLE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
+  var WordingPackError = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "WordingPackError";
+    }
+  };
+  function readWordingPack(pack) {
+    const p = pack;
+    const entries = p?.entries;
+    if (pack === null || typeof pack !== "object" || Array.isArray(pack) || Object.keys(p).some(
+      (k) => !["wording_pack_version", "id", "locale", "entries"].includes(k)
+    ) || p.wording_pack_version !== WORDING_PACK_VERSION || typeof p.id !== "string" || INVISIBLE.test(p.id) || typeof p.locale !== "string" || !LOCALE.test(p.locale) || entries === null || typeof entries !== "object" || Array.isArray(entries) || Object.keys(entries).length === 0 || Object.entries(entries).some(
+      ([k, v]) => !WORDING_KEY.test(k) || typeof v !== "string" || v === ""
+    ))
+      throw new WordingPackError(
+        `wording pack is not an ${WORDING_PACK_VERSION} object`
+      );
+    return {
+      id: p.id,
+      locale: p.locale,
+      entries
+    };
+  }
+  async function checkWordingPackInput(wording) {
+    if (!/^[0-9a-f]{64}$/u.test(wording.sha256))
+      throw new WordingPackError("wording sha256 is not a lowercase hex SHA-256");
+    const digest = await sha256Hex(new TextEncoder().encode(wording.pack));
+    if (digest !== wording.sha256)
+      throw new WordingPackError(
+        "wording pack bytes do not hash to its wording_sha256"
+      );
+    let parsed;
+    try {
+      parsed = JSON.parse(wording.pack);
+    } catch {
+      throw new WordingPackError("wording pack is not JSON");
+    }
+    return readWordingPack(parsed);
+  }
+  function placeholders(text2) {
+    return [...text2.matchAll(PLACEHOLDER)].map((m) => m[1]);
+  }
+  function placeholderGaps(text2) {
+    const matches = [...text2.matchAll(PLACEHOLDER)];
+    const gaps = [];
+    for (let i = 1; i < matches.length; i++)
+      gaps.push(
+        text2.slice(
+          matches[i - 1].index + matches[i - 1][0].length,
+          matches[i].index
+        )
+      );
+    return gaps;
+  }
+  var HAS_NON_SPACE = /\S/u;
+  var HAS_LETTER = /\p{L}/u;
+  var DIGIT_LIKE = /[oil]/gu;
+  var DEFAULT_PACKS = Object.freeze({
+    lines: readWordingPack(contract_report_outcomes_en_default),
+    groups: readWordingPack(contract_report_eu_ai_act_en_default)
+  });
+  var DISTINCT = [
+    // This module's own rule verdict words (contract-report.ts: the bare
+    // `verdict.*` namespace stays contract-report/v1 §3's), one set per
+    // grouping -- the Outcomes card's and the EU card's prefixes never
+    // compare against each other, each pack names only its own.
+    [
+      "lines.verdict.met",
+      "lines.verdict.not_met",
+      "lines.verdict.not_applicable",
+      "lines.verdict.failed",
+      "lines.verdict.unsupported",
+      [
+        "lines.verdict.not_evaluable.judged",
+        "lines.verdict.not_evaluable.unjudged",
+        "lines.verdict.not_evaluable.withheld",
+        "lines.verdict.not_evaluable.unavailable"
+      ]
+    ],
+    [
+      "groups.verdict.met",
+      "groups.verdict.not_met",
+      "groups.verdict.not_applicable",
+      "groups.verdict.failed",
+      "groups.verdict.unsupported",
+      [
+        "groups.verdict.not_evaluable.judged",
+        "groups.verdict.not_evaluable.unjudged",
+        "groups.verdict.not_evaluable.withheld",
+        "groups.verdict.not_evaluable.unavailable"
+      ]
+    ],
+    [
+      "lines.status.resolved",
+      "lines.status.missed",
+      "lines.status.nothing-applied",
+      "lines.status.unverified",
+      [
+        "lines.status.undecided.judged",
+        "lines.status.undecided.unjudged",
+        "lines.status.undecided.none",
+        "lines.status.undecided.withheld",
+        "lines.status.undecided.unavailable"
+      ]
+    ],
+    // The sealed verdicts as the Outcomes proofs name them.
+    [
+      "lines.pf.verdict.met",
+      "lines.pf.verdict.not_met",
+      "lines.pf.verdict.not_evaluable",
+      "lines.pf.verdict.failed",
+      "lines.pf.verdict.unsupported",
+      "lines.pf.verdict.not_applicable"
+    ],
+    // The assurance tier (judged vs. recomputed) must stay a non-swappable
+    // set too: a judgement must never read as a check anyone can repeat.
+    [
+      "groups.tier.judged",
+      "groups.tier.recomputed",
+      "groups.tier.mixed",
+      "groups.tier.unstated"
+    ],
+    [
+      "lines.tier.judged",
+      "lines.tier.recomputed",
+      "lines.tier.mixed",
+      "lines.tier.unknown"
+    ],
+    // The Outcomes headline row labels.
+    [
+      "lines.line.resolved",
+      "lines.line.missed",
+      "lines.line.undecided",
+      "lines.line.unverified",
+      "lines.line.held",
+      "lines.line.added"
+    ],
+    // An obligation's summary pill (EU card): "could not be checked" must
+    // never read as "no exceptions" or the reverse.
+    [
+      "groups.ob.unchecked",
+      ["groups.ob.ok", "groups.ob.ok.found", "groups.ob.ok.unverified"]
+    ],
+    // A test row's summary pill (EU card).
+    [
+      "groups.row.nothing",
+      "groups.row.none-decided",
+      ["groups.row.ok", "groups.row.ok.all-decided"]
+    ],
+    // A session's pill inside a test's drill-down (EU card).
+    [
+      "groups.session.ok",
+      "groups.session.undecided",
+      "groups.session.unverified",
+      "groups.session.none"
+    ],
+    // A conversation's "why" line (Outcomes card): the same {names} signature
+    // on all three, so a pack could otherwise swap a missed conversation's
+    // reason for an undecided one's, or the reverse.
+    ["lines.why.missed", "lines.why.unverified", "lines.why.undecided"],
+    // The rules-table drill-down link's count suffixes (Outcomes card).
+    ["lines.rules.drill.unverified-suffix", "lines.rules.drill.undecided-suffix"],
+    // The rules table's column header for a rule nobody could decide, and for
+    // one whose claim could not be verified (Outcomes card).
+    ["lines.rules.col.undecided", "lines.rules.col.unverified"],
+    // A test row's undecided and unverified counts (EU card).
+    ["groups.row.undecided-note", "groups.row.unverified-note"],
+    // The three kinds of session a test's drill-down can list (EU card).
+    [
+      "groups.drill.kind.exceptions",
+      "groups.drill.kind.unverified",
+      "groups.drill.kind.undecided"
+    ]
+  ];
+  var GUARDED_CATEGORY = {
+    // met/clean: a rule was met, a row resolved, or nothing exceptioned.
+    "lines.verdict.met": "clean",
+    "groups.verdict.met": "clean",
+    "lines.pf.verdict.met": "clean",
+    "lines.line.resolved": "clean",
+    "lines.status.resolved": "clean",
+    "groups.ob.ok": "clean",
+    "groups.ob.ok.found": "clean",
+    "groups.ob.ok.unverified": "clean",
+    "groups.row.ok": "clean",
+    "groups.row.ok.all-decided": "clean",
+    "groups.session.ok": "clean",
+    // not-met/exception: a rule was not met or missed, or a row's or an
+    // obligation's red exceptions count.
+    "lines.verdict.not_met": "exception",
+    "groups.verdict.not_met": "exception",
+    "lines.pf.verdict.not_met": "exception",
+    "lines.line.missed": "exception",
+    "lines.status.missed": "exception",
+    "groups.row.exceptions.one": "exception",
+    "groups.row.exceptions.other": "exception",
+    "groups.count.exception.one": "exception",
+    "groups.count.exception.other": "exception",
+    // could-not-decide: nobody could decide.
+    "lines.line.undecided": "undecided",
+    "lines.status.undecided.judged": "undecided",
+    "lines.status.undecided.unjudged": "undecided",
+    "lines.status.undecided.none": "undecided",
+    "lines.status.undecided.withheld": "undecided",
+    "lines.status.undecided.unavailable": "undecided",
+    "lines.pf.verdict.not_evaluable": "undecided",
+    "lines.verdict.not_evaluable.judged": "undecided",
+    "lines.verdict.not_evaluable.unjudged": "undecided",
+    "lines.verdict.not_evaluable.withheld": "undecided",
+    "lines.verdict.not_evaluable.unavailable": "undecided",
+    "groups.verdict.not_evaluable.judged": "undecided",
+    "groups.verdict.not_evaluable.unjudged": "undecided",
+    "groups.verdict.not_evaluable.withheld": "undecided",
+    "groups.verdict.not_evaluable.unavailable": "undecided",
+    "groups.session.undecided": "undecided",
+    "groups.row.undecided-note": "undecided",
+    // could-not-verify: a claim is unverified, or its verification failed or
+    // is unsupported -- all six failed/unsupported verdict keys included.
+    "lines.line.unverified": "unverifiable",
+    "lines.status.unverified": "unverifiable",
+    "groups.session.unverified": "unverifiable",
+    "lines.verdict.failed": "unverifiable",
+    "lines.verdict.unsupported": "unverifiable",
+    "groups.verdict.failed": "unverifiable",
+    "groups.verdict.unsupported": "unverifiable",
+    "lines.pf.verdict.failed": "unverifiable",
+    "lines.pf.verdict.unsupported": "unverifiable",
+    "groups.row.unverified-note": "unverifiable",
+    // could-not-check: nothing could be checked at all.
+    "groups.ob.unchecked": "unchecked",
+    "groups.ob.unchecked-of": "unchecked",
+    "groups.row.nothing": "unchecked",
+    "groups.row.none-decided": "unchecked",
+    // did-not-apply: no rule or test applied, so nothing was checked; never
+    // a met or a missed result.
+    "lines.verdict.not_applicable": "not-applicable",
+    "groups.verdict.not_applicable": "not-applicable",
+    "lines.pf.verdict.not_applicable": "not-applicable",
+    "lines.status.nothing-applied": "not-applicable",
+    "groups.session.none": "not-applicable",
+    // held: a person's spot check disagreed with a resolved result, which is
+    // held back for a person to decide.
+    "lines.line.held": "held",
+    // added: a person's spot check graded a missed result as resolved; it must
+    // not read as a plain resolved result, which no person overrode.
+    "lines.line.added": "added",
+    // recomputed tier: a fixed check anyone can repeat from the records.
+    "lines.tier.recomputed": "tier.recomputed",
+    "groups.tier.recomputed": "tier.recomputed",
+    // judged tier: a judgement, which must never read like the recomputed
+    // tier above.
+    "lines.tier.judged": "tier.judged",
+    "groups.tier.judged": "tier.judged"
+  };
+  var CATEGORY_LABEL = {
+    clean: "a met/clean result",
+    exception: "a not-met/exception result",
+    undecided: "something nobody could decide",
+    unverifiable: "something that could not be verified",
+    unchecked: "something that could not be checked at all",
+    "not-applicable": "something nothing applied to",
+    held: "a result held for a person to decide",
+    added: "a result a person's check added",
+    "tier.recomputed": "the recomputed tier",
+    "tier.judged": "the judged tier"
+  };
+  var LOCKED_ENTRIES = /* @__PURE__ */ new Set([
+    // The front block (report-provenance.ts): who judged, who witnessed, what verified.
+    "prov.judge.none",
+    "prov.judge.model.does-not-recompute",
+    "prov.judge.model.differs",
+    "prov.judge.model.partly-stated",
+    "prov.judge.model.not-stated",
+    "prov.judge.all-withheld",
+    "prov.judge.some-withheld",
+    "prov.judge.not-carried",
+    "prov.judge.unread",
+    "prov.judge.checker-not-stated",
+    "prov.judge.recomputed",
+    "prov.judge.unnamed",
+    "prov.judge.nothing",
+    "prov.witness.stated",
+    "prov.witness.none",
+    "prov.witness.receipt-not-stated",
+    "prov.witness.stubs.one",
+    "prov.witness.stubs.other",
+    "prov.witness.malformed.one",
+    "prov.witness.malformed.other",
+    "prov.witness.about",
+    "prov.witness.about.unchecked",
+    "prov.witness.about.unsigned",
+    "prov.verifier.ran",
+    "prov.verifier.ran.cll",
+    "prov.verifier.ran.not-stated",
+    "prov.verifier.commit.not-stated",
+    "prov.verifier.built",
+    "prov.verifier.built.not-stated",
+    "prov.verifier.version.not-stated",
+    // Both cards: a rule or conversation nobody could decide, by why.
+    "lines.status.undecided.unjudged",
+    "lines.status.undecided.withheld",
+    "lines.status.undecided.unavailable",
+    // Both cards: dating, withheld reports, the conversation, the proofs.
+    "report.not-stated",
+    "report.span.unknown",
+    "report.basis.source",
+    "report.basis.record",
+    "report.basis.judged",
+    "report.dating.source",
+    "report.dating.record",
+    "report.dating.mixed",
+    "report.dating.mixed.source",
+    "report.dating.mixed.record",
+    "report.dating.mixed.judged",
+    "report.dating.self-attested",
+    "report.dating.tz",
+    "report.gap.notes.withheld",
+    "report.gap.notes.unread",
+    "report.gap.notes.some-withheld",
+    "report.gap.notes.none",
+    "report.pf.case-record.not-stated",
+    "report.pf.dated",
+    "report.pf.dated.no-zone",
+    "report.pf.input-digest.verified",
+    "report.pf.input-digest.cited",
+    "report.pf.transcript.absent",
+    "report.pf.transcript.not-shown",
+    "report.pf.transcript.default-reason",
+    "report.pf.wording.default",
+    "report.pf.wording.supplied.layered",
+    "report.pin.withheld",
+    "report.pin.unread",
+    "report.pin.not-in-bundle",
+    "report.vd.uncomputable",
+    "report.vd.absent",
+    "chat.absent",
+    "chat.record.not-stated",
+    "chat.not-shown",
+    "chat.not-shown.default-reason",
+    "chat.state.cited",
+    "chat.state.verified",
+    "chat.lede",
+    // The Outcomes report.
+    "lines.tier.unknown",
+    "lines.wording.unstated",
+    "lines.wording.mixed",
+    "lines.wording-note.sealed",
+    "lines.wording-note.unstated",
+    "lines.wording-note.partly",
+    "lines.edited.title",
+    "lines.producer-note.kicker",
+    "lines.producer-note.source",
+    "lines.no-note.withheld",
+    "lines.no-note.mismatch",
+    "lines.no-note.unreadable",
+    "lines.no-note.invalid",
+    "lines.no-note.none",
+    "lines.line.unverified.help",
+    "lines.sentence.unverified.unsupported",
+    "lines.sentence.unverified.failed",
+    "lines.sentence.unverified",
+    "lines.why.unverified",
+    "lines.sentence.undecided",
+    "lines.why.nothing-applied",
+    "lines.cal.lede",
+    "lines.line.resolved.help",
+    "lines.line.missed.help",
+    "lines.line.undecided.help",
+    "lines.line.held.help",
+    "lines.line.added.help",
+    "lines.gap.wording.mixed",
+    "lines.gap.wording.none",
+    "lines.pf.case-record.from-claims",
+    "lines.pf.judge-pin.recomputed",
+    "lines.pf.col.rationale",
+    "lines.pf.no-claim",
+    "lines.pf.not-cited",
+    "lines.pf.derived",
+    "lines.pf.sealed-rationale",
+    "lines.pf.recompute",
+    "lines.pin.differs",
+    "lines.pin.not-stated",
+    "lines.why-missed.structured",
+    "lines.why-missed.unstructured",
+    "lines.stamp",
+    "lines.stamp.small",
+    "lines.hc.none",
+    "lines.terms.lede",
+    "lines.terms.lede.agreed",
+    "lines.terms.version.value",
+    "lines.ran.judge-pin.recomputed",
+    "lines.ran.agent.value",
+    "lines.ran.components-mismatch",
+    "lines.ran.lock",
+    "lines.ran.pin-mismatch",
+    "lines.vd.note",
+    "lines.rp.tamper",
+    "lines.cal.source-says",
+    "lines.cal.tz",
+    "lines.cal.lede.dated",
+    "lines.cal.sealed",
+    "lines.tier.mixed",
+    "lines.meta.what-checked.text",
+    // The spelled-out numbers up to twelve: a pack must not make "2" read as
+    // "one hundred".
+    "lines.count.0",
+    "lines.count.1",
+    "lines.count.2",
+    "lines.count.3",
+    "lines.count.4",
+    "lines.count.5",
+    "lines.count.6",
+    "lines.count.7",
+    "lines.count.8",
+    "lines.count.9",
+    "lines.count.10",
+    "lines.count.11",
+    "lines.count.12",
+    // Has no placeholder of its own: a pack could otherwise make "1 verdict"
+    // read as any count it likes ("one hundred verdicts").
+    "lines.pf.verdicts.one",
+    "lines.na-note.one",
+    "lines.na-note.other",
+    "lines.sentence.undecided.none",
+    "lines.why.undecided.none",
+    "lines.sentence.nothing-applied",
+    "lines.note.not-applicable",
+    // The EU AI Act Results.
+    "groups.producer.title",
+    "groups.tier.unstated",
+    "groups.tier.judged.title",
+    "groups.tier.recomputed.title",
+    "groups.tier.mixed",
+    "groups.pack.not-stated",
+    "groups.row.nothing",
+    "groups.row.none-decided",
+    "groups.row.ok",
+    "groups.row.ok.all-decided",
+    "groups.row.unverified-note",
+    "groups.unverified-note",
+    "groups.ob.unchecked",
+    "groups.ob.unchecked-of",
+    "groups.ob.ok",
+    "groups.ob.ok.found",
+    "groups.ob.ok.unverified",
+    "groups.summary.basis",
+    "groups.summary.lede",
+    "groups.pf.case-record.from-claims",
+    "groups.pf.no-claim",
+    "groups.pf.rationale",
+    "groups.pf.absent",
+    "groups.pin.none",
+    "groups.pin.differs",
+    "groups.od.mapped",
+    "groups.od.unmapped",
+    "groups.od.wording.sealed",
+    "groups.od.wording.mixed",
+    "groups.od.wording.unstated",
+    "groups.q.none",
+    "groups.q.unspecified",
+    "groups.q.tail",
+    "groups.ran.contract.differs",
+    "groups.vd.note"
+  ]);
+  var CONFUSABLES = {
+    \u0410: "A",
+    \u0412: "B",
+    \u0415: "E",
+    \u0417: "Z",
+    \u041A: "K",
+    \u041C: "M",
+    \u041D: "H",
+    \u041E: "O",
+    \u0420: "P",
+    \u0421: "C",
+    \u0422: "T",
+    \u0423: "Y",
+    \u0425: "X",
+    \u0406: "I",
+    \u0408: "J",
+    \u0405: "S",
+    "\u051A": "Q",
+    "\u051C": "W",
+    \u0391: "A",
+    \u0392: "B",
+    \u0395: "E",
+    \u0396: "Z",
+    \u0397: "H",
+    \u0399: "I",
+    \u039A: "K",
+    \u039C: "M",
+    \u039D: "N",
+    \u039F: "O",
+    \u03A1: "P",
+    \u03A4: "T",
+    \u03A5: "Y",
+    \u03A7: "X",
+    "\u03F9": "C",
+    "\u037F": "J",
+    \u04BA: "H",
+    "\u0500": "D",
+    \u04C0: "I",
+    \u01C0: "l"
+  };
+  var CONFUSABLE = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "gu");
+  var LOWER_CONFUSABLES = {
+    \u03BD: "v",
+    \u03B7: "n",
+    \u03BC: "u"
+  };
+  var LOWER_CONFUSABLE = new RegExp(
+    `[${Object.keys(LOWER_CONFUSABLES).join("")}]`,
+    "gu"
+  );
+  function asReadUnfolded(word) {
+    return word.replace(PLACEHOLDER, "").normalize("NFKC").replace(/[\p{P}\p{S}]/gu, " ").replace(/\s+/gu, " ").trim();
+  }
+  function asRead(word) {
+    return asReadUnfolded(word).replace(LOWER_CONFUSABLE, (c) => LOWER_CONFUSABLES[c]).toLowerCase().toUpperCase().replace(CONFUSABLE, (c) => CONFUSABLES[c]).toLowerCase();
+  }
+  function readings(word) {
+    const caseFolded = asReadUnfolded(word).toLowerCase().toUpperCase().toLowerCase();
+    const read = asRead(word);
+    return read === caseFolded ? [read] : [read, caseFolded];
+  }
+  function mixesScripts(word) {
+    return [/\p{Script=Latin}/u, /\p{Script=Greek}/u, /\p{Script=Cyrillic}/u].filter(
+      (script) => script.test(word)
+    ).length > 1;
+  }
+  function categoryCollisions(merged, defaults) {
+    const problems = [];
+    const seen = /* @__PURE__ */ new Map();
+    const reported = /* @__PURE__ */ new Set();
+    const visit = (key, category, source) => {
+      if (!Object.hasOwn(source, key)) return;
+      for (const word of readings(source[key])) {
+        if (word === "") continue;
+        const owner = seen.get(word);
+        if (owner === void 0) seen.set(word, { key, category });
+        else if (owner.category !== category && !reported.has(`${owner.key}
+${key}`)) {
+          reported.add(`${owner.key}
+${key}`);
+          problems.push(
+            `${owner.key} and ${key} read alike (${JSON.stringify(word)}); ${CATEGORY_LABEL[owner.category]} must not read like ${CATEGORY_LABEL[category]}, or the other way round`
+          );
+        }
+      }
+    };
+    for (const [key, category] of Object.entries(GUARDED_CATEGORY)) {
+      visit(key, category, merged);
+      visit(key, category, defaults.entries);
+    }
+    return problems;
+  }
+  function wordingProblems(pack, defaults) {
+    const problems = [];
+    for (const [key, text2] of Object.entries(pack.entries)) {
+      if (INVISIBLE.test(text2))
+        problems.push(
+          `${key} carries a bidi or other invisible format character, never only stripped for a check: refused outright`
+        );
+      if (!Object.hasOwn(defaults.entries, key)) continue;
+      const base = defaults.entries[key];
+      if (LOCKED_ENTRIES.has(key)) {
+        if (text2 !== base)
+          problems.push(
+            `${key}: this line states what the page checked and can't be reworded`
+          );
+        continue;
+      }
+      if (key.startsWith("layout.")) {
+        if (text2 !== base)
+          problems.push(
+            `${key} is ${JSON.stringify(text2)}; this report is laid out as ${JSON.stringify(base)}`
+          );
+        continue;
+      }
+      const want = placeholders(base);
+      const got = placeholders(text2);
+      if (want.join(" ") !== got.join(" "))
+        problems.push(
+          `${key} uses {${got.join("} {")}}; it must use exactly {${want.join("} {")}}`
+        );
+      else {
+        const baseGaps = placeholderGaps(base);
+        const gotGaps = placeholderGaps(text2);
+        for (let i = 0; i < gotGaps.length; i++) {
+          const baseGap = baseGaps[i];
+          const gotGap = gotGaps[i];
+          const runsTogether = HAS_LETTER.test(baseGap) ? !HAS_LETTER.test(gotGap) || !HAS_LETTER.test(asRead(gotGap).replace(DIGIT_LIKE, "")) && !(/^\s[^]*\s$/u.test(gotGap) && [...asRead(gotGap)].length === 1) : HAS_NON_SPACE.test(baseGap) && !HAS_NON_SPACE.test(gotGap);
+          if (runsTogether)
+            problems.push(
+              `${key} runs {${got[i]}} and {${got[i + 1]}} together with no word between them; two counts the page computes separately must not be able to read as one`
+            );
+        }
+      }
+    }
+    const merged = { ...defaults.entries };
+    for (const [key, text2] of Object.entries(pack.entries))
+      if (Object.hasOwn(defaults.entries, key)) merged[key] = text2;
+    for (const set of DISTINCT) {
+      const members = set.map((m) => typeof m === "string" ? [m] : [...m]);
+      const defaultOf = /* @__PURE__ */ new Map();
+      for (const keys of members)
+        for (const k of keys)
+          if (Object.hasOwn(defaults.entries, k))
+            for (const word of readings(defaults.entries[k]))
+              defaultOf.set(word, keys.join(" / "));
+      const seen = /* @__PURE__ */ new Map();
+      for (const keys of members) {
+        const name = keys.join(" / ");
+        const words = /* @__PURE__ */ new Set();
+        for (const k of keys) {
+          if (!Object.hasOwn(merged, k)) continue;
+          const unfolded = asReadUnfolded(merged[k]);
+          if (unfolded === "") problems.push(`${k} has no visible word`);
+          else if (mixesScripts(unfolded))
+            problems.push(
+              `${k} mixes Latin, Greek and Cyrillic letters (${JSON.stringify(unfolded)}); a verdict word is written in one script`
+            );
+          else for (const word of readings(merged[k])) words.add(word);
+        }
+        const shared = /* @__PURE__ */ new Set();
+        const taken = /* @__PURE__ */ new Set();
+        for (const word of words) {
+          const other = seen.get(word);
+          if (other !== void 0) {
+            if (!shared.has(other))
+              problems.push(
+                `${name} and ${other} read alike (${JSON.stringify(word)}); two verdicts must not share a word`
+              );
+            shared.add(other);
+          } else seen.set(word, name);
+          const owner = defaultOf.get(word);
+          if (owner !== void 0 && owner !== name && !taken.has(owner)) {
+            problems.push(
+              `${name} reads ${JSON.stringify(word)}, the word for ${owner}; a verdict must not take another verdict's word`
+            );
+            taken.add(owner);
+          }
+        }
+      }
+    }
+    problems.push(...categoryCollisions(merged, defaults));
+    return problems.map((p) => `${pack.id}: ${p}`);
+  }
+  var DEFAULT_PACK_SHA256 = Object.freeze({
+    lines: "a40030f29980786b229f817d906dc60d661a61e1703d0d85290bcbb3b7fc3571",
+    groups: "c00f7be097975f23ce22414630f80239dd9546a6bde8d2282f7439006119ab92"
+  });
+  function fill(key, text2, vars) {
+    return text2.replace(PLACEHOLDER, (whole, name) => {
+      if (!Object.hasOwn(vars, name))
+        throw new WordingPackError(`${key}: no value for {${name}}`);
+      return String(vars[name]);
+    });
+  }
+  function wordsOf(defaults, supplied) {
+    const entries = supplied === void 0 ? defaults.entries : { ...defaults.entries, ...supplied.pack.entries };
+    const t = (key, vars = {}) => {
+      const text2 = Object.hasOwn(entries, key) ? entries[key] : void 0;
+      if (text2 === void 0)
+        throw new WordingPackError(`${defaults.id}: no entry ${key}`);
+      return fill(key, text2, vars);
+    };
+    const grouping = entries["layout.grouping"];
+    if (grouping !== "lines" && grouping !== "groups")
+      throw new WordingPackError(
+        `${defaults.id}: layout.grouping is ${JSON.stringify(grouping)}`
+      );
+    const base = { id: defaults.id, sha256: DEFAULT_PACK_SHA256[grouping] };
+    return {
+      t,
+      p: (key, count2, vars = {}) => t(`${key}.${count2 === 1 ? "one" : "other"}`, {
+        n: count2.toLocaleString(),
+        ...vars
+      }),
+      grouping,
+      source: supplied === void 0 ? { id: base.id, sha256: base.sha256 } : {
+        id: supplied.pack.id,
+        ...supplied.sha256 === void 0 ? {} : { sha256: supplied.sha256 },
+        base
+      }
+    };
+  }
+  async function contractReportWords(grouping, wording) {
+    const defaults = DEFAULT_PACKS[grouping];
+    if (wording === void 0) return wordsOf(defaults);
+    const pack = await checkWordingPackInput(wording);
+    const problems = wordingProblems(pack, defaults);
+    if (problems.length > 0) throw new WordingPackError(problems.join("; "));
+    return wordsOf(defaults, { pack, sha256: wording.sha256 });
+  }
+  var DEFAULT_WORDS = Object.freeze({
+    lines: wordsOf(DEFAULT_PACKS.lines),
+    groups: wordsOf(DEFAULT_PACKS.groups)
+  });
+
+  // capsule-viewer/ts/src/report-provenance.ts
+  function reportPayload3(records, claim) {
+    const digest = claim.evidence[0]?.digest;
+    if (digest === void 0) return void 0;
+    const record = records.get(digest);
+    if (record === void 0) return void 0;
+    const input = record.carriedInput ?? record.agentInput;
+    if (input.state !== "disclosed") return void 0;
+    return isObject(input.payload) ? input.payload : void 0;
+  }
+  function pinComponents2(value) {
+    if (!isObject(value)) return void 0;
+    const modelId = asString(value.model_id);
+    const promptDigest = asString(value.prompt_digest);
+    const axesDigest = asString(value.axes_digest);
+    if (modelId === void 0 || promptDigest === void 0 || axesDigest === void 0)
+      return void 0;
+    const modelVersion = asString(value.model_version);
+    return {
+      modelId,
+      ...modelVersion === void 0 ? {} : { modelVersion },
+      promptDigest,
+      axesDigest,
+      ...isObject(value.sampling_params) ? { samplingParams: value.sampling_params } : {}
+    };
+  }
+  async function tallyJudges(records, claims) {
+    let cited = 0;
+    let notCarried = 0;
+    let withheld = 0;
+    let unread = 0;
+    let unnamed = 0;
+    let recomputedUnnamed = 0;
+    const pins = /* @__PURE__ */ new Map();
+    const checkers = /* @__PURE__ */ new Map();
+    for (const claim of claims) {
+      if (claim.evidence[0]?.digest === void 0) continue;
+      const state = reportState(records, claim);
+      cited += 1;
+      if (state === "not_carried") {
+        notCarried += 1;
+        continue;
+      }
+      if (state === "withheld") {
+        withheld += 1;
+        continue;
+      }
+      if (state !== "disclosed") {
+        unread += 1;
+        continue;
+      }
+      const payload = reportPayload3(records, claim);
+      if (asString(payload?.epistemic_type) === "recomputed_determination") {
+        const checker = asString(payload?.checker_ref);
+        if (checker !== void 0)
+          checkers.set(checker, (checkers.get(checker) ?? 0) + 1);
+        else recomputedUnnamed += 1;
+        continue;
+      }
+      const digest = asString(payload?.judge_pin_digest);
+      if (digest !== void 0) {
+        const entry = pins.get(digest) ?? {
+          count: 0,
+          parts: /* @__PURE__ */ new Map(),
+          bare: 0
+        };
+        entry.count += 1;
+        const parts = pinComponents2(payload?.judge_pin);
+        if (parts === void 0) entry.bare += 1;
+        else entry.parts.set(new TextDecoder().decode(jcs(parts)), parts);
+        pins.set(digest, entry);
+        continue;
+      }
+      unnamed += 1;
+    }
+    const counted = [];
+    for (const [digest, entry] of pins) {
+      let model;
+      let modelNotShown;
+      if (entry.parts.size === 0) modelNotShown = "not_stated";
+      else if (entry.parts.size > 1) modelNotShown = "differs";
+      else if (entry.bare > 0) modelNotShown = "partly_stated";
+      else {
+        const parts = [...entry.parts.values()][0];
+        const checked = await verifyJudgePin({
+          pinned: true,
+          judgePinDigest: digest,
+          judgePin: parts
+        });
+        if (checked.judgePinRecomputes === true)
+          model = quoted(
+            parts.modelVersion === void 0 ? parts.modelId : `${parts.modelId} ${parts.modelVersion}`
+          );
+        else modelNotShown = "does_not_recompute";
+      }
+      counted.push({
+        digest,
+        count: entry.count,
+        ...model === void 0 ? {} : { model },
+        ...modelNotShown === void 0 ? {} : { modelNotShown }
+      });
+    }
+    counted.sort((a, b) => b.count - a.count || (a.digest < b.digest ? -1 : 1));
+    return {
+      cited,
+      notCarried,
+      pins: counted,
+      withheld,
+      unread,
+      checkers: [...checkers].map(([ref, count2]) => ({ ref, count: count2 })).sort((a, b) => b.count - a.count || (a.ref < b.ref ? -1 : 1)),
+      recomputedUnnamed,
+      unnamed
+    };
+  }
+  var fmt = (n) => n.toLocaleString();
+  var quoted = (value) => JSON.stringify(value.length > 120 ? `${value.slice(0, 120)}\u2026` : value);
+  var HEX_DIGEST = /^[0-9a-f]+$/iu;
+  var short = (digest) => HEX_DIGEST.test(digest) ? digest.length > 12 ? `${digest.slice(0, 12)}\u2026` : digest : quoted(digest);
+  function judgeLine(tally, w = DEFAULT_WORDS.lines) {
+    const label = w.t("prov.judge.label");
+    const of = (n) => w.t("prov.of", { count: fmt(n), total: fmt(tally.cited) });
+    if (tally.cited === 0)
+      return {
+        key: "judge",
+        label,
+        text: w.t("prov.judge.none"),
+        state: "not-stated"
+      };
+    const parts = [];
+    for (const pin of tally.pins) {
+      const model = pin.model ?? w.t(
+        pin.modelNotShown === "does_not_recompute" ? "prov.judge.model.does-not-recompute" : pin.modelNotShown === "differs" ? "prov.judge.model.differs" : pin.modelNotShown === "partly_stated" ? "prov.judge.model.partly-stated" : "prov.judge.model.not-stated"
+      );
+      parts.push(
+        w.t("prov.judge.pin", {
+          model,
+          pin: short(pin.digest),
+          of: of(pin.count)
+        })
+      );
+    }
+    if (tally.withheld > 0)
+      parts.push(
+        w.t(
+          tally.withheld === tally.cited ? "prov.judge.all-withheld" : "prov.judge.some-withheld",
+          { of: of(tally.withheld) }
+        )
+      );
+    if (tally.notCarried > 0)
+      parts.push(w.t("prov.judge.not-carried", { of: of(tally.notCarried) }));
+    if (tally.unread > 0)
+      parts.push(w.t("prov.judge.unread", { of: of(tally.unread) }));
+    const recomputed = tally.checkers.reduce((n, c) => n + c.count, 0) + tally.recomputedUnnamed;
+    if (recomputed > 0) {
+      const by = tally.checkers.map(
+        (c) => w.t("prov.judge.checker", {
+          checker: quoted(c.ref),
+          count: fmt(c.count)
+        })
+      );
+      if (tally.recomputedUnnamed > 0)
+        by.push(
+          w.t("prov.judge.checker-not-stated", {
+            count: fmt(tally.recomputedUnnamed)
+          })
+        );
+      parts.push(
+        w.t("prov.judge.recomputed", { of: of(recomputed), by: by.join(", ") })
+      );
+    }
+    if (tally.unnamed > 0)
+      parts.push(w.t("prov.judge.unnamed", { of: of(tally.unnamed) }));
+    const judged = tally.pins.length;
+    const state = tally.withheld === tally.cited ? "withheld" : judged > 1 || judged === 1 && (tally.withheld > 0 || tally.notCarried > 0 || tally.unread > 0 || tally.unnamed > 0) ? "mixed" : judged === 1 ? "stated" : "not-stated";
+    if (parts.length === 0) parts.push(w.t("prov.judge.nothing"));
+    return { key: "judge", label, text: parts.join("; "), state };
+  }
+  var RECEIPT_FIELDS = [
+    "ts_url",
+    "entry_hash",
+    "receipt_b64",
+    "leaf_index",
+    "tree_size"
+  ];
+  function isReceipt(value) {
+    return isObject(value) && typeof value.ts_url === "string" && RECEIPT_FIELDS.every((name) => Object.hasOwn(value, name));
+  }
+  function witnessEntries(checkpoint) {
+    if (!isObject(checkpoint) || !Array.isArray(checkpoint.witnesses)) return [];
+    return checkpoint.witnesses.map((w) => {
+      if (!isReceipt(w)) return { stub: false, malformed: true };
+      if (w.is_stub === true) return { stub: true, malformed: false };
+      const size = w.tree_size;
+      return {
+        url: w.ts_url,
+        ...typeof size === "number" && Number.isSafeInteger(size) ? { treeSize: size } : {},
+        stub: false,
+        malformed: false
+      };
+    });
+  }
+  function witnessLine(bundle, verified, w = DEFAULT_WORDS.lines) {
+    const checkpoint = isObject(bundle) ? bundle.checkpoint : void 0;
+    const page = buildVerificationPageModel(bundle, verified);
+    const logId = isObject(checkpoint) ? asString(checkpoint.log_id) : void 0;
+    const facts = [];
+    if (logId !== void 0)
+      facts.push(w.t("prov.witness.log", { log: quoted(logId) }));
+    if (page.checkpointSize !== void 0)
+      facts.push(w.t("prov.witness.size", { size: fmt(page.checkpointSize) }));
+    if (page.checkpointRoot !== void 0)
+      facts.push(w.t("prov.witness.root", { root: short(page.checkpointRoot) }));
+    const unchecked = [
+      verified.intervalCoverage,
+      verified.perRecordMembership
+    ].some((claim) => claim.findings.includes("checkpoint_unverified"));
+    const about = facts.length === 0 ? [] : [
+      w.t(
+        isObject(checkpoint) && typeof checkpoint.cose === "string" ? unchecked ? "prov.witness.about.unchecked" : "prov.witness.about" : "prov.witness.about.unsigned",
+        { facts: facts.join(", ") }
+      )
+    ];
+    const all = witnessEntries(checkpoint);
+    const entries = all.filter((e) => !e.stub && !e.malformed);
+    const stubs = all.filter((e) => e.stub).length;
+    const malformed = all.filter((e) => e.malformed).length;
+    const others = [
+      stubs === 0 ? "" : w.p("prov.witness.stubs", stubs, { n: fmt(stubs) }),
+      malformed === 0 ? "" : w.p("prov.witness.malformed", malformed, { n: fmt(malformed) })
+    ].filter((t) => t !== "");
+    const besides = others.length === 0 ? [] : [
+      w.t("prov.witness.besides", {
+        others: others.length === 1 ? others[0] : w.t("prov.witness.both", { a: others[0], b: others[1] })
+      })
+    ];
+    const label = w.t("prov.witness.label");
+    if (entries.length === 0)
+      return {
+        key: "witness",
+        label,
+        text: [w.t("prov.witness.none"), ...besides, ...about].join(" "),
+        state: "not-stated"
+      };
+    const named = entries.map((e) => {
+      const url = e.url === void 0 ? w.t("prov.witness.receipt-not-stated") : quoted(e.url);
+      return e.treeSize === void 0 ? url : w.t("prov.witness.entry", { witness: url, size: fmt(e.treeSize) });
+    });
+    return {
+      key: "witness",
+      label,
+      text: [
+        w.t("prov.witness.stated", { witnesses: named.join("; ") }),
+        ...besides,
+        ...about
+      ].join(" "),
+      state: others.length === 0 ? "stated" : "mixed"
+    };
+  }
+  function verifierLine(bundle, build = VIEWER_BUILD, w = DEFAULT_WORDS.lines) {
+    const ran = build === null ? w.t("prov.verifier.ran.not-stated") : w.t(
+      `prov.verifier.ran${build.cllVersion === void 0 ? "" : ".cll"}`,
+      {
+        viewer: build.viewer,
+        viewerVersion: build.viewerVersion,
+        commit: build.commit === void 0 ? w.t("prov.verifier.commit.not-stated") : build.commit,
+        verifier: build.verifier,
+        verifierVersion: build.verifierVersion,
+        ...build.cllVersion === void 0 ? {} : { cll: build.cllVersion }
+      }
+    );
+    const report = isObject(bundle) && isObject(bundle.verification) ? bundle.verification : void 0;
+    const producer = asString(report?.producer);
+    const version = asString(report?.version) ?? asString(report?.producer_version);
+    const built = producer === void 0 ? w.t("prov.verifier.built.not-stated") : w.t("prov.verifier.built", {
+      producer: quoted(producer),
+      version: version === void 0 ? w.t("prov.verifier.version.not-stated") : w.t("prov.verifier.version", { version: quoted(version) })
+    });
+    return {
+      key: "verifier",
+      label: w.t("prov.verifier.label"),
+      text: w.t("prov.verifier.text", { ran, built }),
+      state: build === null ? "not-stated" : "stated"
+    };
+  }
+  async function provenanceLines(records, claims, bundle, verified, w = DEFAULT_WORDS.lines) {
+    return [
+      judgeLine(await tallyJudges(records, claims), w),
+      witnessLine(bundle, verified, w),
+      verifierLine(bundle, VIEWER_BUILD, w)
+    ];
+  }
+  function renderProvenance(lines) {
+    const block = document.createElement("dl");
+    block.className = "prov";
+    block.dataset.section = "provenance";
+    for (const line of lines) {
+      const dt = document.createElement("dt");
+      dt.textContent = line.label;
+      const dd = document.createElement("dd");
+      dd.textContent = line.text;
+      dd.dataset.prov = line.key;
+      dd.dataset.state = line.state;
+      block.append(dt, dd);
+    }
+    return block;
+  }
+
+  // capsule-viewer/ts/src/outcome-report-view.ts
   function element3(tag, text2) {
     const value = document.createElement(tag);
     if (text2 !== void 0) value.textContent = text2;
@@ -11912,412 +12872,2065 @@ ${body}
     value.className = className;
     return value;
   }
-  var fmt = (n) => n.toLocaleString();
+  var SVG_NS = ["http", "://www.w3.org/2000/svg"].join("");
+  var ICON_PATHS = {
+    // an open rulebook
+    book: [
+      "M4 5.5C4 4.7 4.7 4 5.5 4H11v15H5.5C4.7 19 4 18.3 4 17.5Z",
+      "M20 5.5C20 4.7 19.3 4 18.5 4H13v15h5.5c.8 0 1.5-.7 1.5-1.5Z",
+      "M6.5 8h2.5M6.5 11h2.5M15 8h2.5M15 11h2.5"
+    ],
+    // a ticked circle
+    check: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z", "M7.5 12.5l3 3l6-6.5"],
+    // a receipt with a torn foot
+    receipt: [
+      "M6 3h12v18l-2-1.5l-2 1.5l-2-1.5l-2 1.5l-2-1.5L6 21Z",
+      "M9 8h6M9 11.5h6M9 15h4"
+    ],
+    // a target
+    target: [
+      "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z",
+      "M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10Z",
+      "M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2Z"
+    ]
+  };
+  function icon(name) {
+    const paths = ICON_PATHS[name];
+    if (paths === void 0) return void 0;
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.6");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.dataset.icon = name;
+    for (const d of paths) {
+      const path2 = document.createElementNS(SVG_NS, "path");
+      path2.setAttribute("d", d);
+      svg.append(path2);
+    }
+    return svg;
+  }
+  var fmtCount = (n) => n.toLocaleString();
+  function fmtShare(count2, total, percentages, w) {
+    if (percentages)
+      return total === 0 ? "\u2013" : w.t("lines.share.percent", {
+        p: String(Math.round(count2 / total * 100))
+      });
+    return w.t("lines.share", { count: fmtCount(count2), total: fmtCount(total) });
+  }
+  var tierLabel = (tier, w) => w.t(`lines.tier.${tier}`);
+  function criterionLabel(model, checkId, criterionId) {
+    const check = model.terms.checks.find((c) => c.id === checkId);
+    const criterion = check?.criteria.find((c) => c.id === criterionId);
+    const wording = model.criterionWording.get(`${checkId}.${criterionId}`);
+    return {
+      label: criterion?.label ?? `${checkId}.${criterionId}`,
+      text: wording?.text ?? criterion?.text ?? "",
+      question: check?.question ?? checkId,
+      source: wording?.source ?? "unstated"
+    };
+  }
+  var wordingFallback = (source, w) => w.t(`lines.wording.${source}`);
+  function wordingNote(model, w) {
+    const sources = new Set(
+      [...model.criterionWording.values()].map((c) => c.source)
+    );
+    if (sources.size === 1 && sources.has("sealed"))
+      return w.t("lines.wording-note.sealed");
+    if (!sources.has("sealed")) return w.t("lines.wording-note.unstated");
+    return w.t("lines.wording-note.partly");
+  }
+  function editedBadge(model, ref, w) {
+    const edited = model.options.editedCriteria?.find((e) => e.criterion === ref);
+    if (edited === void 0) return void 0;
+    const badge = el2("span", "edited", edited.badge);
+    badge.dataset.edited = ref;
+    badge.title = w.t("lines.edited.title");
+    return badge;
+  }
+  function renderProducerNote(host, model, w) {
+    const note = model.options.producerNote;
+    if (note === void 0) return;
+    const box = el2("aside", "pnote");
+    box.dataset.producerNote = "true";
+    box.append(el2("div", "pn-k", w.t("lines.producer-note.kicker")));
+    box.append(el2("h2", "pn-t", note.title));
+    const list = el2("ul", "pn-l");
+    for (const line of note.lines) list.append(element3("li", line));
+    box.append(list);
+    box.append(el2("p", "pn-src", w.t("lines.producer-note.source")));
+    host.append(box);
+  }
+  var fmtP = (p) => p.toFixed(2);
+  function verdictProbability(criterion) {
+    const probs = criterion.probabilities;
+    if (probs === void 0) return void 0;
+    const key = criterion.claim?.verdict ?? criterion.verdict;
+    return probs[key];
+  }
+  var verdictText = (verdict2, w) => w.t(`lines.pf.verdict.${verdict2}`);
+  function isMiss(verdict2) {
+    return verdict2 === "not_met";
+  }
+  function isUnverified(verdict2) {
+    return verdict2 === "failed" || verdict2 === "unsupported";
+  }
+  function conversationStatus(conversation) {
+    if (conversation.verdict === "met") return "resolved";
+    if (conversation.criteria.some((c) => isMiss(c.verdict))) return "missed";
+    if (conversation.criteria.some((c) => isUnverified(c.verdict)))
+      return "unverified";
+    if (conversation.verdict === "not_met") return "missed";
+    return conversation.criteria.length > 0 && conversation.criteria.every((c) => c.verdict === "not_applicable") ? "nothing-applied" : "undecided";
+  }
+  function statusWord(status2, conversation, w) {
+    if (status2 === "resolved")
+      return { word: w.t("lines.status.resolved"), tone: "ok" };
+    if (status2 === "missed")
+      return { word: w.t("lines.status.missed"), tone: "bad" };
+    if (status2 === "unverified")
+      return { word: w.t("lines.status.unverified"), tone: "ne" };
+    if (status2 === "nothing-applied")
+      return { word: w.t("lines.status.nothing-applied"), tone: "na" };
+    const judged = conversation.criteria.filter((c) => c.verdict === "not_evaluable").map((c) => judgedOf(c.reportState, c.judgePinDigest));
+    if (judged.includes("yes"))
+      return { word: w.t("lines.status.undecided.judged"), tone: "ne" };
+    if (judged.length > 0 && judged.every((j) => j === "no"))
+      return { word: w.t("lines.status.undecided.unjudged"), tone: "ne" };
+    if (judged.length === 0)
+      return { word: w.t("lines.status.undecided.none"), tone: "ne" };
+    return judged.every((j) => j === "withheld" || j === "no") ? { word: w.t("lines.status.undecided.withheld"), tone: "ne" } : { word: w.t("lines.status.undecided.unavailable"), tone: "ne" };
+  }
+  function criterionWord(c, w) {
+    return ruleWord(c.verdict, judgedOf(c.reportState, c.judgePinDigest), w);
+  }
+  function noNoteText(c, w) {
+    switch (c.reportState) {
+      case "withheld":
+      case "mismatch":
+      case "unreadable":
+      case "invalid":
+        return w.t(`lines.no-note.${c.reportState}`);
+      default:
+        return w.t("lines.no-note.none");
+    }
+  }
+  function names(model, list) {
+    return list.map((c) => criterionLabel(model, c.checkId, c.criterionId).label).join(", ");
+  }
+  function countWord(n, w) {
+    return Number.isInteger(n) && n >= 0 && n <= 12 ? w.t(`lines.count.${n}`) : String(n);
+  }
+  function unverifiedClause(model, list, w, lower = false) {
+    const failed2 = list.filter((c) => c.verdict === "failed");
+    const unsupported = list.filter((c) => c.verdict === "unsupported");
+    const parts = [];
+    if (failed2.length > 0)
+      parts.push(
+        w.t("lines.sentence.unverified.failed", {
+          names: names(model, failed2)
+        })
+      );
+    if (unsupported.length > 0)
+      parts.push(
+        w.t("lines.sentence.unverified.unsupported", {
+          names: names(model, unsupported)
+        })
+      );
+    const text2 = `${parts.join(", and ")}, so the records do not say whether ${w.p("lines.word.that-rule-was", list.length)} met.`;
+    return lower ? text2 : text2.charAt(0).toUpperCase() + text2.slice(1);
+  }
+  function resultSentence(conversation, model, w) {
+    const all = conversation.criteria;
+    const applied = all.filter((c) => c.verdict !== "not_applicable");
+    const na = all.length - applied.length;
+    const misses = all.filter((c) => isMiss(c.verdict));
+    const unverified = all.filter((c) => isUnverified(c.verdict));
+    const undecided = all.filter((c) => c.verdict === "not_evaluable");
+    const naText = na > 0 ? ` ${w.t("lines.sentence.na", { n: String(na) })}` : "";
+    const unverifiedText = unverified.length > 0 ? ` ${unverifiedClause(model, unverified, w)}` : "";
+    switch (conversationStatus(conversation)) {
+      case "resolved":
+        return `${w.p("lines.sentence.resolved", applied.length, { n: String(applied.length) })}${naText}`;
+      case "missed":
+        return `${w.t("lines.sentence.missed", {
+          misses: String(misses.length),
+          applied: String(applied.length),
+          rule: w.p("lines.word.rule", applied.length),
+          was: w.p("lines.word.was", misses.length),
+          names: names(model, misses)
+        })}${unverifiedText}${naText}`;
+      case "unverified":
+        return `${w.t("lines.sentence.unverified", {
+          clause: unverifiedClause(model, unverified, w, true),
+          undecidedNote: undecided.length > 0 ? w.t("lines.sentence.unverified.undecided-note", {
+            names: names(model, undecided)
+          }) : ""
+        })}${naText}`;
+      case "undecided":
+        return undecided.length === 0 ? w.t("lines.sentence.undecided.none") : `${w.t("lines.sentence.undecided", {
+          names: names(model, undecided),
+          thatRuleWas: w.p("lines.word.that-rule-was", undecided.length)
+        })}${naText}`;
+      case "nothing-applied":
+        return w.t("lines.sentence.nothing-applied");
+    }
+  }
+  function renderConversation(conversation, model, runInfo, w) {
+    const status2 = conversationStatus(conversation);
+    const item = el2("article", "conv");
+    item.dataset.conversation = conversation.conversationId;
+    item.dataset.conversationVerdict = conversation.verdict;
+    item.dataset.status = status2;
+    const head2 = el2("div", "conv-h");
+    const parts = caseParts(conversation.conversationId, w);
+    head2.append(el2("span", "cid", parts.label));
+    head2.append(wordPill(statusWord(status2, conversation, w), status2));
+    const misses = conversation.criteria.filter((c) => isMiss(c.verdict));
+    const unverified = conversation.criteria.filter(
+      (c) => isUnverified(c.verdict)
+    );
+    const undecided = conversation.criteria.filter(
+      (c) => c.verdict === "not_evaluable"
+    );
+    head2.append(
+      el2(
+        "span",
+        "cwhy",
+        status2 === "missed" ? w.t("lines.why.missed", { names: names(model, misses) }) : status2 === "unverified" ? w.t("lines.why.unverified", { names: names(model, unverified) }) : status2 === "undecided" ? undecided.length === 0 ? w.t("lines.why.undecided.none") : w.t("lines.why.undecided", { names: names(model, undecided) }) : status2 === "nothing-applied" ? w.t("lines.why.nothing-applied") : w.t("lines.why.resolved")
+      )
+    );
+    head2.append(el2("span", "cmodel", parts.model ?? ""));
+    item.append(head2);
+    const body = el2("div", "conv-slot");
+    item.append(body);
+    lazyBody(body, () => conversationBody(conversation, model, runInfo, w));
+    return item;
+  }
+  function conversationBody(conversation, model, runInfo, w) {
+    const body = el2("div", "conv-b");
+    const sentence = el2(
+      "p",
+      "verdict-line",
+      resultSentence(conversation, model, w)
+    );
+    sentence.dataset.why = conversationStatus(conversation);
+    body.append(sentence);
+    body.append(el2("h4", "", w.t("lines.h.rule-by-rule")));
+    const hasNotes = conversation.criteria.some((c) => c.rationale !== void 0);
+    const wordings = conversation.criteria.map(
+      (c) => criterionLabel(model, c.checkId, c.criterionId).source
+    );
+    const anyWording = wordings.some((w2) => w2 === "sealed");
+    const table2 = el2("table", "crit");
+    table2.dataset.criteriaTable = conversation.conversationId;
+    const head2 = element3("thead");
+    const headRow = element3("tr");
+    headRow.append(
+      element3("th", w.t("lines.col.rule")),
+      element3("th", w.t("lines.col.result"))
+    );
+    if (hasNotes) headRow.append(element3("th", w.t("lines.col.note")));
+    head2.append(headRow);
+    table2.append(head2);
+    const tbody = element3("tbody");
+    for (const criterion of conversation.criteria) {
+      const ref = `${criterion.checkId}.${criterion.criterionId}`;
+      const tr = element3("tr");
+      tr.dataset.crit = ref;
+      tr.dataset.critVerdict = criterion.verdict;
+      const label = criterionLabel(
+        model,
+        criterion.checkId,
+        criterion.criterionId
+      );
+      const nameCell = el2("td", "cn");
+      nameCell.append(el2("b", "", label.label));
+      const rowBadge = editedBadge(model, ref, w);
+      if (rowBadge !== void 0) nameCell.append(rowBadge);
+      if (label.source === "sealed") {
+        const wording = el2("small", "", label.text);
+        wording.dataset.wording = label.source;
+        nameCell.append(wording);
+      } else if (anyWording) {
+        const wording = el2("small", "wsrc", wordingFallback(label.source, w));
+        wording.dataset.wording = label.source;
+        nameCell.append(wording);
+      }
+      tr.append(nameCell);
+      const verdictCell = element3("td");
+      verdictCell.append(
+        wordPill(criterionWord(criterion, w), criterion.verdict)
+      );
+      tr.append(verdictCell);
+      if (!hasNotes) {
+        tbody.append(tr);
+        continue;
+      }
+      const noteCell = el2("td", "rat");
+      if (criterion.verdict === "not_applicable")
+        noteCell.append(el2("span", "muted", w.t("lines.note.not-applicable")));
+      else if (criterion.rationale !== void 0)
+        noteCell.append(
+          el2(
+            "span",
+            "sealed",
+            judgeNote(
+              criterion.rationale,
+              criterion.claim?.verdict ?? criterion.verdict,
+              w
+            )
+          )
+        );
+      else noteCell.append(el2("span", "muted", noNoteText(criterion, w)));
+      tr.append(noteCell);
+      tbody.append(tr);
+    }
+    table2.append(tbody);
+    const scroll = el2("div", "tscroll");
+    scroll.append(table2);
+    body.append(scroll);
+    const gaps = [];
+    if (!anyWording)
+      gaps.push(
+        w.t(
+          wordings.includes("mixed") ? "lines.gap.wording.mixed" : "lines.gap.wording.none"
+        )
+      );
+    if (!hasNotes)
+      gaps.push(
+        notesGap(
+          conversation.criteria.flatMap(
+            (c) => c.claim === void 0 ? [] : [c.reportState]
+          ),
+          w
+        )
+      );
+    if (gaps.length > 0) {
+      const gap = el2("p", "small", gaps.join(" "));
+      gap.dataset.gaps = "true";
+      body.append(gap);
+    }
+    body.append(el2("h4", "", w.t("report.h.conversation")));
+    body.append(
+      renderChat(conversation.transcript, conversation.sourceCapsuleId, w)
+    );
+    body.append(
+      levelToggle(
+        2,
+        w.t("report.proofs.toggle"),
+        () => conversationProofs(conversation, model, runInfo, w),
+        { className: "proofs" }
+      )
+    );
+    return body;
+  }
+  function notesGap(states, w) {
+    const set = new Set(states);
+    return w.t(
+      set.size === 1 && set.has("withheld") ? "report.gap.notes.withheld" : set.has("mismatch") || set.has("unreadable") || set.has("invalid") ? "report.gap.notes.unread" : set.has("withheld") ? "report.gap.notes.some-withheld" : "report.gap.notes.none"
+    );
+  }
+  function transcriptRows(t, w) {
+    if (t.state === "verified")
+      return [
+        [w.t("report.pf.transcript-record"), t.transcriptRecordId],
+        [
+          w.t("report.pf.input-digest"),
+          w.t("report.pf.input-digest.verified", { digest: t.inputDigest })
+        ]
+      ];
+    if (t.state === "cited")
+      return [
+        [w.t("report.pf.transcript-record"), t.transcriptRecordId],
+        [
+          w.t("report.pf.input-digest"),
+          w.t("report.pf.input-digest.cited", { digest: t.inputDigest })
+        ]
+      ];
+    return [
+      [
+        w.t("report.pf.transcript"),
+        t.state === "absent" ? w.t("report.pf.transcript.absent") : w.t("report.pf.transcript.not-shown", {
+          reason: t.reason ?? w.t("report.pf.transcript.default-reason")
+        })
+      ]
+    ];
+  }
+  function datedText(dated, w) {
+    return w.t(
+      dated.zone === "not-stated" ? "report.pf.dated.no-zone" : "report.pf.dated",
+      { date: dated.stated ?? dated.date, basis: basisText(dated.basis, w) }
+    );
+  }
+  function conversationProofs(conversation, model, runInfo, w) {
+    const box = el2("div", "pf-b");
+    box.dataset.proofsFor = conversation.conversationId;
+    const rows = [];
+    rows.push([w.t("lines.pf.case"), conversation.conversationId]);
+    rows.push([
+      w.t("report.pf.case-record"),
+      conversation.sourceCapsuleId === void 0 ? w.t("report.pf.case-record.not-stated") : conversation.caseFrom === "claims" ? w.t("lines.pf.case-record.from-claims", {
+        record: conversation.sourceCapsuleId
+      }) : conversation.sourceCapsuleId
+    ]);
+    const dated = conversation.dated;
+    if (dated.basis !== "judged") {
+      rows.push([
+        w.t("lines.pf.dated-by"),
+        datedText(dated, w),
+        { dated: dated.basis }
+      ]);
+      if (dated.importedAt !== void 0)
+        rows.push([w.t("report.pf.imported"), dated.importedAt]);
+      rows.push([w.t("report.pf.judged-sealed"), conversation.judgedDay]);
+    }
+    rows.push([w.t("report.pf.result-capsule"), model.capsuleId]);
+    rows.push(...transcriptRows(conversation.transcript, w));
+    rows.push([
+      w.t("lines.pf.judge-pin"),
+      runInfo.judgePinDigest === void 0 ? pinNotShown(runInfo, w) : runInfo.judgePinRecomputes === true && runInfo.judgePin !== void 0 ? w.t("lines.pf.judge-pin.recomputed", {
+        digest: runInfo.judgePinDigest,
+        model: runInfo.judgePin.modelId,
+        prompt: runInfo.judgePin.promptDigest,
+        axes: runInfo.judgePin.axesDigest
+      }) : runInfo.judgePinDigest
+    ]);
+    const dl = proofList(rows);
+    dl.dataset.checkIt = conversation.conversationId;
+    box.append(dl);
+    box.append(el2("h5", "", w.t("lines.pf.h.each-report")));
+    const table2 = el2("table", "crit pft");
+    const head2 = element3("thead");
+    const headRow = element3("tr");
+    headRow.append(
+      element3("th", w.t("lines.pf.col.rule")),
+      element3("th", w.t("lines.pf.col.verdict")),
+      el2("th", "n", w.t("lines.pf.col.p")),
+      element3("th", w.t("lines.pf.col.report")),
+      element3("th", w.t("lines.pf.col.rationale"))
+    );
+    head2.append(headRow);
+    table2.append(head2);
+    const tbody = element3("tbody");
+    for (const criterion of conversation.criteria) {
+      const tr = element3("tr");
+      tr.dataset.proofCrit = `${criterion.checkId}.${criterion.criterionId}`;
+      tr.dataset.verdict = criterion.verdict;
+      tr.append(
+        element3(
+          "td",
+          criterionLabel(model, criterion.checkId, criterion.criterionId).label
+        ),
+        element3("td", verdictText(criterion.verdict, w))
+      );
+      const p = verdictProbability(criterion);
+      const pCell = el2("td", "n", p === void 0 ? "\u2013" : fmtP(p));
+      if (p !== void 0) pCell.dataset.p = fmtP(p);
+      tr.append(pCell);
+      tr.append(
+        el2(
+          "td",
+          "mono",
+          criterion.claim === void 0 ? w.t("lines.pf.no-claim") : `${criterion.reportCapsuleId ?? w.t("lines.pf.not-cited")}${criterion.reportRecordId === void 0 ? "" : ` (${criterion.reportRecordId})`}`
+        )
+      );
+      const rationale = el2("td", "rat");
+      if (criterion.rationale !== void 0) {
+        const sealed = el2("code", "sealed", criterion.rationale);
+        sealed.dataset.rationale = "sealed";
+        rationale.append(sealed);
+      } else rationale.append(el2("span", "muted", "\u2013"));
+      tr.append(rationale);
+      tbody.append(tr);
+    }
+    table2.append(tbody);
+    const scroll = el2("div", "tscroll");
+    scroll.append(table2);
+    box.append(scroll);
+    const rationales = conversation.criteria.map((c) => c.rationale).filter((r) => r !== void 0);
+    if (rationales.length > 0 && rationales.every((r) => /^jev choice:/u.test(r))) {
+      const derived = el2("p", "", w.t("lines.pf.derived"));
+      derived.dataset.rationaleLabel = "derived";
+      box.append(derived);
+    } else if (rationales.length > 0) {
+      const shown2 = el2("p", "", w.t("lines.pf.sealed-rationale"));
+      shown2.dataset.rationaleLabel = "sealed";
+      box.append(shown2);
+    }
+    box.append(
+      el2(
+        "p",
+        "",
+        w.t("lines.pf.recompute", {
+          verdicts: w.p("lines.pf.verdicts", conversation.criteria.length, {
+            n: countWord(conversation.criteria.length, w)
+          })
+        })
+      )
+    );
+    return box;
+  }
+  function pinAbsence(info, w) {
+    const unread = (info.reportsMismatched ?? 0) + (info.reportsUnreadable ?? 0) + (info.reportsInvalid ?? 0);
+    const cited = fmtCount(info.reportsCited ?? 0);
+    const parts = [];
+    if (info.reportsWithheld !== void 0)
+      parts.push(
+        w.t("report.pin.withheld", {
+          count: fmtCount(info.reportsWithheld),
+          total: cited
+        })
+      );
+    if (unread > 0)
+      parts.push(
+        w.t("report.pin.unread", { count: fmtCount(unread), total: cited })
+      );
+    return parts.length === 0 ? void 0 : w.t("report.pin.not-in-bundle", { reasons: parts.join("; ") });
+  }
+  function pinNotShown(runInfo, w) {
+    if (!runInfo.pinned) return w.t("lines.pin.differs");
+    return pinAbsence(runInfo, w) ?? w.t("lines.pin.not-stated");
+  }
+  function renderConversationList(conversations, model, runInfo, key, w) {
+    const list = el2("div", "convs");
+    list.dataset.conversationsFor = key;
+    list.dataset.conversationCount = String(conversations.length);
+    if (conversations.length === 0)
+      list.append(el2("p", "small", w.t("lines.list.empty")));
+    for (const conversation of conversations)
+      list.append(renderConversation(conversation, model, runInfo, w));
+    return list;
+  }
+  function drill(label, build, key) {
+    const details = levelToggle(1, label, build, { className: "line" });
+    details.dataset.drill = key;
+    return details;
+  }
+  function conversationsDrill(label, conversations, model, runInfo, key, w) {
+    return drill(
+      label,
+      () => renderConversationList(conversations, model, runInfo, key, w),
+      key
+    );
+  }
+  function missedReasonLabel(terms, checkId, criterionId) {
+    const check = terms.checks.find((c) => c.id === checkId);
+    const criterion = check?.criteria.find((c) => c.id === criterionId);
+    return check === void 0 || criterion === void 0 ? `${checkId}.${criterionId}` : `${criterion.label} (${check.question})`;
+  }
+  function groupMissedReasons(missed, terms) {
+    const labelledReasonCode = (code) => code === void 0 ? void 0 : terms.reasonCodes[code];
+    const groups = /* @__PURE__ */ new Map();
+    const structured = /* @__PURE__ */ new Map();
+    const labels = /* @__PURE__ */ new Map();
+    for (const conversation of missed) {
+      const first = conversation.criteria.find((c) => isMiss(c.verdict));
+      if (first === void 0) continue;
+      const label = labelledReasonCode(first.reasonCode);
+      const key = label !== void 0 ? first.reasonCode : `${first.checkId}.${first.criterionId}`;
+      const list = groups.get(key) ?? [];
+      list.push(conversation);
+      groups.set(key, list);
+      structured.set(key, label !== void 0);
+      labels.set(
+        key,
+        label ?? missedReasonLabel(terms, first.checkId, first.criterionId)
+      );
+    }
+    return [...groups.entries()].map(([key, conversations]) => ({
+      key,
+      label: labels.get(key),
+      structured: structured.get(key),
+      conversations
+    })).sort((a, b) => b.conversations.length - a.conversations.length);
+  }
+  function whyMissed(missed, model, runInfo, w) {
+    const box = el2("div", "why-missed");
+    box.dataset.section = "why-missed";
+    const groups = groupMissedReasons(missed, model.terms);
+    box.dataset.reasons = String(groups.length);
+    box.append(el2("h5", "", w.t("lines.why-missed.h")));
+    const table2 = element3("table");
+    const tbody = element3("tbody");
+    for (const group of groups) {
+      const tr = element3("tr");
+      tr.dataset.reasonKey = group.key;
+      tr.dataset.reasonStructured = String(group.structured);
+      tr.dataset.count = String(group.conversations.length);
+      tr.append(
+        element3("td", group.label),
+        el2("td", "n", fmtCount(group.conversations.length))
+      );
+      tbody.append(tr);
+    }
+    table2.append(tbody);
+    box.append(table2);
+    const anyStructured = groups.some((g) => g.structured);
+    box.append(
+      el2(
+        "p",
+        "small",
+        w.t(
+          anyStructured ? "lines.why-missed.structured" : "lines.why-missed.unstructured"
+        )
+      )
+    );
+    for (const group of groups) {
+      const head2 = el2(
+        "div",
+        "rsn-h",
+        w.t("lines.why-missed.reason", {
+          reason: group.label,
+          count: fmtCount(group.conversations.length)
+        })
+      );
+      head2.dataset.reasonFor = group.key;
+      box.append(head2);
+      box.append(
+        renderConversationList(
+          group.conversations,
+          model,
+          runInfo,
+          `reason:${group.key}`,
+          w
+        )
+      );
+    }
+    return box;
+  }
+  function packLine(model, w) {
+    const { id, version } = model.terms.pack;
+    return id === NOT_STATED ? w.t("report.not-stated") : w.t("lines.pack-line", { id, version });
+  }
+  function span(days, w) {
+    const first = days[0];
+    const last = days[days.length - 1];
+    if (first === void 0 || last === void 0)
+      return w.t("report.span.unknown");
+    return first === last ? first : w.t("report.span", { from: first, to: last });
+  }
+  var basisText = (basis, w) => w.t(`report.basis.${basis}`);
+  function datingNote(model, w) {
+    return datingStatement(model.dating, model.totalCount, w);
+  }
+  function datingStatement(dating, total, w) {
+    const { basis, counts, judgedDays, zoneNotStated } = dating;
+    if (basis === "judged") return void 0;
+    const sealed = w.t("report.dating.sealed", { span: span(judgedDays, w) });
+    const parts = [];
+    if (basis === "source") parts.push(w.t("report.dating.source"));
+    else if (basis === "record") parts.push(w.t("report.dating.record"));
+    else {
+      parts.push(w.t("report.dating.mixed"));
+      if (counts.source > 0)
+        parts.push(
+          w.t("report.dating.mixed.source", { n: String(counts.source) })
+        );
+      if (counts.record > 0)
+        parts.push(
+          w.t("report.dating.mixed.record", { n: String(counts.record) })
+        );
+      if (counts.judged > 0)
+        parts.push(
+          w.t("report.dating.mixed.judged", { n: String(counts.judged) })
+        );
+    }
+    parts.push(sealed);
+    if (counts.source > 0) parts.push(w.t("report.dating.self-attested"));
+    if (zoneNotStated > 0)
+      parts.push(
+        w.t("report.dating.tz", {
+          count: String(zoneNotStated),
+          total: String(total)
+        })
+      );
+    return parts.join(" ");
+  }
+  function renderMeta(host, model, w) {
+    const section = el2("section", "");
+    section.dataset.section = "meta";
+    const row1 = el2("div", "ih-row");
+    const bill = el2("div", "party");
+    bill.append(el2("div", "k", w.t("lines.meta.pack")));
+    bill.append(el2("div", "v", packLine(model, w)));
+    row1.append(bill);
+    const title = el2("div", "ih-title");
+    title.append(el2("h1", "inv-title", w.t("lines.title")));
+    if (model.terms.pack.locked !== NOT_STATED)
+      title.append(
+        el2(
+          "div",
+          "inv-sub",
+          w.t("lines.meta.locked", { locked: model.terms.pack.locked })
+        )
+      );
+    row1.append(title);
+    section.append(row1);
+    const row2 = el2("div", "ih-row");
+    const details = el2("div", "meta");
+    const first = model.days[0]?.date;
+    const last = model.days[model.days.length - 1]?.date;
+    const metaRow = (label, value) => {
+      const line = element3("div");
+      line.append(element3("span", label), element3("span", value));
+      details.append(line);
+    };
+    metaRow(
+      w.t("lines.meta.period"),
+      first === void 0 || last === void 0 ? w.t("lines.meta.no-conversations") : first === last ? first : w.t("report.span", { from: first, to: last })
+    );
+    const note = datingNote(model, w);
+    if (note !== void 0) {
+      metaRow(w.t("lines.meta.sealed"), span(model.dating.judgedDays, w));
+      details.lastElementChild.setAttribute("data-sealed", "");
+    }
+    metaRow(w.t("lines.meta.conversations"), fmtCount(model.totalCount));
+    const checked = el2("div", "party");
+    const rules = model.terms.checks.reduce((n, c) => n + c.criteria.length, 0);
+    checked.append(el2("div", "k", w.t("lines.meta.what-checked")));
+    const groups = model.terms.checks.length;
+    const what = el2(
+      "div",
+      "d",
+      w.t("lines.meta.what-checked.text", {
+        rules: w.p("lines.meta.rules", rules, { n: String(rules) }),
+        groups: w.p("lines.meta.groups", groups, { n: String(groups) }),
+        questions: model.terms.checks.map((c) => c.question).join(" \xB7 ")
+      })
+    );
+    what.dataset.whatChecked = String(rules);
+    checked.append(what);
+    row2.append(checked, details);
+    section.append(row2);
+    if (note !== void 0) {
+      const label = el2("p", "date-note", note);
+      label.dataset.dateNote = model.dating.basis;
+      section.append(label);
+    }
+    host.append(section);
+  }
+  function renderLines(host, model, runInfo, w) {
+    const section = el2("section", "");
+    section.dataset.section = "lines";
+    const table2 = document.createElement("table");
+    table2.className = "lines";
+    table2.dataset.rows = "report-lines";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(
+      element3("th", w.t("lines.col.result")),
+      el2("th", "n", w.t("lines.lines.col.conversations"))
+    );
+    thead.append(headRow);
+    table2.append(thead);
+    const tbody = document.createElement("tbody");
+    const byStatus = (status2) => model.conversations.filter((c) => conversationStatus(c) === status2);
+    const resolved = byStatus("resolved");
+    const missed = byStatus("missed");
+    const unverified = byStatus("unverified");
+    const undecided = [...byStatus("undecided"), ...byStatus("nothing-applied")];
+    const share = (n) => fmtShare(n, model.totalCount, model.options.percentages, w);
+    const line = (key, count2, shown2, behind) => ({
+      key,
+      label: w.t(`lines.line.${key}`),
+      help: w.t(`lines.line.${key}.help`),
+      count: count2,
+      shown: shown2,
+      ...behind === void 0 ? {} : { behind }
+    });
+    const lines = [
+      line("resolved", resolved.length, share(resolved.length), resolved),
+      line("missed", missed.length, share(missed.length), missed)
+    ];
+    if (unverified.length > 0)
+      lines.push(
+        line(
+          "unverified",
+          unverified.length,
+          share(unverified.length),
+          unverified
+        )
+      );
+    if (undecided.length > 0)
+      lines.push(
+        line("undecided", undecided.length, share(undecided.length), undecided)
+      );
+    lines.push(
+      line("held", model.heldCount, fmtCount(model.heldCount)),
+      line("added", model.addedCount, fmtCount(model.addedCount))
+    );
+    for (const line2 of lines) {
+      const tr = document.createElement("tr");
+      tr.dataset.line = line2.key;
+      tr.dataset.count = String(line2.count);
+      const desc = el2("td", "desc");
+      desc.append(el2("b", "", line2.label));
+      desc.append(el2("small", "", line2.help));
+      if (line2.behind !== void 0 && line2.behind.length > 0) {
+        const label = w.p("lines.drill.show", line2.behind.length, {
+          n: fmtCount(line2.behind.length)
+        });
+        const behind = line2.behind;
+        desc.append(
+          line2.key === "missed" ? drill(label, () => whyMissed(behind, model, runInfo, w), line2.key) : conversationsDrill(label, behind, model, runInfo, line2.key, w)
+        );
+      }
+      tr.append(desc, el2("td", "n", line2.shown));
+      tbody.append(tr);
+    }
+    table2.append(tbody);
+    section.append(table2);
+    const na = el2(
+      "p",
+      "na-note",
+      w.p("lines.na-note", model.notApplicableCount, {
+        n: fmtCount(model.notApplicableCount)
+      })
+    );
+    na.dataset.line = "not-applicable";
+    na.dataset.count = String(model.notApplicableCount);
+    section.append(na);
+    host.append(section);
+    const stamps = el2("div", "stamps inl");
+    const stamp = el2("div", "stamp rec", w.t("lines.stamp"));
+    stamp.append(el2("small", "", w.t("lines.stamp.small")));
+    stamps.append(stamp);
+    host.append(stamps);
+  }
+  function renderRules(host, model, runInfo, w) {
+    const section = el2("section", "sec");
+    section.dataset.section = "rules";
+    section.append(el2("h2", "", w.t("lines.rules.h")));
+    section.append(el2("p", "lede", w.t("lines.rules.lede")));
+    const table2 = el2("table", "rules");
+    table2.dataset.rows = "rules";
+    const thead = element3("thead");
+    const headRow = element3("tr");
+    headRow.append(
+      element3("th", w.t("lines.col.rule")),
+      el2("th", "n", ruleWord("met", "yes", w).word),
+      el2("th", "n", ruleWord("not_met", "yes", w).word),
+      el2("th", "n", ruleWord("not_applicable", "yes", w).word),
+      el2("th", "n", w.t("lines.rules.col.undecided"))
+    );
+    const anyUnverified = model.conversations.some(
+      (c) => c.criteria.some((cr) => isUnverified(cr.verdict))
+    );
+    if (anyUnverified)
+      headRow.append(el2("th", "n", w.t("lines.rules.col.unverified")));
+    const columns = anyUnverified ? "6" : "5";
+    thead.append(headRow);
+    table2.append(thead);
+    const tbody = element3("tbody");
+    for (const check of model.terms.checks) {
+      const group = el2("tr", "grp");
+      group.dataset.checkId = check.id;
+      group.dataset.passCount = String(model.checkPassCounts.get(check.id) ?? 0);
+      const cell = el2("td", "", check.question);
+      cell.setAttribute("colspan", columns);
+      group.append(cell);
+      tbody.append(group);
+      for (const criterion of check.criteria) {
+        const ref = `${check.id}.${criterion.id}`;
+        const of = (pick) => model.conversations.filter(
+          (c) => c.criteria.some(
+            (cr) => cr.checkId === check.id && cr.criterionId === criterion.id && pick(cr.verdict)
+          )
+        );
+        const met = of((v) => v === "met");
+        const notMet = of(isMiss);
+        const unverifiedHere = of(isUnverified);
+        const na = of((v) => v === "not_applicable");
+        const undecided = of((v) => v === "not_evaluable");
+        const tr = el2("tr", "rule");
+        tr.dataset.rule = ref;
+        tr.dataset.tier = model.criterionTiers.get(ref) ?? "unknown";
+        const label = criterionLabel(model, check.id, criterion.id);
+        const nameCell = el2("td", "cn");
+        nameCell.append(el2("b", "", label.label));
+        const badge = editedBadge(model, ref, w);
+        if (badge !== void 0) nameCell.append(badge);
+        if (label.source === "sealed")
+          nameCell.append(el2("small", "", label.text));
+        const problems = [
+          ...notMet,
+          ...unverifiedHere.filter((c) => !notMet.includes(c)),
+          ...undecided.filter(
+            (c) => !notMet.includes(c) && !unverifiedHere.includes(c)
+          )
+        ];
+        tr.append(
+          nameCell,
+          el2("td", "n ok", fmtCount(met.length)),
+          el2(
+            "td",
+            `n${notMet.length > 0 ? " bad" : ""}`,
+            fmtCount(notMet.length)
+          ),
+          el2("td", "n", fmtCount(na.length)),
+          el2("td", "n", fmtCount(undecided.length))
+        );
+        if (anyUnverified)
+          tr.append(el2("td", "n", fmtCount(unverifiedHere.length)));
+        tbody.append(tr);
+        if (problems.length > 0) {
+          const drillRow = el2("tr", "drill-row");
+          drillRow.dataset.drillFor = ref;
+          const cell2 = element3("td");
+          cell2.setAttribute("colspan", columns);
+          cell2.append(
+            conversationsDrill(
+              w.t("lines.rules.drill", {
+                notMet: fmtCount(notMet.length),
+                unverified: unverifiedHere.length > 0 ? w.t("lines.rules.drill.unverified-suffix", {
+                  n: fmtCount(unverifiedHere.length)
+                }) : "",
+                undecided: undecided.length > 0 ? w.t("lines.rules.drill.undecided-suffix", {
+                  n: fmtCount(undecided.length)
+                }) : ""
+              }),
+              problems,
+              model,
+              runInfo,
+              `rule:${ref}`,
+              w
+            )
+          );
+          drillRow.append(cell2);
+          tbody.append(drillRow);
+        }
+      }
+    }
+    table2.append(tbody);
+    const scroll = el2("div", "tscroll");
+    scroll.append(table2);
+    section.append(scroll);
+    host.append(section);
+  }
+  function renderCalendar(host, model, w) {
+    const section = el2("section", "sec");
+    section.dataset.section = "calendar";
+    section.append(el2("h2", "", w.t("lines.cal.h")));
+    const note = datingNote(model, w);
+    section.append(
+      el2(
+        "p",
+        "lede",
+        w.t(note === void 0 ? "lines.cal.lede" : "lines.cal.lede.dated")
+      )
+    );
+    if (note !== void 0) {
+      const label = el2("p", "date-note", note);
+      label.dataset.dateNote = model.dating.basis;
+      section.append(label);
+    }
+    const list = el2("div", "cal");
+    list.dataset.days = String(model.days.length);
+    for (const day of model.days) {
+      const item = el2("div", "day");
+      item.dataset.day = day.date;
+      item.dataset.resolved = String(day.resolvedCount);
+      item.dataset.total = String(day.conversations.length);
+      item.append(el2("div", "dn", day.date));
+      if (note !== void 0) {
+        const bases = new Set(day.conversations.map((c) => c.dated.basis));
+        if (bases.has("source")) {
+          const chip = el2("div", "src-says", w.t("lines.cal.source-says"));
+          chip.dataset.sourceSays = String(
+            day.conversations.filter((c) => c.dated.basis === "source").length
+          );
+          item.append(chip);
+        }
+        const notStated = day.conversations.filter(
+          (c) => c.dated.zone === "not-stated"
+        ).length;
+        if (notStated > 0) {
+          const tz = el2("div", "tz", w.t("lines.cal.tz"));
+          tz.dataset.tzMarker = "not-stated";
+          item.append(tz);
+        }
+      }
+      item.append(
+        el2(
+          "div",
+          "v",
+          fmtShare(
+            day.resolvedCount,
+            day.conversations.length,
+            model.options.percentages,
+            w
+          )
+        )
+      );
+      const mini = el2("div", "mini");
+      const share = day.conversations.length === 0 ? 0 : day.resolvedCount / day.conversations.length;
+      const fill2 = element3("i");
+      fill2.style.width = `${Math.round(share * 100)}%`;
+      mini.append(fill2);
+      item.append(mini);
+      if (note !== void 0) {
+        const sealed = el2(
+          "div",
+          "sealed",
+          w.t("lines.cal.sealed", { span: span(day.judgedDays, w) })
+        );
+        sealed.dataset.sealed = day.judgedDays.join(" ");
+        item.append(sealed);
+      }
+      if (day.policyChanged !== null) {
+        const flag = el2("div", "flag", w.t("lines.cal.policy-changed"));
+        flag.dataset.policyChanged = day.policyChanged;
+        item.append(flag);
+      }
+      list.append(item);
+    }
+    section.append(list);
+    host.append(section);
+  }
+  function renderHumanChecks(host, calibration, w) {
+    const section = el2("section", "sec");
+    section.dataset.section = "human-checks";
+    section.append(el2("h2", "", w.t("lines.hc.h")));
+    section.append(el2("p", "lede", w.t("lines.hc.lede")));
+    if (calibration.length === 0) {
+      section.append(el2("p", "", w.t("lines.hc.none")));
+      host.append(section);
+      return;
+    }
+    const table2 = document.createElement("table");
+    table2.className = "hct";
+    table2.dataset.weeks = String(calibration.length);
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(
+      element3("th", w.t("lines.hc.col.week")),
+      el2("th", "n", w.t("lines.hc.col.agreed")),
+      el2("th", "n", w.t("lines.hc.col.held")),
+      el2("th", "n", w.t("lines.hc.col.added"))
+    );
+    thead.append(headRow);
+    table2.append(thead);
+    const tbody = document.createElement("tbody");
+    for (const week of calibration) {
+      const tr = document.createElement("tr");
+      tr.dataset.week = week.weekId;
+      tr.dataset.k = String(week.k);
+      tr.dataset.n = String(week.n);
+      tr.append(el2("td", "", week.weekId));
+      tr.append(
+        el2(
+          "td",
+          "n",
+          w.t("lines.hc.agreed", { k: String(week.k), n: String(week.n) })
+        )
+      );
+      const held = week.sample.filter(
+        (s) => s.aiVerdict === "met" && s.humanVerdict !== "met"
+      ).length;
+      const added = week.sample.filter(
+        (s) => s.aiVerdict !== "met" && s.humanVerdict === "met"
+      ).length;
+      const heldCell = el2("td", "n", String(held));
+      heldCell.dataset.held = String(held);
+      const addedCell = el2("td", "n", String(added));
+      addedCell.dataset.added = String(added);
+      tr.append(heldCell, addedCell);
+      tbody.append(tr);
+    }
+    table2.append(tbody);
+    section.append(table2);
+    host.append(section);
+  }
+  function renderTerms(host, model, w) {
+    const section = el2("div", "rp-s");
+    section.dataset.section = "terms";
+    section.append(el2("h3", "", w.t("lines.terms.h")));
+    const lede = el2(
+      "p",
+      "lede",
+      model.terms.pack.agreement === NOT_STATED ? w.t("lines.terms.lede") : w.t("lines.terms.lede.agreed", {
+        agreement: model.terms.pack.agreement
+      })
+    );
+    lede.dataset.termsSource = "bundle";
+    section.append(lede);
+    const pack = el2("div", "pack");
+    const packField = (label, value) => {
+      const box = el2("div", "pk");
+      box.append(el2("div", "k", label), el2("div", "v", value));
+      pack.append(box);
+    };
+    packField(w.t("lines.meta.pack"), model.terms.pack.id);
+    packField(
+      w.t("lines.terms.version"),
+      model.terms.pack.version === NOT_STATED ? w.t("report.not-stated") : w.t("lines.terms.version.value", {
+        version: model.terms.pack.version
+      })
+    );
+    if (model.terms.pack.locked !== NOT_STATED)
+      packField(w.t("lines.terms.locked"), model.terms.pack.locked);
+    section.append(pack);
+    const outcome = el2("div", "outcome");
+    const outcomeIcon = el2("div", "oic");
+    const target = icon("target");
+    if (target !== void 0) outcomeIcon.append(target);
+    outcome.append(outcomeIcon);
+    const outcomeBody = element3("div");
+    outcomeBody.append(el2("div", "t", w.t("lines.terms.outcome")));
+    outcomeBody.append(el2("div", "v", model.terms.pack.outcomeStatement));
+    outcome.append(outcomeBody);
+    section.append(outcome);
+    const checks = el2("div", "checks");
+    checks.dataset.checks = String(model.terms.checks.length);
+    for (const check of model.terms.checks) {
+      const card = el2("section", "check");
+      card.dataset.checkId = check.id;
+      const checkIcon = el2("div", "ic");
+      const drawn = icon(check.icon);
+      if (drawn !== void 0) checkIcon.append(drawn);
+      card.append(checkIcon);
+      card.append(el2("div", "q", check.question));
+      card.append(el2("div", "d", check.description));
+      const criteria = el2("ul", "subs");
+      for (const criterion of check.criteria) {
+        const ref = `${check.id}.${criterion.id}`;
+        const tier = model.criterionTiers.get(ref) ?? "unknown";
+        const item = element3("li");
+        item.dataset.criterionId = criterion.id;
+        item.dataset.tier = tier;
+        const wording = model.criterionWording.get(ref) ?? {
+          text: criterion.text,
+          source: "unstated"
+        };
+        item.dataset.wording = wording.source;
+        const label = el2("b", "", criterion.label);
+        const termsBadge = editedBadge(model, ref, w);
+        if (termsBadge !== void 0) label.append(termsBadge);
+        item.append(label);
+        item.append(
+          element3(
+            "span",
+            w.t("lines.terms.criterion", {
+              text: wording.text,
+              tier: tierLabel(tier, w)
+            })
+          )
+        );
+        if (wording.source !== "sealed")
+          item.append(el2("small", "wsrc", wordingFallback(wording.source, w)));
+        criteria.append(item);
+      }
+      card.append(criteria);
+      checks.append(card);
+    }
+    section.append(checks);
+    const note = el2("p", "small", wordingNote(model, w));
+    note.dataset.wordingNote = "true";
+    section.append(note);
+    section.append(el2("div", "rule", model.terms.pack.resolutionRule));
+    host.append(section);
+  }
+  function renderWhatRan(host, runInfo, w) {
+    const section = el2("div", "rp-s");
+    section.dataset.section = "what-ran";
+    section.append(el2("h3", "", w.t("lines.ran.h")));
+    const ran = el2("div", "ran");
+    ran.dataset.pinned = String(runInfo.pinned);
+    if (runInfo.judgePinRecomputes !== void 0)
+      ran.dataset.pinRecomputes = String(runInfo.judgePinRecomputes);
+    const box = (label, value, key) => {
+      const item = el2("div", "it");
+      item.dataset.ran = key;
+      item.append(el2("div", "k", label));
+      item.append(el2("div", "v", value));
+      ran.append(item);
+    };
+    const pin = runInfo.judgePinRecomputes === true ? runInfo.judgePin : void 0;
+    const notStated = w.t("report.not-stated");
+    box(w.t("lines.ran.contract"), runInfo.contract ?? notStated, "contract");
+    box(
+      w.t("lines.ran.judge-model"),
+      pin === void 0 ? notStated : pin.modelVersion === void 0 ? pin.modelId : `${pin.modelId} ${pin.modelVersion}`,
+      "judge-model"
+    );
+    box(
+      w.t("lines.ran.judge-pin"),
+      runInfo.judgePinDigest === void 0 ? pinNotShown(runInfo, w) : pin === void 0 ? runInfo.judgePinDigest : w.t("lines.ran.judge-pin.recomputed", {
+        digest: runInfo.judgePinDigest
+      }),
+      "judge-pin-digest"
+    );
+    box(
+      w.t("lines.ran.judge-prompt"),
+      pin?.promptDigest ?? notStated,
+      "judge-prompt-digest"
+    );
+    box(
+      w.t("lines.ran.judge-axes"),
+      pin?.axesDigest ?? notStated,
+      "judge-axes-digest"
+    );
+    box(w.t("lines.ran.agent"), w.t("lines.ran.agent.value"), "agent");
+    section.append(ran);
+    if (runInfo.judgePinRecomputes === false) {
+      const warning = el2("p", "", w.t("lines.ran.components-mismatch"));
+      warning.dataset.pinComponentsMismatch = "true";
+      section.append(warning);
+    }
+    const lock = el2("div", "lock", w.t("lines.ran.lock"));
+    section.append(lock);
+    if (!runInfo.pinned) {
+      const warning = el2("p", "", w.t("lines.ran.pin-mismatch"));
+      warning.dataset.pinMismatch = "true";
+      section.append(warning);
+    }
+    host.append(section);
+  }
+  function renderVerificationDetails(host, bundle, verified, w) {
+    const section = el2("div", "rp-s");
+    section.dataset.section = "verification-details";
+    section.append(el2("h3", "", w.t("report.vd.h")));
+    section.append(el2("p", "lede", w.t("lines.vd.lede")));
+    const model = buildVerificationPageModel(bundle, verified);
+    const tech = el2("div", "tech");
+    const field = (label, value) => {
+      tech.append(el2("div", "k", label), el2("div", "v", value));
+    };
+    for (const [label, value] of verificationRows(model, w)) field(label, value);
+    section.append(tech);
+    const note = el2("p", "note", w.t("lines.vd.note"));
+    note.dataset.checkpointKind = "mmr";
+    section.append(note);
+    host.append(section);
+  }
+  function verificationRows(model, w) {
+    return [
+      [
+        w.t("report.vd.bundle-digest"),
+        model.bundleDigest ?? w.t("report.vd.uncomputable")
+      ],
+      [
+        w.t("report.vd.checkpoint-root"),
+        model.checkpointRoot ?? w.t("report.vd.absent")
+      ],
+      [
+        w.t("report.vd.checkpoint-size"),
+        model.checkpointSize === void 0 ? w.t("report.vd.absent") : String(model.checkpointSize)
+      ]
+    ];
+  }
+  function wordingRow(w) {
+    return [
+      w.t("report.pf.wording"),
+      w.source.base === void 0 ? w.t("report.pf.wording.default", {
+        id: w.source.id,
+        sha256: w.source.sha256 ?? ""
+      }) : w.t("report.pf.wording.supplied.layered", {
+        id: w.source.id,
+        sha256: w.source.sha256 ?? "",
+        baseId: w.source.base.id,
+        baseSha256: w.source.base.sha256
+      })
+    ];
+  }
+  function renderReportProofs(host, model, runInfo, bundle, verified, w) {
+    const section = el2("section", "sec rp");
+    section.dataset.section = "report-proofs";
+    const toggle = levelToggle(
+      2,
+      w.t("lines.rp.toggle"),
+      () => {
+        const box = el2("div", "pf-b");
+        const ids = proofList([
+          [w.t("report.pf.result-capsule"), model.capsuleId],
+          [w.t("lines.meta.pack"), packLine(model, w)],
+          wordingRow(w)
+        ]);
+        ids.dataset.reportIds = "true";
+        box.append(ids);
+        renderTerms(box, model, w);
+        renderWhatRan(box, runInfo, w);
+        renderVerificationDetails(box, bundle, verified, w);
+        const tamper = el2("p", "tamper-note", w.t("lines.rp.tamper"));
+        tamper.dataset.tamperNote = "verify-first";
+        box.append(tamper);
+        return box;
+      },
+      { className: "proofs" }
+    );
+    section.append(toggle);
+    host.append(section);
+  }
+  var LINES_FRAME = {
+    tag: "section",
+    className: "oi",
+    page: "outcome-report",
+    css: OUTCOME_REPORT_CSS
+  };
+  async function drawLines(wrapper, result, options, bundle, verified, w) {
+    const model = buildOutcomeReportModel(result, options);
+    const runInfo = await verifyJudgePin(model.runInfo);
+    renderProducerNote(wrapper, model, w);
+    const sheet = el2("div", "sheet");
+    const pad = el2("div", "pad");
+    renderMeta(pad, model, w);
+    renderLines(pad, model, runInfo, w);
+    pad.append(
+      renderProvenance(
+        await provenanceLines(
+          result.records,
+          model.conversations.flatMap(
+            (c) => c.criteria.flatMap(
+              (cr) => cr.claim === void 0 ? [] : [cr.claim]
+            )
+          ),
+          bundle,
+          verified,
+          w
+        )
+      )
+    );
+    sheet.append(pad);
+    wrapper.append(sheet);
+    renderRules(wrapper, model, runInfo, w);
+    renderCalendar(wrapper, model, w);
+    renderHumanChecks(wrapper, model.calibration, w);
+    renderReportProofs(wrapper, model, runInfo, bundle, verified, w);
+  }
+
+  // capsule-viewer/ts/src/compliance-view.ts
+  function element4(tag, text2) {
+    const value = document.createElement(tag);
+    if (text2 !== void 0) value.textContent = text2;
+    return value;
+  }
+  function el3(tag, className, text2) {
+    const value = element4(tag, text2);
+    value.className = className;
+    return value;
+  }
+  function producerText(w, ...content) {
+    const value = element4("i");
+    value.append(...content);
+    value.dataset.source = "producer";
+    value.title = w.t("groups.producer.title");
+    return value;
+  }
+  function maybeProducer(w, tag, className, text2, producer) {
+    if (!producer) return el3(tag, className, text2);
+    const value = el3(tag, className);
+    value.append(producerText(w, text2));
+    return value;
+  }
+  var fmt2 = (n) => n.toLocaleString();
+  var count = (w, noun, n) => w.p(`groups.count.${noun}`, n, { n: fmt2(n) });
   var SEVERITY_CLASS = {
     High: "high",
     Medium: "medium",
     Low: "low"
   };
-  function severityPill(severity) {
-    const cls = SEVERITY_CLASS[severity] ?? "medium";
-    return el2("span", `sev ${cls}`, severity);
+  function severityPill(severity, w) {
+    const cls = Object.hasOwn(SEVERITY_CLASS, severity) ? SEVERITY_CLASS[severity] : void 0;
+    const pill = el3("span", cls === void 0 ? "sev" : `sev ${cls}`);
+    pill.append(producerText(w, severity));
+    return pill;
   }
-  function tierBadge(tier) {
-    const text2 = tier === "judged" ? "judged" : tier === "recomputed" ? "recomputed" : tier === "mixed" ? "tier differs across reports" : "tier not stated";
-    const badge = el2(
+  function tierBadge(tier, w) {
+    const key = tier === "judged" || tier === "recomputed" || tier === "mixed" ? tier : "unstated";
+    const badge = el3(
       "span",
       `kind ${tier === "judged" || tier === "recomputed" ? tier : "unstated"}`,
-      text2
+      w.t(`groups.tier.${key}`)
     );
     badge.dataset.tier = tier;
+    badge.title = tier === "judged" || tier === "recomputed" ? w.t(`groups.tier.${tier}.title`) : "";
     return badge;
   }
   function statusPill(statusClass, text2) {
-    return el2("span", `st ${statusClass}`, text2);
+    return el3("span", `st ${statusClass}`, text2);
   }
-  function renderHeader(host, model) {
-    const hd = el2("div", "hd");
+  function testNames(model, w) {
+    const rows = new Map(
+      model.obligations.flatMap(
+        (o) => o.rows.map((r) => [r.criterionId, r])
+      )
+    );
+    return (criterionId, tag, className) => {
+      const row2 = rows.get(criterionId);
+      return maybeProducer(
+        w,
+        tag,
+        className,
+        row2?.name ?? criterionId,
+        row2?.producerName === true
+      );
+    };
+  }
+  function sessionSpan(model, w) {
+    const days = model.sessions.map((s) => s.day).filter((d) => d !== NOT_STATED).sort();
+    const first = days[0];
+    const last = days[days.length - 1];
+    if (first === void 0 || last === void 0) return void 0;
+    return first === last ? first : w.t("report.span", { from: first, to: last });
+  }
+  function renderHeader(host, model, w) {
+    const hd = el3("div", "hd");
     hd.dataset.section = "header";
-    hd.append(el2("div", "kicker", "EU AI Act obligations report"));
-    hd.append(el2("h1", "", model.regulation));
-    const pack = model.pack.id === NOT_STATED ? `Pack ${NOT_STATED}` : `Pack ${model.pack.id} v${model.pack.version}`;
+    hd.append(el3("div", "kicker", w.t("groups.kicker")));
+    hd.append(maybeProducer(w, "h1", "", model.regulation, true));
+    const pack = model.pack.id === NOT_STATED ? w.t("groups.pack.not-stated") : w.t("groups.pack", { id: model.pack.id, version: model.pack.version });
+    const period = sessionSpan(model, w);
+    const vars = {
+      pack,
+      obligations: count(w, "obligation", model.obligations.length),
+      sessions: count(w, "session", model.totalSessions)
+    };
     hd.append(
-      el2(
+      el3(
         "div",
         "sub",
-        `${pack} \xB7 ${fmt(model.obligations.length)} obligations \xB7 ${fmt(model.totalSessions)} sessions \xB7 Result capsule ${model.capsuleId}`
+        period === void 0 ? w.t("groups.sub", vars) : w.t(
+          model.dating.basis === "judged" ? "groups.sub.judged" : "groups.sub.dated",
+          { ...vars, period }
+        )
       )
     );
-    const basis = el2(
-      "p",
-      "na",
-      `Counts, verdicts, test wording, tiers and the pack are read from the sealed claims and reports in this bundle, or marked "${NOT_STATED}". The article, applicability, method and finding recommendations are the producer's mapping, carried on this bundle's eu-ai-act-compliance/v1 extension outside the signed records.`
-    );
-    basis.dataset.basis = "terms";
-    hd.append(basis);
     host.append(hd);
   }
-  function obligationStatus(obligation) {
-    const exceptions = obligation.rows.reduce((sum, r) => sum + r.notMetCount, 0);
-    if (obligation.applicability.status === "not stated")
-      return exceptions > 0 ? { cls: "exc", text: `Exceptions noted (${fmt(exceptions)})` } : { cls: "ok", text: "No exceptions" };
-    if (obligation.applicability.status === "future")
-      return exceptions > 0 ? {
-        cls: "future",
-        text: `Not yet applicable \xB7 ${fmt(exceptions)} exceptions (readiness)`
-      } : { cls: "future", text: "Not yet applicable \xB7 no exceptions" };
-    return exceptions > 0 ? { cls: "exc", text: `Exceptions noted (${fmt(exceptions)})` } : { cls: "ok", text: "No exceptions" };
+  function nothingChecked(row2) {
+    return row2.metCount + row2.notMetCount + row2.notEvaluableCount + row2.unverifiedCount === 0;
   }
-  function renderSummary(host, model) {
-    const section = el2("section", "");
+  function noneDecided(row2) {
+    return row2.metCount === 0 && row2.notMetCount === 0;
+  }
+  function obligationStatus(obligation, w = DEFAULT_WORDS.groups) {
+    const exceptions = obligation.rows.reduce((sum, r) => sum + r.notMetCount, 0);
+    const unchecked = obligation.rows.filter((r) => noneDecided(r)).length;
+    const unverified = obligation.rows.reduce(
+      (sum, r) => sum + r.unverifiedCount,
+      0
+    );
+    const total = obligation.rows.length;
+    const uncheckedText = unchecked > 0 ? w.t("groups.ob.unchecked-of", {
+      unchecked: fmt2(unchecked),
+      total: count(w, "test", total)
+    }) : "";
+    if (exceptions > 0)
+      return {
+        cls: "exc",
+        text: `${count(w, "exception", exceptions)}${unchecked > 0 && unchecked < total ? uncheckedText : ""}`
+      };
+    if (unchecked === total)
+      return { cls: "ne", text: w.t("groups.ob.unchecked") };
+    if (unchecked > 0)
+      return { cls: "ne", text: `${w.t("groups.ob.ok.found")}${uncheckedText}` };
+    if (unverified > 0)
+      return {
+        cls: "ne",
+        text: w.t("groups.ob.ok.unverified", {
+          unverified: count(w, "result", unverified)
+        })
+      };
+    return { cls: "ok", text: w.t("groups.ob.ok") };
+  }
+  function rowStatus(row2, w = DEFAULT_WORDS.groups) {
+    if (nothingChecked(row2))
+      return { cls: "ne", text: w.t("groups.row.nothing") };
+    if (noneDecided(row2))
+      return {
+        cls: "ne",
+        text: w.t("groups.row.none-decided"),
+        ...row2.notEvaluableNote !== void 0 && row2.notEvaluableCount > 0 ? { note: row2.notEvaluableNote, producerNote: true } : row2.unverifiedCount > 0 ? {
+          note: w.t("groups.row.unverified-note", {
+            n: fmt2(row2.unverifiedCount)
+          })
+        } : {}
+      };
+    const notes = [
+      ...row2.notEvaluableCount > 0 ? [w.t("groups.row.undecided-note", { n: fmt2(row2.notEvaluableCount) })] : [],
+      ...row2.unverifiedCount > 0 ? [w.t("groups.row.unverified-note", { n: fmt2(row2.unverifiedCount) })] : []
+    ];
+    const undecided = notes.length > 0 ? { note: notes.join("; ") } : {};
+    if (row2.notMetCount > 0)
+      return {
+        cls: "exc",
+        text: w.p("groups.row.exceptions", row2.notMetCount, {
+          n: fmt2(row2.notMetCount)
+        }),
+        ...undecided
+      };
+    return {
+      cls: row2.unverifiedCount > 0 ? "ne" : "ok",
+      text: w.t(
+        row2.notEvaluableCount === 0 ? "groups.row.ok.all-decided" : "groups.row.ok"
+      ),
+      ...undecided
+    };
+  }
+  function rowResult(row2, w) {
+    const cell = document.createElement("td");
+    const status2 = rowStatus(row2, w);
+    cell.append(statusPill(status2.cls, status2.text));
+    if (status2.note !== void 0)
+      cell.append(
+        maybeProducer(
+          w,
+          "div",
+          "applic",
+          status2.note,
+          status2.producerNote === true
+        )
+      );
+    return cell;
+  }
+  function renderSummary(host, model, presentation, w) {
+    const section = el3("section", "");
     section.dataset.section = "summary";
-    section.append(el2("h2", "", "1. Summary"));
+    section.append(el3("h2", "", w.t("groups.summary.h")));
+    const tests = model.obligations.reduce((n, o) => n + o.rows.length, 0);
     section.append(
-      el2(
+      el3(
         "p",
         "lede",
-        "Results are stated as counts of sessions; no overall compliance percentage is given."
+        w.t("groups.summary.lede", {
+          tests: count(w, "test", tests),
+          obligations: count(w, "obligation", model.obligations.length)
+        })
       )
     );
+    const basis = el3("p", "na", w.t("groups.summary.basis"));
+    basis.dataset.basis = "terms";
+    section.append(basis);
     const table2 = document.createElement("table");
-    table2.className = "grid";
+    table2.className = "grid sum";
     table2.dataset.rows = "summary";
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     headRow.append(
-      element3("th", "Article"),
-      element3("th", "Obligation"),
-      element3("th", "Applicability"),
-      element3("th", "Status")
+      element4("th", w.t("groups.summary.col.test")),
+      el3("th", "n", w.t("groups.summary.col.checked-in")),
+      element4("th", w.t("groups.summary.col.result"))
     );
     thead.append(headRow);
     table2.append(thead);
-    const tbody = document.createElement("tbody");
     for (const obligation of model.obligations) {
-      const row2 = document.createElement("tr");
+      const tbody = document.createElement("tbody");
+      tbody.dataset.obligationGroup = obligation.key;
+      const row2 = el3("tr", "ob");
       row2.dataset.obligation = obligation.key;
-      const status2 = obligationStatus(obligation);
-      row2.append(
-        el2("td", "b", obligation.article),
-        element3("td", obligation.title),
-        element3("td", obligation.applicability.note)
+      const status2 = obligationStatus(obligation, w);
+      const title = el3("td", "");
+      title.setAttribute("colspan", "2");
+      const name = el3("div", "obn");
+      const article = el3("b", "", obligation.article);
+      if (obligation.mapped)
+        name.append(producerText(w, article, ` \xB7 ${obligation.title}`));
+      else name.append(article, element4("span", ` \xB7 ${obligation.title}`));
+      title.append(name);
+      if (obligation.plain !== NOT_STATED)
+        title.append(maybeProducer(w, "div", "plain", obligation.plain, true));
+      title.append(
+        maybeProducer(
+          w,
+          "div",
+          "applic",
+          obligation.applicability.note,
+          obligation.mapped
+        )
       );
       const statusCell = document.createElement("td");
       statusCell.append(statusPill(status2.cls, status2.text));
-      row2.append(statusCell);
+      row2.append(title, statusCell);
       tbody.append(row2);
-    }
-    table2.append(tbody);
-    section.append(table2);
-    host.append(section);
-  }
-  function checkItBlock(test) {
-    const box = el2("div", "ck");
-    box.dataset.crit = test.criterionId;
-    box.dataset.critVerdict = test.verdict;
-    const head2 = el2("div", "h");
-    const label = test.verdict === "met" ? "\u2713 met" : test.verdict === "not_met" ? "\u2717 not met" : test.verdict === "not_applicable" ? "\u2014 not applicable" : test.verdict === "failed" ? "\u2717 failed verification (counted as an exception)" : test.verdict === "unsupported" ? "\u2717 unsupported: its evidence is not in this bundle (counted as an exception)" : "\u2013 not evaluable";
-    head2.append(element3("span", label));
-    head2.append(tierBadge(test.tier));
-    box.append(head2);
-    if (test.rationale !== void 0)
-      box.append(el2("div", "why", test.rationale));
-    const ev = el2("div", "ev");
-    ev.append(element3("span", "Evidence: "));
-    if (test.reportDigest !== void 0)
-      ev.append(element3("code", test.reportDigest));
-    if (test.contract !== void 0) ev.append(element3("code", test.contract));
-    if (test.judgePinDigest !== void 0)
-      ev.append(element3("code", test.judgePinDigest));
-    if (test.reportDigest === void 0) ev.append(element3("span", "absent"));
-    box.append(ev);
-    return box;
-  }
-  function renderTranscript2(session) {
-    const t = session.transcript;
-    const wrap = el2("div", "tx");
-    wrap.dataset.transcript = t.state;
-    if (t.state !== "verified") {
-      wrap.append(
-        el2(
-          "div",
-          "ev",
-          t.state === "absent" ? `Transcript: not in this bundle. The conversation is sealed in the case record ${session.sourceCapsuleId ?? "(not stated by the reports)"}; this page cannot show it and does not vouch for it.` : `Transcript: not shown: ${t.reason ?? "the cited transcript does not check"}.`
-        )
-      );
-      return wrap;
-    }
-    wrap.append(
-      el2(
-        "div",
-        "ev",
-        `Transcript: sealed in record ${t.transcriptRecordId}; its digest equals what the judged case capsule committed to (${t.inputDigest}), checked on this page. ${t.turns.length} messages, in order.`
-      )
-    );
-    for (const turn of t.turns) {
-      const line = el2("div", `turn ${turn.role}`);
-      line.append(el2("b", "", `${turn.role}: `));
-      if (turn.content !== void 0) line.append(element3("span", turn.content));
-      for (const call of turn.toolCalls)
-        line.append(el2("code", "", ` ${call.name}(${call.arguments})`));
-      wrap.append(line);
-    }
-    return wrap;
-  }
-  function renderSessionDetails(session) {
-    const details = document.createElement("details");
-    details.className = "session";
-    details.dataset.session = session.conversationId;
-    const summary = document.createElement("summary");
-    summary.textContent = `${session.conversationId} \xB7 ${session.day}`;
-    details.append(summary);
-    for (const test of session.tests) details.append(checkItBlock(test));
-    details.append(renderTranscript2(session));
-    return details;
-  }
-  function renderSessionList(host, conversationIds, sessions) {
-    const byId = new Map(sessions.map((s) => [s.conversationId, s]));
-    const details = document.createElement("details");
-    details.dataset.records = "sessions";
-    const summary = document.createElement("summary");
-    summary.textContent = `${fmt(conversationIds.length)} sessions`;
-    details.append(summary);
-    for (const id of conversationIds) {
-      const session = byId.get(id);
-      if (session !== void 0) details.append(renderSessionDetails(session));
-    }
-    host.append(details);
-  }
-  function renderTests(host, model) {
-    const section = el2("section", "");
-    section.dataset.section = "tests";
-    section.append(el2("h2", "", "2. Test results"));
-    section.append(
-      el2(
-        "p",
-        "lede",
-        "Population is the sessions a test has a sealed result for; a session with none for a test is not applicable to it and is not counted. Recomputed tests are deterministic checks anyone can repeat from the records. Judged tests apply a frozen rubric with a pinned model."
-      )
-    );
-    const table2 = document.createElement("table");
-    table2.className = "grid";
-    table2.dataset.rows = "tests";
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    headRow.append(
-      element3("th", "Test"),
-      element3("th", "Requirement"),
-      element3("th", "Type"),
-      el2("th", "n", "Population"),
-      el2("th", "n", "Exceptions"),
-      el2("th", "n", "Not evaluable"),
-      element3("th", "Result")
-    );
-    thead.append(headRow);
-    table2.append(thead);
-    const tbody = document.createElement("tbody");
-    for (const obligation of model.obligations)
-      for (const row2 of obligation.rows) {
-        const tr = document.createElement("tr");
-        tr.dataset.criterion = row2.criterionId;
-        const typeCell = document.createElement("td");
-        typeCell.append(tierBadge(row2.tier));
-        const resultCell = document.createElement("td");
-        const population = model.totalSessions - row2.notApplicableCount;
-        if (population > 0 && row2.notEvaluableCount === population && row2.notMetCount === 0 && row2.metCount === 0) {
-          resultCell.append(statusPill("ne", "Not evaluable"));
-          if (row2.notEvaluableNote !== void 0)
-            resultCell.append(el2("div", "applic", row2.notEvaluableNote));
-        } else {
-          resultCell.append(
-            statusPill(
-              row2.notMetCount > 0 ? "exc" : "ok",
-              row2.notMetCount > 0 ? "Exceptions" : "No exceptions"
-            )
-          );
-        }
+      for (const test of obligation.rows) {
+        const tr = el3("tr", "test");
+        tr.dataset.criterion = test.criterionId;
+        const population = model.totalSessions - test.notApplicableCount;
+        tr.dataset.population = String(population);
+        tr.dataset.exceptions = String(test.notMetCount);
+        tr.dataset.notEvaluable = String(test.notEvaluableCount);
+        const nameCell = el3("td", "tn");
+        const head2 = el3("div", "tnh");
+        head2.append(
+          maybeProducer(w, "b", "", test.name, test.producerName),
+          tierBadge(test.tier, w)
+        );
+        nameCell.append(head2);
+        const finding = model.findings.find(
+          (f) => f.criterionId === test.criterionId
+        );
+        if (finding !== void 0) nameCell.append(renderFinding(finding, w));
+        const sessionIds = [
+          ...test.sessionsByVerdict.get("not_met") ?? [],
+          ...test.sessionsByVerdict.get("unverified") ?? [],
+          ...test.sessionsByVerdict.get("not_evaluable") ?? []
+        ];
         tr.append(
-          el2("td", "b", `${obligation.article}`),
-          element3("td", row2.name),
-          typeCell,
-          el2("td", "n", fmt(population)),
-          el2("td", "n", fmt(row2.notMetCount)),
-          el2("td", "n", fmt(row2.notEvaluableCount)),
-          resultCell
+          nameCell,
+          el3("td", "n", count(w, "session", population)),
+          rowResult(test, w)
         );
         tbody.append(tr);
-        const drill2 = document.createElement("tr");
-        const drillCell = document.createElement("td");
-        drillCell.colSpan = 7;
-        const sessionIds = [
-          ...row2.sessionsByVerdict.get("not_met") ?? [],
-          ...row2.sessionsByVerdict.get("not_evaluable") ?? []
-        ];
-        if (sessionIds.length > 0)
-          renderSessionList(drillCell, sessionIds, model.sessions);
-        drill2.append(drillCell);
-        tbody.append(drill2);
+        if (sessionIds.length > 0) {
+          const toggle = levelToggle(
+            1,
+            sessionListNote(test, count(w, "session", sessionIds.length), w),
+            () => renderSessionList(sessionIds, model, presentation, w),
+            { className: "line" }
+          );
+          toggle.dataset.records = "sessions";
+          toggle.dataset.drill = test.criterionId;
+          const drillRow = el3("tr", "drill-row");
+          drillRow.dataset.drillFor = test.criterionId;
+          const cell = document.createElement("td");
+          cell.setAttribute("colspan", "3");
+          cell.append(toggle);
+          drillRow.append(cell);
+          tbody.append(drillRow);
+        }
       }
-    table2.append(tbody);
+      table2.append(tbody);
+    }
     section.append(table2);
     host.append(section);
   }
-  function renderFindings(host, model) {
-    const section = el2("section", "");
-    section.dataset.section = "findings";
-    section.append(el2("h2", "", "3. Findings"));
-    if (model.findings.length === 0) {
-      section.append(
-        el2(
-          "p",
-          "lede",
-          "No findings: every test with a not-met session count above zero would have produced one."
+  function sessionListNote(test, sessions, w) {
+    const kinds = [
+      ...test.notMetCount > 0 ? [w.t("groups.drill.kind.exceptions")] : [],
+      ...test.unverifiedCount > 0 ? [w.t("groups.drill.kind.unverified")] : [],
+      ...test.notEvaluableCount > 0 ? [w.t("groups.drill.kind.undecided")] : []
+    ];
+    if (kinds.length > 1)
+      return w.t("groups.drill.mixed", {
+        sessions,
+        kinds: kinds.join(", then ")
+      });
+    if (test.notMetCount > 0) return w.t("groups.drill.exceptions", { sessions });
+    if (test.unverifiedCount > 0)
+      return w.t("groups.drill.unverified", { sessions });
+    return w.t("groups.drill.undecided", { sessions });
+  }
+  function renderFinding(finding, w) {
+    const box = el3("div", "fnd");
+    box.dataset.finding = finding.id;
+    const fh = el3("div", "fh");
+    fh.append(
+      maybeProducer(w, "b", "", w.t("groups.finding", { id: finding.id }), true),
+      severityPill(finding.severity, w),
+      element4("span", count(w, "session", finding.sessionIds.length))
+    );
+    box.append(fh);
+    box.append(maybeProducer(w, "div", "rec", finding.recommendation, true));
+    const own = el3("div", "own", w.t("groups.finding.owner"));
+    own.append(producerText(w, finding.ownerDue));
+    box.append(own);
+    return box;
+  }
+  function renderSessionList(conversationIds, model, presentation, w) {
+    const byId = new Map(model.sessions.map((s) => [s.conversationId, s]));
+    const list = el3("div", "convs");
+    list.dataset.sessionCount = String(conversationIds.length);
+    for (const id of conversationIds) {
+      const session = byId.get(id);
+      if (session !== void 0)
+        list.append(renderSession(session, model, presentation, w));
+    }
+    return list;
+  }
+  function isException(test) {
+    return test.verdict === "not_met";
+  }
+  function isUnverified2(test) {
+    return test.verdict === "failed" || test.verdict === "unsupported";
+  }
+  function renderSession(session, model, presentation, w) {
+    const names2 = testNames(model, w);
+    const exceptions = session.tests.filter(isException);
+    const unverified = session.tests.filter(isUnverified2);
+    const undecided = session.tests.filter((t) => t.verdict === "not_evaluable");
+    const parts = caseParts(session.conversationId, w);
+    const item = el3("article", "conv session");
+    item.dataset.session = session.conversationId;
+    const head2 = el3("div", "conv-h");
+    head2.append(el3("span", "cid", parts.label));
+    head2.append(
+      exceptions.length > 0 ? wordPill(
+        { word: count(w, "exception", exceptions.length), tone: "bad" },
+        "exceptions"
+      ) : unverified.length > 0 ? wordPill(
+        { word: w.t("groups.session.unverified"), tone: "ne" },
+        "unverified"
+      ) : undecided.length > 0 ? wordPill(
+        { word: w.t("groups.session.undecided"), tone: "ne" },
+        "undecided"
+      ) : session.tests.some((t) => t.verdict === "met") ? wordPill({ word: w.t("groups.session.ok"), tone: "ok" }, "ok") : wordPill(
+        { word: w.t("groups.session.none"), tone: "na" },
+        "none"
+      )
+    );
+    const why = el3("span", "cwhy");
+    (exceptions.length > 0 ? exceptions : unverified.length > 0 ? unverified : undecided).forEach((t, i) => {
+      if (i > 0) why.append(", ");
+      why.append(names2(t.criterionId, "span", ""));
+    });
+    head2.append(why);
+    head2.append(el3("span", "cmodel", parts.model ?? session.day));
+    item.append(head2);
+    const body = el3("div", "conv-slot");
+    item.append(body);
+    lazyBody(body, () => sessionBody(session, model, presentation, w));
+    return item;
+  }
+  function sessionBody(session, model, presentation, w) {
+    const names2 = testNames(model, w);
+    const body = el3("div", "conv-b");
+    body.append(el3("h4", "", w.t("groups.h.test-by-test")));
+    for (const test of session.tests) {
+      const box = el3("div", "ck");
+      box.dataset.crit = test.criterionId;
+      box.dataset.critVerdict = test.verdict;
+      const h = el3("div", "h");
+      h.append(
+        wordPill(
+          ruleWord(
+            test.verdict,
+            judgedOf(test.reportState, test.judgePinDigest),
+            w
+          ),
+          test.verdict
         )
       );
-      host.append(section);
-      return;
+      h.append(names2(test.criterionId, "span", "tname"));
+      if (test.verdict !== "not_applicable") h.append(tierBadge(test.tier, w));
+      if (test.verdict === "failed" || test.verdict === "unsupported")
+        h.append(el3("span", "applic", w.t("groups.unverified-note")));
+      box.append(h);
+      if (test.rationale !== void 0)
+        box.append(
+          el3(
+            "div",
+            "why",
+            judgeNote(test.rationale, test.claim?.verdict ?? test.verdict, w)
+          )
+        );
+      body.append(box);
     }
-    for (const finding of model.findings) {
-      const box = el2("div", "fnd");
-      box.dataset.finding = finding.id;
-      const fh = el2("div", "fh");
-      fh.append(
-        el2("b", "", finding.id),
-        severityPill(finding.severity),
-        element3("span", finding.article),
-        el2("span", "", finding.testName)
+    if (session.tests.every((t) => t.rationale === void 0)) {
+      const gap = el3(
+        "p",
+        "small",
+        notesGap(
+          session.tests.flatMap(
+            (t) => t.claim === void 0 ? [] : [t.reportState]
+          ),
+          w
+        )
       );
-      box.append(fh);
-      const table2 = document.createElement("table");
-      table2.className = "fk";
-      const evRow = document.createElement("tr");
-      evRow.append(
-        element3("th", "Evidence"),
-        element3("td", `${fmt(finding.sessionIds.length)} sessions`)
-      );
-      const recRow = document.createElement("tr");
-      recRow.append(
-        element3("th", "Recommendation"),
-        el2("td", "", finding.recommendation)
-      );
-      const ownerRow = document.createElement("tr");
-      ownerRow.append(
-        element3("th", "Owner \xB7 due"),
-        element3("td", finding.ownerDue)
-      );
-      table2.append(evRow, recRow, ownerRow);
-      box.append(table2);
-      renderSessionList(box, finding.sessionIds, model.sessions);
-      section.append(box);
+      gap.dataset.gaps = "true";
+      body.append(gap);
     }
+    body.append(el3("h4", "", w.t("report.h.conversation")));
+    body.append(renderChat(session.transcript, session.sourceCapsuleId, w));
+    body.append(
+      levelToggle(
+        2,
+        w.t("report.proofs.toggle"),
+        () => sessionProofs(session, model, w),
+        { className: "proofs" }
+      )
+    );
+    return body;
+  }
+  function sessionProofs(session, model, w) {
+    const names2 = testNames(model, w);
+    const box = el3("div", "pf-b");
+    box.dataset.proofsFor = session.conversationId;
+    const dated = session.dated;
+    const dating = dated.basis === "judged" ? [] : [
+      [w.t("groups.pf.dated"), datedText(dated, w), { dated: dated.basis }],
+      ...dated.importedAt === void 0 ? [] : [
+        [
+          w.t("report.pf.imported"),
+          dated.importedAt,
+          { imported: "" }
+        ]
+      ]
+    ];
+    const rows = [
+      [w.t("groups.pf.session"), session.conversationId],
+      ...dating,
+      [w.t("report.pf.judged-sealed"), session.judgedDay, { sealed: "" }],
+      [
+        w.t("report.pf.case-record"),
+        session.sourceCapsuleId === void 0 ? w.t("report.pf.case-record.not-stated") : session.caseFrom === "claims" ? w.t("groups.pf.case-record.from-claims", {
+          record: session.sourceCapsuleId
+        }) : session.sourceCapsuleId
+      ]
+    ];
+    rows.push(...transcriptRows(session.transcript, w));
+    rows.push([w.t("report.pf.result-capsule"), model.capsuleId]);
+    const dl = proofList(rows);
+    dl.dataset.checkIt = session.conversationId;
+    box.append(dl);
+    box.append(el3("h5", "", w.t("groups.pf.h.each-report")));
+    for (const test of session.tests) {
+      const ev = el3("div", "ev");
+      ev.dataset.proofCrit = test.criterionId;
+      const label = names2(test.criterionId, "b", "");
+      label.append(": ");
+      ev.append(label);
+      if (test.verdict === "not_applicable") {
+        ev.append(element4("span", w.t("groups.pf.no-claim")));
+      } else {
+        if (test.reportDigest !== void 0)
+          ev.append(element4("code", test.reportDigest));
+        if (test.contract !== void 0)
+          ev.append(element4("code", test.contract));
+        if (test.judgePinDigest !== void 0)
+          ev.append(
+            element4(
+              "code",
+              w.t("groups.pf.judge-pin", { digest: test.judgePinDigest })
+            )
+          );
+        if (test.rationale !== void 0) {
+          const sealed = el3(
+            "div",
+            "sealed",
+            w.t("groups.pf.rationale", { rationale: test.rationale })
+          );
+          sealed.dataset.rationale = "sealed";
+          ev.append(sealed);
+        }
+        if (test.reportDigest === void 0)
+          ev.append(element4("span", w.t("groups.pf.absent")));
+      }
+      box.append(ev);
+    }
+    return box;
+  }
+  function pinText(model, w) {
+    if (model.runInfo.judgePinDigest !== void 0)
+      return model.runInfo.judgePinDigest;
+    if (!model.runInfo.pinned) return w.t("groups.pin.differs");
+    return pinAbsence(model.runInfo, w) ?? w.t("groups.pin.none");
+  }
+  function renderReportProofs2(host, model, bundle, verified, w) {
+    const section = el3("section", "rp");
+    section.dataset.section = "report-proofs";
+    section.append(
+      levelToggle(
+        2,
+        w.t("groups.rp.toggle"),
+        () => {
+          const box = el3("div", "pf-b");
+          renderObligationDetails(box, model, w);
+          renderQuality(box, model, w);
+          renderWhatRan2(box, model, w);
+          renderVerificationDetails2(box, bundle, verified, w);
+          return box;
+        },
+        { className: "proofs" }
+      )
+    );
     host.append(section);
   }
-  function renderQuality(host, model) {
-    const section = el2("section", "");
-    section.dataset.section = "quality";
-    section.append(el2("h2", "", "4. Quality of judged results"));
+  function renderObligationDetails(host, model, w) {
+    const part = el3("div", "rp-s");
+    part.dataset.section = "obligation-detail";
+    part.append(el3("h3", "", w.t("groups.od.h")));
+    for (const obligation of model.obligations) {
+      const box = el3("div", "obd");
+      box.dataset.obligationDetail = obligation.key;
+      box.dataset.mapped = String(obligation.mapped);
+      box.append(
+        maybeProducer(
+          w,
+          "h5",
+          "",
+          `${obligation.article} \xB7 ${obligation.title}`,
+          obligation.mapped
+        )
+      );
+      box.append(
+        el3(
+          "p",
+          "na",
+          w.t(obligation.mapped ? "groups.od.mapped" : "groups.od.unmapped")
+        )
+      );
+      if (obligation.judgedTerms.length > 0) {
+        const terms = el3("p", "applic", w.t("groups.od.judged-terms"));
+        terms.append(producerText(w, obligation.judgedTerms.join(", ")));
+        box.append(terms);
+      }
+      box.append(maybeProducer(w, "p", "", obligation.method, obligation.mapped));
+      for (const row2 of obligation.rows) {
+        const rowBox = el3("div", "ck");
+        rowBox.dataset.wording = row2.wording.source;
+        const h = el3("div", "h");
+        h.append(
+          maybeProducer(w, "span", "", row2.name, row2.producerName),
+          tierBadge(row2.tier, w)
+        );
+        rowBox.append(h);
+        rowBox.append(
+          el3(
+            "div",
+            "why",
+            row2.wording.source === "sealed" ? w.t("groups.od.wording.sealed", { text: row2.wording.text }) : w.t(
+              row2.wording.source === "mixed" ? "groups.od.wording.mixed" : "groups.od.wording.unstated"
+            )
+          )
+        );
+        if (row2.notEvaluableNote !== void 0)
+          rowBox.append(
+            maybeProducer(w, "div", "ev", row2.notEvaluableNote, true)
+          );
+        box.append(rowBox);
+      }
+      part.append(box);
+    }
+    host.append(part);
+  }
+  function renderQuality(host, model, w) {
+    const part = el3("div", "rp-s");
+    part.dataset.section = "quality";
+    part.append(el3("h3", "", w.t("groups.q.h")));
     const protocol = model.qualityProtocol;
     if (protocol === void 0) {
-      section.append(
-        el2("p", "lede", "No quality protocol declared in this pack.")
-      );
-      host.append(section);
+      part.append(el3("p", "", w.t("groups.q.none")));
+      host.append(part);
       return;
     }
-    section.append(
-      el2(
-        "p",
-        "lede",
-        `Protocol ${protocol.protocol ?? "unspecified"}${protocol.cadence === void 0 ? "" : `, ${protocol.cadence}`}. Recomputed tests are not sampled.`
-      )
+    const line = el3("p", "", w.t("groups.q.protocol"));
+    line.append(
+      protocol.protocol === void 0 ? w.t("groups.q.unspecified") : producerText(w, protocol.protocol)
     );
-    if (protocol.note !== void 0) section.append(el2("p", "na", protocol.note));
-    host.append(section);
+    if (protocol.cadence !== void 0)
+      line.append(", ", producerText(w, protocol.cadence));
+    line.append(w.t("groups.q.tail"));
+    part.append(line);
+    if (protocol.note !== void 0)
+      part.append(maybeProducer(w, "p", "na", protocol.note, true));
+    host.append(part);
   }
-  function renderWhatRan2(host, model) {
-    const section = el2("section", "");
-    section.dataset.section = "methodology";
-    section.append(el2("h2", "", "5. Methodology"));
-    const ran = el2("div", "ran");
-    const field = (label, value) => {
-      const it = el2("div", "it");
-      it.append(el2("div", "k", label), el2("div", "v", value));
-      ran.append(it);
-    };
-    field(
-      "Contract",
-      model.runInfo.contract ?? (model.runInfo.pinned ? "no conversations" : "disagrees across sessions")
-    );
-    field(
-      "Judge pin digest",
-      model.runInfo.judgePinDigest ?? (model.runInfo.pinned ? "no judged sessions cited" : "disagrees across sessions")
-    );
-    field("Sessions", fmt(model.totalSessions));
-    section.append(ran);
-    host.append(section);
-  }
-  function renderObligationDetail(host, obligation) {
-    const details = document.createElement("details");
-    details.dataset.obligationDetail = obligation.key;
-    const summary = document.createElement("summary");
-    summary.textContent = `${obligation.article} \xB7 ${obligation.title}`;
-    details.append(summary);
-    details.dataset.mapped = String(obligation.mapped);
-    details.append(
-      el2(
-        "p",
-        "na",
-        obligation.mapped ? "Article, summary and method: the producer's mapping, not a sealed record." : `The producer's extension does not map this obligation: article, summary and method ${NOT_STATED}.`
-      )
-    );
-    details.append(el2("p", "", obligation.plain));
-    if (obligation.judgedTerms.length > 0)
-      details.append(
-        el2("p", "applic", `Judged terms: ${obligation.judgedTerms.join(", ")}`)
-      );
-    details.append(el2("p", "", obligation.method));
-    for (const row2 of obligation.rows) {
-      const rowBox = el2("div", "ck");
-      rowBox.dataset.wording = row2.wording.source;
-      const h = el2("div", "h");
-      h.append(element3("span", row2.name), tierBadge(row2.tier));
-      rowBox.append(h);
-      rowBox.append(
-        el2(
-          "div",
-          "why",
-          row2.wording.source === "sealed" ? `Wording run (sealed): ${row2.wording.text}` : row2.wording.source === "mixed" ? `Wording ${NOT_STATED}: the cited reports state different wordings.` : `Wording ${NOT_STATED}: no cited report states it.`
+  function renderWhatRan2(host, model, w) {
+    const part = el3("div", "rp-s");
+    part.dataset.section = "methodology";
+    part.append(el3("h3", "", w.t("groups.ran.h")));
+    const dl = proofList([
+      [
+        w.t("groups.ran.contract"),
+        model.runInfo.contract ?? w.t(
+          model.runInfo.pinned ? "groups.ran.contract.none" : "groups.ran.contract.differs"
         )
-      );
-      if (row2.notEvaluableNote !== void 0)
-        rowBox.append(el2("div", "ev", row2.notEvaluableNote));
-      details.append(rowBox);
+      ],
+      [w.t("groups.ran.judge-pin"), pinText(model, w)],
+      [w.t("groups.ran.sessions"), fmt2(model.totalSessions)],
+      ...model.dating.from === void 0 || model.dating.to === void 0 ? [] : [
+        [
+          w.t("groups.ran.period"),
+          span([model.dating.from, model.dating.to], w),
+          { period: "" }
+        ]
+      ],
+      ...model.dating.basis === "judged" ? [] : [
+        [
+          w.t("groups.ran.sealed"),
+          span(model.dating.judgedDays, w),
+          { sealed: "" }
+        ]
+      ],
+      [w.t("report.pf.result-capsule"), model.capsuleId],
+      wordingRow(w)
+    ]);
+    dl.dataset.ran = "true";
+    part.append(dl);
+    const note = datingStatement(model.dating, model.totalSessions, w);
+    if (note !== void 0) {
+      const p = el3("p", "na", note);
+      p.dataset.dateNote = model.dating.basis;
+      part.append(p);
     }
-    host.append(details);
+    host.append(part);
   }
-  function renderObligationDetails(host, model) {
-    const section = el2("section", "");
-    section.dataset.section = "obligation-detail";
-    section.append(el2("h2", "", "Obligation detail"));
-    for (const obligation of model.obligations)
-      renderObligationDetail(section, obligation);
-    host.append(section);
+  function renderVerificationDetails2(host, bundle, verified, w) {
+    const part = el3("div", "rp-s");
+    part.dataset.section = "verification-details";
+    part.append(el3("h3", "", w.t("report.vd.h")));
+    const model = buildVerificationPageModel(bundle, verified);
+    part.append(proofList(verificationRows(model, w)));
+    part.append(el3("p", "", w.t("groups.vd.note")));
+    host.append(part);
   }
-  function renderCompliancePage(result, presentation, _bundle, _verified, root) {
+  var GROUPS_FRAME = {
+    tag: "div",
+    className: "cc",
+    page: "compliance",
+    css: COMPLIANCE_CSS
+  };
+  async function drawGroups(wrapper, result, presentation, bundle, verified, w) {
     const model = buildComplianceModel(result, presentation);
-    const wrapper = el2("div", "cc");
-    wrapper.dataset.page = "compliance";
+    renderHeader(wrapper, model, w);
+    wrapper.append(
+      renderProvenance(
+        await provenanceLines(
+          result.records,
+          model.sessions.flatMap(
+            (s) => s.tests.flatMap((t) => t.claim === void 0 ? [] : [t.claim])
+          ),
+          bundle,
+          verified,
+          w
+        )
+      )
+    );
+    renderSummary(wrapper, model, presentation, w);
+    renderReportProofs2(wrapper, model, bundle, verified, w);
+  }
+
+  // capsule-viewer/ts/src/contract-report.ts
+  var FRAMES = { lines: LINES_FRAME, groups: GROUPS_FRAME };
+  async function renderContractReport(result, input, bundle, verified, root, wording) {
+    const w = await contractReportWords(input.grouping, wording);
+    const frame = FRAMES[input.grouping];
+    const wrapper = document.createElement(frame.tag);
+    wrapper.className = frame.className;
+    wrapper.dataset.page = frame.page;
+    wrapper.dataset.levels = "2";
     const style = document.createElement("style");
-    style.textContent = COMPLIANCE_CSS;
+    style.textContent = frame.css;
     wrapper.append(style);
-    renderHeader(wrapper, model);
-    renderSummary(wrapper, model);
-    renderObligationDetails(wrapper, model);
-    renderTests(wrapper, model);
-    renderFindings(wrapper, model);
-    renderQuality(wrapper, model);
-    renderWhatRan2(wrapper, model);
+    if (input.grouping === "lines")
+      await drawLines(wrapper, result, input.options, bundle, verified, w);
+    else
+      await drawGroups(wrapper, result, input.presentation, bundle, verified, w);
     root.append(wrapper);
+  }
+  function renderOutcomeReportPage(result, options, bundle, verified, root) {
+    return renderContractReport(
+      result,
+      { grouping: "lines", options },
+      bundle,
+      verified,
+      root
+    );
+  }
+  function renderCompliancePage(result, presentation, bundle, verified, root) {
+    return renderContractReport(
+      result,
+      { grouping: "groups", presentation },
+      bundle,
+      verified,
+      root
+    );
   }
 
   // capsule-viewer/ts/src/composed-view.ts
@@ -12328,22 +14941,22 @@ ${body}
     const composed = entry?.composed;
     return composed !== void 0 && !composed.malformed ? composed : void 0;
   }
-  function element4(tag, text2) {
+  function element5(tag, text2) {
     const node = document.createElement(tag);
     if (text2 !== void 0) node.textContent = text2;
     return node;
   }
   function row(cells, header = false) {
-    const tr = element4("tr");
-    for (const cell of cells) tr.append(element4(header ? "th" : "td", cell));
+    const tr = element5("tr");
+    for (const cell of cells) tr.append(element5(header ? "th" : "td", cell));
     return tr;
   }
   function table(name, columns, rows) {
-    const node = element4("table");
+    const node = element5("table");
     node.setAttribute(`data-${name}`, "");
-    const head2 = element4("thead");
+    const head2 = element5("thead");
     head2.append(row(columns, true));
-    const body = element4("tbody");
+    const body = element5("tbody");
     body.append(...rows);
     node.append(head2, body);
     return node;
@@ -12353,12 +14966,12 @@ ${body}
   var claimText = (claim) => claim === void 0 ? NOT_APPLICABLE : claim.findings.length === 0 ? claim.status : `${claim.status} (${claim.findings.join(", ")})`;
   var pairText = (members) => `${members[0]} \u2013 ${members[1]}`;
   function renderDifference(difference, host) {
-    const list = element4("dl");
+    const list = element5("dl");
     list.dataset.pointer = difference.pointer;
-    list.append(element4("dt", difference.pointer));
+    list.append(element5("dt", difference.pointer));
     for (const value of difference.values)
       list.append(
-        element4(
+        element5(
           "dd",
           value.resolved ? `${value.member}: ${JSON.stringify(value.value)}` : `${value.member}: does not resolve`
         )
@@ -12377,35 +14990,35 @@ ${body}
   }
   function renderComposed(model, host, services) {
     const result = model.result;
-    const section = element4("section");
+    const section = element5("section");
     section.dataset.section = "composition";
     section.dataset.module = BUILTIN_MANIFEST_COMPOSED.id;
-    section.append(element4("h2", "Composition"));
-    const status2 = element4("p", `composed/v1 check: ${result.status}`);
+    section.append(element5("h2", "Composition"));
+    const status2 = element5("p", `composed/v1 check: ${result.status}`);
     status2.dataset.compositionStatus = result.status;
     section.append(status2);
     if (result.findings.length > 0)
-      section.append(element4("p", `findings: ${result.findings.join(", ")}`));
+      section.append(element5("p", `findings: ${result.findings.join(", ")}`));
     section.append(
-      element4(
+      element5(
         "p",
         "Composition closure covers the declared members only; it is not completeness of participation."
       )
     );
-    section.append(element4("h3", "Composed digest"));
-    const digest = element4("dl");
+    section.append(element5("h3", "Composed digest"));
+    const digest = element5("dl");
     digest.dataset.composedDigest = result.composedDigest.declared;
     digest.dataset.matches = String(result.composedDigest.matches);
     digest.append(
-      element4("dt", "declared"),
-      element4("dd", result.composedDigest.declared),
-      element4("dt", "recomputed"),
-      element4("dd", result.composedDigest.recomputed || "uncomputable"),
-      element4("dt", "matches"),
-      element4("dd", result.composedDigest.matches ? "yes" : "no")
+      element5("dt", "declared"),
+      element5("dd", result.composedDigest.declared),
+      element5("dt", "recomputed"),
+      element5("dd", result.composedDigest.recomputed || "uncomputable"),
+      element5("dt", "matches"),
+      element5("dd", result.composedDigest.matches ? "yes" : "no")
     );
     section.append(digest);
-    section.append(element4("h3", "Members"));
+    section.append(element5("h3", "Members"));
     section.append(
       table(
         "composition-members",
@@ -12441,7 +15054,7 @@ ${body}
         })
       )
     );
-    section.append(element4("h3", "Observers"));
+    section.append(element5("h3", "Observers"));
     section.append(
       table(
         "composition-observers",
@@ -12454,20 +15067,20 @@ ${body}
       )
     );
     section.append(
-      element4(
+      element5(
         "p",
         "Custody domains are labels declared by whoever composed this block. Identical labels make an agreeing pair redundant; distinct labels do not establish that two observers are independent."
       )
     );
-    section.append(element4("h3", "Composition closure"));
-    const closure2 = element4(
+    section.append(element5("h3", "Composition closure"));
+    const closure2 = element5(
       "p",
       `${result.compositionClosure.status}; missing: ${result.compositionClosure.missing.length === 0 ? "none" : result.compositionClosure.missing.join(", ")}; findings: ${findingsText(result.compositionClosure.findings)}`
     );
     closure2.dataset.closureStatus = result.compositionClosure.status;
     section.append(closure2);
-    section.append(element4("h3", "Joins"));
-    if (result.joins.length === 0) section.append(element4("p", "No joins."));
+    section.append(element5("h3", "Joins"));
+    if (result.joins.length === 0) section.append(element5("p", "No joins."));
     else {
       section.append(
         table(
@@ -12499,7 +15112,7 @@ ${body}
           renderDifference(difference, details);
         section.append(details);
       }
-      section.append(element4("h3", "Agreement"));
+      section.append(element5("h3", "Agreement"));
       section.append(
         table(
           "composition-agreement",
@@ -12632,7 +15245,7 @@ ${body}
   }
 
   // capsule-viewer/ts/src/evidence-graph-view.ts
-  function element5(tag, text2) {
+  function element6(tag, text2) {
     const value = document.createElement(tag);
     if (text2 !== void 0) value.textContent = text2;
     return value;
@@ -12645,23 +15258,23 @@ ${body}
     }
   }
   function appendValue(parent2, label, value) {
-    parent2.append(element5("dt", label));
-    parent2.append(element5("dd", display(value)));
+    parent2.append(element6("dt", label));
+    parent2.append(element6("dd", display(value)));
   }
   function renderTime(value) {
     const zone = zoneStatement(value);
-    const time = element5("span", value);
+    const time = element6("span", value);
     time.dataset.tz = zone;
     if (zone === "not-stated") {
-      const marker = element5("span", " (timezone not stated)");
+      const marker = element6("span", " (timezone not stated)");
       marker.dataset.tzMarker = "not-stated";
       time.append(marker);
     }
     return time;
   }
   function appendTime(parent2, label, value, absent) {
-    parent2.append(element5("dt", label));
-    const cell = element5("dd");
+    parent2.append(element6("dt", label));
+    const cell = element6("dd");
     if (value === void 0) {
       cell.textContent = absent;
       cell.dataset.time = "not-stated";
@@ -12670,17 +15283,41 @@ ${body}
     }
     parent2.append(cell);
   }
-  var recordsWord = (count) => `${count} ${count === 1 ? "record" : "records"}`;
+  var recordsWord = (count2) => `${count2} ${count2 === 1 ? "record" : "records"}`;
+  var BANNER_LINES = {
+    verified: "Contents checked",
+    failed: "Check failed",
+    // The accessible name starts with the visible words (WCAG 2.5.3).
+    verifiedTitle: "Contents checked: bundle verification passed",
+    failedTitle: "Check failed: bundle verification failed"
+  };
   function renderVerificationBanner(root, verified, coverage) {
-    const banner = element5(
-      "p",
-      verified ? coverage.uncheckpointed === 0 ? "Bundle verification passed" : `Bundle verification passed; ${coverage.uncheckpointed} of ${recordsWord(coverage.total)} uncheckpointed` : "Bundle verification failed"
+    const bar = element6("div");
+    bar.className = "cv-shell-bar";
+    const banner = element6(
+      "span",
+      verified ? BANNER_LINES.verified : BANNER_LINES.failed
     );
+    banner.className = "cv-pill";
     banner.dataset.verify = verified ? "verified" : "failed";
     banner.dataset.uncheckpointed = String(coverage.uncheckpointed);
-    root.append(banner);
+    const title = verified ? BANNER_LINES.verifiedTitle : BANNER_LINES.failedTitle;
+    banner.setAttribute("role", "img");
+    banner.setAttribute("aria-label", title);
+    banner.title = title;
+    bar.append(banner);
+    if (verified && coverage.uncheckpointed > 0) {
+      const note = element6(
+        "span",
+        `${coverage.uncheckpointed} of ${recordsWord(coverage.total)} not in the checkpoint`
+      );
+      note.className = "cv-shell-note";
+      note.dataset.uncheckpointedNote = "";
+      bar.append(note);
+    }
+    root.append(bar);
     if (verified) return banner;
-    const refusal = element5(
+    const refusal = element6(
       "p",
       "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed."
     );
@@ -12696,28 +15333,74 @@ ${body}
   };
   function renderUnableToVerify(root, options = {}) {
     root.replaceChildren();
-    const banner = element5("p", UNABLE_TO_VERIFY_LINES.banner);
+    const banner = element6("p", UNABLE_TO_VERIFY_LINES.banner);
     banner.dataset.verify = "unable";
-    const reason = element5("p", UNABLE_TO_VERIFY_LINES.reason);
+    const reason = element6("p", UNABLE_TO_VERIFY_LINES.reason);
     reason.dataset.refusal = "unable-to-verify";
     root.append(banner, reason);
     if (options.verifyCommand === void 0) {
-      root.append(element5("p", UNABLE_TO_VERIFY_LINES.noCommand));
+      root.append(element6("p", UNABLE_TO_VERIFY_LINES.noCommand));
       return;
     }
-    const command = element5("code", options.verifyCommand);
+    const command = element6("code", options.verifyCommand);
     command.dataset.verifyCommand = "";
-    const block = element5("pre");
+    const block = element6("pre");
     block.append(command);
-    root.append(element5("p", UNABLE_TO_VERIFY_LINES.command), block);
+    root.append(element6("p", UNABLE_TO_VERIFY_LINES.command), block);
   }
-  function styleBanner(banner, verified) {
-    banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
+  function checkedSummaryLine(verified, model) {
+    const total = model.checks.length;
+    const failed2 = model.checks.filter((c) => c.status === "fail").length;
+    const passed = model.checks.filter((c) => c.status === "pass").length;
+    const notRun = total - failed2 - passed;
+    const pageFailed = model.checkLists.failed.filter(
+      (id) => !NUMBERED_CHECK_GROUND.has(id)
+    ).length;
+    const notRunNote = notRun > 0 ? `, ${notRun} not run` : "";
+    const leads = [];
+    if (failed2 > 0)
+      leads.push(`${failed2} of ${total} checks failed${notRunNote}`);
+    if (pageFailed > 0)
+      leads.push(
+        `${pageFailed} ${pageFailed === 1 ? "check" : "checks"} on this page failed`
+      );
+    if (failed2 === 0 && pageFailed === 0)
+      leads.push(
+        verified ? `${passed} of ${total} checks passed${notRunNote}` : SUMMARY_NOT_VERIFIED
+      );
+    if (failed2 === 0 && (pageFailed > 0 || !verified) && notRun > 0)
+      leads.push(`${notRun} of ${total} checks not run`);
+    const parts = [...leads, recordsWord(model.records.length)];
+    const signatures = model.checkLists.notChecked.filter(
+      (id) => SIGNATURE_CHECKS.has(id)
+    ).length;
+    const others = model.checkLists.notChecked.length - signatures;
+    if (signatures > 0) parts.push("signatures not checked here");
+    if (others > 0)
+      parts.push(
+        `${others} other ${others === 1 ? "check" : "checks"} not run here`
+      );
+    return parts.join(" \xB7 ");
   }
+  var SUMMARY_NOT_VERIFIED = "the bundle did not verify";
+  var NUMBERED_CHECK_GROUND = /* @__PURE__ */ new Set([
+    "record-digests",
+    "record-rules",
+    "closure",
+    "range",
+    "membership"
+  ]);
+  var SIGNATURE_CHECKS = /* @__PURE__ */ new Set([
+    "checkpoint-signature",
+    "producer-signatures",
+    "cited-signers",
+    "countersignatures"
+  ]);
+  var CHECKED_SECTION_TITLE = "How this page was checked";
   function renderPresentationHeader(root, bundle) {
     const presentation = readPresentationBlock(bundle);
     if (presentation === void 0) return;
-    const header = element5("header");
+    const header = element6("header");
     header.dataset.presentation = "header";
     if (presentation.logoDataUrl !== void 0) {
       const logo = document.createElement("img");
@@ -12726,12 +15409,12 @@ ${body}
       header.append(logo);
     }
     if (presentation.producerDisplayName !== void 0) {
-      const name = element5("span", presentation.producerDisplayName);
+      const name = element6("span", presentation.producerDisplayName);
       name.dataset.presentationField = "producer-display-name";
       header.append(name);
     }
     if (presentation.title !== void 0) {
-      const title = element5("strong", presentation.title);
+      const title = element6("strong", presentation.title);
       title.dataset.presentationField = "title";
       header.append(title);
     }
@@ -12754,29 +15437,29 @@ ${body}
     }
   }
   function renderSignerStatement(item, signer, statement) {
-    const label = element5("p", `${signer}'s statement of what it recomputed:`);
+    const label = element6("p", `${signer}'s statement of what it recomputed:`);
     item.append(label);
-    const checks = element5("ul");
+    const checks = element6("ul");
     checks.dataset.countersignStatement = "checks";
     statement.checks.forEach((check) => {
-      const row2 = element5("li", `${check.name}: ${check.result}`);
+      const row2 = element6("li", `${check.name}: ${check.result}`);
       row2.dataset.checkResult = check.result;
       checks.append(row2);
     });
     item.append(checks);
     if (statement.receipt === "unverified") {
-      const receipt = element5("p", "receipt present, not checked by this viewer");
+      const receipt = element6("p", "receipt present, not checked by this viewer");
       receipt.dataset.countersignReceipt = "unverified";
       item.append(receipt);
     }
   }
   function renderStamps(host, stamps) {
-    host.append(element5("h4", "Countersignatures"));
-    const list = element5("ul");
+    host.append(element6("h4", "Countersignatures"));
+    const list = element6("ul");
     stamps.forEach((stamp) => {
-      const item = element5("li");
+      const item = element6("li");
       item.dataset.stampKind = stamp.kind;
-      item.append(element5("span", stampText(stamp)));
+      item.append(element6("span", stampText(stamp)));
       if (stamp.kind === "resolved") {
         renderSignerStatement(item, stamp.name, stamp.statement);
       } else if (stamp.kind === "not-independent") {
@@ -12789,14 +15472,14 @@ ${body}
     host.append(list);
   }
   function renderReceipts(host, receipts2) {
-    host.append(element5("h4", "Receipts"));
+    host.append(element6("h4", "Receipts"));
     if (receipts2.length === 0) {
-      host.append(element5("p", "no receipts disclosed"));
+      host.append(element6("p", "no receipts disclosed"));
       return;
     }
-    const list = element5("ul");
+    const list = element6("ul");
     receipts2.forEach((receipt) => {
-      const item = element5(
+      const item = element6(
         "li",
         `${receipt.witness} \xB7 ${RECEIPT_GRADE_DISPLAY[receipt.grade]} \xB7 `
       );
@@ -12812,35 +15495,35 @@ ${body}
     unverified: "membership unverified"
   });
   function renderCheckpointCoverage(host, records, uncheckpointed, coverage) {
-    host.append(element5("h4", "Checkpoint coverage"));
+    host.append(element6("h4", "Checkpoint coverage"));
     if (coverage.status === "established") {
-      const count = element5(
+      const count2 = element6(
         "p",
         `${recordsWord(uncheckpointed)} uncheckpointed of ${recordsWord(records.length)} supplied`
       );
-      count.dataset.coverage = "uncheckpointed";
-      count.dataset.count = String(uncheckpointed);
-      host.append(count);
+      count2.dataset.coverage = "uncheckpointed";
+      count2.dataset.count = String(uncheckpointed);
+      host.append(count2);
     } else {
-      const line = element5("p", `coverage not established: ${coverage.reason}`);
+      const line = element6("p", `coverage not established: ${coverage.reason}`);
       line.dataset.coverage = "not-established";
       line.dataset.claim = coverage.status;
       host.append(line);
       if (coverage.status === "withheld") return;
     }
     host.append(renderCoverageStatusCounts(records));
-    const details = element5("details");
+    const details = element6("details");
     details.dataset.records = "coverage-detail";
-    const summary = element5(
+    const summary = element6(
       "summary",
       `${recordsWord(records.length)}, by capsule id`
     );
     details.append(summary);
-    const list = element5("ul");
+    const list = element6("ul");
     list.dataset.records = "coverage";
     for (const record of records) {
-      const item = element5("li", `${record.capsuleId} \xB7 `);
-      const status2 = element5("span", COVERAGE_LABEL[record.status]);
+      const item = element6("li", `${record.capsuleId} \xB7 `);
+      const status2 = element6("span", COVERAGE_LABEL[record.status]);
       status2.dataset.recordStatus = record.status;
       status2.className = `seal-${record.status}`;
       item.dataset.capsuleId = record.capsuleId;
@@ -12855,24 +15538,24 @@ ${body}
     for (const record of records) {
       counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
     }
-    const list = element5("ul");
+    const list = element6("ul");
     list.dataset.records = "coverage-summary";
     for (const status2 of Object.keys(COVERAGE_LABEL)) {
-      const count = counts.get(status2) ?? 0;
-      if (count === 0) continue;
-      const item = element5(
+      const count2 = counts.get(status2) ?? 0;
+      if (count2 === 0) continue;
+      const item = element6(
         "li",
-        `${recordsWord(count)} ${COVERAGE_LABEL[status2]}`
+        `${recordsWord(count2)} ${COVERAGE_LABEL[status2]}`
       );
       item.dataset.coverageStatus = status2;
-      item.dataset.count = String(count);
+      item.dataset.count = String(count2);
       list.append(item);
     }
     return list;
   }
   function renderCompletenessStatement(host, completeness2) {
-    host.append(element5("h4", "Completeness statement"));
-    const details = element5("dl");
+    host.append(element6("h4", "Completeness statement"));
+    const details = element6("dl");
     appendValue(
       details,
       "closure depth",
@@ -12892,13 +15575,13 @@ ${body}
     host.append(details);
   }
   function renderChecks(host, checks) {
-    host.append(element5("h4", "The ten checks"));
-    const list = element5("ol");
+    host.append(element6("h4", "The ten checks"));
+    const list = element6("ol");
     checks.forEach((check) => {
-      const item = element5("li");
+      const item = element6("li");
       item.dataset.checkStatus = check.status;
-      item.append(element5("strong", check.name));
-      item.append(element5("span", `: ${check.result}`));
+      item.append(element6("strong", check.name));
+      item.append(element6("span", `: ${check.result}`));
       list.append(item);
     });
     host.append(list);
@@ -12906,7 +15589,7 @@ ${body}
   function renderExtensions(host, rows, refusals) {
     renderExtensionTable(host, rows);
     for (const notice of refusals) {
-      const line = element5("p", notice.line);
+      const line = element6("p", notice.line);
       line.dataset.presentationRefused = notice.id;
       line.dataset.refusal = notice.reason;
       host.append(line);
@@ -12914,17 +15597,17 @@ ${body}
   }
   function renderExtensionTable(host, rows) {
     if (rows.length === 0) return;
-    host.append(element5("h4", "Extensions"));
-    const table2 = element5("table");
+    host.append(element6("h4", "Extensions"));
+    const table2 = element6("table");
     table2.dataset.extensions = "";
-    const head2 = element5("tr");
+    const head2 = element6("tr");
     for (const label of ["extension", "integrity", "semantics"])
-      head2.append(element5("th", label));
-    const thead = element5("thead");
+      head2.append(element6("th", label));
+    const thead = element6("thead");
     thead.append(head2);
-    const body = element5("tbody");
+    const body = element6("tbody");
     for (const row2 of rows) {
-      const tr = element5("tr");
+      const tr = element6("tr");
       tr.dataset.extensionId = row2.id;
       tr.dataset.integrity = row2.integrity;
       tr.dataset.semantics = row2.refusal !== void 0 ? "refused" : row2.interpreter === void 0 ? "uninterpreted" : "interpreted";
@@ -12933,9 +15616,9 @@ ${body}
         tr.dataset.refusal = row2.refusal.reason;
       }
       tr.append(
-        element5("td", row2.id),
-        element5("td", row2.integrity),
-        element5("td", row2.semantics)
+        element6("td", row2.id),
+        element6("td", row2.integrity),
+        element6("td", row2.semantics)
       );
       body.append(tr);
     }
@@ -12950,11 +15633,11 @@ ${body}
     ];
     for (const [which, heading, ids] of groups) {
       if (ids.length === 0) continue;
-      host.append(element5("h4", heading));
-      const list = element5("ul");
+      host.append(element6("h4", heading));
+      const list = element6("ul");
       list.dataset.checks = which;
       for (const id of ids) {
-        const item = element5(
+        const item = element6(
           "li",
           verificationCheckWords(
             id,
@@ -12967,32 +15650,32 @@ ${body}
       }
       host.append(list);
       if (which === "not-checked") {
-        const pointer = element5("p", FULL_VERIFIER_LINE);
+        const pointer = element6("p", FULL_VERIFIER_LINE);
         pointer.dataset.checks = "full-verifier";
         host.append(pointer);
         if (verifierHint !== void 0 && verifierHint !== "") {
-          const hint = element5("pre", verifierHint);
+          const hint = element6("pre", verifierHint);
           hint.dataset.verifierHint = "";
           host.append(hint);
         }
       }
     }
-    const scope = element5("p", CHECKS_SCOPE_LINE);
+    const scope = element6("p", CHECKS_SCOPE_LINE);
     scope.dataset.checks = "scope";
     host.append(scope);
   }
   async function renderVerificationPage(root, context, styled, applied, refused, citedSigners, verifierHint) {
     const { bundle, verification: verified, countersigners } = context;
-    const section = element5("section");
+    const section = element6("section");
     section.dataset.page = "verification";
     let page = section;
     if (styled) {
       section.className = "oi oi-vp";
-      page = element5("div");
+      page = element6("div");
       page.className = "sec";
       section.append(page);
     }
-    page.append(element5("h2", "Verification"));
+    page.append(element6("h2", "Verification"));
     const stamps = await classifyCountersignatures(
       context.countersignatures.map((entry) => entry.value),
       verified.bundleDigest,
@@ -13003,14 +15686,14 @@ ${body}
       stamps,
       citedSigners
     });
-    const summary = element5("dl");
+    const summary = element6("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
     appendValue(summary, "checkpoint root", model.checkpointRoot ?? "absent");
     appendValue(summary, "checkpoint size", model.checkpointSize ?? "absent");
     page.append(summary);
     renderReceipts(page, model.receipts);
     if (model.selfWitnessed) {
-      const witness = element5(
+      const witness = element6(
         "p",
         "self-witnessed: no transparency-service receipt"
       );
@@ -13028,8 +15711,20 @@ ${body}
     renderChecks(page, model.checks);
     renderExtensions(page, model.extensions, model.presentationRefusals);
     renderCheckLists(page, model.checkLists, verifierHint);
-    page.append(element5("p", model.verifyIndependentlyLine));
-    root.append(section);
+    page.append(element6("p", model.verifyIndependentlyLine));
+    const folded = document.createElement("details");
+    folded.className = "cv-checked";
+    folded.dataset.checked = "";
+    folded.open = !bundleVerified(verified);
+    const heading = element6("summary");
+    heading.append(
+      element6("strong", CHECKED_SECTION_TITLE),
+      document.createTextNode(
+        ` \xB7 ${checkedSummaryLine(bundleVerified(verified), model)}`
+      )
+    );
+    folded.append(heading, section);
+    root.append(folded);
   }
   function metRate(report) {
     const required = report.outcomes.filter(
@@ -13042,13 +15737,13 @@ ${body}
     return `met rate ${passed}/${required.length}`;
   }
   function renderCalibration(calibration) {
-    const section = element5("section");
-    section.append(element5("h2", "Human check"));
+    const section = element6("section");
+    section.append(element6("h2", "Human check"));
     if (calibration === void 0) {
-      section.append(element5("p", "no human-check data"));
+      section.append(element6("p", "no human-check data"));
       return section;
     }
-    const details = element5("dl");
+    const details = element6("dl");
     appendValue(details, "confusion matrix", calibration.confusion);
     appendCount(details, "agreement", calibration.agreement);
     appendCount(details, "corrected rate", calibration.correctedRate);
@@ -13056,26 +15751,26 @@ ${body}
     section.append(details);
     return section;
   }
-  function appendCount(parent2, label, count) {
-    parent2.append(element5("dt", label));
-    const cell = element5("dd");
-    if (count === void 0) {
+  function appendCount(parent2, label, count2) {
+    parent2.append(element6("dt", label));
+    const cell = element6("dd");
+    if (count2 === void 0) {
       cell.textContent = "not stated";
       cell.dataset.count = "not-stated";
-    } else if ("rate" in count) {
+    } else if ("rate" in count2) {
       cell.textContent = "rate given, k and n not stated";
       cell.dataset.count = "not-stated";
     } else {
-      cell.textContent = `${count.k} of ${count.n}`;
-      cell.dataset.k = String(count.k);
-      cell.dataset.n = String(count.n);
+      cell.textContent = `${count2.k} of ${count2.n}`;
+      cell.dataset.k = String(count2.k);
+      cell.dataset.n = String(count2.n);
     }
     parent2.append(cell);
   }
-  function renderProvenance(capsuleId, coordinates, times) {
-    const panel = element5("section");
-    panel.append(element5("h4", "Provenance"));
-    const details = element5("dl");
+  function renderProvenance2(capsuleId, coordinates, times) {
+    const panel = element6("section");
+    panel.append(element6("h4", "Provenance"));
+    const details = element6("dl");
     appendValue(details, "capsule ID", capsuleId);
     if (times.provenanceMode !== void 0)
       appendValue(details, "provenance", times.provenanceMode);
@@ -13086,8 +15781,8 @@ ${body}
       "action time not stated"
     );
     appendTime(details, "seal time", times.sealTime, "seal time not stated");
-    details.append(element5("dt", "seal status"));
-    const seal = element5(
+    details.append(element6("dt", "seal status"));
+    const seal = element6(
       "dd",
       coordinates === void 0 ? "uncheckpointed" : "checkpointed"
     );
@@ -13103,20 +15798,20 @@ ${body}
     return panel;
   }
   function renderJudgment(judgment) {
-    const item = element5("li");
-    item.append(element5("strong", `${judgment.axisId}: ${judgment.status}`));
-    item.append(element5("p", judgment.rationale));
-    item.append(element5("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
+    const item = element6("li");
+    item.append(element6("strong", `${judgment.axisId}: ${judgment.status}`));
+    item.append(element6("p", judgment.rationale));
+    item.append(element6("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
     return item;
   }
   function renderAct(act) {
-    const section = element5("section");
-    section.append(element5("h4", `Turn ${act.turnIdx}`));
+    const section = element6("section");
+    section.append(element6("h4", `Turn ${act.turnIdx}`));
     if (act.agentInput !== void 0)
-      section.append(element5("pre", display(act.agentInput)));
+      section.append(element6("pre", display(act.agentInput)));
     if (act.agentOutput !== void 0)
-      section.append(element5("pre", display(act.agentOutput)));
-    section.append(renderProvenance(act.capsuleId, act.logCoordinates, act));
+      section.append(element6("pre", display(act.agentOutput)));
+    section.append(renderProvenance2(act.capsuleId, act.logCoordinates, act));
     return section;
   }
   function object12(value) {
@@ -13129,9 +15824,9 @@ ${body}
         agent_input_digest: act.agentInputDigest,
         agent_output_digest: act.agentOutputDigest
       });
-      const evidence = element5("section");
-      evidence.append(element5("h4", "Undisclosed payload evidence"));
-      const details = element5("dl");
+      const evidence = element6("section");
+      evidence.append(element6("h4", "Undisclosed payload evidence"));
+      const details = element6("dl");
       appendValue(details, "capsule ID", act.capsuleId);
       for (const field of ["agent_input_digest", "agent_output_digest"]) {
         if (typeof committed[field] === "string")
@@ -13143,7 +15838,7 @@ ${body}
         ["agent_output", act.agentOutputDisclosure]
       ]) {
         if (state !== "disclosure_mismatch") continue;
-        const note = element5(
+        const note = element6(
           "p",
           `${field}: the disclosed value does not match the committed digest and is withheld`
         );
@@ -13155,36 +15850,36 @@ ${body}
   }
   function renderCase(caseNode, host) {
     host.replaceChildren();
-    host.append(element5("h3", `Case ${caseNode.caseId}`));
-    const judgments = element5("ul");
+    host.append(element6("h3", `Case ${caseNode.caseId}`));
+    const judgments = element6("ul");
     caseNode.judgments.forEach(
       (judgment) => judgments.append(renderJudgment(judgment))
     );
-    host.append(element5("h4", "Axis judgments"), judgments);
-    host.append(element5("h4", "Disclosed transcript"));
+    host.append(element6("h4", "Axis judgments"), judgments);
+    host.append(element6("h4", "Disclosed transcript"));
     caseNode.acts.forEach((act) => host.append(renderAct(act)));
     renderWithheldActs(caseNode.acts, host);
   }
   function renderReport(report, host, _records) {
     host.replaceChildren();
-    const heading = element5("h2", "Cases for ");
+    const heading = element6("h2", "Cases for ");
     heading.append(renderTime(report.date));
     host.append(heading);
-    const outcomes = element5("ul");
+    const outcomes = element6("ul");
     report.outcomes.forEach((outcome) => {
       outcomes.append(
-        element5(
+        element6(
           "li",
           `${outcome.outcomeId} (${outcome.role}): ${outcome.aggregate ?? "unrated"}`
         )
       );
     });
-    host.append(element5("h3", "Outcome rollup"), outcomes);
+    host.append(element6("h3", "Outcome rollup"), outcomes);
     renderWithheldActs(report.withheldActs, host);
-    const cases = element5("section");
-    const detail = element5("section");
+    const cases = element6("section");
+    const detail = element6("section");
     report.cases.forEach((caseNode) => {
-      const item = element5(
+      const item = element6(
         "button",
         `${caseNode.taskId}, trial ${caseNode.trial}: ${caseNode.aggregate ?? "unrated"}`
       );
@@ -13196,18 +15891,18 @@ ${body}
     host.append(
       cases,
       detail,
-      renderProvenance(report.capsuleId, report.logCoordinates, report)
+      renderProvenance2(report.capsuleId, report.logCoordinates, report)
     );
   }
   function renderCitation(citation) {
-    const section = element5("section");
+    const section = element6("section");
     section.append(
-      renderProvenance(citation.capsuleId, citation.logCoordinates, citation)
+      renderProvenance2(citation.capsuleId, citation.logCoordinates, citation)
     );
     if (citation.disclosure === "disclosed") {
-      section.append(element5("pre", display(citation.disclosedPayload)));
+      section.append(element6("pre", display(citation.disclosedPayload)));
     } else {
-      const note = element5(
+      const note = element6(
         "p",
         citation.disclosure === "disclosure_mismatch" ? "withheld: the disclosed value does not match the committed digest" : "withheld"
       );
@@ -13218,33 +15913,33 @@ ${body}
   }
   function renderReportRow(row2, host) {
     host.replaceChildren();
-    host.append(element5("h3", row2.label));
-    const status2 = element5("p", row2.status.replaceAll("_", " "));
+    host.append(element6("h3", row2.label));
+    const status2 = element6("p", row2.status.replaceAll("_", " "));
     status2.dataset.rowStatus = row2.status;
     host.append(status2);
-    if (row2.reason !== void 0) host.append(element5("p", row2.reason));
-    host.append(element5("h4", "Evidence"));
+    if (row2.reason !== void 0) host.append(element6("p", row2.reason));
+    host.append(element6("h4", "Evidence"));
     if (row2.citations.length === 0) {
-      host.append(element5("p", "no citation"));
+      host.append(element6("p", "no citation"));
     } else {
       row2.citations.forEach((citation) => host.append(renderCitation(citation)));
     }
   }
   function renderReportRowsTable(reportRows, root) {
-    const section = element5("section");
+    const section = element6("section");
     section.dataset.page = "report-rows";
-    section.append(element5("h1", reportRows.title ?? "Report"));
+    section.append(element6("h1", reportRows.title ?? "Report"));
     const table2 = document.createElement("table");
-    const detail = element5("section");
+    const detail = element6("section");
     reportRows.rows.forEach((row2) => {
       const tr = document.createElement("tr");
       const labelCell = document.createElement("td");
-      const button = element5("button", row2.label);
+      const button = element6("button", row2.label);
       button.setAttribute("type", "button");
       button.dataset.rowId = row2.rowId;
       button.addEventListener("click", () => renderReportRow(row2, detail));
       labelCell.append(button);
-      const statusCell = element5("td", row2.status.replaceAll("_", " "));
+      const statusCell = element6("td", row2.status.replaceAll("_", " "));
       statusCell.dataset.rowStatus = row2.status;
       tr.append(labelCell, statusCell);
       table2.append(tr);
@@ -13252,7 +15947,7 @@ ${body}
     section.append(
       table2,
       detail,
-      renderProvenance(
+      renderProvenance2(
         reportRows.capsuleId,
         reportRows.logCoordinates,
         reportRows
@@ -13262,12 +15957,12 @@ ${body}
   }
   function renderCitedMember(host, field, resolution, committed) {
     if (resolution.state !== "disclosed" && committed === void 0) return;
-    host.append(element5("h5", field));
+    host.append(element6("h5", field));
     if (resolution.state === "disclosed") {
-      host.append(element5("pre", display(resolution.payload)));
+      host.append(element6("pre", display(resolution.payload)));
       return;
     }
-    const note = element5(
+    const note = element6(
       "p",
       resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
     );
@@ -13275,10 +15970,10 @@ ${body}
     host.append(note);
   }
   function renderCitedRecord(record, records, host) {
-    const section = element5("section");
+    const section = element6("section");
     section.dataset.citedRecord = record.capsuleId;
     section.append(
-      renderProvenance(record.capsuleId, record.logCoordinates, record)
+      renderProvenance2(record.capsuleId, record.logCoordinates, record)
     );
     renderCitedMember(
       section,
@@ -13293,22 +15988,22 @@ ${body}
       record.agentOutputDigest
     );
     if (record.cites.length > 0) {
-      section.append(element5("h5", "Cites"));
+      section.append(element6("h5", "Cites"));
       renderCitationList(record.cites, records, section);
     }
     host.append(section);
   }
   function renderCitationList(ids, records, host) {
-    const list = element5("ul");
-    const detail = element5("section");
+    const list = element6("ul");
+    const detail = element6("section");
     for (const id of ids) {
-      const item = element5("li");
+      const item = element6("li");
       const target = records.get(id);
       if (target === void 0) {
         item.textContent = `${id} \xB7 not in this bundle`;
         item.dataset.citation = "missing";
       } else {
-        const button = element5("button", id);
+        const button = element6("button", id);
         button.setAttribute("type", "button");
         button.dataset.citedId = id;
         button.addEventListener("click", () => {
@@ -13328,30 +16023,30 @@ ${body}
       (entry) => entry.field === field
     );
     if (mismatch === void 0) return void 0;
-    const marker = element5("span", "count mismatch");
+    const marker = element6("span", "count mismatch");
     marker.dataset.countMismatch = field;
     marker.dataset.stated = String(mismatch.stated);
     marker.dataset.recomputed = String(mismatch.recomputed);
     return marker;
   }
   function appendCloseState(parent2, close, tag) {
-    const cell = element5(tag, close.state);
+    const cell = element6(tag, close.state);
     cell.dataset.closeState = close.state;
     cell.dataset.closeDerivation = close.derivation;
     cell.dataset.assertedState = close.asserted;
     if (close.stateMismatch) {
-      const marker = element5("span", "state mismatch");
+      const marker = element6("span", "state mismatch");
       marker.dataset.stateMismatch = "close_state";
       marker.dataset.asserted = close.asserted;
       marker.dataset.recomputed = close.state;
       cell.append(" ", marker);
     } else if (close.derivation === "producer-asserted") {
-      const marker = element5("span", "producer-asserted");
+      const marker = element6("span", "producer-asserted");
       marker.dataset.producerAsserted = "close_state";
       cell.append(" ", marker);
     }
     if (close.peerRefMismatch) {
-      const marker = element5("span", "peer_close_ref carries no such link");
+      const marker = element6("span", "peer_close_ref carries no such link");
       marker.dataset.peerRefMismatch = "peer_close_ref";
       cell.append(" ", marker);
     }
@@ -13359,18 +16054,18 @@ ${body}
     return cell;
   }
   function renderClose(close, result, host) {
-    host.append(element5("h4", "Close"));
-    const details = element5("dl");
+    host.append(element6("h4", "Close"));
+    const details = element6("dl");
     if (close.period !== void 0)
       appendValue(
         details,
         "period",
         `${close.period.start} \u2192 ${close.period.end}`
       );
-    details.append(element5("dt", "state"));
+    details.append(element6("dt", "state"));
     appendCloseState(details, close, "dd");
-    details.append(element5("dt", "derivation"));
-    const derivation = element5(
+    details.append(element6("dt", "derivation"));
+    const derivation = element6(
       "dd",
       close.derivation === "recomputed" ? `recomputed from ${close.links.length} counterparty ${close.links.length === 1 ? "link" : "links"} to the cited Close in this bundle${close.ignored.length === 0 ? "" : ` (${close.ignored.length} other ${close.ignored.length === 1 ? "link" : "links"} ignored)`}` : "producer-asserted: the cited Close is not a record in this bundle, so its links could not be read"
     );
@@ -13379,8 +16074,8 @@ ${body}
     if (close.peer !== void 0) appendValue(details, "peer", close.peer);
     if (close.bookId !== void 0) appendValue(details, "book", close.bookId);
     if (close.keyId !== void 0) {
-      details.append(element5("dt", "signer"));
-      const signer = element5(
+      details.append(element6("dt", "signer"));
+      const signer = element6(
         "dd",
         close.keyVerified === true ? `${close.keyId} (verified)` : `${close.keyId} \xB7 ${UNVERIFIED_KEY_LABEL}`
       );
@@ -13388,17 +16083,17 @@ ${body}
       details.append(signer);
     }
     host.append(details);
-    host.append(element5("h5", "Cited Close"));
+    host.append(element6("h5", "Cited Close"));
     renderCitationList([close.closeRef], result.records, host);
     if (close.peerCloseRef !== void 0) {
-      host.append(element5("h5", "Peer record"));
+      host.append(element6("h5", "Peer record"));
       renderCitationList([close.peerCloseRef], result.records, host);
     }
     if (close.links.length > 0) {
-      host.append(element5("h5", "Links to the cited Close"));
-      const list = element5("ul");
+      host.append(element6("h5", "Links to the cited Close"));
+      const list = element6("ul");
       for (const link of close.links) {
-        const item = element5(
+        const item = element6(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 signer ${link.keyId} (verified)`
         );
@@ -13409,10 +16104,10 @@ ${body}
       host.append(list);
     }
     if (close.ignored.length > 0) {
-      host.append(element5("h5", "Links ignored (not from the counterparty)"));
-      const list = element5("ul");
+      host.append(element6("h5", "Links ignored (not from the counterparty)"));
+      const list = element6("ul");
       for (const link of close.ignored) {
-        const item = element5(
+        const item = element6(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 ${link.reason}`
         );
@@ -13425,7 +16120,7 @@ ${body}
   }
   function appendVerdict(parent2, claim) {
     const shown2 = claim.failed ? "failed" : claim.support === "supported" ? claim.verdict : "unsupported";
-    const cell = element5(parent2.tagName === "TR" ? "td" : "dd", shown2);
+    const cell = element6(parent2.tagName === "TR" ? "td" : "dd", shown2);
     cell.dataset.verdict = shown2;
     cell.dataset.support = claim.support;
     if (claim.failed) {
@@ -13438,7 +16133,7 @@ ${body}
   }
   function appendSufficiency(parent2, claim) {
     const shown2 = claim.failed ? "failed" : claim.sufficiency;
-    const cell = element5(parent2.tagName === "TR" ? "td" : "dd", shown2);
+    const cell = element6(parent2.tagName === "TR" ? "td" : "dd", shown2);
     cell.dataset.sufficiency = shown2;
     if (claim.failed) {
       cell.dataset.statedSufficiency = claim.sufficiency;
@@ -13449,24 +16144,24 @@ ${body}
   }
   function renderClaim(claim, result, host) {
     host.replaceChildren();
-    host.append(element5("h3", `Claim ${claim.id}`));
-    const details = element5("dl");
+    host.append(element6("h3", `Claim ${claim.id}`));
+    const details = element6("dl");
     appendValue(details, "contract", claim.contractRef);
     appendValue(details, "requirement", claim.requirementRef);
-    details.append(element5("dt", "type"));
-    const type = element5("dd", CLAIM_TYPE_LABEL(claim));
+    details.append(element6("dt", "type"));
+    const type = element6("dd", CLAIM_TYPE_LABEL(claim));
     type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
     if (!claim.recognized) type.className = "claim-unrecognized";
     details.append(type);
     appendValue(details, "tier", claim.tier);
     appendValue(details, "grade", claim.grade);
-    details.append(element5("dt", "sufficiency"));
+    details.append(element6("dt", "sufficiency"));
     appendSufficiency(details, claim);
-    details.append(element5("dt", "verdict"));
+    details.append(element6("dt", "verdict"));
     appendVerdict(details, claim);
     host.append(details);
     if (claim.failed) {
-      const note = element5(
+      const note = element6(
         "p",
         `failed: ${claim.failure ?? "verification failed"}; sufficiency and verdict withheld`
       );
@@ -13475,15 +16170,15 @@ ${body}
     }
     if (claim.close !== void 0) renderClose(claim.close, result, host);
     if (claim.support === "unsupported") {
-      const note = element5(
+      const note = element6(
         "p",
         claim.missing.length === 0 ? "unsupported: this claim cites no evidence" : `unsupported: cited evidence not in this bundle: ${claim.missing.join(", ")}`
       );
       note.dataset.claimMissing = String(claim.missing.length);
       host.append(note);
     }
-    host.append(element5("h4", "Presentation"));
-    const carrier = element5("dl");
+    host.append(element6("h4", "Presentation"));
+    const carrier = element6("dl");
     appendValue(carrier, "carrier", claim.presentation.kind);
     appendValue(carrier, "status", claim.presentation.status);
     if (claim.presentation.summary !== void 0)
@@ -13492,7 +16187,7 @@ ${body}
       appendValue(carrier, "narrative", claim.presentation.narrative);
     host.append(carrier);
     if (claim.presentation.evidence !== void 0) {
-      host.append(element5("h5", "Carrier evidence"));
+      host.append(element6("h5", "Carrier evidence"));
       const list = renderCitationList(
         claim.presentation.evidence,
         result.records,
@@ -13500,22 +16195,22 @@ ${body}
       );
       list.dataset.carrierEvidence = String(claim.presentation.evidence.length);
     }
-    host.append(element5("h4", "Proofs"));
+    host.append(element6("h4", "Proofs"));
     if (claim.proofs.length === 0) {
-      host.append(element5("p", "no proof cited"));
+      host.append(element6("p", "no proof cited"));
     } else {
-      const proofs = element5("ul");
+      const proofs = element6("ul");
       for (const proof of claim.proofs)
         proofs.append(
-          element5("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
+          element6("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
         );
       host.append(proofs);
     }
-    host.append(element5("h4", "Evidence"));
+    host.append(element6("h4", "Evidence"));
     for (const ref of claim.evidence) {
       const record = result.records.get(ref.digest);
       if (record === void 0) {
-        const missing = element5("p", `${ref.digest} \xB7 not in this bundle`);
+        const missing = element6("p", `${ref.digest} \xB7 not in this bundle`);
         missing.dataset.evidence = "missing";
         host.append(missing);
       } else {
@@ -13529,10 +16224,10 @@ ${body}
     ["notEvaluable", "not evaluable"]
   ];
   function renderResultPage(result, root) {
-    const section = element5("section");
+    const section = element6("section");
     section.dataset.page = "result";
-    section.append(element5("h1", "Evidence result"));
-    const coverage = element5("p");
+    section.append(element6("h1", "Evidence result"));
+    const coverage = element6("p");
     coverage.append(
       `coverage: ${result.coverage.evaluatedPopulation} requirements evaluated`
     );
@@ -13550,13 +16245,13 @@ ${body}
     coverage.dataset.unknown = String(result.coverage.unknownCount);
     section.append(coverage);
     const byId = new Map(result.claims.map((claim) => [claim.id, claim]));
-    const buckets = element5("section");
+    const buckets = element6("section");
     buckets.dataset.buckets = "verdict";
-    buckets.append(element5("h2", "Claims by verdict"));
+    buckets.append(element6("h2", "Claims by verdict"));
     for (const [key, label] of BUCKETS) {
-      const count = result.bucketCounts[key];
-      const heading = element5("h3", `${label}: ${count === 0 ? "none" : count}`);
-      heading.dataset.bucketCount = String(count);
+      const count2 = result.bucketCounts[key];
+      const heading = element6("h3", `${label}: ${count2 === 0 ? "none" : count2}`);
+      heading.dataset.bucketCount = String(count2);
       heading.dataset.bucketOf = key;
       const marker = countMismatchMarker(
         result,
@@ -13566,14 +16261,14 @@ ${body}
       buckets.append(heading);
       const ids = result.buckets[key];
       if (ids.length === 0) {
-        buckets.append(element5("p", "none"));
+        buckets.append(element6("p", "none"));
         continue;
       }
-      const list = element5("ul");
+      const list = element6("ul");
       list.dataset.bucket = key;
       for (const id of ids) {
         const claim = byId.get(id);
-        const item = element5(
+        const item = element6(
           "li",
           claim?.failed ? `${id} \xB7 failed` : claim?.support === "unsupported" ? `${id} \xB7 unsupported` : id
         );
@@ -13585,7 +16280,7 @@ ${body}
       }
       buckets.append(list);
     }
-    const failedHeading = element5(
+    const failedHeading = element6(
       "h3",
       `failed: ${result.bucketCounts.failed === 0 ? "none" : result.bucketCounts.failed}`
     );
@@ -13593,12 +16288,12 @@ ${body}
     failedHeading.dataset.bucketOf = "failed";
     buckets.append(failedHeading);
     const failedIds = result.claims.filter((claim) => claim.failed).map((claim) => claim.id);
-    if (failedIds.length === 0) buckets.append(element5("p", "none"));
+    if (failedIds.length === 0) buckets.append(element6("p", "none"));
     else {
-      const list = element5("ul");
+      const list = element6("ul");
       list.dataset.bucket = "failed";
       for (const id of failedIds) {
-        const item = element5("li", id);
+        const item = element6("li", id);
         item.dataset.claimRef = id;
         item.className = "claim-failed";
         list.append(item);
@@ -13608,7 +16303,7 @@ ${body}
     section.append(buckets);
     const table2 = document.createElement("table");
     table2.dataset.claims = "rows";
-    const detail = element5("section");
+    const detail = element6("section");
     for (const claim of result.claims) {
       const tr = document.createElement("tr");
       tr.dataset.claimRow = claim.id;
@@ -13619,19 +16314,19 @@ ${body}
         tr.dataset.failed = claim.failedOn ?? "close_state";
       }
       const idCell = document.createElement("td");
-      const button = element5("button", claim.id);
+      const button = element6("button", claim.id);
       button.setAttribute("type", "button");
       button.dataset.claimId = claim.id;
       button.addEventListener("click", () => renderClaim(claim, result, detail));
       idCell.append(button);
-      tr.append(idCell, element5("td", claim.requirementRef));
+      tr.append(idCell, element6("td", claim.requirementRef));
       appendSufficiency(tr, claim);
       appendVerdict(tr, claim);
-      const tier = element5("td", claim.tier);
+      const tier = element6("td", claim.tier);
       tier.dataset.tier = claim.tier;
-      const grade = element5("td", claim.grade);
+      const grade = element6("td", claim.grade);
       grade.dataset.grade = claim.grade;
-      const type = element5("td", CLAIM_TYPE_LABEL(claim));
+      const type = element6("td", CLAIM_TYPE_LABEL(claim));
       type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
       if (!claim.recognized) type.className = "claim-unrecognized";
       if (claim.close !== void 0) {
@@ -13644,23 +16339,23 @@ ${body}
     section.append(
       table2,
       detail,
-      renderProvenance(result.capsuleId, result.logCoordinates, result)
+      renderProvenance2(result.capsuleId, result.logCoordinates, result)
     );
     root.append(section);
   }
   function renderGraph(graph2, root, records) {
-    const aggregate = element5("section");
-    aggregate.append(element5("h1", "Evidence graph"));
-    const metrics = element5("dl");
+    const aggregate = element6("section");
+    aggregate.append(element6("h1", "Evidence graph"));
+    const metrics = element6("dl");
     appendValue(metrics, "per-axis", graph2.aggregate.perAxis);
     appendValue(metrics, "counts", graph2.aggregate.counts);
     aggregate.append(metrics);
     root.append(aggregate, renderCalibration(graph2.calibration));
-    const calendar = element5("section");
-    calendar.append(element5("h2", "Daily reports"));
-    const detail = element5("section");
+    const calendar = element6("section");
+    calendar.append(element6("h2", "Daily reports"));
+    const detail = element6("section");
     [...graph2.reports].sort((left, right) => left.date.localeCompare(right.date)).forEach((report) => {
-      const tile = element5("button");
+      const tile = element6("button");
       tile.append(renderTime(report.date), `: ${metRate(report)}`);
       tile.setAttribute("type", "button");
       tile.dataset.reportDate = report.date;
@@ -13723,12 +16418,13 @@ ${body}
     }),
     render: async (model, host) => {
       host.setChromeClass("oi");
-      await renderOutcomeReportPage(
+      await renderContractReport(
         model.result,
-        model.card,
+        { grouping: "lines", options: model.card },
         model.bundle,
         model.verification,
-        host.L1
+        host.L1,
+        host.wording
       );
     }
   };
@@ -13747,13 +16443,17 @@ ${body}
       bundle: context.bundle,
       verification: context.verification
     }),
-    render: (model, host) => renderCompliancePage(
-      model.result,
-      model.card,
-      model.bundle,
-      model.verification,
-      host.L1
-    )
+    render: async (model, host) => {
+      host.setChromeClass(COMPLIANCE_CHROME);
+      await renderContractReport(
+        model.result,
+        { grouping: "groups", presentation: model.card },
+        model.bundle,
+        model.verification,
+        host.L1,
+        host.wording
+      );
+    }
   };
   var resultModule = {
     manifest: BUILTIN_MANIFEST_RESULT,
@@ -13836,16 +16536,17 @@ ${body}
     );
   }
   var OUTCOME_CHROME = "oi";
+  var COMPLIANCE_CHROME = "cc";
   function presentationServices(context) {
     return Object.freeze({
       details(summary, open = false) {
         const details = document.createElement("details");
         if (open) details.open = true;
-        details.append(element5("summary", summary));
+        details.append(element6("summary", summary));
         return details;
       },
       badge(state) {
-        const badge = element5("span", state);
+        const badge = element6("span", state);
         badge.dataset.badge = state;
         return badge;
       },
@@ -13926,10 +16627,11 @@ ${body}
     };
     const drawFrame = () => {
       root.replaceChildren();
+      root.classList.remove("cv-shell-chrome");
+      renderVerificationBanner(root, verified, coverage);
       renderPresentationHeader(root, bundle);
-      return renderVerificationBanner(root, verified, coverage);
     };
-    let banner = drawFrame();
+    drawFrame();
     if (refused.length > 0)
       root.dataset.presentationRefused = refused.map((r) => r.id).join(" ");
     else delete root.dataset.presentationRefused;
@@ -13940,11 +16642,12 @@ ${body}
         L1: root,
         L2: root,
         depth: options.depth ?? "L2",
+        ...options.wording === void 0 ? {} : { wording: options.wording },
         setChromeClass(name) {
-          if (name !== OUTCOME_CHROME)
+          if (name !== OUTCOME_CHROME && name !== COMPLIANCE_CHROME)
             throw new Error(`unknown chrome class ${JSON.stringify(name)}`);
           chrome = name;
-          styleBanner(banner, verified);
+          root.classList.add("cv-shell-chrome");
         }
       };
       try {
@@ -13955,12 +16658,12 @@ ${body}
         );
       } catch {
         chrome = void 0;
-        banner = drawFrame();
+        drawFrame();
         refusal = "presentation-failed";
       }
     }
     if (refusal === void 0 && resolution.kind === "no-presentation") {
-      const note = element5(
+      const note = element6(
         "p",
         "No presentation is available for this bundle, audience and format. The records and their verification are below."
       );
@@ -13984,12 +16687,12 @@ ${body}
         );
       } catch {
         chrome = void 0;
-        banner = drawFrame();
+        drawFrame();
         refusal = "presentation-failed";
       }
     }
     if (refusal !== void 0) {
-      const note = element5("p", PRESENTATION_REFUSALS[refusal]);
+      const note = element6("p", PRESENTATION_REFUSALS[refusal]);
       note.dataset.refusal = refusal;
       root.append(note);
     }
@@ -14015,8 +16718,8 @@ ${body}
   }
 
   // capsule-viewer/ts/src/presentation-mount.ts
-  function mountPresentation(element6, input) {
-    return renderEvidenceGraph(input.bundle, element6, void 0, {
+  function mountPresentation(element7, input) {
+    return renderEvidenceGraph(input.bundle, element7, void 0, {
       audience: input.audience,
       format: input.format,
       ...input.depth === void 0 ? {} : { depth: input.depth },
@@ -14024,7 +16727,7 @@ ${body}
       ...input.registry === void 0 ? {} : { registry: input.registry }
     });
   }
-  async function mountPresentationFragment(hash2, element6, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+  async function mountPresentationFragment(hash2, element7, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
     let payload;
     try {
       payload = decodePresentationFragment(hash2, maxLength);
@@ -14032,10 +16735,10 @@ ${body}
       const note = document.createElement("p");
       note.dataset.refusal = "fragment-unreadable";
       note.textContent = `This link's fragment could not be read, so nothing is shown. ${err instanceof Error ? err.message : ""}`.trim();
-      element6.replaceChildren(note);
+      element7.replaceChildren(note);
       return;
     }
-    await mountPresentation(element6, {
+    await mountPresentation(element7, {
       bundle: payload.bundle,
       audience: payload.audience,
       format: "fragment",

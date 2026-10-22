@@ -24,7 +24,7 @@
     "eecd39aef42e6f231ea49a3baf3be894afa1b7eb5add2c8805e27efffab15191"
   ],
   "text": [
-    "Bundle verification passed",
+    "Contents checked",
     "Example rules: September against October",
     "Spend limit per order",
     "same",
@@ -47,6 +47,8 @@
     "4",
     "leaf",
     "3",
+    "How this page was checked",
+    "· 10 of 10 checks passed · 4 records · signatures not checked here",
     "Verification",
     "bundle digest",
     "\"8a4bacd7586b0f3d0b9e06e11d723d204815f93170b1cf5564e684d01909c3e3\"",

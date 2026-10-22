@@ -60,8 +60,9 @@ cp example/bundle.json example/report.html .
 
 render report.html
 check "the error hook ran in the page" contains report.html.dom 'data-render-hook="installed"'
-check "the page says the bundle verified" contains report.html.dom 'data-verify="verified"'
-check "the banner reads 'Bundle verification passed'" contains report.html.dom 'Bundle verification passed'
+# The pill element itself: the page's stylesheet names data-verify values too.
+check "the page says the bundle verified" contains report.html.dom 'class="cv-pill" data-verify="verified"'
+check "the pill reads 'Contents checked'" contains report.html.dom '>Contents checked</span>'
 # The rendered markup, not the bundle's JSON the page also carries.
 check "the page renders the report" contains report.html.dom 'data-page="report-rows"><h1>Example checks</h1>'
 check "the page renders the row 'Config file'" contains report.html.dom 'data-row-id="config">Config file</button></td><td data-row-status="same">same<'
@@ -74,7 +75,8 @@ check "verify --bundle: VALID, exit 0" test "$verdict" -eq 0
 sed 's/"check":"permissions","result":"different"/"check":"permissions","result":"same"/' report.html >tampered.html
 check "the tampered copy differs" differs report.html tampered.html
 render tampered.html
-check "the tampered page says verification failed" contains tampered.html.dom 'Bundle verification failed'
+check "the tampered page says verification failed" contains tampered.html.dom 'class="cv-pill" data-verify="failed"'
+check "the tampered page's pill reads 'Check failed'" contains tampered.html.dom '>Check failed</span>'
 check "the tampered page renders no rows" lacks tampered.html.dom 'data-page="report-rows"'
 permissions=$(jq -r '.disclosures | to_entries[] | select(.value.agent_input.check == "permissions") | .key' bundle.json)
 jq --arg id "$permissions" '.disclosures[$id].agent_input.result = "same"' bundle.json >tampered.json
@@ -141,9 +143,11 @@ check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$ve
 render incomplete.html
 if contains incomplete.html.dom 'data-verdict='; then
   check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
-  check "incomplete-bundle: the page never says the bundle passed" lacks incomplete.html.dom 'Bundle verification passed'
+  # The pill's accessible name is where the page says "passed" (the attribute,
+  # not the viewer's inline script, which holds the same words).
+  check "incomplete-bundle: the page never says the bundle passed" lacks incomplete.html.dom 'aria-label="Contents checked: bundle verification passed"'
 else
-  echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'passed' for it (agent-action-capsule's issue on the viewer's verdict wording)"
+  echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'Contents checked' for it (agent-action-capsule's issue on the viewer's verdict wording)"
 fi
 
 # A deal receipt: its deal text (summary lines, step lines, amounts) is
