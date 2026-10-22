@@ -419,17 +419,24 @@ func legStartOf(e dealEvent) bool {
 }
 
 // dealJourneyStep is one move of the errand, as the report lists it: who
-// moved, the move's token, its label from the wording pack, and the values
-// the label was filled with (who, item, reason, classes, amount, limit,
-// count), so another renderer can word it from its own pack.
+// moved, the move's token, its label from the wording pack, the pack key it
+// was worded from and the values the label was filled with (who, item,
+// reason, classes, amount, limit, count), so another renderer can word it
+// from its own pack.
 type dealJourneyStep struct {
 	By     string `json:"by"`
 	Move   string `json:"move"`
 	Count  int    `json:"count,omitempty"`
 	Found  int64  `json:"found,omitempty"`
+	Key    string `json:"key"`
 	Label  string `json:"label"`
 	Values cli.V  `json:"values,omitempty"`
 	Step   string `json:"step"`
+	// facts are the values as the sealed report keeps them (sealedJourney):
+	// a wording pack's words are never sealed, so a reason is its token
+	// (and an "other" reason's own detail) and the classes told are their
+	// tokens, in the order a sentence lists them.
+	facts map[string]interface{}
 }
 
 // dealJourney is the errand's moves in order: the user's (asked, narrowed,
@@ -444,7 +451,11 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 		if key == "" {
 			key = "journey." + by + "." + move
 		}
-		out = append(out, dealJourneyStep{By: by, Move: move, Label: w.Line(key, vals), Values: vals, Step: se.CapsuleID})
+		facts := map[string]interface{}{}
+		for k, v := range vals {
+			facts[k] = v
+		}
+		out = append(out, dealJourneyStep{By: by, Move: move, Key: key, Label: w.Line(key, vals), Values: vals, Step: se.CapsuleID, facts: facts})
 	}
 	currency := ""
 	if len(events) > 0 && events[0].Event.Open != nil {
@@ -485,8 +496,8 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 			case moveOptions:
 				n := len(am.Options)
 				vals := cli.V{"count": strconv.Itoa(n)}
-				out = append(out, dealJourneyStep{By: "agent", Move: moveOptions, Count: n, Found: *am.Found,
-					Label: w.Line("journey.agent.options", vals), Values: vals, Step: se.CapsuleID})
+				out = append(out, dealJourneyStep{By: "agent", Move: moveOptions, Count: n, Found: *am.Found, Key: "journey.agent.options",
+					Label: w.Line("journey.agent.options", vals), Values: vals, Step: se.CapsuleID, facts: map[string]interface{}{"count": vals["count"]}})
 			case moveCouldnt:
 				reason := am.Detail
 				if am.Reason != "other" {
@@ -496,6 +507,11 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 					add("agent", am.Move, "journey.agent.couldnt.who", se, cli.V{"who": recipientName(*am.Who), "reason": reason})
 				} else {
 					add("agent", am.Move, "", se, cli.V{"reason": reason})
+				}
+				facts := out[len(out)-1].facts
+				facts["reason"] = am.Reason
+				if am.Reason == "other" {
+					facts["detail"] = am.Detail
 				}
 			default:
 				add("agent", am.Move, "", se, nil)
@@ -524,6 +540,12 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 				who = recipientName(*d.Who)
 			}
 			add("agent", "told", "", se, cli.V{"who": who, "classes": disclosureWords(w, classes)})
+			slices.SortStableFunc(classes, func(a, b string) int { return classRank(a) - classRank(b) })
+			told := []interface{}{}
+			for _, c := range slices.Compact(classes) {
+				told = append(told, c)
+			}
+			out[len(out)-1].facts["classes"] = told
 		case e.Kind == "act" && e.Act != nil:
 			a := e.Act
 			move := "act." + a.Action
@@ -552,6 +574,17 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 		case e.Kind == "close" && e.Close != nil && e.Close.Status == "called_off":
 			add("user", "called_off", "", se, nil)
 		}
+	}
+	return out
+}
+
+// sealedJourney is the journey as the user's own copy of the report seals
+// it, for its page to word (deal-view.js): each move's who, token, pack key,
+// step and facts, and no words from any pack.
+func sealedJourney(steps []dealJourneyStep) []interface{} {
+	out := make([]interface{}, len(steps))
+	for i, s := range steps {
+		out[i] = map[string]interface{}{"by": s.By, "move": s.Move, "key": s.Key, "step": s.Step, "facts": s.facts}
 	}
 	return out
 }

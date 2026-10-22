@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -289,6 +291,10 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		"instructions": report.Instructions,
 		"produced_by":  stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cli.CLIVersion,
 		"scope": dealScopeLine, "audience": cli.DealAudienceKeep, "verify_command": verifyCommand,
+		// The errand's moves (capsule-cli#370), worded on the page from the
+		// pack the page carries: a shared copy has none, its labels name the
+		// merchant, the item and what was told.
+		"journey": sealedJourney(dealJourney(events, cli.BuiltinWording())),
 	}
 	// The merchant rows carry only strings and booleans; round-trip them to
 	// the generic JSON shape the bundle encoder takes.
@@ -397,6 +403,31 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // and the chat speak from one pack (capsule-cli#345).
 var pageWords = []string{"report.title"}
 
+// journeyPageWords are the words the user's own page words its journey
+// with (capsule-cli#370), as dealJourney words the report's: each move's
+// template as the pack has it, and each reason and class already worded as
+// dealJourney words them (Wording.Line, and classWord where the pack's class
+// line says nothing), so the page fills templates only. A shared copy
+// carries no journey, and none of these.
+func journeyPageWords(w cli.Wording) map[string]string {
+	out := map[string]string{}
+	classes := slices.Clone(spokenClassOrder)
+	for k, v := range w.Entries {
+		switch {
+		case strings.HasPrefix(k, "journey.reason."):
+			out[k] = w.Line(k, nil)
+		case strings.HasPrefix(k, "journey."):
+			out[k] = v
+		case strings.HasPrefix(k, "class."):
+			classes = append(classes, strings.TrimPrefix(k, "class."))
+		}
+	}
+	for _, c := range classes {
+		out["class."+c] = disclosureWords(w, []string{c})
+	}
+	return out
+}
+
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string, w cli.Wording) (string, error) {
 	if err := cli.PageGate(b); err != nil {
 		return "", err
@@ -416,6 +447,9 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, v
 		if v, ok := w.Entries[k]; ok {
 			words[k] = v
 		}
+	}
+	if audience, _ := dealPageReport(b)["audience"].(string); audience == cli.DealAudienceKeep {
+		maps.Copy(words, journeyPageWords(w))
 	}
 	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand, "words": words})
 	if err != nil {

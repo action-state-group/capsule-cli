@@ -42,6 +42,37 @@ function versionBefore(a, b) {
   return x.pre < y.pre;
 }
 
+// dealJourneyLabel words one move of the sealed journey (capsule-cli#370)
+// from the page's words, as capsulectl's Wording.Line words the report's
+// journey: a key the page has no word for, or a placeholder with no value,
+// words nothing. The facts are sealed without any pack's words: a reason is
+// its token (an "other" reason is its own detail) and the classes told are
+// tokens, which the page's words (capsulectl worded each reason and class
+// already) put into words.
+const dealJourneyLabel = (words, move) => {
+  const text = words[move.key];
+  if (typeof text !== "string") return "";
+  const facts = move.facts && typeof move.facts === "object" ? move.facts : {};
+  const vals = {};
+  // An "other" reason's detail is the reason's value, never a placeholder
+  // of its own: the report words the same values.
+  for (const [k, v] of Object.entries(facts)) if (typeof v === "string" && k !== "detail") vals[k] = v;
+  if (typeof facts.reason === "string") {
+    const word = words["journey.reason." + facts.reason];
+    vals.reason = facts.reason === "other" ? facts.detail : typeof word === "string" ? word : "";
+  }
+  if (Array.isArray(facts.classes)) {
+    const named = facts.classes.map((c) => (typeof words["class." + c] === "string" ? words["class." + c] : String(c).replace(/_/g, " ")));
+    vals.classes = named.length < 2 ? named.join("") : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  }
+  let missing = false;
+  const filled = text.replace(/\{([a-z_]+)\}/g, (_, k) => {
+    if (typeof vals[k] !== "string") missing = true;
+    return typeof vals[k] === "string" ? vals[k] : "";
+  });
+  return missing ? "" : filled;
+};
+
 // The model: everything render shows, read from the verified context and the
 // page's build-time checks. Stricter than the core's gate in one place:
 // membership must be proven, not unbound (canRender).
@@ -428,6 +459,41 @@ const dealViewRender = (model, regions) => {
   } else {
     host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
   }
+
+  // How it went (capsule-cli#370): the errand's moves in order, read from
+  // the sealed report and worded from the pack this page carries, as
+  // `deal report` words its journey. Each row says who moved, and whether
+  // its sealed step verified. A shared copy, or a report sealed before
+  // journeys, has none.
+  const journey = Array.isArray(report.journey) ? report.journey.filter((m) => m && typeof m === "object") : [];
+  if (!shared && journey.length > 0) {
+    host.append(el("h2", "How it went"));
+    const movers = { user: "You", agent: "Your agent", other: "The other side" };
+    // A time is said when it changes: moves a minute apart read as one run.
+    let said;
+    journey.forEach((m) => {
+      const step = byId.get(m.step);
+      // A step that did not verify gives no time either: only its row says so.
+      const when = step && typeof step.at === "string" && matched.has(m.step) ? local(step.at) : "";
+      const at = when && when !== said ? `${when} · ` : "";
+      said = when || said;
+      const label = dealJourneyLabel(words, m);
+      // The row is its step: it says whether that step verified, and lists
+      // no step line, which "What the agent did" already shows.
+      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [], undefined, m.step);
+      row.dataset.journey = label;
+      host.append(row);
+    });
+    host.append(
+      el(
+        "p",
+        "Who moved and the names, items and amounts in each row are sealed in this file and checked. The other words come from the wording this page was made with, which is not sealed.",
+        "deal-note",
+      ),
+    );
+  }
+
+  host.append(el("h2", "What the agent did"));
   host.append(
     el(
       "p",
@@ -439,8 +505,6 @@ const dealViewRender = (model, regions) => {
       "deal-note",
     ),
   );
-
-  host.append(el("h2", "What the agent did"));
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   listed = new Set();

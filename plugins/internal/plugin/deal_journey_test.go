@@ -69,14 +69,11 @@ func rules(check map[string]any) []string {
 	return out
 }
 
-// The golden: the 2026-10-20 errand as one deal. Asked → Searched →
-// Showed you 4 options → Recommended → Couldn't (sign-in) → Switched to
-// eBay → Chose for you → two pauses approved → Paid $1.90 within $2. No
-// payee change, no "Not what you asked", no pause on the chosen item, and
-// at both checks no material field changed.
-func TestTheFawnErrandIsOneDeal(t *testing.T) {
-	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+// fawnDeal seals the 2026-10-20 errand as one deal, up to its pay, and
+// returns the deal and its two checks.
+func fawnDeal(t *testing.T) (id string, share, pay map[string]any) {
+	t.Helper()
+	id = dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
 	note(t, id, "searched", `{"where":"aliexpress, ebay, etsy, redbubble","results":37}`)
 	note(t, id, "options", fawnOptions)
 	note(t, id, "recommended", `{"option":1,"reason":"cheapest delivered"}`)
@@ -93,14 +90,14 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 	assert.Equal(t, true, switched["starts_leg"])
 	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
 
-	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
+	share = dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
 	require.Equal(t, "pause", share["verdict"], share["card"])
 	assert.Equal(t, []string{"first_disclosure", "first_disclosure"}, rules(share))
 	_, err = answer(t, id, share["check_id"].(string), "yes, send it", shownCard(t, share["card"].(string)))
 	require.NoError(t, err)
 	assert.Equal(t, true, note(t, id, "disclosure", `{"fields":[{"class":"name","value":"`+homeName+`"},{"class":"address","value":"`+homeStreet+`"}]}`)["approved"])
 
-	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	pay = dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
 	require.Equal(t, "pause", pay["verdict"], pay["card"])
 	assert.Equal(t, []string{"promised_ask"}, rules(pay), "the share's card said it would ask before paying")
 	assert.Contains(t, pay["card"], "within your $2 limit")
@@ -110,6 +107,17 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 	act := note(t, id, "act", `{"action":"pay","amount_minor":190,"payee":"eBay","rail":"card","reference":"EB-1"}`)
 	assert.Equal(t, false, act["unchecked"])
 
+	return id, share, pay
+}
+
+// The golden: the 2026-10-20 errand as one deal. Asked → Searched →
+// Showed you 4 options → Recommended → Couldn't (sign-in) → Switched to
+// eBay → Chose for you → two pauses approved → Paid $1.90 within $2. No
+// payee change, no "Not what you asked", no pause on the chosen item, and
+// at both checks no material field changed.
+func TestTheFawnErrandIsOneDeal(t *testing.T) {
+	dealFixture(t)
+	id, share, pay := fawnDeal(t)
 	assert.Equal(t, []string{"user:asked", "agent:searched", "agent:options", "agent:recommended", "agent:couldnt",
 		"user:switched", "agent:chose", "agent:paused", "agent:told", "agent:paused", "agent:act.pay"}, journeyMoves(t, id))
 	for _, c := range []map[string]any{share, pay} {
@@ -129,7 +137,7 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 		labels = append(labels, s.(map[string]any)["label"].(string))
 	}
 	assert.Equal(t, []string{"Asked", "Searched", "Showed you 4 options", "Recommended", "Couldn't (AliExpress sign-in)",
-		"Switched to eBay", "Chose for you", "Paused for you", "Told eBay your name and address", "Paused for you",
+		"Switched to eBay", "Chose for you", "Waited for your OK", "Told eBay your name and address", "Waited for your OK",
 		"Paid $1.90 within your $2 limit"}, labels)
 }
 
