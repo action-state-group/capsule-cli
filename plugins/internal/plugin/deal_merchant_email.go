@@ -1101,13 +1101,16 @@ func domainWords(signer, apex string) string {
 // amount on the last check that went ahead, else the user's limit, else the
 // agreed price. limit is true when only a ceiling is known. An answer with no
 // words of the user's (agent_card) is not their approval (capsule-cli#421):
-// every renderer calls this amount "You approved", so it is skipped.
+// every renderer calls this amount "You approved", so it is skipped, and
+// after one the agreed price is not theirs either, since such an answer
+// adopts the terms its card named.
 func approvedAmount(events []sealedEvent, state dealState) (amount *int64, currency, basis string, steps []string, limit bool) {
 	byID := map[string]sealedEvent{}
 	for _, se := range events {
 		byID[se.CapsuleID] = se
 	}
 	currency = state.agreed.Currency
+	cardAnswered := false
 	for i := len(events) - 1; i >= 0; i-- {
 		a := events[i].Event.Approval
 		// In typed records a check that needed no approval authorizes the
@@ -1117,7 +1120,11 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 				a = &dealApproval{Check: act.AuthorizedBy, Proceed: true, Approver: "standing_intent"}
 			}
 		}
-		if a == nil || !a.Proceed || a.Reason != "" || a.Approver == "agent_card" {
+		if a != nil && a.Proceed && a.Reason == "" && a.Approver == "agent_card" {
+			cardAnswered = true
+			continue
+		}
+		if a == nil || !a.Proceed || a.Reason != "" {
 			continue
 		}
 		check, ok := byID[a.Check]
@@ -1143,7 +1150,7 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 	if state.intent.MaxTotalMinor != nil {
 		return state.intent.MaxTotalMinor, currency, dealBasisYourLimit, []string{events[0].CapsuleID}, true
 	}
-	if state.agreed.PriceMinor != nil {
+	if state.agreed.PriceMinor != nil && !cardAnswered {
 		return state.agreed.PriceMinor, currency, "the agreed price", []string{events[0].CapsuleID}, false
 	}
 	return nil, "", "", nil, false
