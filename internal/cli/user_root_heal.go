@@ -3,9 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -32,6 +34,8 @@ type userRootHeal struct {
 	Failed        map[string]string    `json:"failed,omitempty"`
 	Reason        string               `json:"reason,omitempty"`
 	Error         string               `json:"error,omitempty"`
+	// why is a refusal's reason alone, for install to add to its own.
+	why string
 }
 
 const userRootHealedReason = "these directories on the plugin root's path were group- or other-writable and owned by this user; plugin install required them not to be, and a host may reset them (for example on VM replacement), so write access for group and others was removed"
@@ -66,8 +70,14 @@ func healUserRoot(home string) userRootHeal {
 	if len(problems) == 0 {
 		return userRootHeal{State: "ok"}
 	}
+	return healProblems(home, problems, userRootHealedReason)
+}
+
+// healProblems is healUserRoot's repair of problems found on the plugin
+// root's path; reason is reported when it heals.
+func healProblems(home string, problems []unsafePathProblem, reason string) userRootHeal {
 	refuse := func(why string) userRootHeal {
-		return userRootHeal{State: "refused", Error: newAncestryError("the plugin root "+userPluginRoot(home), problems).Error() + "; not healed: " + why}
+		return userRootHeal{State: "refused", Error: newAncestryError("the plugin root "+userPluginRoot(home), problems).Error() + "; not healed: " + why, why: why}
 	}
 	realHome, err := filepath.EvalSymlinks(home)
 	if err != nil || realHome == string(os.PathSeparator) {
@@ -131,7 +141,7 @@ func healUserRoot(home string) userRootHeal {
 
 	// Apply. A directory already tightened stays so if a later one fails:
 	// undoing it would add write access back.
-	h := userRootHeal{State: "healed", Reason: userRootHealedReason, Modes: map[string][2]string{}}
+	h := userRootHeal{State: "healed", Reason: reason, Modes: map[string][2]string{}}
 	for _, t := range targets {
 		if t.mode == t.want {
 			continue // a concurrent run tightened it first
@@ -180,6 +190,67 @@ func (h *userRootHeal) fail(path, why string) {
 // odd HOME never tightens a tree shared on purpose.
 func homeDeepEnoughForRoot(realHome string) bool {
 	return len(strings.Split(strings.Trim(realHome, string(os.PathSeparator)), string(os.PathSeparator))) >= 2
+}
+
+const installPathHealedReason = "group and other write was removed from these directories: they belong to this user, and plugin install refuses a path another user could change"
+
+// healInstallPath is healUserRoot for plugin install, run before its own
+// checks: a host that makes HOME group-writable would otherwise stop every
+// fresh install (capsule-cli#354). The root may not exist yet, so it judges
+// the existing part of the path from / down as install does, plus the
+// directories the walk looks names up in so far. A problem above HOME
+// refuses the whole heal, and installRoot then refuses as before.
+func healInstallPath(home string) userRootHeal {
+	if !userRootIsTrusted(home) {
+		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " is not one of the plugin roots"}
+	}
+	_, existing, _, err := canonicalPath(userPluginRoot(home))
+	if err != nil {
+		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " does not resolve"}
+	}
+	problems := fullPathCheck(existing)
+	for _, p := range userRootAncestryProblems(home) {
+		if !slices.ContainsFunc(problems, func(q unsafePathProblem) bool { return q.path == p.path }) {
+			problems = append(problems, p)
+		}
+	}
+	if len(problems) == 0 {
+		return userRootHeal{State: "ok"}
+	}
+	return healProblems(home, problems, installPathHealedReason)
+}
+
+// explain adds to install's error what its heal did: why it healed nothing,
+// each chmod that failed, and which directories it tightened, since they
+// stay so. A message SafeError hides goes to stderr instead.
+func (h userRootHeal) explain(c *cobra.Command, err error) error {
+	if err == nil {
+		return nil
+	}
+	var notes []string
+	if h.why != "" {
+		notes = append(notes, "not healed: "+h.why)
+	}
+	for _, path := range slices.Sorted(maps.Keys(h.Failed)) {
+		notes = append(notes, "chmod go-w on "+path+": "+h.Failed[path])
+	}
+	if len(h.ChmodGoW) > 0 {
+		// Quoted, since a path may contain spaces.
+		quoted := make([]string, len(h.ChmodGoW))
+		for i, path := range h.ChmodGoW {
+			quoted[i] = strconv.Quote(path)
+		}
+		notes = append(notes, "install had already removed group and other write from "+strings.Join(quoted, ", "))
+	}
+	if len(notes) == 0 {
+		return err
+	}
+	var hint *hintError
+	if errors.As(err, &hint) {
+		return Hint(hint.class, hint.message+"; "+strings.Join(notes, "; "))
+	}
+	fmt.Fprintln(c.ErrOrStderr(), "capsulectl: "+strings.Join(notes, "; "))
+	return err
 }
 
 // doctorUserRoot is healUserRoot for doctor, which the user ran.

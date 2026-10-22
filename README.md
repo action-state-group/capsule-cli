@@ -125,8 +125,10 @@ release, checks it against `SHA256SUMS` and, when `gh` is installed, its build
 provenance with the same `gh attestation verify` as above, and puts it in
 `~/.local/lib/capsulectl/plugins`. Its output lists the checks that ran. It
 never runs through `sudo`, and it refuses a plugin root on a path another user
-could change; on a stock Ubuntu account that means a one-time
-`chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it prints.
+could change. When the only fault is group or other write on your own
+directories under `$HOME` (a stock Ubuntu account, or a host that makes the
+home `2770`), it removes that write access itself and reports it under
+`plugin_root_healed`.
 From a source checkout, `make install` installs the core and both plugins.
 See [docs/PLUGINS.md](docs/PLUGINS.md).
 
@@ -272,7 +274,7 @@ stale name does not shadow the new one:
 
 ```bash
 BIN="$(go env GOBIN)"; GOPATH="$(go env GOPATH)"; rm -f "${BIN:-${GOPATH%%:*}/bin}/capsule"
-make install   # installs capsulectl and its book and deal plugins (on stock Ubuntu, first: chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl, as it prints)
+make install   # installs capsulectl and its book and deal plugins
 ```
 
 ## Commands

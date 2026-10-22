@@ -344,6 +344,9 @@ type pluginInstallResult struct {
 	ReplacedVersion string   `json:"replaced_version,omitempty"`
 	VersionCheck    string   `json:"version_check"`
 	Checks          []string `json:"checks"`
+	// RootHealed is what install's heal of the plugin root's path changed,
+	// when it changed anything.
+	RootHealed *userRootHeal `json:"plugin_root_healed,omitempty"`
 }
 
 // stageInRoot writes a new temporary file in the root through r and returns
@@ -619,54 +622,65 @@ func pluginInstallCommand() *cobra.Command {
 			} else if platform := runtime.GOOS + "/" + runtime.GOARCH; !slices.Contains(releasePlatforms, platform) {
 				return InputError("there is no release build of the plugins for " + platform + " (releases ship " + strings.Join(releasePlatforms, ", ") + "); build it and install the file")
 			}
-			root, err := installRoot(home, true)
+			heal := healInstallPath(home)
+			result, err := installOperand(c, home, operand, allow)
 			if err != nil {
-				return err
+				return heal.explain(c, err)
 			}
-			r, err := os.OpenRoot(root)
-			if err != nil {
-				return err
+			if len(heal.ChmodGoW)+len(heal.Failed) > 0 {
+				result.RootHealed = &heal
 			}
-			defer r.Close()
-			var staged string
-			defer func() {
-				if staged != "" {
-					_ = r.Remove(staged)
-				}
-			}()
-			var checks []string
-			expected := ""
-			if strings.Contains(operand, "/") {
-				src, err := os.Open(operand)
-				if err != nil {
-					return InputError(operand + " cannot be read")
-				}
-				defer src.Close()
-				if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
-					return err
-				}
-				checks = []string{"handshake (cli-plugin-metadata)"}
-			} else {
-				expected = operand
-				base, _ := c.Flags().GetString("release-url")
-				if staged, checks, err = fetchFirstParty(c.Context(), r, root, base, operand); err != nil {
-					return err
-				}
-			}
-			result, err := finishInstall(r, root, staged, expected, allow, checks)
-			if err == nil || errors.Is(err, errPluginDurability) {
-				staged = ""
-			}
-			if err != nil {
-				return err
-			}
-			return Output(c, result)
+			return heal.explain(c, Output(c, result))
 		},
 	}
 	cmd.Flags().Bool("allow-version-mismatch", false, "Install a first-party plugin whose version differs from this capsulectl's")
 	cmd.Flags().String("release-url", pluginReleaseBase, "Base URL of the release downloads (tests)")
 	_ = cmd.Flags().MarkHidden("release-url")
 	return cmd
+}
+
+// installOperand installs operand on the per-user root, after the operand
+// checks and install's heal.
+func installOperand(c *cobra.Command, home, operand string, allow bool) (pluginInstallResult, error) {
+	root, err := installRoot(home, true)
+	if err != nil {
+		return pluginInstallResult{}, err
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return pluginInstallResult{}, err
+	}
+	defer r.Close()
+	var staged string
+	defer func() {
+		if staged != "" {
+			_ = r.Remove(staged)
+		}
+	}()
+	var checks []string
+	expected := ""
+	if strings.Contains(operand, "/") {
+		src, err := os.Open(operand)
+		if err != nil {
+			return pluginInstallResult{}, InputError(operand + " cannot be read")
+		}
+		defer src.Close()
+		if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
+			return pluginInstallResult{}, err
+		}
+		checks = []string{"handshake (cli-plugin-metadata)"}
+	} else {
+		expected = operand
+		base, _ := c.Flags().GetString("release-url")
+		if staged, checks, err = fetchFirstParty(c.Context(), r, root, base, operand); err != nil {
+			return pluginInstallResult{}, err
+		}
+	}
+	result, err := finishInstall(r, root, staged, expected, allow, checks)
+	if err == nil || errors.Is(err, errPluginDurability) {
+		staged = ""
+	}
+	return result, err
 }
 
 // fetchFirstParty downloads this release's plugin asset into the root,
