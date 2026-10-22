@@ -72,18 +72,23 @@ jobs:
 
   tests:
     # The race detector (the slowest case loops sampled) split by test name
-    # across four jobs, and every case without it in a fifth: see
+    # across six jobs, and every case without it across two: see
     # scripts/test.sh. One job running both passes took 13-15 minutes and
-    # hit go test's 15-minute timeout on PR runs and on the nightly.
+    # hit go test's 15-minute timeout on PR runs and on the nightly; at four
+    # race shards and one plain job, the plugin package grew past the race
+    # shard's 15 minutes and the plain pass's 10 (capsule-cli#403).
     strategy:
       fail-fast: false
       matrix:
         part:
-          - { pass: race, shard: 1/4 }
-          - { pass: race, shard: 2/4 }
-          - { pass: race, shard: 3/4 }
-          - { pass: race, shard: 4/4 }
-          - { pass: plain, shard: 1/1 }
+          - { pass: race, shard: 1/6 }
+          - { pass: race, shard: 2/6 }
+          - { pass: race, shard: 3/6 }
+          - { pass: race, shard: 4/6 }
+          - { pass: race, shard: 5/6 }
+          - { pass: race, shard: 6/6 }
+          - { pass: plain, shard: 1/2 }
+          - { pass: plain, shard: 2/2 }
     name: test (${{ matrix.part.pass }} ${{ matrix.part.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
