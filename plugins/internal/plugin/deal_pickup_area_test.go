@@ -147,3 +147,64 @@ func TestAnXDealPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 	assert.Contains(t, err.Error(), "pickup_location")
 	assert.Len(t, records(t, id), before, "a refused note seals nothing")
 }
+
+// capsule-cli#399: a street address written with lookalike letters, marks,
+// separators, escapes or markup is still read as one, as the listing guard
+// reads its words (#398): marks dropped, letters read as their TR39
+// skeleton, any separator a space, and markup read both as a gap and as
+// nothing.
+func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
+	for name, v := range map[string]string{
+		"Cyrillic Ѕ":                  "12 Oak Ѕt",
+		"Cyrillic Ѕ and т":            "12 Oak Ѕт",
+		"Greek Τ":                     "12 Oak SΤ",
+		"Greek Ι in Drive":            "12 Oak DRΙVE",
+		"Cyrillic а in Ave":           "12 Oak аve",
+		"Cyrillic о in Road":          "12 Mill Rоad",
+		"Armenian ս in Suite":         "Sսite 200",
+		"Greek Α in Apt":              "Αpt 4",
+		"Cyrillic р in Apt":           "Aрt 4",
+		"Cyrillic і in Unit":          "Unіt 4",
+		"enclosing mark U+20DD":       "12 Oak S⃝t",
+		"enclosing mark U+0488":       "12 Oak S҈t",
+		"spacing mark U+0903":         "12 Oak Sःt",
+		"nonspacing mark U+0301":      "12 Oak Śt",
+		"combining mark in a number":  "1⃝2 Oak St",
+		"fullwidth letters":           "12 Oak Ｓｔ",
+		"math letters":                "12 Oak \U0001d412\U0001d42d",
+		"no-break space":              "12 Oak St",
+		"em space":                    "12 Oak St",
+		"ideographic space":           "12　Oak　St",
+		"line separator":              "12 Oak St",
+		"paragraph separator":         "12 Oak St",
+		"word joiner":                 "12 Oak S⁠t",
+		"Hangul filler":               "12 Oak Sㅤt",
+		"HTML character reference":    "12 Oak &#83;t",
+		"named HTML reference":        "12&nbsp;Oak&nbsp;St",
+		"percent escape":              "12%20Oak%20St",
+		"JSON escape":                 `12 Oak St`,
+		"HTML tags around words":      "12 <span class=\"x\">Oak</span> <i>St</i>",
+		"HTML tag inside a word":      "12 Oak S<b></b>t",
+		"HTML tag as the only gap":    "12<br>Oak<br>St",
+		"Markdown emphasis in a word": "12 Oak S**t**",
+		"Markdown code in a word":     "12 Oak S`t`",
+		"Devanagari digits":           "१२ Oak St",
+		"Arabic-Indic one":            "١ Oak St",
+		"lookalike stroke as l":       "8 Penny ǀn",
+		"unit with fullwidth #":       "＃5, Hyde Park",
+	} {
+		assert.True(t, readsAsStreetAddress(v), "%s: %q", name, v)
+		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
+		assert.ErrorIs(t, err, cli.ErrInput, name)
+	}
+	// A public area still passes, however it is written; a plain i is never
+	// an l ("in" is not "ln"), and a lookalike label is the label.
+	for _, v := range []string{
+		"2 bedrooms in Hyde Park", "Pickup 5 in Austin", "Lot 4 in the park", "12 pi Hyde Park",
+		"Hyde Park", "St. Louis, MO 63101", "<b>Hyde Park</b>", "**Downtown** Austin", "Austin TX 78701",
+		"Sаint Louis", "Zone 2, Park Place", "2 blocks from Main St", "Community Unit area",
+		"Εxit 12 Commerce Dr", "Ｈｙｄｅ Ｐａｒｋ", "Hauptstraße 7", "Main_St corridor", "District 9",
+	} {
+		assert.False(t, readsAsStreetAddress(v), "%q", v)
+	}
+}

@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
-	"golang.org/x/text/unicode/norm"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -2773,71 +2774,177 @@ func (d dealDisclosure) validate() error {
 	return nil
 }
 
-// pickupAreaFormat is the invisible format characters (a zero-width space,
-// a soft hyphen) that would split a street type into two harmless words.
-var pickupAreaFormat = regexp.MustCompile(`\p{Cf}`)
+// pickupAreaTag is an HTML tag, which reads as a space in one reading of a
+// pickup_area and as nothing in the other (readsAsStreetAddress).
+var pickupAreaTag = regexp.MustCompile(`<[^<>]*>`)
 
-// pickupAreaWord is a word of a pickup_area value, in any script; an
-// abbreviation's period and other punctuation fall between words.
-var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{M}\p{Nd}]+`)
+// pickupAreaEmphasis are the Markdown emphasis and code characters, which
+// the second reading drops too, so "S**t**" reads "St".
+const pickupAreaEmphasis = "*_~`"
 
-// pickupAreaNumber is a house number: decimal digits in any script, with an
-// optional letter ("12", "12345", "12B"), not an ordinal ("5th").
+// pickupAreaWord is a word of a pickup_area value as read
+// (pickupAreaReading): letters and decimal digits; an abbreviation's period
+// and other punctuation fall between words.
+var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{Nd}]+`)
+
+// pickupAreaNumber is a house number: decimal digits, with an optional
+// letter ("12", "12345", "12B"), not an ordinal ("5th").
 var pickupAreaNumber = regexp.MustCompile(`^\p{Nd}+\p{L}?$`)
 
-// pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5".
-var pickupAreaUnit = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:apt|unit|suite|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
+// pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5",
+// matched on the reading (pickupAreaEither may stand for an i).
+var pickupAreaUnit = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])(?:apt|un[iı]t|su[iı]te|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
+
+// pickupAreaEither is how the reading writes a lookalike whose skeleton is i
+// or l: TR39 reads a Greek capital iota and a Cyrillic palochka as l, so
+// either letter may be meant, and the word lists take it as both
+// (pickupAreaIs). A plain ASCII i or l is only itself, so "in" is never "ln".
+const pickupAreaEither = 'ı'
+
+// pickupAreaKeys is a word list.
+func pickupAreaKeys(words ...string) map[string]bool {
+	keys := map[string]bool{}
+	for _, w := range words {
+		keys[w] = true
+	}
+	return keys
+}
+
+// pickupAreaIs is whether a word of the reading is one of words: the same
+// letters, where pickupAreaEither stands for i or l.
+func pickupAreaIs(word string, words map[string]bool) bool {
+	if words[word] {
+		return true
+	}
+	if !strings.ContainsRune(word, pickupAreaEither) {
+		return false
+	}
+	for w := range words {
+		if len(w) == utf8.RuneCountInString(word) && eitherMatches(word, w) {
+			return true
+		}
+	}
+	return false
+}
+
+func eitherMatches(word, w string) bool {
+	i := 0
+	for _, r := range word {
+		c := rune(w[i])
+		if r != c && !(r == pickupAreaEither && (c == 'i' || c == 'l')) {
+			return false
+		}
+		i++
+	}
+	return true
+}
 
 // pickupAreaStreetTypes are the street types a house number comes before.
-var pickupAreaStreetTypes = map[string]bool{
-	"st": true, "street": true, "ave": true, "avenue": true, "rd": true, "road": true,
-	"blvd": true, "boulevard": true, "ln": true, "lane": true, "dr": true, "drive": true,
-	"ct": true, "court": true, "way": true, "pl": true, "place": true, "hwy": true,
-	"highway": true, "pkwy": true, "parkway": true, "cir": true, "circle": true,
-	"ter": true, "terrace": true, "trl": true, "trail": true, "sq": true, "square": true,
-	"loop": true, "plaza": true, "alley": true, "pike": true,
-}
+var pickupAreaStreetTypes = pickupAreaKeys(
+	"st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard", "ln", "lane", "dr", "drive",
+	"ct", "court", "way", "pl", "place", "hwy", "highway", "pkwy", "parkway", "cir", "circle",
+	"ter", "terrace", "trl", "trail", "sq", "square", "loop", "plaza", "alley", "pike",
+)
 
 // pickupAreaLabels are words that make the number after them a label, not a
 // house number ("Exit 12", "Ward 3", "Zone 2").
-var pickupAreaLabels = map[string]bool{"exit": true, "ward": true, "zone": true}
+var pickupAreaLabels = pickupAreaKeys("exit", "ward", "zone")
 
 // pickupAreaDistances are words that make the number before them a distance
 // or a time, not a house number ("2 blocks from Main St", "10 min on the
 // way"). Only these end the street name: "off 12 Oak St" and "12 The Grove
 // Rd" are addresses.
-var pickupAreaDistances = map[string]bool{
-	"block": true, "blocks": true, "mile": true, "miles": true, "mi": true, "min": true,
-	"mins": true, "minute": true, "minutes": true, "km": true,
-}
+var pickupAreaDistances = pickupAreaKeys(
+	"block", "blocks", "mile", "miles", "mi", "min", "mins", "minute", "minutes", "km",
+)
 
 // readsAsStreetAddress is whether a pickup_area value looks like a street
 // address rather than a public area: a house number followed by a street
 // type with at most three name words between ("12 Oak St.", "11501 Alterra
 // Pkwy"), or a numbered unit ("Apt 4", "#5"). The agent picks the class
 // label, so an address labelled pickup_area would reach everyone a public
-// area may go to. The value is NFKC-normalized ("１２" is "12") with format
-// characters removed first. A ZIP, a street named without a number before it
-// ("Main St corridor", "St. Louis, Ward 3"), a number with no street type
-// ("1600 Broadway") and a number after the street ("Hauptstraße 7") pass: the
-// guard catches the common shape, not every address.
+// area may go to. The value is read so that how it is written cannot hide
+// the shape (pickupAreaReading): escapes decoded, then read twice, with HTML
+// tags as spaces, and with tags and Markdown emphasis dropped; either
+// reading that looks like an address refuses it. A ZIP, a street named
+// without a number before it ("Main St corridor", "St. Louis, Ward 3"), a
+// number with no street type ("1600 Broadway") and a number after the
+// street ("Hauptstraße 7") pass: the guard catches the common shape, not
+// every address.
 func readsAsStreetAddress(v string) bool {
-	v = pickupAreaFormat.ReplaceAllString(norm.NFKC.String(v), "")
+	v = decodeEscapes(v)
+	spaced := pickupAreaTag.ReplaceAllString(v, " ")
+	joined := strings.Map(func(r rune) rune {
+		if strings.ContainsRune(pickupAreaEmphasis, r) {
+			return -1
+		}
+		return r
+	}, pickupAreaTag.ReplaceAllString(v, ""))
+	return streetAddressShape(pickupAreaReading(spaced)) || streetAddressShape(pickupAreaReading(joined))
+}
+
+// pickupAreaReading is v as the street-address guard reads it, so a street
+// type or a unit cannot slip past by how it is written: what draws nothing
+// (ignorable) and every mark (\p{M}: nonspacing, spacing and enclosing,
+// such as U+20DD) read as nothing; every separator (\p{Z}) and space as a
+// space; any script's decimal digit as its ASCII digit; a vertical stroke
+// (pipeLike) as pickupAreaEither; a letter outside ASCII as its TR39
+// confusable skeleton (confusableSkeleton) when that is plain letters and
+// digits, so a Cyrillic Ѕ reads s and a fullwidth Ｓ reads s, with an i or l
+// in it read as pickupAreaEither; everything else folded (foldDecoded:
+// compatibility forms). Then lower case.
+func pickupAreaReading(v string) string {
+	var b strings.Builder
+	for _, r := range v {
+		switch {
+		case unicode.Is(unicode.M, r) || ignorable(r):
+		case unicode.Is(unicode.Z, r) || unicode.IsSpace(r):
+			b.WriteByte(' ')
+		case unicode.Is(unicode.Nd, r):
+			// A digit stays a digit, even one drawn like a stroke (١).
+			b.WriteString(foldDecoded(string(r)))
+		case pipeLike(r):
+			b.WriteRune(pickupAreaEither)
+		case r > 0x7f && unicode.IsLetter(r):
+			if sk := confusableSkeleton(r); sk != "" && isASCIIAlnum(sk) {
+				b.WriteString(strings.Map(func(c rune) rune {
+					if c == 'i' || c == 'l' {
+						return pickupAreaEither
+					}
+					return c
+				}, sk))
+				break
+			}
+			b.WriteString(foldDecoded(string(r)))
+		default:
+			b.WriteString(foldDecoded(string(r)))
+		}
+	}
+	return strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.M, r) {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, b.String())
+}
+
+// streetAddressShape is readsAsStreetAddress on one reading.
+func streetAddressShape(v string) bool {
 	if pickupAreaUnit.MatchString(v) {
 		return true
 	}
 	// A comma or semicolon ends a street address's first line.
 	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
-		words := pickupAreaWord.FindAllString(strings.ToLower(part), -1)
+		words := pickupAreaWord.FindAllString(part, -1)
 		for i, w := range words {
-			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaLabels[words[i-1]]) {
+			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaIs(words[i-1], pickupAreaLabels)) {
 				continue
 			}
 			for _, next := range words[i+1 : min(i+5, len(words))] {
-				if pickupAreaDistances[next] {
+				if pickupAreaIs(next, pickupAreaDistances) {
 					break
 				}
-				if pickupAreaStreetTypes[next] {
+				if pickupAreaIs(next, pickupAreaStreetTypes) {
 					return true
 				}
 			}
