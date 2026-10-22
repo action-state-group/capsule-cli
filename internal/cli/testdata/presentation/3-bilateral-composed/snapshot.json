@@ -31,7 +31,7 @@
     "efe600ed2eebc8a64b0781ae8b03b29d9b882d0e8c6f07cfe6707fe5f2fffa2f"
   ],
   "text": [
-    "Bundle verification passed",
+    "Contents checked",
     "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.",
     "Composition",
     "composed/v1 check: withheld",
@@ -104,6 +104,8 @@
     "result",
     "3fbe7339cdc28af263b583eb2a803ed183f78242fa077b9af84712375e54f973 – 8cfce281290ed32ae1c51d0beb95cb3dc0006ea5927c33763465bead8943bf10",
     "corroborating, on declared custody",
+    "How this page was checked",
+    "· 10 of 10 checks passed · 1 record · signatures not checked here · 1 other check not run here",
     "Verification",
     "bundle digest",
     "\"efe600ed2eebc8a64b0781ae8b03b29d9b882d0e8c6f07cfe6707fe5f2fffa2f\"",

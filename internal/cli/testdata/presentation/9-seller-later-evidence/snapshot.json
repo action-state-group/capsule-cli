@@ -42,7 +42,7 @@
     "f95030d9d7a14cf7a3ef4a8ebd05a1c734fb968153524ee9a51fe75eddce38b9"
   ],
   "text": [
-    "Bundle verification passed",
+    "Contents checked",
     "DEMO",
     "Deal report",
     "What you asked",
@@ -155,6 +155,8 @@
     "Oct 21, 2026, 4:53 AM ·",
     "Claim recorded (): Returns accepted within 7 days if unridden",
     "This page checked each step's sealed record and its place in this deal's log; the verification below says what was and was not checked. The records carry fingerprints, not names or numbers; the words shown come from this device. The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. It covers this skill's own records only, never the agent host's own store.",
+    "How this page was checked",
+    "· 10 of 10 checks passed · 21 records · signatures not checked here",
     "Verification",
     "bundle digest",
     "\"f95030d9d7a14cf7a3ef4a8ebd05a1c734fb968153524ee9a51fe75eddce38b9\"",

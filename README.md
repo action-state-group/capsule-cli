@@ -867,7 +867,7 @@ payloads, the citation closure and the log proofs. It does **not** check:
 - the checkpoint's signature;
 - the records' signatures.
 
-It says "Bundle verification passed" for a bundle that `verify --bundle` calls
+It says "Contents checked" for a bundle that `verify --bundle` calls
 `INCOMPLETE` too. Run `verify --bundle` for the verdict.
 
 **Order matters.** Publish everything and cut the checkpoint before you disclose:

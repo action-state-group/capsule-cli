@@ -20,8 +20,10 @@
     "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b"
   ],
   "text": [
-    "Bundle verification failed",
+    "Check failed",
     "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed.",
+    "How this page was checked",
+    "· 3 of 10 checks failed · 1 check on this page failed · 1 record · signatures not checked here",
     "Verification",
     "bundle digest",
     "\"0da963e89819051b3c04326b2e50109e4bb994f8456e0e7e684436f84abb9747\"",

@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Every page has a margin, a "Contents checked" pill and a folded check section (capsule-viewer#60, from #408)
+
+- **Changed:** the pages capsulectl writes (`disclose --html`, `deal
+  report --html`, `presentation build`, `book report build`) take
+  capsule-viewer's page shell at `c48de50`:
+  - every page has a width and padding; receipts keep their 760px theme;
+  - the verdict is a small pill at the top, "Contents checked" or "Check
+    failed", in place of the "Bundle verification passed" line;
+  - the verification details (digests, checkpoint root, the ten checks,
+    completeness, extensions) fold into one closed "How this page was
+    checked" section, whose line says how many checks passed, how many
+    records the file carries and what was not checked here. It opens by
+    itself for a bundle that did not verify.
+- **Changed:** the same pin brings capsule-viewer's report-card redesign
+  (capsule-viewer#41, #42, #48) to `book report build`'s outcome and EU AI
+  Act cards:
+  - one contract-report view with wording packs;
+  - two levels in plain words;
+  - who judged, who witnessed and what verified, on the front;
+  - a rule-by-rule table with a "could not decide" column.
+
+  A conversation the judge could not decide is now counted as neither
+  resolved nor missed: the outcome sample reads 4 missed and 1 undecided
+  where it read 5 missed. The old "The terms", "What ran" and "Verification
+  details" sections move into the card's own proofs section and the folded
+  check section.
+- **Changed:** `capsule-viewer/go` moves from v0.1.1 to the pseudo-version
+  of `c48de50`, the same commit the vendored runtime (`evidence-graph.iife.js`)
+  is built from, so the shell's style hashes and the runtime move together. A
+  test now holds the two to one commit; the earlier check that hashed the
+  runtime's stylesheets from the vendored file cannot, as the runtime now
+  builds them from parts.
+
 ### A sale's listing post, and the classes its listings state (capsule-engine#187, #190)
 
 - **Added:** `deal check --deal sale-…` takes a listing post: `{"action":
