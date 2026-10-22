@@ -682,6 +682,18 @@ A verifier holding one deal's records in `seq` order checks:
     - A `represent` check of any other class is ASK. Only the user's own approval, in their words,
       authorizes the claim (`[task_authority, user_approval]`, then any platform approvals, as on
       an action).
+    - The user's own claim. A `represent` check of class `authenticity` may carry
+      `representing.attributed_to: "user"` (a closed set of one, on no other class): the words are
+      the user's claim, said by the agent as theirs and marked unverified. capsulectl accepts it
+      only in words that follow one fixed template, one sentence: they start "The seller says ",
+      end " (unverified)", and hold a claim between that is not blank (Unicode white space and U+001C-U+001F trimmed) and has no sentence mark: a Unicode 17.0 Sentence_Terminal code point (`.` `!` `?` `。` `؟` `।` and the rest, in any script), a line terminator (U+000A, U+000B, U+000C, U+000D, U+001C, U+001D, U+001E, U+0085, U+2028, U+2029) or `…` (U+2026), 181 code points in all, listed in capsule-cli's `plugins/internal/plugin/testdata/sentence-marks.txt` and the same in the engine's promise_never/1.1.0, e.g. "The seller says
+      it's authentic (unverified)". Every such check is ASK, with finding `attributed_claim`,
+      whatever the task authority orders: a class the user ordered says what may be said, not
+      that the user made this claim. Only the user's own approval, in their words, authorizes
+      the claim; an answer on the card with no words of theirs (`agent_card`) or a standing
+      intent never does, and their `hold` leaves it unchecked. A seller ruleset passes such a
+      claim where it refuses the agent's own authenticity claim, and may check the same template
+      on `representing_opening`.
     - Authorization holds only when all of these are true:
       - the claim's class equals the checked one, and its words are the checked words. The claim
         is sealed under the check's own nonces, so its `text_commitment` (and

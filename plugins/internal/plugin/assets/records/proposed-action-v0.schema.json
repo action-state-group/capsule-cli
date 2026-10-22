@@ -248,6 +248,22 @@
             },
             "source_ref_commitment": {
               "$ref": "record-common-v0.schema.json#/$defs/hex64"
+            },
+            "attributed_to": {
+              "description": "Only on an authenticity claim: user when the words are the user's own claim, said by the agent as theirs and marked unverified, in one fixed template, one sentence: \"The seller says … (unverified)\", e.g. \"The seller says it's authentic (unverified)\". Absent when the words are the agent's. Every such check asks, and only the user's own approval, in their words, authorizes the claim.",
+              "const": "user"
+            }
+          },
+          "if": {
+            "required": [
+              "attributed_to"
+            ]
+          },
+          "then": {
+            "properties": {
+              "class": {
+                "const": "authenticity"
+              }
             }
           }
         },

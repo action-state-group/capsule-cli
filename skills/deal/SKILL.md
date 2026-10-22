@@ -715,6 +715,16 @@ A class the user told you to state passes. That is the deal's
 `ordered_representations`: "tell them about the scratch" is `condition`.
 Every other class asks the user for these exact words.
 
+Never say on your own that the item is authentic: the seller rules refuse
+it. When the user themselves claims it is authentic and wants the buyer
+told, say it as their claim, marked unverified: add `"attributed_to":
+"user"` to `representing`, class `authenticity`, with words in exactly this
+form, one sentence: "The seller says <their claim> (unverified)", e.g. "The
+seller says it's authentic (unverified)". No full stop, `!`, `?` or line break
+before the ending, in any script. Any other words are refused. This check always asks: show the user
+the card, and only their own answer, in their words, lets you say it. Never
+attribute a claim the user did not make.
+
 State each ordered class before any offer, commit, sign, payment or share in
 this deal. On a sale, state it in every buyer's thread. Until you do, those
 checks ask with no way to proceed. The only ways on are to state it, or, on

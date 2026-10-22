@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
 )
@@ -39,7 +40,70 @@ const representAction = "represent"
 const (
 	ruleRepresentationMissing = "required_representation_missing"
 	ruleRepresentationOutside = "representation_outside_authority"
+	// ruleAttributedClaim is capsulectl's own ask on every represent check
+	// attributed to the user: whatever the task authority orders, only the
+	// user can say these words are their claim (capsule-engine#189).
+	ruleAttributedClaim = "attributed_claim"
 )
+
+// The user's own claim, said by the seller's agent (capsule-engine#189,
+// Steven's A7 ruling): a represent check may carry attributed_to "user", only
+// on an authenticity claim, and only in words that follow one fixed
+// template, one sentence that names the role, never the person, and ends
+// marked unverified: "The seller says it's authentic (unverified)". The
+// seller ruleset passes such a claim (promise_never/1.1.0) where it refuses
+// the agent's own authenticity claim, and checks the same template when it
+// can open the words.
+const (
+	attributedToUser   = "user"
+	attributedClass    = "authenticity"
+	attributedPrefix   = "The seller says "
+	attributedSuffix   = " (unverified)"
+	attributedTemplate = `"The seller says … (unverified)"`
+	// attributedSentenceMarks end a sentence or a line, in any script: every
+	// Unicode 17.0 Sentence_Terminal code point, every line terminator
+	// Python's str.splitlines uses, and U+2026, as explicit code points so the
+	// set stays frozen whatever Go's unicode tables become. The engine's
+	// promise_never/1.1.0 reads the same list (attributed_template.sentence_marks);
+	// testdata/sentence-marks.txt holds it, byte-identical in both repositories.
+	attributedSentenceMarks = "" +
+		"\u000A\u000B\u000C\u000D\u001C\u001D\u001E\u0021\u002E\u003F\u0085\u0589\u061D" +
+		"\u061E\u061F\u06D4\u0700\u0701\u0702\u07F9\u0837\u0839\u083D\u083E\u0964\u0965" +
+		"\u104A\u104B\u1362\u1367\u1368\u166E\u1735\u1736\u17D4\u17D5\u1803\u1809\u1944" +
+		"\u1945\u1AA8\u1AA9\u1AAA\u1AAB\u1B4E\u1B4F\u1B5A\u1B5B\u1B5E\u1B5F\u1B7D\u1B7E" +
+		"\u1B7F\u1C3B\u1C3C\u1C7E\u1C7F\u2024\u2026\u2028\u2029\u203C\u203D\u2047\u2048" +
+		"\u2049\u2CF9\u2CFA\u2CFB\u2E2E\u2E3C\u2E53\u2E54\u3002\uA4FF\uA60E\uA60F\uA6F3" +
+		"\uA6F7\uA876\uA877\uA8CE\uA8CF\uA92F\uA9C8\uA9C9\uAA5D\uAA5E\uAA5F\uAAF0\uAAF1" +
+		"\uABEB\uFE12\uFE15\uFE16\uFE52\uFE56\uFE57\uFF01\uFF0E\uFF1F\uFF61\U00010A56" +
+		"\U00010A57\U00010F55\U00010F56\U00010F57\U00010F58\U00010F59\U00010F86\U00010F87" +
+		"\U00010F88\U00010F89\U00011047\U00011048\U000110BE\U000110BF\U000110C0\U000110C1" +
+		"\U00011141\U00011142\U00011143\U000111C5\U000111C6\U000111CD\U000111DE\U000111DF" +
+		"\U00011238\U00011239\U0001123B\U0001123C\U000112A9\U000113D4\U000113D5\U0001144B" +
+		"\U0001144C\U000115C2\U000115C3\U000115C9\U000115CA\U000115CB\U000115CC\U000115CD" +
+		"\U000115CE\U000115CF\U000115D0\U000115D1\U000115D2\U000115D3\U000115D4\U000115D5" +
+		"\U000115D6\U000115D7\U00011641\U00011642\U0001173C\U0001173D\U0001173E\U00011944" +
+		"\U00011946\U00011A42\U00011A43\U00011A9B\U00011A9C\U00011C41\U00011C42\U00011EF7" +
+		"\U00011EF8\U00011F43\U00011F44\U00016A6E\U00016A6F\U00016AF5\U00016B37\U00016B38" +
+		"\U00016B44\U00016D6E\U00016D6F\U00016E98\U0001BC9F\U0001DA88"
+)
+
+// attributedBlank is whether a claim is blank as Python's str.strip sees it,
+// as the engine does: Unicode white space and U+001C-U+001F.
+func attributedBlank(claim string) bool {
+	return strings.TrimFunc(claim, func(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }) == ""
+}
+
+// attributedWords is whether text follows the attribution template exactly:
+// the prefix, a claim that is not blank and holds no sentence mark
+// (attributedSentenceMarks), so it stays one sentence, then the suffix.
+func attributedWords(text string) bool {
+	if !strings.HasPrefix(text, attributedPrefix) || !strings.HasSuffix(text, attributedSuffix) ||
+		len(text) < len(attributedPrefix)+len(attributedSuffix) {
+		return false
+	}
+	claim := text[len(attributedPrefix) : len(text)-len(attributedSuffix)]
+	return !attributedBlank(claim) && !strings.ContainsAny(claim, attributedSentenceMarks)
+}
 
 // representationGated are the acts an ordered representation must come
 // before: every act that moves toward or carries out a commitment, and every
@@ -54,6 +118,10 @@ type dealRepresenting struct {
 	Class  string `json:"class"`
 	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
+	// AttributedTo is "user" when the words are the user's own claim, said
+	// as theirs and marked unverified (attributedWords); empty when they are
+	// the agent's.
+	AttributedTo string `json:"attributed_to,omitempty"`
 }
 
 // representationRules is whether a deal follows the representation rules:
@@ -119,6 +187,11 @@ func (s dealState) missingRepresentations() []string {
 // words. An external checker may deny either (promise_never).
 func evaluateRepresentation(r *dealCheckResult, s dealState, snap dealSnapshot, add func(q, rule, field, text string)) {
 	c := snap.Representing.Class
+	// An attributed claim always asks: a class the user ordered says what may
+	// be said, not that the user made this claim.
+	if snap.Representing.AttributedTo == attributedToUser {
+		add("asked", ruleAttributedClaim, "representation", "These words go out as your claim: \""+snap.Representing.Text+"\". Only you can say they're yours")
+	}
 	if !slices.Contains(s.ordered(), c) {
 		add("asked", ruleRepresentationOutside, "representation", "You didn't ask me to tell the buyer about the "+classWord(c)+". I need your OK on these exact words")
 	}
@@ -154,7 +227,26 @@ func checkRepresenting(events []sealedEvent, snap *dealSnapshot) error {
 	if snap.AmountMinor != nil || snap.Terms != nil || snap.Recourse != nil || snap.Who != nil || len(snap.Disclosing) > 0 {
 		return cli.InputError("a represent check is about the words only: leave amounts, terms, recourse, who and disclosing out")
 	}
-	*rp = dealRepresenting{Class: claim.Class, Text: claim.Text, Source: claim.Source}
+	if err := checkAttribution(rp.AttributedTo, claim.Class, claim.Text); err != nil {
+		return err
+	}
+	*rp = dealRepresenting{Class: claim.Class, Text: claim.Text, Source: claim.Source, AttributedTo: rp.AttributedTo}
+	return nil
+}
+
+// checkAttribution refuses an attribution outside its closed set, on any
+// class but authenticity, or in words that do not follow the template.
+func checkAttribution(to, class, text string) error {
+	switch {
+	case to == "":
+		return nil
+	case to != attributedToUser:
+		return cli.InputError(`representing.attributed_to is "user" (the user's own claim) or left out (the agent's)`)
+	case class != attributedClass:
+		return cli.InputError("only an authenticity claim can be attributed to the user: leave attributed_to out of a " + classWord(class) + " claim")
+	case !attributedWords(text):
+		return cli.InputError("refusing to check: the user's claim must read " + attributedTemplate + ", one sentence, with no full stop, !, ? or line break before \"(unverified)\" (in any script), so the buyer sees whose claim it is and that it is unverified")
+	}
 	return nil
 }
 
@@ -211,6 +303,7 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 	if rp := snap.Representing; rp.Class != c.Class || rp.Text != c.Text || rp.Source != c.Source {
 		return "", "the claim is not the words that were checked: check these words", "differs_from_check"
 	}
+	attributed := snap.Representing.AttributedTo == attributedToUser
 	if ck.Verdict == "deny" {
 		return "", "the check denied it", "denied"
 	}
@@ -228,7 +321,9 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 		return "", "what you asked the agent to say changed after the check: check again", "authority_changed"
 	}
 	used := usedAuthorizations(events)
-	if ck.Verdict == "pass" {
+	// The user's own claim is authorized only by the user's own approval, in
+	// their words: never by a passing check alone.
+	if ck.Verdict == "pass" && !attributed {
 		if used[c.Check] {
 			return "", "that check already covered an earlier claim", "approval_used"
 		}
@@ -242,6 +337,8 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 		switch {
 		case !a.Proceed:
 			return "", "the check asked and the answer was " + a.Choice, "not_approved"
+		case a.Approver != "user" && attributed:
+			return "", "these words go out as your claim, and only your own approval, in your words, says they're yours", "not_approved"
 		case a.Approver != "user":
 			return "", "the check asked, and only your own approval, in your words, covers what the agent says for you", "not_approved"
 		case used[later.CapsuleID]:

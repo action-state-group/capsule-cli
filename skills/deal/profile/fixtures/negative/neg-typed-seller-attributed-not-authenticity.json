@@ -1,0 +1,37 @@
+{
+  "fixture": "neg-typed-seller-attributed-not-authenticity",
+  "expect": "invalid",
+  "description": "A represent check attributing a condition claim to the user: only an authenticity claim can be attributed to the user (attributed_to).",
+  "expected_stage": "schema",
+  "expected_error_contains": "authenticity",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json"
+  ],
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 3,
+    "at": "2026-10-07T10:05:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "body": {
+      "action": "represent",
+      "representing": {
+        "class": "condition",
+        "attributed_to": "user",
+        "text_commitment": "d91bc00fba824fb5af508ce050fdc223a954651eb372ac5909e46ad310ba1ac6"
+      }
+    }
+  }
+}

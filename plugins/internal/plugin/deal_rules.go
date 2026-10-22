@@ -2392,7 +2392,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			for _, d := range e.Check.Differences {
 				// The user's own yes answered it: a "you didn't ask for this" on
 				// the action, or on what the agent tells the buyer.
-				answered := userApproved[se.CapsuleID] && (d.Rule == "not_asked" && d.Field == "action" || d.Rule == ruleRepresentationOutside)
+				answered := userApproved[se.CapsuleID] && (d.Rule == "not_asked" && d.Field == "action" || d.Rule == ruleRepresentationOutside || d.Rule == ruleAttributedClaim)
 				// Keeping a promise to ask is not trying something else.
 				if d.Question == "asked" && d.Rule != "agent_picked" && d.Rule != "promised_ask" && !answered {
 					asked = append(asked, d.Text)
