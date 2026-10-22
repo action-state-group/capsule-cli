@@ -157,8 +157,13 @@ func TestActAnomalyKind(t *testing.T) {
 		"answer_was_not_proceed": "unsealed_approval",
 		"no_sealed_approval":     "unsealed_approval",
 		"approval_already_used":  "unsealed_approval",
-		"":                       "skipped_check",
-		"expired":                "skipped_check",
+		// The check asked, and only the agent's card answered it.
+		"ask_needs_your_words": "unsealed_approval",
+		"no_check":             "skipped_check",
+		"stale_check":          "skipped_check",
+		"changed_after_check":  "skipped_check",
+		"":                     "skipped_check",
+		"expired":              "skipped_check",
 	} {
 		assert.Equal(t, want, actAnomalyKind(dealAct{Unchecked: true, Rule: rule}), rule)
 	}

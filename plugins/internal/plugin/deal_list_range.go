@@ -101,7 +101,10 @@ func dealRulesAnswer(r *dealRules) string {
 }
 
 // actAnomalyKind is the anomaly an act sealed without a valid check is, as
-// `deal report` names it; "" for a checked act.
+// `deal report` names it; "" for a checked act. An act whose check asked and
+// that went ahead on anything but the user's own yes (an answer not to
+// proceed, none, one already used, or the agent's card answer to an ask) is
+// unsealed_approval; one with no check in force is skipped_check.
 func actAnomalyKind(a dealAct) string {
 	if !a.Unchecked {
 		return ""
@@ -109,7 +112,7 @@ func actAnomalyKind(a dealAct) string {
 	switch a.Rule {
 	case "differs_from_check":
 		return "differs_from_check"
-	case "answer_was_not_proceed", "no_sealed_approval", "approval_already_used":
+	case "answer_was_not_proceed", "no_sealed_approval", "approval_already_used", "ask_needs_your_words":
 		return "unsealed_approval"
 	}
 	return "skipped_check"

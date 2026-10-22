@@ -333,10 +333,14 @@ user's own and is never sent by default.
   reported, so a mid-period upgrade shows as two. A re-check is another
   check.
 - **Anomalies.** The steps sealed in the range that `deal report` lists as
-  the agent's: an act sealed with no check (`skipped_check`), without a
-  sealed approval to go ahead (`unsealed_approval`), or other than what was
-  checked (`differs_from_check`, `deal report`'s `asked_vs_did` on an act),
-  and a disclosure no approval covered (`unapproved_disclosure`). Each act
+  the agent's: an act sealed with no check in force (`skipped_check`: none,
+  one gone stale or made before the details changed, or, for a seller's
+  commit, no accepted offer), with no approval of the user's own to go
+  ahead (`unsealed_approval`: an answer not to proceed, none, one already
+  used, or only the agent's card answer to a check that asked), or other
+  than what was checked (`differs_from_check`, `deal report`'s
+  `asked_vs_did` on an act), and a disclosure no approval covered
+  (`unapproved_disclosure`). Each act
   or disclosure counts once, in the range it was sealed in. A check's
   pauses are in its verdict, and steps the other party took are not
   counted.
