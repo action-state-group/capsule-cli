@@ -1,6 +1,6 @@
 {
   "card": "obligation",
-  "emitted_by": "capsulectl report build --bundle bundle.json --card obligation --out page.html",
+  "emitted_by": "capsulectl book report build --bundle bundle.json --card obligation --out page.html",
   "kind": "monthly-compliance",
   "page": "written",
   "rerender": "report-build",

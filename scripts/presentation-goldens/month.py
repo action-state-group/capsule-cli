@@ -150,7 +150,7 @@ def result_request(kind: str, ids: dict[str, str]) -> dict:
         },
         "view": {"spec_version": "presentation/v1", "title": title},
     }
-    references = [{"Type": "agent-action-capsule", "DigestAlg": "sha256", "Digest": ids[r["key"]], "CitationPurpose": "acted_on"} for r in reports(kind)]
+    references = [{"Type": "agent-action-capsule", "DigestAlg": "SHA-256", "Digest": ids[r["key"]], "CitationPurpose": "acted_on"} for r in reports(kind)]
     return {
         "spec_version": "capsule-seal-request/v1",
         "capsule": {

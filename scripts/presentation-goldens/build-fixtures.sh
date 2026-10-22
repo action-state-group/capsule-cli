@@ -33,10 +33,11 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 (cd "$root" && go build -o "$work/capsulectl" ./cmd/capsulectl)
-# The deal commands are the capsulectl-deal plugin's, found on a plugin root
-# of this run's own.
+# The deal and book commands are the capsulectl-deal and capsulectl-book
+# plugins', found on a plugin root of this run's own.
 mkdir -p "$work/plugins"
 (cd "$root/plugins" && go build -o "$work/plugins/capsulectl-deal" ./cmd/capsulectl-deal)
+(cd "$root/plugins" && go build -o "$work/plugins/capsulectl-book" ./cmd/capsulectl-book)
 export CAPSULECTL_PLUGIN_ROOTS="$work/plugins"
 capsulectl() { "$work/capsulectl" "$@"; }
 
@@ -99,11 +100,11 @@ spend=$(rule spend-limit "Spend per order stays under the example limit" same)
 approval=$(rule approval "Orders over the example threshold need a second approval" different)
 vendor=$(rule vendor "Only vendors on the example list are paid" same)
 jq -n --arg spend "$spend" --arg approval "$approval" --arg vendor "$vendor" '
-  def cite($id): {type: "agent-action-capsule", digest_alg: "sha256", digest: $id, citation_purpose: "acted_on"};
+  def cite($id): {type: "agent-action-capsule", digest_alg: "SHA-256", digest: $id, citation_purpose: "acted_on"};
   {spec_version: "capsule-seal-request/v1",
    capsule: {ActionID: "rules-compare", ActionType: "fyi", Operator: "example-operator",
              Developer: "example-rules-checker@1", Timestamp: "2026-10-07T00:01:00Z",
-             References: [$spend, $approval, $vendor] | map({Type: "agent-action-capsule", DigestAlg: "sha256",
+             References: [$spend, $approval, $vendor] | map({Type: "agent-action-capsule", DigestAlg: "SHA-256",
                                                              Digest: ., CitationPurpose: "acted_on"})},
    payload: {spec_version: "report/v1", type: "example.rules_compare/v0",
              title: "Example rules: September against October", rows: [
@@ -244,9 +245,10 @@ meta 3-bilateral-composed "$(jq -n --arg v "$(verdict bundle.json)" --arg c "$aa
   refused_because: "no capsulectl command renders a bundle file to a page; the page gate refuses this bundle (verify --bundle: INCOMPLETE, no checkpoint), as it does every published composed/v1 vector; the vendored viewer has no composed/v1 view"}')"
 
 # --- 4 and 5. monthly outcome and compliance reports: Result v0 roots ------
-# A Result v0 sealed as the payload of a SQLite record: `result build` seals
-# only into a jsonl book, whose bundles leave producer signatures out, and
-# the page gate refuses those (INCOMPLETE).
+# A Result v0 sealed as the payload of a SQLite record. When these fixtures
+# were first taken, `result build` sealed only into a jsonl book whose
+# bundles left producer signatures out, and the page gate refused those
+# (capsule-cli#148); the fixtures keep the SQLite route.
 month() { # fixture dir, kind, card
   fixture "$1"
   sqlite_profile
@@ -261,9 +263,9 @@ month() { # fixture dir, kind, card
   capsulectl cll checkpoint create --profile example >/dev/null
   capsulectl disclose --profile example --root "$root_id" --out disclosed.json >/dev/null
   jq --argjson ext "$(python3 "$here/month.py" extension "$2")" '.extensions = ((.extensions // {}) + $ext)' disclosed.json >bundle.json
-  capsulectl report build --bundle bundle.json --card "$3" --out page.html >/dev/null
+  capsulectl book report build --bundle bundle.json --card "$3" --out page.html >/dev/null
   cp bundle.json page.html "$out/$1/"
-  meta "$1" "$(jq -n --arg k "$2" --arg card "$3" --arg v "$(verdict bundle.json)" '{kind: ("monthly-" + $k), emitted_by: ("capsulectl report build --bundle bundle.json --card " + $card + " --out page.html"), rerender: "report-build", card: $card, page: "written", verify: $v}')"
+  meta "$1" "$(jq -n --arg k "$2" --arg card "$3" --arg v "$(verdict bundle.json)" '{kind: ("monthly-" + $k), emitted_by: ("capsulectl book report build --bundle bundle.json --card " + $card + " --out page.html"), rerender: "report-build", card: $card, page: "written", verify: $v}')"
 }
 month 4-monthly-outcome outcome outcome
 month 5-monthly-compliance compliance obligation
