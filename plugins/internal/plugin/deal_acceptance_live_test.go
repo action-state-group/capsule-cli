@@ -164,6 +164,30 @@ func TestTheCardSaysWhyTheRulesFoundNoAcceptance(t *testing.T) {
 	assert.Equal(t, []string{"first time they get your details"}, cardWhy(w, dealCheckResult{Differences: diffs("first_disclosure")}, share, old),
 		"rules that allowed it need no reason about the acceptance")
 	assert.Equal(t, []string{"the buyer's acceptance was called off"}, cardWhy(w, dealCheckResult{Differences: diffs("acceptance_called_off")}, share, cardFacts{}))
+	// The refusal is never dropped by the two-reason limit: higher rows may
+	// come first, and it takes the second place.
+	refusal := "your rules don't allow this, because the buyer's acceptance is older than 31 days. Ask them to accept again"
+	assert.Equal(t, []string{"the buyer's acceptance was called off", refusal},
+		cardWhy(w, dealCheckResult{Differences: diffs("acceptance_called_off", "rules_deny")}, share, old))
+	assert.Equal(t, []string{"the payee or contact changed since you first talked", refusal},
+		cardWhy(w, dealCheckResult{Differences: diffs("payee_or_contact_changed", "acceptance_called_off", "rules_deny")}, share, old))
+}
+
+// The card names the acceptance only when the rule that releases on it is
+// the one that failed or could not be evaluated.
+func TestOnlyTheAcceptanceRuleFailingNamesTheAcceptance(t *testing.T) {
+	rules := func(findings ...dealRulesFinding) *dealRules {
+		return &dealRules{Status: "evaluated", Verdict: "deny", Findings: findings}
+	}
+	s13 := dealRulesFinding{ID: "s13", Check: "seller.release_on_acceptance/1.2.0", Verdict: "fail"}
+	assert.True(t, acceptanceRuleFailed(rules(s13)))
+	assert.True(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: "release_on_acceptance", Verdict: "not_evaluable", Reason: "no history"})))
+	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "pass"})), "it passed")
+	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "not_evaluable", Reason: rulesDeclaredNotMeasured})), "declared, not measured")
+	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "r01", Check: "caps/1", Verdict: "fail"})), "another rule")
+	assert.False(t, acceptanceRuleFailed(rules(dealRulesFinding{ID: "x", Check: "seller.release_on_acceptance_extra/1", Verdict: "fail"})))
+	assert.False(t, acceptanceRuleFailed(&dealRules{Status: "not_evaluated"}))
+	assert.False(t, acceptanceRuleFailed(nil))
 }
 
 // setClock replaces the deal clock for the rest of the test.
@@ -212,6 +236,24 @@ func TestAShareAfterTheWindowSaysTheAcceptanceIsTooOld(t *testing.T) {
 	assert.NotContains(t, dealCheckOf(t, id, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["pickup_area"]}`)["card"], "older than")
 	assert.NotContains(t, dealCheckOf(t, id, `{"action":"share_contact","disclosing_to":"platform","recipient":{"name":"Example Market","domain":"market.example"},"disclosing":["email"]}`)["card"], "older than")
 	assert.Contains(t, dealCheckOf(t, id, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["pickup_area","phone"]}`)["card"], deniedOld)
+
+	// Past the window, a refusal or a gap from another rule is not the
+	// acceptance's: the rules' own reason stands.
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-other-deny", checkerPrints("deny", denyFinding))}})
+	other := dealCheckOf(t, id, phoneShare)
+	require.Equal(t, "deny", other["verdict"])
+	assert.Contains(t, other["card"], "Why I stopped: your rules don't allow this")
+	assert.NotContains(t, other["card"], "older than")
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-other-gap", checkerPrints("not_evaluable",
+		`{"id":"weekly","check":"window","verdict":"not_evaluable","reason":"the record carries no week of history"}`))}})
+	gap := dealCheckOf(t, id, phoneShare)
+	require.Equal(t, "pause", gap["verdict"])
+	assert.Contains(t, gap["card"], "I couldn't check this against your rules")
+	assert.NotContains(t, gap["card"], "older than")
+	// The acceptance rule not evaluated is the acceptance's.
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-s13-gap", checkerPrints("not_evaluable",
+		`{"id":"s13","check":"seller.release_on_acceptance/1.2.0","verdict":"not_evaluable","reason":"no acceptance in the history"}`))}})
+	assert.Contains(t, dealCheckOf(t, id, phoneShare)["card"], "the buyer's acceptance is older than 31 days; ask them to accept again")
 
 	// An unrelated ask from the rules says nothing about the acceptance.
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-ask", checkerPrints("escalate",

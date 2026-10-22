@@ -152,6 +152,17 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 			break
 		}
 	}
+	// The refusal for an old acceptance is always said: it takes the
+	// second place when two reasons above it apply.
+	if f.acceptanceOld && hasRule(r, "rules_deny") {
+		refusal := w.Line("card.why.rules_deny.acceptance_too_old", cli.V{"days": strconv.Itoa(cli.RulesHistoryDays)})
+		if refusal != "" && !slices.Contains(why, refusal) {
+			if len(why) == 2 {
+				why = why[:1]
+			}
+			why = append(why, refusal)
+		}
+	}
 	return why
 }
 
@@ -254,7 +265,7 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	// (a platform's or anyone else's is not its to release, and the public
 	// pickup area needs none).
 	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo == "counterparty" && slices.ContainsFunc(snap.Disclosing, func(c string) bool { return c != "pickup_area" }) &&
-		state.saleThread() && state.acceptanceOutsideHistory(state.historySince)
+		state.saleThread() && state.acceptanceOutsideHistory(state.historySince) && acceptanceRuleFailed(r.Rules)
 	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
