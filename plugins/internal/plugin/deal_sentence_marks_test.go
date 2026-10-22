@@ -43,10 +43,20 @@ func TestAttributedSentenceMarksAreTheSharedFixture(t *testing.T) {
 	assert.Equal(t, want, []rune(attributedSentenceMarks))
 }
 
-// Every rune Go's Unicode tables call a sentence terminator is in the frozen
-// list: when Go moves to a Unicode version with a new one, this fails, and
-// the list (and the engine's) must be reconsidered, never silently left short.
+// sentenceMarksUnicode is the Unicode version attributedSentenceMarks was
+// built from.
+const sentenceMarksUnicode = "17.0.0"
+
+// Under the Unicode version the list was built from, every rune Go's tables
+// call a sentence terminator is in it. Under any other version the check is
+// skipped: the list is frozen with promise_never/1.1.0, so a toolchain
+// upgrade must not fail on it, and a new sentence terminator needs a new
+// promise_never version (and a new list here).
 func TestEverySentenceTerminatorGoKnowsIsAMark(t *testing.T) {
+	if unicode.Version != sentenceMarksUnicode {
+		t.Skipf("the sentence marks are frozen at Unicode %s (promise_never/1.1.0); Go has Unicode %s. "+
+			"A new sentence terminator needs a new promise_never version", sentenceMarksUnicode, unicode.Version)
+	}
 	marks := map[rune]bool{}
 	for _, r := range attributedSentenceMarks {
 		marks[r] = true
