@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### A buyer's acceptance releases a seller's details only while the deal is live (capsule-engine#179)
+
+- **Added:** on a sale's thread, after the seller cancels the buyer's
+  acceptance (a `cancel` act after it), every later share check asks,
+  until the buyer accepts again: a new built-in difference
+  `acceptance_called_off` (question `safety`), with the card reason "the
+  buyer's acceptance was called off" (wording key
+  `card.why.acceptance_called_off`). A cancel calls off only the
+  acceptances before it; a cancel checked but never recorded calls off
+  nothing. The rule joins the rule table, so `ruleset_digest` changes and
+  the profile's typed fixtures are regenerated.
+- **Added:** the check of that cancel asks "The buyer backed out: record
+  their acceptance as called off?" (wording key
+  `card.question.cancel.acceptance`).
+- **Added:** when every commit of a sale thread is older than the cutoff
+  of the 31-day history the rules checker was given, the card on a
+  seller's share to the thread's buyer says why. When the acceptance rule
+  (`release_on_acceptance`, s13) fails and the rules refuse, it reads "Why
+  I stopped: your rules don't allow this, because the buyer's acceptance
+  is older than 31 days. Ask them to accept again." (wording key
+  `card.why.rules_deny.acceptance_too_old`). When s13 could not be
+  evaluated and nothing refused, the reason is "the buyer's acceptance is
+  older than 31 days; ask them to accept again"
+  (`card.why.acceptance_too_old`). Both take `{days}`. A refusal that s13
+  did not fail keeps the plain reason. Never on an escalation, a finding
+  of another rule, or a share of only the public `pickup_area`; the
+  refusal is always said, after at most one reason above it. capsulectl
+  holds the whole thread, so it tells this from no acceptance at all.
+- **Changed:** the deal skill has the agent record the seller's `cancel`
+  in the thread when a buyer who accepted withdraws, rather than closing
+  it, and, when the acceptance is too old, make the offer again, record
+  the acceptance and check and record the commit before sharing.
+
 ### An approval agrees only to the terms its card named (capsule-cli#380)
 
 - **Changed (breaking):** a check's card names every term the check changes
@@ -150,39 +183,6 @@
   a street address (a house number before a street type such as St, Ave or
   Pkwy, or a numbered unit such as Apt 4 or #5), naming `pickup_location`
   for an exact spot; nothing is sealed.
-
-### A buyer's acceptance releases a seller's details only while the deal is live (capsule-engine#179)
-
-- **Added:** on a sale's thread, after the seller cancels the buyer's
-  acceptance (a `cancel` act after it), every later share check asks,
-  until the buyer accepts again: a new built-in difference
-  `acceptance_called_off` (question `safety`), with the card reason "the
-  buyer's acceptance was called off" (wording key
-  `card.why.acceptance_called_off`). A cancel calls off only the
-  acceptances before it; a cancel checked but never recorded calls off
-  nothing. The rule joins the rule table, so `ruleset_digest` changes and
-  the profile's typed fixtures are regenerated.
-- **Added:** the check of that cancel asks "The buyer backed out: record
-  their acceptance as called off?" (wording key
-  `card.question.cancel.acceptance`).
-- **Added:** when every commit of a sale thread is older than the cutoff
-  of the 31-day history the rules checker was given, the card on a
-  seller's share to the thread's buyer says why. When the acceptance rule
-  (`release_on_acceptance`, s13) fails and the rules refuse, it reads "Why
-  I stopped: your rules don't allow this, because the buyer's acceptance
-  is older than 31 days. Ask them to accept again." (wording key
-  `card.why.rules_deny.acceptance_too_old`). When s13 could not be
-  evaluated and nothing refused, the reason is "the buyer's acceptance is
-  older than 31 days; ask them to accept again"
-  (`card.why.acceptance_too_old`). Both take `{days}`. A refusal that s13
-  did not fail keeps the plain reason. Never on an escalation, a finding
-  of another rule, or a share of only the public `pickup_area`; the
-  refusal is always said, after at most one reason above it. capsulectl
-  holds the whole thread, so it tells this from no acceptance at all.
-- **Changed:** the deal skill has the agent record the seller's `cancel`
-  in the thread when a buyer who accepted withdraws, rather than closing
-  it, and, when the acceptance is too old, make the offer again, record
-  the acceptance and check and record the commit before sharing.
 
 ## v0.1.0-rc19
 
