@@ -8,9 +8,9 @@
 #   scripts/presentation-goldens/build-fixtures.sh
 #
 # Each page is emitted by the real CLI, so the page gate
-# (internal/cli/page_gate.go) applies: a refused page is recorded with the
-# refusal instead. Keys and capsule ids are fresh on every run, so a rebuild
-# rewrites every fixture.
+# (internal/cli/page_gate.go) applies, and every fixture's page must pass it.
+# Keys and capsule ids are fresh on every run, so a rebuild rewrites every
+# fixture.
 #
 # Needs bash, go, jq, perl and python3. Writes only the fixtures' directory and its own
 # temp directory.

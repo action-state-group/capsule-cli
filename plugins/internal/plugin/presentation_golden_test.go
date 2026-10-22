@@ -152,6 +152,7 @@ func TestPresentationGoldens(t *testing.T) {
 			require.NoError(t, err)
 			verdict, _ := cli.BundleVerdict(bundle, nil)
 			require.Equal(t, meta.Verify, verdict, "verify --bundle's verdict on the fixture")
+			require.Equal(t, "written", meta.Page, "every fixture has a page")
 
 			page, err := rerenderPresentationPage(t, dir, meta, bundle)
 			require.NoError(t, err, "the page gate must let this fixture's page through")
