@@ -1,6 +1,11 @@
 package plugin
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -284,4 +289,28 @@ func TestACardClickAdoptsTheNamedTerms(t *testing.T) {
 	require.NotNil(t, last.Approval)
 	require.Equal(t, "agent_card", last.Approval.Approver)
 	assert.Equal(t, float64(0), payCount(t, id, freeShippingPay))
+}
+
+// A pack pinned before this release that words the terms line away (an
+// extra placeholder never filled) is not used: the card says the terms in
+// the built-in words, so what the approval adopts is on it.
+func TestAPackThatHidesTheTermsLineIsNotUsed(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(cli.BuiltinWordingBytes(), &doc))
+	doc["id"] = "org.example.product.wording/v0"
+	doc["entries"].(map[string]any)["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}"
+	raw, err := json.Marshal(doc)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "pack.json")
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	p.Wording = cli.ProfileWording{Path: path, SHA256: hex.EncodeToString(sum[:])}
+	require.NoError(t, cli.SaveProfile(p, true))
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, freeShippingShare))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	assert.Equal(t, "built-in", share["wording"])
+	assert.Contains(t, share["card"], "\nSaying yes also agrees to shipping: Free shipping.\n")
 }

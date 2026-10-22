@@ -183,21 +183,20 @@ func (w Wording) missingKeys() []string {
 // hidingTerms is the first card.terms entry of w that could hide a term
 // from the card's terms line, or "": an approval adopts exactly the terms
 // that line names (capsule-cli#380), so each entry must say something and
-// keep every placeholder the built-in entry fills.
+// use exactly the built-in entry's placeholders. One missing drops a term;
+// one extra is never filled, and Line then says nothing at all.
 func (w Wording) hidingTerms() string {
 	builtin := BuiltinWording().Entries
+	placeholders := func(text string) []string {
+		return slices.Compact(slices.Sorted(slices.Values(placeholder.FindAllString(text, -1))))
+	}
 	for _, k := range slices.Sorted(maps.Keys(builtin)) {
 		if !strings.HasPrefix(k, "card.terms.") {
 			continue
 		}
 		got := w.Entries[k]
-		if strings.TrimSpace(got) == "" {
+		if strings.TrimSpace(got) == "" || !slices.Equal(placeholders(got), placeholders(builtin[k])) {
 			return k
-		}
-		for _, m := range placeholder.FindAllString(builtin[k], -1) {
-			if !strings.Contains(got, m) {
-				return k
-			}
 		}
 	}
 	return ""

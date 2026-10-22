@@ -14,10 +14,10 @@ import (
 // the action, from the comparison material_fields_changed counts
 // (materialChangedKeys2). An approval adopts a changed term into what was
 // agreed only when the card it was given on named that term, with the value
-// it named, a named drop included. An approval with no card shown (standing_intent, on a check that
-// passed) adopts no changed term, so the next check carrying it still counts
-// it. A term stated for the first time, or restated in other words, is no
-// change and is adopted as before.
+// it named, a named drop included. An approval with no card shown
+// (standing_intent, on a check that passed) adopts no changed term, so the
+// next check carrying it still counts it. A term stated for the first time,
+// or restated in other words, is no change and is adopted as before.
 //
 // Which terms a card named is recomputed from the check and the agreement in
 // force when it was sealed, as the card was rendered from them: the card

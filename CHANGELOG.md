@@ -132,8 +132,8 @@
   from what was agreed, whatever the action, in one new line: `Saying yes
   also agrees to <terms>.` (new `card.terms.*` keys: a pinned pack needs
   them, or the built-in pack is used; a pack whose `card.terms.*` entry is
-  blank or leaves out a placeholder the built-in entry fills is refused, as
-  it could hide a term). A term that had an agreed value says it: `(was
+  blank or uses other placeholders than the built-in entry is refused, as
+  it could hide a term, and one pinned before is not used). A term that had an agreed value says it: `(was
   ...)`, in the agreed currency. The terms are the ones
   `material_fields_changed` counts, the payee aside.
 - **Changed (breaking):** an approved proceed adopts a changed term into what
