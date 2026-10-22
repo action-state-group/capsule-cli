@@ -73,8 +73,8 @@ func newDealListChecks() dealListChecks {
 // newDealListAnomalies lists the act- and disclosure-level anomaly kinds of
 // `deal report` (with an act against the user's answer not to proceed apart
 // from the other unsealed approvals), and a seller's representation nothing
-// authorized, each at zero. Counterparty-side kinds and the causes of a check's pause are not
-// counted: the verdicts count the pauses.
+// authorized, each at zero. Counterparty-side kinds and the causes of a
+// check's pause are not counted: the verdicts count the pauses.
 func newDealListAnomalies() map[string]int {
 	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0, "unapproved_representation": 0, "acted_against_answer": 0}
 }

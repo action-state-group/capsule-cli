@@ -332,8 +332,9 @@ user's own and is never sent by default.
   `evaluated` and `partly_unanswered` checks by the ruleset the checker
   reported, so a mid-period upgrade shows as two. A re-check is another
   check.
-- **Anomalies.** The steps sealed in the range that `deal report` lists as
-  the agent's, one key per kind:
+- **Anomalies.** The agent's steps sealed in the range that went wrong, one
+  key per kind (all but the last are anomalies `deal report` lists as the
+  agent's):
   - `skipped_check`: an act with no check in force: none, a stale one, one
     made before the details changed, an act taken before a statement the
     user asked the agent to make first, or a seller's commit with no
@@ -348,7 +349,7 @@ user's own and is never sent by default.
     sale that no check or approval covered (sealed anyway, since the words
     may already be said). `deal report` does not list these as anomalies.
 
-  Each act or disclosure counts once, in the range it was sealed in. A
+  Each act, disclosure or claim counts once, in the range it was sealed in. A
   check's pauses are in its verdict, and steps the other party took are not
   counted.
 - **Whose view.** The output is the user's own, like `deal list --json`:
