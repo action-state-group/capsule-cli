@@ -356,3 +356,53 @@ func TestALeakedShareNamesEveryClassItGives(t *testing.T) {
 		assert.Contains(t, strings.SplitN(card, "\n", 3)[1], class, "the question names every class")
 	}
 }
+
+// A class the approved check named that had already gone out without the
+// user's OK is one they have.
+func TestAHeldNoteSaysAnApprovedLeakedClassIsOneTheyHave(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakClasses(t, id, "email", "phone")
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"phone"`)))
+	require.Equal(t, "pause", check["verdict"])
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"}]}`)
+	assert.Equal(t, []any{"email"}, held["held"])
+	assert.Equal(t, "You haven't OK'd telling Shop your email before. This also shares your phone, which they already have.", held["reason"])
+}
+
+// Every state of one class given beside a held leaked phone: its clause in
+// the held note, or held itself.
+func TestAHeldNoteSaysEachOtherClassAsWhatItIs(t *testing.T) {
+	const phone = `{"class":"phone","value":"+1 555 010 4477"}`
+	approve := func(t *testing.T, id, class string) {
+		check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"`+class+`"`)))
+		require.Equal(t, "pause", check["verdict"])
+		dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	}
+	for _, tc := range []struct {
+		name   string
+		setup  func(t *testing.T, id string)
+		held   []any
+		reason string
+	}{
+		{"told with OK", func(t *testing.T, id string) { tellWithOK(t, id, "name", homeName) }, []any{"phone"},
+			"You haven't OK'd telling Shop your phone before. This also shares your name, which they already have."},
+		{"approved, new", func(t *testing.T, id string) { approve(t, id, "name") }, []any{"phone"},
+			"You haven't OK'd telling Shop your phone before. This also shares your name, which would be new to them."},
+		{"approved, gone before without OK", func(t *testing.T, id string) { leakClasses(t, id, "name"); approve(t, id, "name") }, []any{"phone"},
+			"You haven't OK'd telling Shop your phone before. This also shares your name, which they already have."},
+		{"gone before without OK, not approved", func(t *testing.T, id string) { leakClasses(t, id, "name") }, []any{"name", "phone"},
+			"You haven't OK'd telling Shop your name and phone before."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dealFixture(t)
+			id := openShop(t, "redbubble.com")
+			tc.setup(t, id)
+			leakPhone(t, id)
+			held := heldNote(t, id, `{"fields":[{"class":"name","value":"`+homeName+`"},`+phone+`]}`)
+			assert.Equal(t, tc.held, held["held"])
+			assert.Equal(t, tc.reason, held["reason"])
+		})
+	}
+}

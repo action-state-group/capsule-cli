@@ -1695,14 +1695,15 @@ func dealNoteCommand() *cobra.Command {
 							fresh = append(fresh, c)
 						}
 					}
-					// A class outside first is either told to them already or
-					// new to them and named by the approved check: only the
-					// told ones are said as "which they already have".
+					// A class outside first was named by the approved check or
+					// told already: one they have (told, or gone before without
+					// the user's OK) is "which they already have", any other
+					// "which would be new to them".
 					for _, f := range d.Fields {
 						if slices.Contains(first, f.Class) || slices.Contains(told, f.Class) || slices.Contains(fresh, f.Class) {
 							continue
 						}
-						if memory.toldBefore(keys, f.Class) != "" {
+						if memory.toldBefore(keys, f.Class) != "" || memory.leakedBefore(keys, f.Class) {
 							told = append(told, f.Class)
 						} else {
 							fresh = append(fresh, f.Class)
