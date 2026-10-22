@@ -15,7 +15,8 @@ import (
 //   - User moves are intent notes. Each one's move (asked, narrowed,
 //     switched, raised, picked) is derived from what it changes against the
 //     intent in force (intentMove); the user calling the errand off is a
-//     close, status called_off.
+//     close, status called_off. The user's own answer to a pause, when it
+//     was applied, is approved or declined (capsule-cli#410).
 //   - Agent moves are agent_move records, one note kind per label
 //     (searched, options, recommended, chose, couldnt): the command fixes
 //     the label. Asking the seller, checking a claim, pausing, telling and
@@ -440,7 +441,7 @@ type dealJourneyStep struct {
 }
 
 // dealJourney is the errand's moves in order: the user's (asked, narrowed,
-// switched, raised, picked, called_off), the agent's (searched, options,
+// switched, raised, picked, approved, declined, called_off), the agent's (searched, options,
 // recommended, chose, asked_seller, checked, couldnt, paused, told, and
 // what it did) and the other side's (said, changed). An intent sealed
 // before journey records is "changed". The report is the user's own copy:
@@ -513,8 +514,52 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 				if am.Reason == "other" {
 					facts["detail"] = am.Detail
 				}
+			case moveChose:
+				// What the agent chose names the item (capsule-cli#410).
+				if am.Item != "" {
+					add("agent", am.Move, "journey.agent.chose.item", se, cli.V{"item": am.Item})
+				} else {
+					add("agent", am.Move, "", se, nil)
+				}
 			default:
 				add("agent", am.Move, "", se, nil)
+			}
+		case e.Kind == "approval" && e.Approval != nil && e.Approval.Approver == "user" && e.Approval.Limits == nil && e.Approval.Reason == "":
+			// The user's own answer to a pause, at its own step (capsule-cli
+			// #410): an OK, or a hold as a no, worded from the check it
+			// answered (a payment, an offer or a commitment by its amount as
+			// the card said it, a share by the classes told). An answer that
+			// was not applied (the check was answered already, or changed
+			// since) is no move, as deal note says it; so is any other choice
+			// (verify_contact), a confirm_limits answer (the raised move) and
+			// an answer that is not the user's own (an agent's card answer, a
+			// standing intent).
+			move := ""
+			switch {
+			case e.Approval.Proceed:
+				move = "approved"
+			case e.Approval.Choice == "hold":
+				move = "declined"
+			default:
+				continue
+			}
+			check, _, ok := checkedCard(events[:i], e.Approval.Check)
+			if !ok {
+				continue
+			}
+			action, snap := check.Event.Check.Action, answeredSnapshot(events[:i], check.Event.Check.Snapshot)
+			switch {
+			case (action == "pay" || action == "offer" || action == "commit") && snap != nil && snap.AmountMinor != nil:
+				state, err := foldDeal(events[:i])
+				if err != nil {
+					continue
+				}
+				add("user", move, "journey.user."+move+"."+action, se, cli.V{"amount": cardAmount(*snap, state)})
+			case action == "share_contact" && snap != nil && len(snap.Disclosing) > 0:
+				add("user", move, "journey.user."+move+".share_contact", se, cli.V{"classes": disclosureWords(w, snap.Disclosing)})
+				out[len(out)-1].facts["classes"] = spokenClasses(snap.Disclosing)
+			default:
+				add("user", move, "journey.user."+move+".other", se, nil)
 			}
 		case e.Kind == "message" && e.Message != nil:
 			switch e.Message.From {
@@ -540,12 +585,7 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 				who = recipientName(*d.Who)
 			}
 			add("agent", "told", "", se, cli.V{"who": who, "classes": disclosureWords(w, classes)})
-			slices.SortStableFunc(classes, func(a, b string) int { return classRank(a) - classRank(b) })
-			told := []interface{}{}
-			for _, c := range slices.Compact(classes) {
-				told = append(told, c)
-			}
-			out[len(out)-1].facts["classes"] = told
+			out[len(out)-1].facts["classes"] = spokenClasses(classes)
 		case e.Kind == "act" && e.Act != nil:
 			a := e.Act
 			move := "act." + a.Action
@@ -574,6 +614,29 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 		case e.Kind == "close" && e.Close != nil && e.Close.Status == "called_off":
 			add("user", "called_off", "", se, nil)
 		}
+	}
+	return out
+}
+
+// answeredSnapshot is the snapshot (the proposed action) a check was made
+// on, read from the steps before the answer.
+func answeredSnapshot(events []sealedEvent, snapshot string) *dealSnapshot {
+	for _, s := range events {
+		if s.CapsuleID == snapshot && s.Event.Snapshot != nil {
+			return s.Event.Snapshot
+		}
+	}
+	return nil
+}
+
+// spokenClasses is classes as tokens for the sealed journey, in the order a
+// sentence lists them (disclosureWords), each once.
+func spokenClasses(classes []string) []interface{} {
+	sorted := slices.Clone(classes)
+	slices.SortStableFunc(sorted, func(a, b string) int { return classRank(a) - classRank(b) })
+	out := []interface{}{}
+	for _, c := range slices.Compact(sorted) {
+		out = append(out, c)
 	}
 	return out
 }

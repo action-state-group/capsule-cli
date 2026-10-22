@@ -142,15 +142,22 @@ func TestTheSealedJourneyHoldsNoWords(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &b))
 	report, _, _ := cli.DealSealedReport(b)
 	journey := report["journey"].([]interface{})
-	require.Len(t, journey, 11)
+	require.Len(t, journey, 13)
 	for _, m := range journey {
 		assert.NotContains(t, m, "label")
 	}
 	couldnt := journey[4].(map[string]interface{})
 	assert.Equal(t, map[string]interface{}{"who": "AliExpress", "reason": "sign_in_required"}, couldnt["facts"])
 	assert.Equal(t, "journey.agent.couldnt.who", couldnt["key"])
-	told := journey[8].(map[string]interface{})
+	told := journey[9].(map[string]interface{})
 	assert.Equal(t, map[string]interface{}{"who": "eBay", "classes": []interface{}{"name", "address"}}, told["facts"])
+	// The user's OK to share is sealed by its classes, and the chosen item
+	// as itself (capsule-cli#410).
+	okShare := journey[8].(map[string]interface{})
+	assert.Equal(t, "journey.user.approved.share_contact", okShare["key"])
+	assert.Equal(t, map[string]interface{}{"classes": []interface{}{"name", "address"}}, okShare["facts"])
+	chose := journey[6].(map[string]interface{})
+	assert.Equal(t, map[string]interface{}{"item": "Fawn Sticker"}, chose["facts"])
 }
 
 // pinJourneyPack pins a copy of the built-in pack, edited, as the deal
