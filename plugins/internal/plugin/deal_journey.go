@@ -513,8 +513,35 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 				if am.Reason == "other" {
 					facts["detail"] = am.Detail
 				}
+			case moveChose:
+				// What the agent chose names the item (capsule-cli#410).
+				if am.Item != "" {
+					add("agent", am.Move, "journey.agent.chose.item", se, cli.V{"item": am.Item})
+				} else {
+					add("agent", am.Move, "", se, nil)
+				}
 			default:
 				add("agent", am.Move, "", se, nil)
+			}
+		case e.Kind == "approval" && e.Approval != nil && e.Approval.Approver == "user" && e.Approval.Limits == nil:
+			// The user's own answer to a pause, at its own step (capsule-cli
+			// #410): an OK or a no, worded from the check it answered. A
+			// confirm_limits answer is the raised move, and an answer that
+			// is not the user's own (an agent's card answer, a standing
+			// intent) is not this move.
+			move := "approved"
+			if !e.Approval.Proceed {
+				move = "declined"
+			}
+			action, snap := answeredCheck(events[:i], e.Approval.Check)
+			switch {
+			case action == "pay" && snap != nil && snap.AmountMinor != nil:
+				add("user", move, "journey.user."+move+".pay", se, cli.V{"amount": spokenMoney(*snap.AmountMinor, currency)})
+			case action == "share_contact" && snap != nil && len(snap.Disclosing) > 0:
+				add("user", move, "journey.user."+move+".share_contact", se, cli.V{"classes": disclosureWords(w, snap.Disclosing)})
+				out[len(out)-1].facts["classes"] = spokenClasses(snap.Disclosing)
+			default:
+				add("user", move, "journey.user."+move+".other", se, nil)
 			}
 		case e.Kind == "message" && e.Message != nil:
 			switch e.Message.From {
@@ -540,12 +567,7 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 				who = recipientName(*d.Who)
 			}
 			add("agent", "told", "", se, cli.V{"who": who, "classes": disclosureWords(w, classes)})
-			slices.SortStableFunc(classes, func(a, b string) int { return classRank(a) - classRank(b) })
-			told := []interface{}{}
-			for _, c := range slices.Compact(classes) {
-				told = append(told, c)
-			}
-			out[len(out)-1].facts["classes"] = told
+			out[len(out)-1].facts["classes"] = spokenClasses(classes)
 		case e.Kind == "act" && e.Act != nil:
 			a := e.Act
 			move := "act." + a.Action
@@ -574,6 +596,35 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 		case e.Kind == "close" && e.Close != nil && e.Close.Status == "called_off":
 			add("user", "called_off", "", se, nil)
 		}
+	}
+	return out
+}
+
+// answeredCheck is the action and the snapshot of the check an approval
+// answered, read from the steps before it.
+func answeredCheck(events []sealedEvent, check string) (string, *dealSnapshot) {
+	for _, c := range events {
+		if c.CapsuleID != check || c.Event.Check == nil {
+			continue
+		}
+		for _, s := range events {
+			if s.CapsuleID == c.Event.Check.Snapshot && s.Event.Snapshot != nil {
+				return c.Event.Check.Action, s.Event.Snapshot
+			}
+		}
+		return c.Event.Check.Action, nil
+	}
+	return "", nil
+}
+
+// spokenClasses is classes as tokens for the sealed journey, in the order a
+// sentence lists them (disclosureWords), each once.
+func spokenClasses(classes []string) []interface{} {
+	sorted := slices.Clone(classes)
+	slices.SortStableFunc(sorted, func(a, b string) int { return classRank(a) - classRank(b) })
+	out := []interface{}{}
+	for _, c := range slices.Compact(sorted) {
+		out = append(out, c)
 	}
 	return out
 }

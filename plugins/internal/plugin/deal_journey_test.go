@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -119,7 +120,7 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 	dealFixture(t)
 	id, share, pay := fawnDeal(t)
 	assert.Equal(t, []string{"user:asked", "agent:searched", "agent:options", "agent:recommended", "agent:couldnt",
-		"user:switched", "agent:chose", "agent:paused", "agent:told", "agent:paused", "agent:act.pay"}, journeyMoves(t, id))
+		"user:switched", "agent:chose", "agent:paused", "user:approved", "agent:told", "agent:paused", "user:approved", "agent:act.pay"}, journeyMoves(t, id))
 	for _, c := range []map[string]any{share, pay} {
 		for _, r := range rules(c) {
 			assert.NotContains(t, []string{"payee_or_contact_changed", "not_asked", "agent_picked", "over_limit", "terms_changed"}, r)
@@ -137,8 +138,8 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 		labels = append(labels, s.(map[string]any)["label"].(string))
 	}
 	assert.Equal(t, []string{"Asked", "Searched", "Showed you 4 options", "Recommended", "Couldn't (AliExpress sign-in)",
-		"Switched to eBay", "Chose for you", "Waited for your OK", "Told eBay your name and address", "Waited for your OK",
-		"Paid $1.90 within your $2 limit"}, labels)
+		"Switched to eBay", "Chose Fawn Sticker for you", "Waited for your OK", "OK'd sharing your name and address",
+		"Told eBay your name and address", "Waited for your OK", "OK'd paying $1.90", "Paid $1.90 within your $2 limit"}, labels)
 }
 
 // The Raised path: an ask for options only allows nothing; picking one and
@@ -691,4 +692,36 @@ func TestJourneyLabelsWithoutAnAmountAndByName(t *testing.T) {
 	assert.Equal(t, "Told AliExpress your email", steps[1].Label)
 	assert.Equal(t, "Paid", steps[2].Label)
 	assert.Equal(t, "Told Craigslist your email", steps[3].Label, "a named recipient by its own name")
+}
+
+// The user's own answer to a pause is their move (capsule-cli#410): an OK
+// after the pause it answered and before the act it allowed, a no as a no.
+// A pause with no sealed answer of the user's has no such row, and an
+// agent's card answer is not the user's.
+func TestTheUsersAnswerIsTheirMove(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	assert.NotContains(t, journeyMoves(t, id), "user:approved", "a pause with no answer yet has no OK")
+	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string),
+		"--choice", "hold", "--said", "no, not my address", "--shown-card", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	var labels []string
+	for _, s := range dealRun(t, "report", "--deal", id)["journey"].([]any) {
+		m := s.(map[string]any)
+		labels = append(labels, m["by"].(string)+":"+m["label"].(string))
+	}
+	assert.Contains(t, labels, "user:Said no to sharing your name and address")
+	assert.NotContains(t, labels, "user:OK'd sharing your name and address")
+
+	// A click on the agent's card carries no words of the user's: no move.
+	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	require.Equal(t, "pause", pay["verdict"], pay["card"])
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", pay["check_id"].(string), "--choice", "proceed")
+	moves := journeyMoves(t, id)
+	assert.Equal(t, 1, strings.Count(strings.Join(moves, " "), "user:declined"), moves)
+	assert.NotContains(t, moves, "user:approved", "a card click is not the user's OK")
 }
