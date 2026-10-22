@@ -772,18 +772,31 @@ func TestTheUsersAnswerToAnOfferNamesItsAmount(t *testing.T) {
 // out, the same tap is sealed as the card's and is no row.
 func TestATappedLabelIsTheUsersAnswer(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
-	note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com"}}`)
-	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
-	require.Equal(t, "pause", share["verdict"], share["card"])
-	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string),
-		"--choice", "proceed", "--said", "Share anyway", "--shown-card", shownCard(t, share["card"].(string)))
-	var approvers []any
-	for _, r := range checkApprovals(t, id) {
-		approvers = append(approvers, r["approver"])
+	tap := func(said ...string) string {
+		id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+		note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com"}}`)
+		share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
+		require.Equal(t, "pause", share["verdict"], share["card"])
+		args := []string{"note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string),
+			"--choice", "proceed", "--shown-card", shownCard(t, share["card"].(string))}
+		dealRun(t, append(args, said...)...)
+		return id
 	}
-	assert.Equal(t, []any{"user"}, approvers, "a tapped label is the user's answer")
+	approvers := func(id string) []any {
+		var out []any
+		for _, r := range checkApprovals(t, id) {
+			out = append(out, r["approver"])
+		}
+		return out
+	}
+
+	id := tap("--said", "Share anyway")
+	assert.Equal(t, []any{"user"}, approvers(id), "a tapped label is the user's answer")
 	assert.Contains(t, journeyMoves(t, id), "user:approved")
+
+	id = tap()
+	assert.Equal(t, []any{"agent_card"}, approvers(id), "without --said the answer is the card's")
+	assert.NotContains(t, journeyMoves(t, id), "user:approved")
 }
 
 // checkApprovals are the deal's sealed approval record bodies, in order.
