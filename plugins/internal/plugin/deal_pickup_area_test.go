@@ -43,6 +43,7 @@ func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 		"3 Ash Sq", "3 Ash Loop", "3 Ash Plaza", "3 Ash Alley", "3 Ash Pike", "Apt 4", "Unit 12",
 		"#5, Hyde Park", "Suite 200", "Ste. 3, Austin", "Hyde Park, apt #4",
 		"pickup is off 12 Oak St", "near 12 Oak St", "from 12 Oak St", "12 The Grove Rd", "12 Road to Nowhere Ln",
+		"near 4512 Duval St", "close to 12 Oak St", "corner of 12 Oak St", "5 mi from 12 Oak St", "the 12 Oak St building",
 	} {
 		assert.True(t, readsAsStreetAddress(v), v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
