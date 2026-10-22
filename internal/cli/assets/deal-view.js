@@ -42,6 +42,34 @@ function versionBefore(a, b) {
   return x.pre < y.pre;
 }
 
+// dealJourneyLabel words one move of the sealed journey (capsule-cli#370)
+// from the page's wording pack, as capsulectl's Wording.Line words the
+// report's journey: a key the pack lacks, or a placeholder with no value,
+// words nothing. The facts are sealed without any pack's words: a reason is
+// the pack's word for its token (an "other" reason is its own detail), and
+// the classes told are listed by the pack's word for each.
+const dealJourneyLabel = (words, move) => {
+  const text = words[move.key];
+  if (typeof text !== "string") return "";
+  const facts = move.facts && typeof move.facts === "object" ? move.facts : {};
+  const vals = {};
+  for (const [k, v] of Object.entries(facts)) if (typeof v === "string") vals[k] = v;
+  if (typeof facts.reason === "string") {
+    const word = words["journey.reason." + facts.reason];
+    vals.reason = facts.reason === "other" ? facts.detail : typeof word === "string" ? word : "";
+  }
+  if (Array.isArray(facts.classes)) {
+    const named = facts.classes.map((c) => (typeof words["class." + c] === "string" ? words["class." + c] : String(c).replace(/_/g, " ")));
+    vals.classes = named.length < 2 ? named.join("") : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  }
+  let missing = false;
+  const filled = text.replace(/\{([a-z_]+)\}/g, (_, k) => {
+    if (typeof vals[k] !== "string") missing = true;
+    return typeof vals[k] === "string" ? vals[k] : "";
+  });
+  return missing ? "" : filled;
+};
+
 // The model: everything render shows, read from the verified context and the
 // page's build-time checks. Stricter than the core's gate in one place:
 // membership must be proven, not unbound (canRender).
@@ -439,6 +467,25 @@ const dealViewRender = (model, regions) => {
       "deal-note",
     ),
   );
+
+  // How it went (capsule-cli#370): the errand's moves in order, read from
+  // the sealed report and worded from the pack this page carries, as
+  // `deal report` words its journey. Each row says who moved, so a switch
+  // reads as the user's, and opens to its sealed step. A shared copy, or a
+  // report sealed before journeys, has none.
+  const journey = Array.isArray(report.journey) ? report.journey.filter((m) => m && typeof m === "object") : [];
+  if (!shared && journey.length > 0) {
+    host.append(el("h2", "How it went"));
+    const movers = { user: "You", agent: "Your agent", other: "The other side" };
+    journey.forEach((m) => {
+      const step = byId.get(m.step);
+      const at = step && typeof step.at === "string" ? `${local(step.at)} · ` : "";
+      const label = dealJourneyLabel(words, m) || String(m.move);
+      const row = item(`${at}${movers[m.by] || "Someone"} · ${label}`, [m.step]);
+      row.dataset.journey = label;
+      host.append(row);
+    });
+  }
 
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];

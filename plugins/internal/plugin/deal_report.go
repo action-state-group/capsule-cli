@@ -289,6 +289,10 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		"instructions": report.Instructions,
 		"produced_by":  stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cli.CLIVersion,
 		"scope": dealScopeLine, "audience": cli.DealAudienceKeep, "verify_command": verifyCommand,
+		// The errand's moves (capsule-cli#370), worded on the page from the
+		// pack the page carries: a shared copy has none, its labels name the
+		// merchant, the item and what was told.
+		"journey": sealedJourney(dealJourney(events, cli.BuiltinWording())),
 	}
 	// The merchant rows carry only strings and booleans; round-trip them to
 	// the generic JSON shape the bundle encoder takes.
@@ -397,6 +401,10 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // and the chat speak from one pack (capsule-cli#345).
 var pageWords = []string{"report.title"}
 
+// pageWordPrefixes are the families of keys the page words the journey with
+// (capsule-cli#370): each move's label, a reason's word, a class's word.
+var pageWordPrefixes = []string{"journey.", "class."}
+
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string, w cli.Wording) (string, error) {
 	if err := cli.PageGate(b); err != nil {
 		return "", err
@@ -415,6 +423,13 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, v
 	for _, k := range pageWords {
 		if v, ok := w.Entries[k]; ok {
 			words[k] = v
+		}
+	}
+	for k, v := range w.Entries {
+		for _, prefix := range pageWordPrefixes {
+			if strings.HasPrefix(k, prefix) {
+				words[k] = v
+			}
 		}
 	}
 	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand, "words": words})

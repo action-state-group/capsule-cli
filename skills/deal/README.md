@@ -441,6 +441,15 @@ the array it always was):
    check restates an item read from an earlier step (a changed payee, a
    code request), the two are one item that expands to both steps.
 
+The report also lists the errand's `journey`: each move in order (asked,
+searched, showed options, recommended, couldn't, switched, chose, paused,
+told, paid, ...), who made it (`user`, `agent` or `other`), its label in the
+profile's wording pack, the pack `key` and the `values` it was filled with.
+The user's own page shows it as "How it went", one row per move saying who
+moved, so a switch reads as the user's. Its sealed report keeps each move's
+key and facts only, never a pack's words, and the page words them from the
+same pack `deal report` used; a shared copy carries no journey.
+
 Every item lists the steps it was read from. `--html FILE` writes the report
 as one local, self-contained page, built on this machine: nothing is hosted
 and no link is minted. The page embeds an AAC Evidence Bundle of the deal's
