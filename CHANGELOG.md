@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+## v0.1.0-rc20
+
+### The receipt moments of the Muse chat contract (capsule-cli#373)
+
+- **Added:** the first receipt says two more lines, once per profile: the
+  first act or final close when no other deal in the store has an act or a
+  close. A paid purchase with a sealed counterparty name (not an id or a
+  domain) gets a contrast line; a called-off first receipt and a seller's
+  first receipt (the thread's close) get their own keep line. Read from the
+  sealed steps; nothing new is stored. A seller's offer or commit is never a
+  receipt moment.
+- **Added:** a `called_off` or `not_selected` close, and `deal report` on such
+  a deal, says "The receipt shows nothing paid and nothing shared.", or
+  "…nothing paid." when a disclosure was noted. A seller's thread says
+  neither.
+- **Added:** `deal list --json` gives each listing a `say` line (the agreed
+  item, how the deal ended, the amount paid, an ended sale's listing, the
+  local date with the year when not this year's; demos marked; no id), with
+  or without a range.
+- **Changed:** the page message's label is `report.private` ("PRIVATE"), not
+  "View details"; a `--share` copy is silent. 14 new wording-pack keys
+  (`say.receipt.first.*`, `say.close.nothing_done`, `say.close.nothing_paid`,
+  `say.list.*`, `report.private`): a pinned pack needs them, or the built-in
+  pack is used.
+- **Changed:** the deal skill sends the page in its own message with the
+  label as its only words; says when a receipt goes out by itself (a
+  payment, an errand ending arrived or called off, a sale thread closing,
+  an updated receipt only on a material change); closes an errand that a
+  hold or deny ended as `called_off`; answers "show my receipts" from
+  `deal list --json`, never memory, and re-attaches one with
+  `deal report --html`.
+
+### A period's checks and agent anomalies in `deal list` (capsule-cli#385)
+
+- **Added:** `deal list --since/--until --json` adds two members to
+  `totals`, always present on a range with every key at zero: `checks`
+  (`verdicts`: `pass`/`pause`/`deny`; `rules`: `evaluated`,
+  `partly_unanswered`, `not_evaluated`, `not_configured`, `unrecorded`;
+  `rulesets`: `{ruleset_id, definition_digest, checks}` for the checks whose
+  rules were evaluated) and `anomalies`, one per act, disclosure or claim
+  sealed in the range (`skipped_check`, `acted_against_answer`,
+  `unsealed_approval`, `differs_from_check`, `unapproved_disclosure`,
+  `unapproved_representation`). Every step sealed in the range counts,
+  sales' own logs included. A word outside the known ones is counted under
+  its own key, never dropped.
+- **Changed:** the agent answering an ask's card itself
+  (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
+  where it read `skipped_check`; the check was made.
+
+### Plugin install heals a group-writable home (capsule-cli#354)
+
+- **Changed:** `plugin install` puts back `chmod go-w`, as the checkpoint
+  cadence does (#339), on the directories of the plugin root's path that the
+  process's user owns under `$HOME` and whose only fault is group or other
+  write. Anything else stays refused, now with `not healed: <why>`. The
+  result carries `plugin_root_healed` (each directory, mode before and
+  after) when it changed anything; a failed install after a heal names the
+  directories it tightened. README and docs/PLUGINS.md drop the manual
+  `chmod go-w` step.
+
+### `say.error.before` says what the agent did (capsule-cli#377)
+
+- **Changed:** the built-in wording for `say.error.before` is "I couldn't
+  record that step, so I stopped before paying or sharing anything." It said
+  "… so I've stopped. Nothing was paid or shared."
+
 ### A listing's public pickup area may be told as its own class (capsule-engine#181)
 
 - **Added:** disclosure class `pickup_area`, the public area a listing shows
