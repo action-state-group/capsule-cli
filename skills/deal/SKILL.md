@@ -446,17 +446,19 @@ capsulectl. Follow them; never make up your own narration of a step.
   these moments only:
   - after a payment: `deal note --kind act --html FILE`;
   - when an errand ends, arrived or called off, and when a sale's buyer
-    thread closes: `deal close --html FILE`. After a hold or a deny that
-    ends the errand, close it `called_off` all the same: its receipt says
-    nothing was paid or shared, and is the user's proof of that;
+    thread closes: `deal close --html FILE`. When a hold or a deny ends
+    an errand where nothing was done yet (no act on record), close it
+    `called_off` all the same: its receipt shows nothing was paid (or
+    shared), and the user keeps it as proof. After an act, close it with
+    what happened (`received`, `not_received`);
   - an updated receipt only on a material change: a merchant email added,
     a refund, and on a sale a payment received or the handover (the list
     above). Nothing else sends one: the cadence, `deal tick`, checkpoints
     and other bookkeeping stay silent.
 
-  The first receipt the user ever gets carries two more lines (what our
-  receipt covers next to the merchant's, and why to keep it); capsulectl
-  adds them to `say` that once. Never add them yourself.
+  The first receipt the user ever gets carries one or two more lines (what
+  it covers next to the merchant's, and why to keep it); capsulectl adds
+  them to `say` that once. Never add them yourself.
 - **"Show my receipts" comes from the record, never from memory.** Run
   `deal list --json` (with `--since` and `--until` when the user names a
   period, and then say its `say` first) and say each deal's `say`, one per
