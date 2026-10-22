@@ -43,11 +43,12 @@ function versionBefore(a, b) {
 }
 
 // dealJourneyLabel words one move of the sealed journey (capsule-cli#370)
-// from the page's wording pack, as capsulectl's Wording.Line words the
-// report's journey: a key the pack lacks, or a placeholder with no value,
+// from the page's words, as capsulectl's Wording.Line words the report's
+// journey: a key the page has no word for, or a placeholder with no value,
 // words nothing. The facts are sealed without any pack's words: a reason is
-// the pack's word for its token (an "other" reason is its own detail), and
-// the classes told are listed by the pack's word for each.
+// its token (an "other" reason is its own detail) and the classes told are
+// tokens, which the page's words (capsulectl worded each reason and class
+// already) put into words.
 const dealJourneyLabel = (words, move) => {
   const text = words[move.key];
   if (typeof text !== "string") return "";
@@ -484,11 +485,18 @@ const dealViewRender = (model, regions) => {
       const when = step && typeof step.at === "string" ? local(step.at) : "";
       const at = when && when !== said ? `${when} · ` : "";
       said = when || said;
-      const label = dealJourneyLabel(words, m) || String(m.move);
-      const row = item(`${at}${movers[m.by] || "Someone"} · ${label}`, [m.step]);
+      const label = dealJourneyLabel(words, m);
+      const row = item(`${at}${movers[m.by] || "Someone"}${label ? ` · ${label}` : ""}`, [m.step], undefined, m.step);
       row.dataset.journey = label;
       host.append(row);
     });
+    host.append(
+      el(
+        "p",
+        "The names, items and amounts in these rows are sealed in this file and checked. The words around them come from the wording this page was made with, which is not sealed.",
+        "deal-note",
+      ),
+    );
   }
 
   host.append(el("h2", "What the agent did"));

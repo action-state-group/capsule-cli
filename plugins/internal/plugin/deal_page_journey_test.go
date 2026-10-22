@@ -22,7 +22,8 @@ const dealPageJourneyDriver = `
 const fs = require("fs");
 const vm = require("vm");
 const { webcrypto } = require("crypto");
-const html = fs.readFileSync(process.argv[2], "utf8");
+const [pagePath, edit] = process.argv.slice(2);
+const html = fs.readFileSync(pagePath, "utf8");
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 const bundleScript = scripts.find((s) => s.startsWith("window.__BUNDLE__ = "));
 const runtime = scripts.find((s) => s.includes("var EvidenceGraph = "));
@@ -46,6 +47,13 @@ for (const source of modules) vm.runInContext(source, context);
 vm.runInContext(bootstrap.slice(0, bootstrap.indexOf("\n(async")), context);
 const EG = vm.runInContext("EvidenceGraph", context);
 const bundle = vm.runInContext("window.__BUNDLE__", context);
+const words = vm.runInContext("globalThis.capsulectlDealPage.words", context);
+// "withhold": the switch step's disclosure is dropped from the file.
+if (edit === "withhold") {
+  const report = bundle.extensions["x-deal-report/v0"].agent_input.report;
+  const step = report.journey.find((m) => m.move === "switched").step;
+  delete bundle.disclosures[step];
+}
 (async () => {
   const ctx = await EG.buildVerifiedBundleContext(bundle);
   const resolution = await EG.resolvePresentation(ctx);
@@ -59,13 +67,14 @@ const bundle = vm.runInContext("window.__BUNDLE__", context);
     shown: headings.includes("How it went"),
     labels: rows.map((n) => n.dataset.journey),
     rows: rows.map((n) => n.children[0].textContent),
+    words: Object.keys(words).filter((k) => k.startsWith("journey.") || k.startsWith("class.")),
   }));
 })();
 `
 
 // renderJourney writes the deal's page (a shared copy when share is set) and
 // renders it under node.
-func renderJourney(t *testing.T, id string, share bool) map[string]any {
+func renderJourney(t *testing.T, id string, share bool, edit ...string) map[string]any {
 	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -80,7 +89,7 @@ func renderJourney(t *testing.T, id string, share bool) map[string]any {
 	dealRun(t, args...)
 	driver := filepath.Join(dir, "driver.js")
 	require.NoError(t, os.WriteFile(driver, []byte(dealPageJourneyDriver), 0o600))
-	out, err := exec.Command(node, driver, page).CombinedOutput()
+	out, err := exec.Command(node, append([]string{driver, page}, edit...)...).CombinedOutput()
 	require.NoError(t, err, string(out))
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(out, &got), string(out))
@@ -111,6 +120,13 @@ func TestTheDealPageShowsTheJourney(t *testing.T) {
 	shared := renderJourney(t, id, true)
 	require.Empty(t, shared["refusal"])
 	assert.Equal(t, false, shared["shown"], "a shared copy carries no journey")
+	assert.Empty(t, shared["words"], "nor the words to word one")
+	assert.NotEmpty(t, got["words"])
+
+	// A row whose step did not verify says so on the row itself.
+	withheld := renderJourney(t, id, false, "withhold")
+	require.Empty(t, withheld["refusal"])
+	assert.Equal(t, "You · Switched to eBay · step not verified in this report", withheld["rows"].([]any)[5])
 }
 
 // The sealed report's journey is facts only: no word from a wording pack,
@@ -170,11 +186,22 @@ func TestThePageWordsTheJourneyFromThePinnedPack(t *testing.T) {
 		return out
 	}
 	pinJourneyPack(t, func(e map[string]any) {
+		// A class or reason line that says nothing falls back as the
+		// report's does: the class's own word, an empty reason.
+		e["class.name"] = "{nothing}"
+		e["journey.reason.sign_in_required"] = "{nothing}"
+	})
+	want := labels()
+	assert.Contains(t, want, "Told eBay your name and address")
+	assert.Contains(t, want, "Couldn't (AliExpress )")
+	assert.Equal(t, want, renderJourney(t, id, false)["labels"])
+
+	pinJourneyPack(t, func(e map[string]any) {
 		e["journey.user.switched"] = "You moved the errand to {who}"
 		e["journey.reason.sign_in_required"] = "needed a sign-in"
 		e["class.address"] = "street address"
 	})
-	want := labels()
+	want = labels()
 	assert.Contains(t, want, "You moved the errand to eBay")
 	assert.Contains(t, want, "Couldn't (AliExpress needed a sign-in)")
 	assert.Contains(t, want, "Told eBay your name and street address")

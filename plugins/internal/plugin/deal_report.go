@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -401,9 +403,30 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // and the chat speak from one pack (capsule-cli#345).
 var pageWords = []string{"report.title"}
 
-// pageWordPrefixes are the families of keys the page words the journey with
-// (capsule-cli#370): each move's label, a reason's word, a class's word.
-var pageWordPrefixes = []string{"journey.", "class."}
+// journeyPageWords are the words the user's own page words its journey
+// with (capsule-cli#370), as dealJourney words the report's: each move's
+// template as the pack has it, and each reason and class already worded as
+// dealJourney words them (Wording.Line, and classWord where the pack's class
+// line says nothing), so the page fills templates only. A shared copy
+// carries no journey, and none of these.
+func journeyPageWords(w cli.Wording) map[string]string {
+	out := map[string]string{}
+	classes := slices.Clone(spokenClassOrder)
+	for k, v := range w.Entries {
+		switch {
+		case strings.HasPrefix(k, "journey.reason."):
+			out[k] = w.Line(k, nil)
+		case strings.HasPrefix(k, "journey."):
+			out[k] = v
+		case strings.HasPrefix(k, "class."):
+			classes = append(classes, strings.TrimPrefix(k, "class."))
+		}
+	}
+	for _, c := range classes {
+		out["class."+c] = disclosureWords(w, []string{c})
+	}
+	return out
+}
 
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string, w cli.Wording) (string, error) {
 	if err := cli.PageGate(b); err != nil {
@@ -425,12 +448,8 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, v
 			words[k] = v
 		}
 	}
-	for k, v := range w.Entries {
-		for _, prefix := range pageWordPrefixes {
-			if strings.HasPrefix(k, prefix) {
-				words[k] = v
-			}
-		}
+	if audience, _ := dealPageReport(b)["audience"].(string); audience == cli.DealAudienceKeep {
+		maps.Copy(words, journeyPageWords(w))
 	}
 	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand, "words": words})
 	if err != nil {
