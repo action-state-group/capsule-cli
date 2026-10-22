@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### A listing's public pickup area may be told as its own class (capsule-engine#181)
+
+- **Added:** disclosure class `pickup_area`, the public area a listing shows
+  (a neighborhood, city, region or ZIP, never a street address), distinct
+  from `pickup_location`, the exact spot. It is a `share_contact` class in
+  `deal check`'s `disclosing`, `deal note --kind disclosure`, the x-deal-v0
+  and typed record schemas, the profile (PROFILE.md and
+  `check_profile.py`), the wording pack (`class.pickup_area`) and the deal
+  skill, with a seller's typed fixture chain in the profile. It is not an
+  address class: capsulectl's own acceptance gate does not hold a seller's
+  share of it for an accepted offer. The seller rules still hold it from a
+  buyer before acceptance until capsule-engine#186.
+- **Added:** a disclosure note refuses a `pickup_area` value that reads as
+  a street address (a house number before a street type such as St, Ave or
+  Pkwy, or a numbered unit such as Apt 4 or #5), naming `pickup_location`
+  for an exact spot; nothing is sealed.
+
 ## v0.1.0-rc19
 
 ### The deal page's as-of line (capsule-cli#362)

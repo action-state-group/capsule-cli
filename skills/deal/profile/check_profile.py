@@ -54,12 +54,13 @@ RECORD_TYPES = json.loads(SCHEMA_PATH.read_text())["$defs"]["record_type"]["enum
 UNFIXTURED_TYPES = {"counterparty_profile"}
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
-                                                  "pickup_location", "other_contact")}
+                                                  "pickup_location", "pickup_area", "other_contact")}
 DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
                                                            "payment_card", "id_document")})
 # What an offer covers, and a seller's commit must equal: the material terms.
 OFFER_TERMS = ("amount_minor", "currency", "terms", "recourse")
 # The classes that give a place: a seller gives one out only for an accepted offer.
+# pickup_area, the public area a listing shows, is not one of them.
 ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
 # The actions an ordered representation must come before (section 6): every
 # action that moves toward or carries out a commitment, and every share.
@@ -1247,11 +1248,11 @@ def run_fixtures() -> int:
         print(f"{'ok  ' if ok else 'FAIL'} commercial-bounds/v0 {x['document']['min_total_minor']:<16} {x['bounds_commitment'][:16]}…")
     store = local_store_values()
 
-    # Three positive chains: x-deal-v0 throughout, one sealed in the typed action
-    # records beside x-deal-v0 evidence records, and a sale's own log. Each is
-    # checked as its own chain.
+    # Four positive chains: x-deal-v0 throughout, one sealed in the typed action
+    # records beside x-deal-v0 evidence records, a seller's typed share, and a
+    # sale's own log. Each is checked as its own chain.
     positives = []
-    for chain_dir in ("positive", "positive-typed", "positive-sale"):
+    for chain_dir in ("positive", "positive-typed", "positive-typed-seller", "positive-sale"):
         chain = []
         for p in sorted((FIX / chain_dir).glob("*.json")):
             positives.append(p)
@@ -1263,9 +1264,10 @@ def run_fixtures() -> int:
                 if d != f["expected_digest"]:
                     raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
                 chain.append(rec)
-                # A sale's log is checked as a chain from its task authority on,
-                # every prefix: its root alone is not yet one.
-                if chain_dir != "positive-sale" or len(chain) >= 2:
+                # A sale's log, and a seller's deal (sealed in the typed records),
+                # is checked as a chain from its task authority on, every prefix:
+                # its root alone is not yet one.
+                if chain_dir not in ("positive-sale", "positive-typed-seller") or len(chain) >= 2:
                     check_chain(chain)
                 print(f"ok   {chain_dir}/{p.name:<34} {record_type_of(rec):<20} jcs-sha256 {d}")
             except StageError as e:
@@ -1702,6 +1704,92 @@ def regen():
         digests.append((f"positive-sale/{n}", d))
         dump(FIX / "positive-sale" / n, {"fixture": n, "expect": "valid", "story": sale_stories[record_type_of(r)],
                                          "record": r, "expected_digest": d})
+    # --- a seller's typed share of the listing's pickup area (capsule-engine#181) --------
+    # Before any offer, the seller's agent gives a listing platform the public pickup
+    # area. pickup_area is not an address class, so no acceptance is needed; the same
+    # share of pickup_location is a negative (neg-typed-seller-pickup-location-...).
+    chain_id2 = "deal-5c2e8a1f3b7d9046"
+    dk2 = deal_key(secret, chain_id2)
+    raw2 = {("name", "first"): "Example Buyer", ("domain", "first"): "buyer.example",
+            ("domain", "platform"): "craigslist.org"}
+    fps2 = {k: fingerprint(dk2, k[0], v) for k, v in raw2.items()}
+    texts2 = {"seller-intent": "Sell my example bicycle; ask 1900",
+              "seller-card": "First time telling Craigslist your pickup area · [Hold] [Go ahead]",
+              "seller-said": "yes, put the area on the listing",
+              "seller-area": "Hyde Park, Austin"}
+    com2 = {k: commitment(nonce(k), v) for k, v in texts2.items()}
+    records2, names2 = [], []
+    clock2 = iter([f"2026-10-07T10:{m:02d}:00Z" for m in (0, 0, 5, 5, 6, 7)])
+
+    def tref2(j):
+        return {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(records2[j])}
+
+    def add_typed2(name, type_name, body, refs=None):
+        r = {"type": type_name, "canonicalization": "jcs", "chain_id": chain_id2, "seq": len(records2) + 1,
+             "at": next(clock2), "prev": tref2(len(records2) - 1), "chain_root": tref2(0)}
+        if refs:
+            r["refs"] = [{"rel": rel, **tref2(j)} for rel, j in refs]
+        r["body"] = body
+        records2.append(r)
+        names2.append(f"{len(records2):02d}-{name}.json")
+        return len(records2) - 1
+
+    records2.append({"x-deal-v0": {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": chain_id2,
+                                   "record_type": "baseline", "seq": 1, "at": next(clock2), "channel": "web",
+                                   "counterparty": {"fp_alg": "hmac-sha256-deal-key",
+                                                    "ids": {k[0]: fps2[k] for k in (("name", "first"), ("domain", "first"))}}},
+                     "body": {"deal_type": "purchase", "demo": True,
+                              "intent": {"verbatim_commitment": commitment(nonce("seller-baseline"), texts2["seller-intent"]),
+                                         "party_role": "seller", "allowed": ["offer", "commit", "share_contact"]},
+                              "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+                              "recourse": {"rail": "card", "refundable": False}}})
+    names2.append("01-baseline.json")
+    sta = add_typed2("task-authority", "task-authority/v0", {
+        "verbatim_commitment": com2["seller-intent"], "allowed": ["offer", "commit", "share_contact"]}, refs=[("source", 0)])
+    sk = add_typed2("proposed-action", "proposed-action/v0", {
+        "action": "share_contact", "disclosing": ["pickup_area"], "disclosing_to": "platform", "recipient_role": "platform"})
+    sv = add_typed2("action-evaluation", "action-evaluation/v0", {
+        "disposition": "ASK", "findings": [{"question": "who", "rule": "first_disclosure", "field": "pickup_area"}],
+        "options": ["hold", "proceed"], "rendering_commitment": com2["seller-card"], "judge": {"kind": "rules"},
+        "proposed_action_digest": record_digest(records2[sk]), "task_authority_ref": tref2(sta),
+        "ruleset_digest": record_digest(rules), "materiality": "predicate", "materiality_digest": materiality,
+        "valid_until": "2026-10-07T10:20:00Z", "authority_basis": [{"type": "task_authority", "ref": tref2(sta)}]},
+        refs=[("checks", sk)])
+    sa = add_typed2("approval-on-the-card", "action-approval/v0", {
+        "authority": "user_approval", "choice": "proceed", "proceed": True,
+        "said_commitment": com2["seller-said"], "rendering_commitment": com2["seller-card"]}, refs=[("approves", sv)])
+    add_typed2("action-record-share-pickup-area", "action-record/v0", {
+        "action": "share_contact",
+        "disclosed": {"to": "platform", "fields": [{"class": "pickup_area", "value_commitment": com2["seller-area"]}]},
+        "counterparty": {"fp_alg": "hmac-sha256-chain-key", "ids": {"domain": fps2[("domain", "platform")]}},
+        "evaluation_ref": tref2(sv),
+        "authority_basis": [{"type": "task_authority", "ref": tref2(sta)}, {"type": "user_approval", "ref": tref2(sa)}]},
+        refs=[("authorized_by", sa)])
+    stories2 = {
+        "baseline": "First contact on a seller's deal: the user sells an example bicycle.",
+        "task-authority/v0": "The seller's task authority: their words by commitment and the allowed actions.",
+        "proposed-action/v0": "The share about to be made: the listing's public pickup area, to a platform.",
+        "action-evaluation/v0": "The deal check asks (ASK): the first time this platform is told the pickup area.",
+        "action-approval/v0": "The user's own answer on the card the check rendered.",
+        "action-record/v0": "The pickup area given to the platform before any offer: pickup_area is not an address "
+                            "class, so it rests on no acceptance.",
+    }
+    (FIX / "positive-typed-seller").mkdir(parents=True, exist_ok=True)
+    for old in (FIX / "positive-typed-seller").glob("*.json"):
+        old.unlink()
+    for n, r in zip(names2, records2):
+        d = record_digest(r)
+        digests.append((f"positive-typed-seller/{n}", d))
+        dump(FIX / "positive-typed-seller" / n, {"fixture": n, "expect": "valid", "story": stories2[record_type_of(r)],
+                                                 "record": r, "expected_digest": d})
+    r = json.loads(json.dumps(records2[-1]))
+    r["body"]["disclosed"]["fields"][0]["class"] = "pickup_location"
+    dump(FIX / "negative" / "neg-typed-seller-pickup-location-before-acceptance.json", {
+        "fixture": "neg-typed-seller-pickup-location-before-acceptance", "expect": "invalid",
+        "description": "The same share naming pickup_location, the exact spot: an address class, so a seller "
+                       "gives it out only for an offer the other party accepted.",
+        "expected_stage": "chain", "expected_error_contains": "no offer is on record",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")

@@ -15,6 +15,7 @@ Files in this directory:
 | `records/` | JSON Schemas (Draft 2020-12) for the typed action records and the check request and response (section 9). |
 | `fixtures/positive/` | One deal, 19 records, covering most record types (not `sale`, which `positive-sale/` carries; the fixture run of `check_profile.py` names the types no positive fixture carries yet), with the expected JCS digest of each. |
 | `fixtures/positive-typed/` | One deal sealed in the typed action records beside x-deal-v0 evidence records (section 9). |
+| `fixtures/positive-typed-seller/` | A seller's typed deal that gives a listing platform the public pickup area (`pickup_area`) before any offer. |
 | `fixtures/negative/` | Records that MUST be rejected, each at one named stage. |
 | `fixtures/fingerprint-vectors.json` | Test-only local store: a public test secret, the raw values, their normalized forms, fingerprints and commitments. |
 | `fixtures/expected-digests.txt` | The positive digests as a manifest. |
@@ -363,8 +364,10 @@ Field details:
   absolute.
 - **Disclosures.** A `disclosure` records what the agent told someone about the user. Each
   field is a `class` (`name`, `phone`, `email`, `home_address`, `address`, `pickup_location`,
-  `other_contact`, `credential`, `verification_code`, `payment_card`, `id_document`) and a
-  `value_commitment` to the value given. The value itself stays in the local store; a ledger of
+  `pickup_area`, `other_contact`, `credential`, `verification_code`, `payment_card`,
+  `id_document`) and a `value_commitment` to the value given. `pickup_location` is the exact
+  spot; `pickup_area` is the public area a listing shows (a neighborhood, city, region or ZIP,
+  never a street address) and is not an address class. The value itself stays in the local store; a ledger of
   disclosures must never itself be a disclosure. Unlike an unauthorized `action`, a disclosure
   with no covering approval is still a `disclosure` record, with `authority: "none"` and the
   `rule` that failed (for example `no_check` or `answer_was_not_proceed`), so every telling
@@ -584,8 +587,8 @@ A verifier holding one deal's records in `seq` order checks:
    acceptance observation (section 9) names, by `proposed_action_ref`, the latest offer, after
    an `offer` action that rests on it (the offer was made). On a typed seller deal, a `commit`
    action, and a share action that discloses an address class (`home_address`, `address`,
-   `pickup_location`), each need: an offer on record, an acceptance of the latest one, and no
-   `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
+   `pickup_location`; not `pickup_area`), each need: an offer on record, an acceptance of the
+   latest one, and no `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
    `counterparty_facts`, after that acceptance. A change leaves the acceptance behind: the
    offer is made and accepted again. Such a commit or share action cites the acceptance it rests
    on with exactly one `source` ref; no other action carries one. The acceptance is not

@@ -13,6 +13,7 @@ import (
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"golang.org/x/text/unicode/norm"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -2523,13 +2524,13 @@ type dealToldItem struct {
 var disclosureClasses = map[string]string{
 	"name": "share_contact", "phone": "share_contact", "email": "share_contact",
 	"home_address": "share_contact", "address": "share_contact", "pickup_location": "share_contact",
-	"other_contact": "share_contact",
-	"credential":    "share_credentials", "verification_code": "share_credentials",
+	"pickup_area": "share_contact", "other_contact": "share_contact",
+	"credential": "share_credentials", "verification_code": "share_credentials",
 	"payment_card": "share_credentials", "id_document": "share_credentials",
 }
 
 var disclosureClassWords = map[string]string{
-	"home_address": "home address", "address": "street address", "pickup_location": "pickup location", "other_contact": "contact details",
+	"home_address": "home address", "address": "street address", "pickup_location": "pickup location", "pickup_area": "pickup area", "other_contact": "contact details",
 	"verification_code": "verification code", "payment_card": "payment card", "id_document": "ID document",
 }
 
@@ -2546,7 +2547,8 @@ func (d dealDisclosure) action() string {
 }
 
 // addressed is whether the disclosure gives a place: a street or home
-// address, or a pickup location.
+// address, or a pickup location. A pickup_area (the public area a listing
+// shows) is not a place in this sense: it needs no acceptance first.
 func (d dealDisclosure) addressed() bool {
 	for _, f := range d.Fields {
 		switch f.Class {
@@ -2615,10 +2617,13 @@ func (d dealDisclosure) validate() error {
 	for _, f := range d.Fields {
 		a, ok := disclosureClasses[f.Class]
 		if !ok {
-			return cli.InputError("disclosure field class must be one of name, phone, email, home_address, address, pickup_location, other_contact, credential, verification_code, payment_card, id_document: " + f.Class)
+			return cli.InputError("disclosure field class must be one of name, phone, email, home_address, address, pickup_location, pickup_area, other_contact, credential, verification_code, payment_card, id_document: " + f.Class)
 		}
 		if strings.TrimSpace(f.Value) == "" {
 			return cli.InputError("every disclosed field needs the value that was given (kept on this device only)")
+		}
+		if f.Class == "pickup_area" && readsAsStreetAddress(f.Value) {
+			return cli.InputError("a pickup_area is a neighborhood, city, region or ZIP, and this value reads as a street address (a house number before a street type, or a numbered unit): give an exact spot as pickup_location, which waits for an accepted offer")
 		}
 		if action != "" && a != action {
 			return cli.InputError("seal contact details and credentials as separate disclosures: each is covered by its own check")
@@ -2626,6 +2631,79 @@ func (d dealDisclosure) validate() error {
 		action = a
 	}
 	return nil
+}
+
+// pickupAreaFormat is the invisible format characters (a zero-width space,
+// a soft hyphen) that would split a street type into two harmless words.
+var pickupAreaFormat = regexp.MustCompile(`\p{Cf}`)
+
+// pickupAreaWord is a word of a pickup_area value, in any script; an
+// abbreviation's period and other punctuation fall between words.
+var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{M}\p{Nd}]+`)
+
+// pickupAreaNumber is a house number: decimal digits in any script, with an
+// optional letter ("12", "12345", "12B"), not an ordinal ("5th").
+var pickupAreaNumber = regexp.MustCompile(`^\p{Nd}+\p{L}?$`)
+
+// pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5".
+var pickupAreaUnit = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:apt|unit|suite|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
+
+// pickupAreaStreetTypes are the street types a house number comes before.
+var pickupAreaStreetTypes = map[string]bool{
+	"st": true, "street": true, "ave": true, "avenue": true, "rd": true, "road": true,
+	"blvd": true, "boulevard": true, "ln": true, "lane": true, "dr": true, "drive": true,
+	"ct": true, "court": true, "way": true, "pl": true, "place": true, "hwy": true,
+	"highway": true, "pkwy": true, "parkway": true, "cir": true, "circle": true,
+	"ter": true, "terrace": true, "trl": true, "trail": true, "sq": true, "square": true,
+	"loop": true, "plaza": true, "alley": true, "pike": true,
+}
+
+// pickupAreaLabels are words that make the number after them a label, not a
+// house number ("Exit 12", "Ward 3", "Zone 2").
+var pickupAreaLabels = map[string]bool{"exit": true, "ward": true, "zone": true}
+
+// pickupAreaDistances are words that make the number before them a distance
+// or a time, not a house number ("2 blocks from Main St", "10 min on the
+// way"). Only these end the street name: "off 12 Oak St" and "12 The Grove
+// Rd" are addresses.
+var pickupAreaDistances = map[string]bool{
+	"block": true, "blocks": true, "mile": true, "miles": true, "mi": true, "min": true,
+	"mins": true, "minute": true, "minutes": true, "km": true,
+}
+
+// readsAsStreetAddress is whether a pickup_area value looks like a street
+// address rather than a public area: a house number followed by a street
+// type with at most three name words between ("12 Oak St.", "11501 Alterra
+// Pkwy"), or a numbered unit ("Apt 4", "#5"). The agent picks the class
+// label, so an address labelled pickup_area would reach everyone a public
+// area may go to. The value is NFKC-normalized ("１２" is "12") with format
+// characters removed first. A ZIP, a street named without a number before it
+// ("Main St corridor", "St. Louis, Ward 3"), a number with no street type
+// ("1600 Broadway") and a number after the street ("Hauptstraße 7") pass: the
+// guard catches the common shape, not every address.
+func readsAsStreetAddress(v string) bool {
+	v = pickupAreaFormat.ReplaceAllString(norm.NFKC.String(v), "")
+	if pickupAreaUnit.MatchString(v) {
+		return true
+	}
+	// A comma or semicolon ends a street address's first line.
+	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
+		words := pickupAreaWord.FindAllString(strings.ToLower(part), -1)
+		for i, w := range words {
+			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaLabels[words[i-1]]) {
+				continue
+			}
+			for _, next := range words[i+1 : min(i+5, len(words))] {
+				if pickupAreaDistances[next] {
+					break
+				}
+				if pickupAreaStreetTypes[next] {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // recordsTyped is the record set of a deal sealed in the typed action

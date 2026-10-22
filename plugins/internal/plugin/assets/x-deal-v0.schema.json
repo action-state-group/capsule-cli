@@ -700,7 +700,7 @@
     },
     "disclosure_class": {
       "description": "The kind of thing told about the user. Contact classes are covered by a share_contact check; credential classes by share_credentials.",
-      "enum": ["name", "phone", "email", "home_address", "address", "pickup_location", "other_contact", "credential", "verification_code", "payment_card", "id_document"]
+      "enum": ["name", "phone", "email", "home_address", "address", "pickup_location", "pickup_area", "other_contact", "credential", "verification_code", "payment_card", "id_document"]
     },
     "body_disclosure": {
       "description": "Something the agent told someone about the user: the class of each field and a commitment to its value, never the value. authority is approval (refs carries exactly one authorized_by) or none (rule says why).",
