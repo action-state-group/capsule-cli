@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #75, #76)
+### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #74, #75, #76)
 
 - **Changed:** the pages capsulectl writes take capsule-viewer at
   `4e4d553`. The check section's "Records in this bundle" lists every
@@ -13,7 +13,9 @@
   report title, the provenance line opens the first section card, and
   every panel starts at one inset (capsule-viewer#75). The verification
   page lists `contract-report/v1` as interpreted when the contract-report
-  module drew the page (capsule-viewer#73).
+  module drew the page (capsule-viewer#73). A bundle that did not verify
+  gets a red callout on every page: "Check failed", the check section's
+  counts and a link to it (capsule-viewer#74).
 - **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
   from capsule-viewer `4e4d553` and agent-action-capsule `1d655a1`
   (`ts/v0.6.1`). `go.mod`'s `capsule-viewer/go` moves to the same viewer

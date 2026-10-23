@@ -119,7 +119,7 @@ portable_checks() {
   # Both layers state the same thing: each line the page shows for a step
   # is the one the typed record of that step implies.
   check "the page lists as many records as were exported" \
-    contains page.html.dom "<summary>$(jq length records.json) records, by capsule id</summary>"
+    contains page.html.dom "<summary>Records in this bundle: $(jq length records.json) records, by capsule id</summary>"
   local line
   line=$(record_line records.json proposed-action/v0 '"About to \(.action) \(money)"')
   check "the page shows what the proposed action says ($line)" contains page.html.dom "<span>$line</span>"
