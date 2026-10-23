@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc22
+
 ### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #74, #75, #76)
 
 - **Changed:** the pages capsulectl writes take capsule-viewer at
@@ -43,7 +45,8 @@
   `eu-ai-act-compliance/v1` block keep their cards, which now share the
   same layout. A page built with no `--depth` now opens at L0, the first
   screen with its rows closed, where it opened fully before; `--depth L2`
-  still opens everything.
+  still opens every section, but each entry under "Records in this bundle"
+  stays closed until it is opened (capsule-viewer#76).
 - **Fixed:** the "Verified by" line names the capsule-viewer commit the page
   came from ("at 20f815da0688"), where it read "at commit not stated"
   (#363): `scripts/build-report-runtime.mjs` defines
@@ -92,6 +95,12 @@
   markup no longer hide a street address. Values that passed before and
   are now refused include `78701-1234`, `Pier 39`, `Exit 12 Commerce Dr`
   (it needs a comma) and `<b>Hyde Park</b>`.
+
+### Docs
+
+- A design note says how the book and deal plugins leave this repository
+  (`docs/design/326-plugins-leave-the-core.md`, capsule-cli#326). No
+  behavior change.
 
 ## v0.1.0-rc21
 
