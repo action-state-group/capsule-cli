@@ -2777,8 +2777,9 @@ func (d dealDisclosure) validate() error {
 // pickupAreaRefused is why a pickup_area value is refused: it holds more
 // than a public area may (pickupAreaAllowed).
 const pickupAreaRefused = "a pickup_area is a neighborhood, city, region or 5-digit ZIP: letters, spaces and , . - ' ( ) /, " +
-	"with a number only as the ZIP, an ordinal (5th), after district, ward, zone, exit, route or highway, " +
-	"or before blocks, miles, min or km. This value holds more, such as a house number, a unit or other characters: " +
+	"each word in one script, with a number only as a 5-digit ZIP at the end or before a comma, an ordinal (5th), " +
+	"or right after district, ward, zone, exit, route or highway, or right before block(s), mile(s), min(s) or km. " +
+	"This value holds more, such as a house number, a unit or other characters: " +
 	"give an exact spot as pickup_location, which waits for an accepted offer"
 
 // pickupAreaPunctuation is the punctuation a pickup_area may hold besides
@@ -2799,22 +2800,30 @@ var (
 // pickup_area would reach everyone a public area may go to. It is defined by
 // what it may contain rather than by spotting an address, so how an address
 // is written cannot hide it (capsule-cli#399; PM decision 65806c1a). The
-// value, its escapes decoded, may hold only:
+// value is read as written, as it is sealed and sent: an escape (&#83;,
+// %20, \u0053) needs a character outside the set, so it is refused, never
+// decoded. It may hold only:
 //
 //   - letters (with the marks written on them), decimal digits of any
-//     script, spaces and pickupAreaPunctuation; any other character
-//     (markup, #, |, a symbol, a control, a format or private-use
-//     character, a filler that draws nothing) is refused, not read past;
+//     script, spaces (\p{Zs}) and pickupAreaPunctuation; any other
+//     character (markup, #, |, &, a symbol, a control such as a tab or a
+//     line break, a format or private-use character, a filler that draws
+//     nothing) is refused, not read past. The one exception is a zero-width
+//     joiner or non-joiner inside a word of a script that is written with
+//     them (Persian, the Indic scripts), never a Latin one;
 //   - words whose letters are each in one script (TR39's mixed-script
 //     check), so a Cyrillic S in "St" is refused;
-//   - numbers only as a 5-digit ZIP ending its part of the value (before a
-//     comma or at the end: "Austin, TX 78701"), an ordinal ("5th"), after a
-//     pickupAreaLabels word or before a pickupAreaDistances word. A ZIP+4
-//     narrows to a building and is refused, and so is a postal code of
-//     another country. A word in another script that draws as digits (its
-//     TR39 skeleton is digits, l and o: "ЗЗ") counts as a number.
+//   - numbers only as five decimal digits ending their part of the value
+//     (before a comma or at the end, a closing parenthesis or period
+//     allowed: "Austin, TX 78701"), an ordinal ("5th", "21st"), or right
+//     after a pickupAreaLabels word or right before a pickupAreaDistances
+//     word. A ZIP+4 narrows to a building and is refused, and so is a
+//     postal code of another country; two numbers joined by a hyphen are
+//     refused whatever surrounds them. A word in another script that draws
+//     as digits (its TR39 skeleton is digits, l and o: "ЗЗ") counts as a
+//     number, and is never a ZIP.
 func pickupAreaAllowed(v string) bool {
-	runes := []rune(decodeEscapes(v))
+	runes := []rune(v)
 	var words []pickupAreaToken
 	for i := 0; i < len(runes); {
 		r := runes[i]
@@ -2844,13 +2853,17 @@ func pickupAreaAllowed(v string) bool {
 		if !w.hasDigit && !w.number {
 			continue
 		}
+		// A ZIP+4 or a range ("78701-1234", "12-14") whatever surrounds it.
+		if k > 0 && words[k-1].number && strings.TrimSpace(string(runes[words[k-1].end:w.start])) == "-" {
+			return false
+		}
 		switch {
 		case w.number && k > 0 && slices.Contains(pickupAreaLabels, words[k-1].text) &&
 			pickupAreaSpaces(runes[words[k-1].end:w.start]):
 		case w.number && k+1 < len(words) && slices.Contains(pickupAreaDistances, words[k+1].text) &&
 			pickupAreaSpaces(runes[w.end:words[k+1].start]):
-		case pickupAreaOrdinal.MatchString(w.text):
-		case w.number && len(w.text) == 5 && pickupAreaEndsPart(runes, w.end):
+		case pickupAreaOrdinal(w.text):
+		case w.number && w.letters == 0 && len(w.text) == 5 && pickupAreaEndsPart(runes, w.end):
 		default:
 			return false
 		}
@@ -2858,8 +2871,26 @@ func pickupAreaAllowed(v string) bool {
 	return true
 }
 
-// pickupAreaOrdinal is an ordinal: "5th", "21st", "2nd", "3rd".
-var pickupAreaOrdinal = regexp.MustCompile(`^[0-9]+(?:st|nd|rd|th)$`)
+// pickupAreaOrdinal is whether a word is an ordinal with its own suffix:
+// "1st", "2nd", "3rd", "5th", "11th", "21st"; never "12st".
+func pickupAreaOrdinal(w string) bool {
+	n := strings.TrimRight(w, "abcdefghijklmnopqrstuvwxyz")
+	if n == "" || len(w)-len(n) != 2 || strings.Trim(n, "0123456789") != "" {
+		return false
+	}
+	suffix := "th"
+	if teen := len(n) >= 2 && n[len(n)-2] == '1'; !teen {
+		switch n[len(n)-1] {
+		case '1':
+			suffix = "st"
+		case '2':
+			suffix = "nd"
+		case '3':
+			suffix = "rd"
+		}
+	}
+	return w[len(n):] == suffix
+}
 
 // pickupAreaWordRune is whether runes[j] continues a word: a letter, a
 // digit, a mark on a letter, or a zero-width joiner or non-joiner between
@@ -2872,7 +2903,13 @@ func pickupAreaWordRune(runes []rune, j int) bool {
 	case unicode.Is(unicode.M, r):
 		return j > 0 && (unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
 	case r == 0x200C || r == 0x200D:
-		return j > 0 && j+1 < len(runes) && unicode.IsLetter(runes[j-1]) && unicode.IsLetter(runes[j+1])
+		// After a letter or a mark (a virama), before a letter, never in a
+		// Latin word.
+		if j == 0 || j+1 >= len(runes) || !unicode.IsLetter(runes[j+1]) ||
+			!(unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1])) {
+			return false
+		}
+		return scriptOf(runes[j+1]) != "Latin" && scriptOf(runes[j-1]) != "Latin"
 	}
 	return false
 }
@@ -2880,24 +2917,23 @@ func pickupAreaWordRune(runes []rune, j int) bool {
 // pickupAreaBetweenWords is whether r may end a word: a space or one of
 // pickupAreaPunctuation.
 func pickupAreaBetweenWords(r rune) bool {
-	return r == ' ' || unicode.Is(unicode.Zs, r) || r == '\t' || r == '\n' || r == '\r' ||
-		strings.ContainsRune(pickupAreaPunctuation, r)
+	return unicode.Is(unicode.Zs, r) || strings.ContainsRune(pickupAreaPunctuation, r)
 }
 
 // pickupAreaSpaces is whether rs is only spaces: a label or distance word
 // goes with its number only right beside it ("Zone, 12 Oak St" is refused).
 func pickupAreaSpaces(rs []rune) bool {
-	return !slices.ContainsFunc(rs, func(r rune) bool { return !unicode.Is(unicode.Zs, r) && !unicode.IsSpace(r) })
+	return !slices.ContainsFunc(rs, func(r rune) bool { return !unicode.Is(unicode.Zs, r) })
 }
 
-// pickupAreaEndsPart is whether only spaces, then a comma or the end, follow
-// runes[end:].
+// pickupAreaEndsPart is whether only spaces, a closing parenthesis or a
+// period, then a comma or the end, follow runes[end:].
 func pickupAreaEndsPart(runes []rune, end int) bool {
 	for _, r := range runes[end:] {
 		switch {
 		case r == ',':
 			return true
-		case !unicode.Is(unicode.Zs, r) && !unicode.IsSpace(r):
+		case !unicode.Is(unicode.Zs, r) && r != ')' && r != '.':
 			return false
 		}
 	}
@@ -2906,9 +2942,10 @@ func pickupAreaEndsPart(runes []rune, end int) bool {
 
 // pickupAreaToken is a word of a pickup_area value (pickupAreaWord).
 type pickupAreaToken struct {
-	text     string // its letters and digits, lower case, digits as ASCII
+	text     string // its letters and digits, lower case, compatibility forms and digits as ASCII
 	number   bool   // digits only, or letters that draw as digits
 	hasDigit bool
+	letters  int
 	start    int // its first rune in the value
 	end      int // the rune after it
 }
@@ -2936,7 +2973,11 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 			if sc := scriptOf(r); sc != "Common" && sc != "Inherited" {
 				scripts[sc] = true
 			}
-			b.WriteRune(unicode.ToLower(r))
+			if f := foldDecoded(string(r)); r > 0x7f && f != "" && isASCIIAlnum(f) {
+				b.WriteString(strings.ToLower(f)) // fullwidth Ｅｘｉｔ is exit
+			} else {
+				b.WriteRune(unicode.ToLower(r))
+			}
 			if r > 0x7f {
 				nonASCII = true
 			}
@@ -2967,7 +3008,7 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 	if len(scripts) > 1 && !(len(scripts) == 2 && scripts["Hiragana"] && scripts["Katakana"]) {
 		return w, false
 	}
-	w.text = b.String()
+	w.text, w.letters = b.String(), letters
 	switch {
 	case letters == 0:
 		w.number = w.hasDigit

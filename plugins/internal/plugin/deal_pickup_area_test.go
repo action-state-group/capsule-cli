@@ -48,6 +48,12 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"78701-1234", "Austin, TX 78701-1234", "SW1A 1AA", "K1A 0B1", "78701 Oak St",
 		// Numbers outside the allowed contexts.
 		"2 bedrooms in Hyde Park", "Building 4, Hyde Park", "Pier 39",
+		// Review of the allowlist: a ZIP+4 whatever surrounds it; a letter
+		// that draws as a digit is never a ZIP; escapes are refused as
+		// written; an ordinal takes its own suffix.
+		"Zone 78701-1234 km", "Apt \u0417\u04171", "\u0417123, Oak St", "Oak St \u0417123", "\u01c0234, Oak St",
+		"\u13ce12, Main St", "\u0417\u0417\u0417\u0417\u0417", "&#1600; Pennsylvania Ave", "&#4512; Duval St", "Hyde&nbsp;Park",
+		"%41ustin", "12st Oak", "Oak 12St", "3nd Ave", "11st Ave", "12-14 Oak",
 		// A label or distance word goes with its number only right beside it.
 		"Zone, 12 Oak St", "Exit (12) Oak St", "12, km from Oak St",
 	} {
@@ -64,11 +70,13 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"Midway, Utah 84049", "District 9", "Union Square", "Community Unit area", "Ward 3, near Main St",
 		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr", "Zone 2, Park Place",
 		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66 corridor",
-		"Highway 101 area", "21st and Main area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
+		"Highway 101 area", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
+		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12 area", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
 		// Letters of any one script, written any way that is still letters.
 		"Z\u00fcrich Kreis", "Cafe\u0301 district", "Hawai\u02bbi Kai", "K\u00f6ln-Ehrenfeld",
 		"\uff28\uff59\uff44\uff45 \uff30\uff41\uff52\uff4b", "\uff17\uff18\uff17\uff10\uff11",
 		"\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433, \u041d\u0435\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d",
+		"\u0dc1\u0dca\u200d\u0dbb\u0dd3 \u0dbd\u0d82\u0d9a\u0dcf", "\u0645\u06cc\u200c\u062f\u0627\u0646", "\u6c5f\ub0a8 area",
 		"\u6e0b\u8c37\u306e\u3042\u305f\u308a", "\u30b7\u30d6\u30e4 \u99c5\u524d", "\uac15\ub0a8\uc5ed \uadfc\ucc98",
 	} {
 		assert.True(t, pickupAreaAllowed(v), "%q", v)
@@ -144,7 +152,7 @@ func TestAPlatformsPickupLocationStillWaitsForAnAcceptance(t *testing.T) {
 
 // The guard is on the disclosure note whatever the record set: an x-deal-v0
 // deal refuses a street address labelled pickup_area too, sealing nothing.
-func TestAnXDealPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
+func TestAnXDealPickupAreaThatHoldsAnAddressIsRefused(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
 		"intent":{"verbatim":"buy the bike and arrange pickup","allowed":["pay","share_contact"]},
@@ -193,6 +201,11 @@ func TestAPickupAreaWrittenToHideAnAddressIsRefused(t *testing.T) {
 		"an ampersand":                     "Bed & Breakfast row",
 		"a fullwidth number sign":          "\uff035, Hyde Park",
 		"a semicolon":                      "Austin; Hyde Park",
+		"a tab":                            "Austin\tDowntown",
+		"a line break":                     "Austin\nDowntown",
+		"a joiner in a Latin word":         "Oak S\u200dt",
+		"a non-joiner in Latin":            "Hy\u200cde Park",
+		"Han and Latin in one word":        "\u6c5fA area",
 	} {
 		assert.False(t, pickupAreaAllowed(v), "%s: %q", name, v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
