@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Report pages take capsule-viewer's contract-report module (capsule-viewer#58, #66, #70)
+
+- **Changed:** the pages capsulectl writes take capsule-viewer at
+  `20f815d`. A Result bundle that opts into `contract-report/v1`, as the
+  EU AI Act and airline-support-outcomes packs now do
+  (evidencebook-skills#39), opens as capsule-viewer's contract-report
+  page:
+  - a callout at the top says the contents checked, with the counts and a
+    link to "How this page was checked";
+  - the sealed coverage and its buckets come first, then the per-case
+    answers;
+  - provenance folds to one line;
+  - rule and test rows open in place, with no script needed;
+  - a Result whose claims the card cannot place one by one is drawn as the
+    generic Result page.
+
+  Bundles that carry only the earlier `outcome-report/v1` or
+  `eu-ai-act-compliance/v1` block keep their cards, which now share the
+  same layout.
+- **Changed:** `agent-action-capsule/go` moves from v0.11.0 to v0.12.0 in
+  both modules. It registers `contract-report/v1` and carries Result v0's
+  `out_of_scope` verdict and `applies_from`. `presentation list` now shows
+  seven built-in manifests, `aac.builtin.result-contract-report/v0` among
+  them, vendored from that release.
+- **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
+  from capsule-viewer `20f815d` and agent-action-capsule `17f0c9f`
+  (`ts/v0.6.0`), the verifier the viewer now builds against. `go.mod`'s
+  `capsule-viewer/go` moves to the same commit. The presentation goldens'
+  pages and snapshots are re-emitted from their unchanged bundles.
+
 ### Evidence Bundles come from AAC's producer (#353)
 
 - **Changed:** `bundle`, `disclose`, `permalink`, `countersign request`

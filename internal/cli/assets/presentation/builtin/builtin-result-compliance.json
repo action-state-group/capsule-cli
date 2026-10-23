@@ -20,6 +20,7 @@
       "spec_version:report/v1"
     ],
     "extensions": [
+      "contract-report/v1",
       "outcome-report/v1"
     ]
   },

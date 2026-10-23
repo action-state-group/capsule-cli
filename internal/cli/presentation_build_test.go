@@ -294,7 +294,7 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 	}
 	builtins, err := BuiltinPresentationManifests()
 	require.NoError(t, err)
-	require.Len(t, builtins, 6)
+	require.Len(t, builtins, 7)
 	assert.NoError(t, StaticPresentationCheck(builtins))
 	var examples []map[string]interface{}
 	for _, name := range []string{"example-composition-aware", "example-declarative-outcome", "example-declarative-rules", "example-generic-fallback", "example-unilateral"} {
@@ -369,9 +369,10 @@ func TestThePresentationRuntimeDeclarationIsTheVendoredOne(t *testing.T) {
 		"builtin-evaluation-summary-graph.json": "0747d86864c685d90e7dd9456bc8b378ff17dd5d2be9fa2f03a939f1ed00489b",
 		"builtin-no-aggregate.json":             "0ea7853f0bdc957c772cd019d3de78b525352c3ec61a427e1f0238c7495f0ee6",
 		"builtin-report-rows.json":              "b224a61b5494ba50e7b07b01d752972f1b46173deef17ffc46e608e286a81358",
-		"builtin-result-compliance.json":        "e5d8e8212bfe2478b39bf4a7d78ae13e399d0e1b16eed4cd2235967f1a5c3289",
-		"builtin-result-outcome-report.json":    "6e9399278f9f4c211bc495e3392499fc55f51f7e1a974532fe4250fd9ff4d398",
-		"builtin-result.json":                   "52aaf2434c0b583afb47e1e896b8a5047fc1cf7494d0230286fc95a354b57314",
+		"builtin-result-compliance.json":        "7be762df73c93510c8011608f3595b27c9ab2861f9e28fb68e66a399f86831ec",
+		"builtin-result-contract-report.json":   "94cec81a3f63cd8507abb8e5d9d3bcbe69bfc4d0cd2ceda6fb9ca28d0fe9a1e4",
+		"builtin-result-outcome-report.json":    "6c15efd773dd13075fe23ffc204eb2540594765b47b6ee42a1280d9b30511547",
+		"builtin-result.json":                   "5a92f4b1c595488b48fb6b5db3ccd9f69e9d6eb10b41431cf0f3d1471a293650",
 	}
 	entries, err := builtinPresentationFS.ReadDir("assets/presentation/builtin")
 	require.NoError(t, err)
