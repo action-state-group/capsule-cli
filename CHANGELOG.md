@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Report pages take capsule-viewer's contract-report module (capsule-viewer#58, #66, #70)
+
+- **Changed:** the pages capsulectl writes take capsule-viewer at
+  `20f815d`. A Result bundle that opts into `contract-report/v1`, as the
+  EU AI Act and airline-support-outcomes packs now do
+  (evidencebook-skills#39), opens as capsule-viewer's contract-report
+  page:
+  - a callout at the top says the contents checked, with the counts and a
+    link to "How this page was checked";
+  - the sealed coverage and its buckets come first, then the per-case
+    answers;
+  - provenance folds to one line;
+  - rule and test rows open in place, with no script needed;
+  - a Result whose claims the card cannot place one by one is drawn as the
+    generic Result page.
+
+  Bundles that carry only the earlier `outcome-report/v1` or
+  `eu-ai-act-compliance/v1` block keep their cards, which now share the
+  same layout. A page built with no `--depth` now opens at L0, the first
+  screen with its rows closed, where it opened fully before; `--depth L2`
+  still opens everything.
+- **Fixed:** the "Verified by" line names the capsule-viewer commit the page
+  came from ("at 20f815da0688"), where it read "at commit not stated"
+  (#363): `scripts/build-report-runtime.mjs` defines
+  `__CAPSULE_VIEWER_COMMIT__` as the pinned commit.
+- **Changed:** `agent-action-capsule/go` moves from v0.11.0 to v0.12.0 in
+  both modules, so the Go resolver knows `contract-report/v1` as the page
+  does: v0.12.0 registers it and adds its built-in manifest (the seven
+  built-ins are vendored from that release), and its interop verifier
+  accepts `out_of_scope` in the pair invariant. `result build` and this
+  tool's Result schema are unchanged. `presentation list` names the
+  contract-report module by the id the page registers in place of
+  agent-action-capsule's built-in, `capsuleviewer.contract-report/v0`.
+- **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
+  from capsule-viewer `20f815d` and agent-action-capsule `17f0c9f`
+  (`ts/v0.6.0`), the verifier the viewer now builds against. `go.mod`'s
+  `capsule-viewer/go` moves to the same commit. The presentation goldens'
+  pages and snapshots, and the presentation pass's build snapshots, are
+  re-emitted from their unchanged bundles.
+
 ### Evidence Bundles come from AAC's producer (#353)
 
 - **Changed:** `bundle`, `disclose`, `permalink`, `countersign request`

@@ -70,6 +70,7 @@ func presentationCandidates() ([]presentationCandidate, []presentationRefusedPlu
 		if err != nil {
 			return nil, nil, fmt.Errorf("built-in presentation manifest %s: %w", entry.Name(), err)
 		}
+		m.ID = pageModuleID(m.ID)
 		out = append(out, presentationCandidate{manifest: m, source: "builtin"})
 	}
 	dealView, err := aacpresentation.ParseManifest(DealViewManifestJSON)

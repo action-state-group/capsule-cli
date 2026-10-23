@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -453,4 +454,31 @@ func TestPresentationListARefusedModuleStillDisplacesTheDealView(t *testing.T) {
 	row := listedModule(t, l, "capsuleviewer.receipt.unilateral/v0")
 	assert.Equal(t, true, row["matches"])
 	assert.Equal(t, "presentation_api_unsupported", row["refusal"].(map[string]any)["reason"])
+}
+
+// A Result opted into contract-report/v1 is drawn by the module the page
+// registers in place of agent-action-capsule's built-in for it
+// (spec/contract-report-v1.md section 4), and list names that module.
+func TestPresentationListNamesThePagesContractReportModule(t *testing.T) {
+	pluginRoot(t)
+	for _, fixture := range []string{"4-monthly-outcome", "5-monthly-compliance"} {
+		t.Run(fixture, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata/presentation", fixture, "bundle.json"))
+			require.NoError(t, err)
+			var bundle map[string]any
+			require.NoError(t, json.Unmarshal(raw, &bundle))
+			bundle["extensions"].(map[string]any)["contract-report/v1"] = map[string]any{}
+			opted, err := json.Marshal(bundle)
+			require.NoError(t, err)
+			path := filepath.Join(t.TempDir(), "bundle.json")
+			require.NoError(t, os.WriteFile(path, opted, 0o600))
+			stdout, err := invoke(t, "", "presentation", "list", "--bundle", path)
+			require.NoError(t, err, stdout)
+			l := decodeList(t, stdout)
+			require.NotNil(t, l.Selected)
+			assert.Equal(t, contractReportPageID, l.Selected["id"])
+			assert.Equal(t, "builtin", l.Selected["source"])
+			assert.Contains(t, string(EvidenceGraphIIFE), `"`+contractReportPageID+`"`, "the page registers it")
+		})
+	}
 }
