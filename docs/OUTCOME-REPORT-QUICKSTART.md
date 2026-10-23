@@ -206,13 +206,14 @@ checkpoint closed the day before the Result v0 existed; skip it and
 `disclose` shows that record uncheckpointed.
 
 `--attach-input-originals` is opt-in: it carries each published capsule's
-retained input original in the bundle (extension
-`capsulectl/agent-input-originals/v1`), each checked against the capsule's
-`agent_input_digest` first. The book itself stores no originals. Leave the
-flag off and the bundle carries digests only. The card shows a conversation's
-transcript only when the Result also cites that conversation's case record;
-the Result v0 `rollup_day.py` writes cites the reports alone, so this page's
-report does not show transcripts.
+retained input original, read from the book's artifact store, in the bundle
+(extension `capsulectl/agent-input-originals/v1`), each checked against the
+capsule's `agent_input_digest` first. Leave the flag off and the bundle
+carries digests only. The card shows a conversation's transcript when the
+Result also cites that conversation's case record. The Result v0
+`rollup_day.py` writes does: each claim cites the conversation's case record
+beside its report (evidencebook-skills#11). So with the flag on, this page's
+report shows each conversation's transcript.
 
 ## 8. Build and open the report
 
