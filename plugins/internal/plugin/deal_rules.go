@@ -2907,8 +2907,9 @@ func pickupAreaOrdinal(w string) bool {
 }
 
 // pickupAreaWordRune is whether runes[j] continues a word: a letter, a
-// digit, a mark on a letter, or a zero-width joiner or non-joiner between
-// two letters (as Persian and the Indic scripts write words).
+// digit, a mark on a letter, a mark or a joiner, or a zero-width joiner or
+// non-joiner with a letter or a mark on each side (as Persian and the Indic
+// scripts write words).
 func pickupAreaWordRune(runes []rune, j int) bool {
 	r := runes[j]
 	switch {
@@ -2970,9 +2971,9 @@ type pickupAreaToken struct {
 	end      int // the rune after it
 }
 
-// pickupAreaWord reads one word: false when its letters are in more than one
-// script (Common and Inherited letters, such as the okina in "Hawaiʻi", go
-// with any; Han with kana, Hangul or Bopomofo is one). Its text is lower
+// pickupAreaWord reads one word: false when its letters, digits and marks
+// are in more than one script (Common and Inherited ones, such as the okina
+// in "Hawaiʻi", go with any; Han with kana, Hangul or Bopomofo is one). Its text is lower
 // case, its digits ASCII. It is a number when it is digits only, or when it
 // has a letter outside ASCII and every letter's TR39 skeleton is a digit, l
 // or o, with a digit (a stroke letter such as ǀ counts as 1) among them or
