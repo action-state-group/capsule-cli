@@ -41,7 +41,7 @@ type BundleOptions struct {
 	Withhold       map[string]bool
 	WithDisclosure bool
 	// ProducerKey, when set, is declared in the bundle's producer-key/v1
-	// extension (see producerKeyExtension). Nil emits no extension.
+	// extension (ProducerKeyExtensionKind). Nil emits no extension.
 	ProducerKey ed25519.PublicKey
 }
 

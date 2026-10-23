@@ -239,7 +239,13 @@ func TestAssembleBundleIsAACsProducerOutput(t *testing.T) {
 
 	checkpoint := got["checkpoint"].(map[string]interface{})
 	assert.NotEmpty(t, checkpoint["cose"])
-	assert.NotContains(t, checkpoint, "statement", "the COSE checkpoint is carried once, as cose")
+	keys := make([]string, 0, len(checkpoint))
+	for key := range checkpoint {
+		keys = append(keys, key)
+	}
+	// The signed fields and the COSE statement once, as cose: no legacy
+	// statement copy, and not the signing body's kind and v.
+	assert.ElementsMatch(t, []string{"log_id", "mmr_size", "root", "prev_size", "prev_root", "key_id", "timestamp", "cose"}, keys)
 	assert.NotContains(t, got, "disclosures")
 }
 

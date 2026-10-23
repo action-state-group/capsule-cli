@@ -8,9 +8,10 @@
   and the deal commands build their Evidence Bundles with
   agent-action-capsule's `BuildEvidenceBundle`, the one producer every
   language shares, instead of capsulectl's own assembler. Book profiles
-  are unchanged. A new bundle differs from an rc21 one in four ways:
+  are unchanged. A new bundle differs from an rc21 one in five ways:
   `checkpoint` carries the signed checkpoint once, as `cose`, without the
-  older `statement` copy; a countersign request bundle states
+  older `statement` copy; `checkpoint` no longer repeats the signing
+  body's `kind` and `v`; a countersign request bundle states
   `payloads_mode` `selected` (the draft's value) instead of `none`; a
   bundle that reveals nothing has no `disclosures` member instead of an
   empty one; and `completeness.missing` lists missing citations in the
