@@ -1,6 +1,6 @@
 # Design note: the book and deal plugins leave the neutral repository
 
-capsule-cli#326. Status: draft for review, round 2. Checked against `main` at
+capsule-cli#326. Status: draft for review, round 3. Checked against `main` at
 `df68c51` (after v0.1.0-rc21), evidencebook `main` (`v0.7.0`), actionstate-site
 `main` (`install/` and `scripts/install-*`) and actionstate-muse `main`.
 
@@ -52,8 +52,9 @@ What still ties the plugins to this repository:
    build both plugins and run `deal init` on
    `skills/deal/demo/retail-checkout`. The `presentation-pass`, golden and
    `interop-at-resolved-versions` jobs run in `plugins/`. The `capsulectl`
-   skill documents the book verbs (`skills/capsulectl/spec.yaml` lines
-   244-320: `request`, `respond`, `close`, `reconcile`, `result`), and its
+   skill documents the book verbs (`skills/capsulectl/spec.yaml` from line
+   248: `request`, `respond`, `close`, `reconcile`, `result build`, `report
+   build`), and its
    scripted demo runs them on a jsonl book profile, built with
    `plugins/scripts/bookdemo`.
 
@@ -112,7 +113,7 @@ evidencebook, and the split costs only about a dozen functions.
 |---|---|
 | `plugins/cmd/capsulectl-book`, the book files of `plugins/internal/plugin` (`book.go`, `booklog.go`, `bookhost.go`, `backfill.go`, `report.go`, `result.go`, `resultbuild.go`, `resultschema.go`, their tests) | `evidencebook/capsulectl/` (its own `go.mod`): `cmd/capsulectl-book`, `internal/book` |
 | `sealResultRecord`, `checkpointCovers`, the shared request and response reading | evidencebook library, exported, with tests |
-| the book verbs' part of `skills/capsulectl` (spec entries for `request`, `respond`, `close`, `reconcile`, `result`, `report`, `backfill`; demo steps 12-15; `references/` text on them), and `plugins/scripts/bookdemo` | `evidencebook/capsulectl`, as that plugin's skill. This is public skill text, so Sherlock2 reviews it. The core skill keeps the core verbs, and its demo runs on a plain `log: cll` profile |
+| the book verbs' part of `skills/capsulectl` (spec entries for `request`, `respond`, `close`, `reconcile`, `result build`, `report build`; demo steps 12-15; `references/` text on them), `plugins/scripts/bookdemo`, and `docs/BACKFILL.md` (the book plugin's `backfill`) | `evidencebook/capsulectl`, as that plugin's skill. This is public skill text, so Sherlock2 reviews it. The core skill keeps the core verbs, and its demo runs on a plain `log: cll` profile |
 | `plugins/cmd/capsulectl-deal`, the deal files of `plugins/internal/plugin` (`deal*.go`, `action_records.go`, `materiality.go`, `rules_checker*.go`, `confusables_table.go`, `assets/`, their tests and `testdata/`) | `evidencebook-deal`: `cmd/capsulectl-deal`, `internal/deal` |
 | `plugins/scripts/genconfusables`, `third_party/unicode/`, `scripts/update-confusables.sh`, `plugins/scripts/engine-e2e` | `evidencebook-deal` |
 | `skills/deal/` (`SKILL.md`, `README.md`, `COUNTERSIGN.md`, `AUDIT-HOST.md`, `profile/`, `demo/`, `scripts/`) | `evidencebook-deal/skills/deal/` |
@@ -132,9 +133,26 @@ company repository. Plugin tests that read core files through relative
 paths (`binaries_test.go:15`, `presentation_golden_test.go:41`,
 `report_test.go:73`) read them from the pinned capsule-cli module instead
 (`go list -m -f '{{.Dir}}' github.com/action-state-group/capsule-cli`;
-module zips include `testdata/`). The presentation goldens in
-`internal/cli/testdata/presentation` stay with the core, which uses them in
-its own tests.
+module zips include `testdata/`). That copy is read-only, so nothing writes
+there. `presentation_golden_test.go` today rewrites the `page.html`
+goldens and snapshots in `internal/cli/testdata/presentation` when its
+update variables are set (lines 34-37, 165, 175). After the move:
+
+- `evidencebook-deal` owns the goldens of the pages it builds, and updates
+  them in its own tree.
+- The core keeps its own committed fixtures and goldens for its own tests
+  (`presentation_fixtures_test.go` and others). It updates them only when a
+  format or coverage changes, not each time a deal page changes.
+
+So a change to a deal page needs no capsule-cli PR.
+
+**Wording key coverage.** `TestEveryWordingKeyTheCodeNamesIsInThePack`
+(`narration_test.go:56-74`) globs `../../plugins/internal/plugin/*.go` as
+well as the core. Once that directory is gone the glob returns nothing and
+the deal half passes silently. So each plugin repository runs the same
+check over its own code against `cli.BuiltinWording()` from its pinned
+capsule-cli, and the check fails when its file glob matches nothing.
+Step 6 removes the plugin glob from the core test.
 
 **History.** capsule-cli stays public and keeps the full history. Each new
 home starts from one import commit naming the capsule-cli commit it was cut
@@ -181,7 +199,8 @@ its imports in the same release.
 **Plugin-only code in the core.** `deadcode ./cmd/capsulectl` lists 37
 functions in `internal/cli` that only the plugins reach. They stay in the
 host package, because almost all of them wrap unexported core state (store
-locks, delivery state, the evidence-door transport). Moving them would mean
+locks, delivery state, the evidence-door transport and its answer checks,
+`verifyRefusal` and `verifyChainHead`). Moving them would mean
 exporting more. The one exception is `scitt_receipt.go`
 (`statementEntryHash`, `verifyStatementReceipt`): it has no callers and no
 tests, so step 1 deletes it.
@@ -220,7 +239,7 @@ exists, the spec is the source of `x-deal/v0`, and
 | `deal.go`, `deal_ids.go`, `deal_share.go`, `deal_sale.go`, `deal_rules.go`, `deal_errors.go`, `deal_cadence.go` | reachable from the core's own commands (`deadcode`): verify, bundle, the cadence, `canary`, and the error classes `SafeError` maps for every binary |
 | `materiality.go`, `assets/materiality/neutral.json` | the core evaluates a predicate a profile or pack supplies; it holds no deal policy |
 | `rules_checker*.go` | the pinned external-check seam the core runs |
-| `capsulectl.deal-view/v0` (`assets/deal-view.{js,css,manifest.json}`) | the plain rendering of a deal bundle. Under J.8, basic rendering is neutral and lives in capsule-viewer (#325). It moves there before donation (#428) |
+| `capsulectl.deal-view/v0` (`assets/deal-view.{js,css,manifest.json}`) | the core's own page module for a deal bundle (#325). It requires `x-deal-v0` and carries product wording, so it is not basic rendering under J.8, which keeps company modules out of capsule-viewer. It leaves the core before donation (#428). Where it goes, the deal plugin as a plugin presentation module or capsule-viewer once `x-deal/v0` is a neutral spec and the product wording is gone, is a boundary question under #428 |
 | the deal entries of the built-in wording pack | see section 4.3 |
 | `pluginhost.go`: launcher names `book` and `deal`, the three deal hooks, the hand-over of book-profile verbs | the CLI-level contract `docs/PLUGINS.md` documents. It becomes generic before donation (#428) |
 | `canary`, the deal-plugin check in `doctor --install-check` | they run deal verbs or check the deal plugin through the command line (#428) |
@@ -284,9 +303,11 @@ Once the plugins release on their own, a plugin binary carries two
 versions:
 
 - **`cli.CLIVersion` and `cli.CLICommit`** stay the core version the
-  binary embeds. A plugin release build sets them with `-X` to the
-  capsule-cli version its `go.mod` requires (`go list -m`). Inside
-  capsule-cli, `release-build.sh` already sets them to the release tag, so
+  binary embeds. A plugin release build sets them with `-X`: the version is
+  the capsule-cli version its `go.mod` requires (`go list -m`), and the
+  commit is that version's commit (`.Origin.Hash` from `go mod download
+  -json`, as `ci.yml`'s interop job already reads it). Inside capsule-cli,
+  `release-build.sh` already sets them to the release tag and commit, so
   builds from here don't change.
 - **`cli.PluginVersion` and `cli.PluginCommit`**, two new host-package
   variables, are the plugin's own release tag and commit. Release builds
@@ -312,14 +333,16 @@ rules are unchanged: a release core refuses at install unless
 `--allow-version-mismatch`, warns at dispatch, and `doctor` fails; a
 development core doesn't check.
 
-**The producer stamp.** Sealed deal records and deal pages name the
-producer as `capsulectl <CLIVersion> (<CLICommit>)` (`deal_rules.go:861`;
-`deal_report.go:292`, `produced_by` and `page_built_by`). After the move it
-becomes `capsulectl-deal <PluginVersion> (<PluginCommit>)`, in the same
-field shape. A plugin tag can then never read as a core release. Records
-already sealed keep the old stamp, and the page already compares producers
-across steps. The stamp is kept in sealed records, so it is a one-way door
-(section 9).
+**The producer stamp doesn't change at the move.** Sealed deal records
+and deal pages name the producer as `capsulectl <CLIVersion>
+(<CLICommit>)` (`deal_rules.go:861`; `deal_report.go:292`: `produced_by`,
+`page_built_by`, `page_version`). `deal-view.js` (lines 436-445) compares
+each step's producer version with `page_version` as core release tags, and
+links capsule-cli's release notes. With `CLIVersion` still the embedded
+core's tag, the stamp stays true, and the comparison and links keep
+working. Recording the plugin's own version in sealed records would change
+a sealed format and what deal-view compares, so it is left out of this
+move (section 10).
 
 Every core release still needs a plugin release built against it. This is
 RELEASING.md step 6, "re-cut the companion plugin", which already exists
@@ -468,6 +491,10 @@ The generator and its checks:
   "`<version> <core sha256> <deal plugin sha256>`". It splits into
   `CAPSULECTL_PIN` ("`<version> <core sha256>`") and `CAPSULECTL_DEAL_PIN`
   ("`<deal tag> <deal plugin sha256>`").
+- `scripts/seller-sale-e2e.sh` (lines 49-51) and `buyer-exits-e2e.sh`
+  (lines 48-50) read the third field of `CAPSULECTL_PIN` and exit 2 without
+  it. `real-capsulectl-test.sh` (lines 63-67) runs both. They read
+  `CAPSULECTL_DEAL_PIN` instead.
 - `scripts/real-capsulectl-test.sh`, `demo-acp.sh`, `demo-ucp.sh`,
   `staged-install-test.sh` and `.github/workflows/install.yml` build the
   deal asset's name and URL from the capsule-cli release, check it against
@@ -522,7 +549,9 @@ which is RELEASING.md's release-triple rule.
    `release-build.sh` and the `Makefile`, and the freeze check; turn the
    path check to fail mode; make install by name refuse, with the advice,
    doc and dead-code changes in section 6.1; move the book verbs out of the
-   `capsulectl` skill; update `docs/PLUGINS.md`, `docs/RELEASING.md`,
+   `capsulectl` skill; drop the plugin glob from `narration_test.go:60`;
+   point the comment at `deal_profile.go:11` away from
+   `skills/deal/profile/PROFILE.md`; update `docs/PLUGINS.md`, `docs/RELEASING.md`,
    `README.md`, `docs/CANARY.md`, `docs/HARNESS.md` and the `CHANGELOG.md`
    upgrade note. It merges before the rc22 tag only if steps 2 to 5 are
    done. Otherwise the plugins ship from here once more in rc22 (section 4.2
@@ -571,7 +600,6 @@ deal`. Users see no rename.
 | The new exported evidencebook functions | Public library API |
 | Asset names and URLs in the new releases, `actionstate-install-release/2`, and the install summary entries | Install folders, the repin and Muse pins freeze them |
 | The handshake field `core_version` | It joins the published `cli-plugin/v1` contract |
-| The producer stamp `capsulectl-deal <tag> (<commit>)` | Sealed records keep it |
 | Removing `plugin install book\|deal` | A command users can see stops fetching |
 
 ## 10. Follow-ups
@@ -584,6 +612,8 @@ deal`. Users see no rename.
   each deal format the core verifies.
 - Moving settlement verification to AAC (J.8), after which the deal plugin
   drops `capsule-cli/settlement`.
+- Recording the deal plugin's own version in sealed records, with deal-view
+  comparing producers by name. That is a format change with its own design.
 
 ## 11. Acceptance, as #326 states it
 
