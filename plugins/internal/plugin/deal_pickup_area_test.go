@@ -30,39 +30,65 @@ func TestPickupAreaIsAContactClassAndNotAnAddress(t *testing.T) {
 	assert.Contains(t, err.Error(), "pickup_area")
 }
 
-// The guard Sherlock2 asked for: the agent picks the class label, so a value
-// that reads as a street address is refused as a pickup_area.
-func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
+// The guard Sherlock2 asked for, as an allowlist (capsule-cli#399, PM
+// decision 65806c1a): the agent picks the class label, so a pickup_area may
+// hold only what a public area does, and anything else is refused.
+func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 	for _, v := range []string{
 		"12 Oak St", "12 Oak St.", "1600 Pennsylvania Ave", "4 Elm Dr., Austin", "12B Elm Dr.",
-		"12 Oak Street", "9 Sunset Blvd", "9 Sunset Boulevard", "3 Mill Rd", "3 Mill Road", "8 Penny Ln",
-		"8 Penny Lane", "100 Ocean Drive", "2 Kings Ct.", "2 Kings Court", "5 Abbey Way", "6 Hart Pl.",
-		"6 Grove Place", "Austin, TX 78701, 12 Oak St", "123456 Long Rd", "12 OAK ST", "12 Elm Hwy",
-		"12345 Oak St", "11501 Alterra Pkwy, Austin", "10250 Santa Monica Blvd", "１２ Oak St", "١٢ Oak St",
-		"１２ Ｏａｋ Ｓｔ", "12 Oak S\u200bt", "7 Old Mill Creek Rd", "3 Ash Cir", "3 Ash Ter.", "3 Ash Trl",
-		"3 Ash Sq", "3 Ash Loop", "3 Ash Plaza", "3 Ash Alley", "3 Ash Pike", "Apt 4", "Unit 12",
-		"#5, Hyde Park", "Suite 200", "Ste. 3, Austin", "Hyde Park, apt #4",
-		"pickup is off 12 Oak St", "near 12 Oak St", "from 12 Oak St", "12 The Grove Rd", "12 Road to Nowhere Ln",
-		"near 4512 Duval St", "close to 12 Oak St", "corner of 12 Oak St", "5 mi from 12 Oak St", "the 12 Oak St building",
+		"12 Oak Street", "9 Sunset Blvd", "100 Ocean Drive", "Austin, TX 78701, 12 Oak St", "123456 Long Rd",
+		"12 OAK ST", "12345 Oak St", "11501 Alterra Pkwy, Austin", "\uff11\uff12 Oak St", "\u0661\u0662 Oak St",
+		"7 Old Mill Creek Run Rd", "Apt 4", "Unit 12", "#5, Hyde Park", "Suite 200", "Ste. 3, Austin",
+		"Hyde Park, apt #4", "pickup is off 12 Oak St", "near 12 Oak St", "the 12 Oak St building",
+		// What detection let through: a number after the street, none before
+		// a street type, a unit with no unit word.
+		"Hauptstra\u00dfe 7", "1600 Broadway", "Main Ave. 7", "Oak St, 12",
+		// A ZIP+4 narrows to a building; other countries' postal codes; a ZIP
+		// that does not end its part.
+		"78701-1234", "Austin, TX 78701-1234", "SW1A 1AA", "K1A 0B1", "78701 Oak St",
+		// Numbers outside the allowed contexts.
+		"2 bedrooms in Hyde Park", "Building 4, Hyde Park", "Pier 39",
+		// Review of the allowlist: a ZIP+4 whatever surrounds it; a letter
+		// that draws as a digit is never a ZIP; escapes are refused as
+		// written; an ordinal takes its own suffix.
+		"Zone 78701-1234 km", "Apt \u0417\u04171", "\u0417123, Oak St", "Oak St \u0417123", "\u01c0234, Oak St",
+		"\u13ce12, Main St", "\u0417\u0417\u0417\u0417\u0417", "&#1600; Pennsylvania Ave", "&#4512; Duval St", "Hyde&nbsp;Park",
+		"%41ustin", "12st Oak", "Oak 12St", "3nd Ave", "11st Ave", "12-14 Oak",
+		"1st-2nd Ave", "Zone 78701--1234 km", "Zone 78701 -- 1234 km", "Zone 78701-/1234 km", "Zone 78701-(1234 km)",
+		// Rulings 4991f25b: a number of up to 3 digits in a context; a label
+		// number ends its part; a ZIP only in the last part.
+		"Ward 1600 Pennsylvania Ave", "Ward 123 Main St", "Exit 12 Commerce Dr", "Route 66 corridor", "Highway 1010",
+		"1600 km Pennsylvania Ave", "1600th Pennsylvania Ave", "Zone 78701 1234 km", "12345, Oak St",
+		"78701, Austin", "Hauptstra\u00dfe 12345, Berlin", "Austin 7870", "Austin 787012",
+		// Review round 3: digits and marks count toward a word's script; the
+		// Ogham space mark draws as a dash.
+		"Ward \u06612\u0969", "\u0661\u0662th St area", "Oak\u30fc", "Oak\u0483", "12th\u168014th", "\u6c5f\u30ca\ud55c area",
+		// A label or distance word goes with its number only right beside it.
+		"Zone, 12 Oak St", "Exit (12) Oak St", "12, km from Oak St",
 	} {
-		assert.True(t, readsAsStreetAddress(v), v)
+		assert.False(t, pickupAreaAllowed(v), v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
 		require.ErrorIs(t, err, cli.ErrInput, v)
 		assert.Contains(t, err.Error(), "pickup_location", v)
 		assert.NotContains(t, err.Error(), v, "the value stays out of the message")
 	}
 	for _, v := range []string{
-		"78701", "78701-1234", "Austin", "Austin, TX", "Austin, TX 78701", "Brooklyn", "Brooklyn, NY 11201",
+		"78701", "Austin", "Austin, TX", "Austin, TX 78701", "Austin 78701", "Brooklyn", "Brooklyn, NY 11201",
 		"Hyde Park", "Downtown Austin", "Capitol Hill, Seattle", "Bay Area", "St. Louis, MO 63101",
-		"St. Louis, Ward 3", "Main Ave. 7", "Oak Lane neighborhood", "Park Place area", "Main St corridor",
-		"near 5th Ave", "Midway, Utah 84049", "District 9", "Union Square", "Community Unit area",
-		"Ward 3, near Main St", "2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr",
-		"Zone 2, Park Place", "10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown",
-		// Stated limits: a street type after the number, none at all, or more
-		// than three name words between.
-		"Hauptstraße 7", "1600 Broadway", "7 Old Mill Creek Run Rd",
+		"St. Louis, Ward 3", "Oak Lane neighborhood", "Park Place area", "Main St corridor", "near 5th Ave",
+		"Midway, Utah 84049", "District 9", "Union Square", "Community Unit area", "Ward 3, near Main St",
+		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Zone 2, Park Place",
+		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66, Barstow",
+		"Highway 101", "999 km from Austin", "\u09b0\u200d\u09cd\u09af area", "Ward \u0661\u0662", "Exit 421", "123rd St area", "St. John\u2019s", "St. John's", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
+		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12, north side", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
+		// Letters of any one script, written any way that is still letters.
+		"Z\u00fcrich Kreis", "Cafe\u0301 district", "Hawai\u02bbi Kai", "K\u00f6ln-Ehrenfeld",
+		"\uff28\uff59\uff44\uff45 \uff30\uff41\uff52\uff4b", "\uff17\uff18\uff17\uff10\uff11",
+		"\u0421\u0430\u043d\u043a\u0442-\u041f\u0435\u0442\u0435\u0440\u0431\u0443\u0440\u0433, \u041d\u0435\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d",
+		"\u0dc1\u0dca\u200d\u0dbb\u0dd3 \u0dbd\u0d82\u0d9a\u0dcf", "\u0645\u06cc\u200c\u062f\u0627\u0646", "\u6c5f\ub0a8 area",
+		"\u6e0b\u8c37\u306e\u3042\u305f\u308a", "\u30b7\u30d6\u30e4 \u99c5\u524d", "\uac15\ub0a8\uc5ed \uadfc\ucc98",
 	} {
-		assert.False(t, readsAsStreetAddress(v), v)
+		assert.True(t, pickupAreaAllowed(v), "%q", v)
 		assert.NoError(t, dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate(), v)
 	}
 	// The guard is pickup_area's alone: the exact spot is a street address.
@@ -135,7 +161,7 @@ func TestAPlatformsPickupLocationStillWaitsForAnAcceptance(t *testing.T) {
 
 // The guard is on the disclosure note whatever the record set: an x-deal-v0
 // deal refuses a street address labelled pickup_area too, sealing nothing.
-func TestAnXDealPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
+func TestAnXDealPickupAreaThatHoldsAnAddressIsRefused(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
 		"intent":{"verbatim":"buy the bike and arrange pickup","allowed":["pay","share_contact"]},
@@ -146,4 +172,61 @@ func TestAnXDealPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, err.Error(), "pickup_location")
 	assert.Len(t, records(t, id), before, "a refused note seals nothing")
+}
+
+// capsule-cli#399: what detection had to read through is refused as
+// written: lookalike letters, marks on digits, markup, escapes, symbols,
+// controls and fillers, and letters in another script that draw as digits.
+func TestAPickupAreaWrittenToHideAnAddressIsRefused(t *testing.T) {
+	for name, v := range map[string]string{
+		"a Cyrillic S in St":               "Oak \u0405t",
+		"a Greek T in St":                  "Oak S\u03a4",
+		"Cyrillic and Greek in one word":   "Oak \u0405\u03a4 \u0438 \u03bb",
+		"a Latin small capital":            "Oak \u0405\u1d1b",
+		"a Cyrillic a in Ave":              "Oak \u0430ve",
+		"a Greek A in Apt":                 "\u0391pt",
+		"an enclosing mark on a digit":     "1\u20dd2 Oak St",
+		"Cyrillic Ze drawn as 33":          "\u0417\u0417 Oak St",
+		"a stroke and a Cyrillic O as 100": "\u01c0\u041e\u041e Oak St",
+		"a stroke letter as 1":             "\u01c0 Oak St",
+		"a fullwidth stroke":               "Oak\uff5cSt",
+		"a box stroke":                     "Austin \u2502 Main St",
+		"a danda":                          "Oak\u0964St",
+		"a pipe":                           "Austin | Main St",
+		"a word joiner":                    "Oak S\u2060t",
+		"a zero-width space":               "Oak S\u200bt",
+		"a Hangul filler":                  "Oak S\u3164t",
+		"a control character":              "Oak S\u0001t",
+		"a private-use character":          "Oak S\ue000t",
+		"an HTML tag":                      "<b>Hyde Park</b>",
+		"an HTML comment":                  "Hyde Park<!-- 12 Oak St -->",
+		"text that only looks like a tag":  "Pickup <12 Oak St>",
+		"Markdown emphasis":                "**Downtown** Austin",
+		"a Markdown link":                  "[Hyde Park](https://example.com/map)",
+		"an HTML character reference":      "12 Oak &#83;t",
+		"a named HTML reference":           "12&nbsp;Oak&nbsp;St",
+		"a percent escape":                 "12%20Oak%20St",
+		"a JSON escape":                    "12 Oak \x5cu0053t",
+		"an ampersand":                     "Bed & Breakfast row",
+		"a fullwidth number sign":          "\uff035, Hyde Park",
+		"a semicolon":                      "Austin; Hyde Park",
+		"a grapheme joiner":                "Oak S\u034ft",
+		"a variation selector":             "Oak S\ufe0ft",
+		"a joiner between Common letters":  "Hawai\u02bb\u200d\u02bbi",
+		"a joiner after a Latin mark":      "Hy\u0301\u200d\u02bcde Park",
+		"a joiner in a Cyrillic word":      "\u041c\u043e\u200d\u0441\u043a\u0432\u0430",
+		"a tab":                            "Austin\tDowntown",
+		"a line break":                     "Austin\nDowntown",
+		"a joiner in a Latin word":         "Oak S\u200dt",
+		"a non-joiner in Latin":            "Hy\u200cde Park",
+		"Han and Latin in one word":        "\u6c5fA area",
+	} {
+		assert.False(t, pickupAreaAllowed(v), "%s: %q", name, v)
+		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
+		assert.ErrorIs(t, err, cli.ErrInput, name)
+	}
+	// A single Cyrillic or Greek letter that draws as o is a word, not a 0.
+	for _, v := range []string{"\u0412\u0441\u0442\u0440\u0435\u0447\u0430 \u043e \u0440\u0430\u0439\u043e\u043d\u0435", "\u03bf \u03c3\u03c4\u03b1\u03b8\u03bc\u03cc\u03c2"} {
+		assert.True(t, pickupAreaAllowed(v), "%q", v)
+	}
 }

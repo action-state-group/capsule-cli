@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### A pickup_area holds only what a public area does (#399)
+
+- **Changed (breaking):** a `pickup_area` may hold only letters, spaces
+  and `, . - ' ’ ( ) /`, each word in one script, with a number only as a
+  5-digit ZIP at the end of the value, or as a number of up to 3 digits:
+  an ordinal (`5th`), right after district, ward, zone, exit, route or
+  highway and ending its part (`Exit 12, Commerce Dr`), or right before
+  block(s), mile(s), min(s) or km. Anything else is refused as written:
+  a house number, a unit, a ZIP+4, another country's postal code, two
+  numbers joined by a hyphen, markup, `#`, `|`, `&`, an escape, a control
+  character, or a word mixing scripts. So lookalike letters, marks and
+  markup no longer hide a street address. Values that passed before and
+  are now refused include `78701-1234`, `Pier 39`, `Exit 12 Commerce Dr`
+  (it needs a comma) and `<b>Hyde Park</b>`.
+
 ## v0.1.0-rc21
 
 ### Every page has a margin, a "Contents checked" pill and a folded check section (capsule-viewer#60, from #408)

@@ -9,11 +9,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
-	"golang.org/x/text/unicode/norm"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -2762,8 +2763,8 @@ func (d dealDisclosure) validate() error {
 		if strings.TrimSpace(f.Value) == "" {
 			return cli.InputError("every disclosed field needs the value that was given (kept on this device only)")
 		}
-		if f.Class == "pickup_area" && readsAsStreetAddress(f.Value) {
-			return cli.InputError("a pickup_area is a neighborhood, city, region or ZIP, and this value reads as a street address (a house number before a street type, or a numbered unit): give an exact spot as pickup_location, which waits for an accepted offer")
+		if f.Class == "pickup_area" && !pickupAreaAllowed(f.Value) {
+			return cli.InputError(pickupAreaRefused)
 		}
 		if action != "" && a != action {
 			return cli.InputError("seal contact details and credentials as separate disclosures: each is covered by its own check")
@@ -2773,78 +2774,319 @@ func (d dealDisclosure) validate() error {
 	return nil
 }
 
-// pickupAreaFormat is the invisible format characters (a zero-width space,
-// a soft hyphen) that would split a street type into two harmless words.
-var pickupAreaFormat = regexp.MustCompile(`\p{Cf}`)
+// pickupAreaRefused is why a pickup_area value is refused: it holds more
+// than a public area may (pickupAreaAllowed).
+const pickupAreaRefused = "a pickup_area is a neighborhood, city, region or 5-digit ZIP: letters, spaces and , . - ' \u2019 ( ) /, " +
+	"each word in one script, with a number only as a 5-digit ZIP at the end, or as a number of up to 3 digits: " +
+	"an ordinal (5th), right after district, ward, zone, exit, route or highway and ending its part (before a comma or at the end), " +
+	"or right before block(s), mile(s), min(s) or km; two numbers joined by a hyphen are refused. " +
+	"This value holds more, such as a house number, a unit or other characters: " +
+	"give an exact spot as pickup_location, which waits for an accepted offer"
 
-// pickupAreaWord is a word of a pickup_area value, in any script; an
-// abbreviation's period and other punctuation fall between words.
-var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{M}\p{Nd}]+`)
+// pickupAreaPunctuation is the punctuation a pickup_area may hold besides
+// spaces (pickupAreaAllowed).
+const pickupAreaPunctuation = ",.-'\u2019()/"
 
-// pickupAreaNumber is a house number: decimal digits in any script, with an
-// optional letter ("12", "12345", "12B"), not an ordinal ("5th").
-var pickupAreaNumber = regexp.MustCompile(`^\p{Nd}+\p{L}?$`)
+// pickupAreaLabels are the words a number may follow ("District 9", "Exit
+// 12"), and pickupAreaDistances the words it may come before ("2 blocks",
+// "10 min"), with only spaces between.
+var (
+	pickupAreaLabels    = []string{"district", "ward", "zone", "exit", "route", "highway"}
+	pickupAreaDistances = []string{"block", "blocks", "mile", "miles", "min", "mins", "km"}
+)
 
-// pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5".
-var pickupAreaUnit = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:apt|unit|suite|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
-
-// pickupAreaStreetTypes are the street types a house number comes before.
-var pickupAreaStreetTypes = map[string]bool{
-	"st": true, "street": true, "ave": true, "avenue": true, "rd": true, "road": true,
-	"blvd": true, "boulevard": true, "ln": true, "lane": true, "dr": true, "drive": true,
-	"ct": true, "court": true, "way": true, "pl": true, "place": true, "hwy": true,
-	"highway": true, "pkwy": true, "parkway": true, "cir": true, "circle": true,
-	"ter": true, "terrace": true, "trl": true, "trail": true, "sq": true, "square": true,
-	"loop": true, "plaza": true, "alley": true, "pike": true,
-}
-
-// pickupAreaLabels are words that make the number after them a label, not a
-// house number ("Exit 12", "Ward 3", "Zone 2").
-var pickupAreaLabels = map[string]bool{"exit": true, "ward": true, "zone": true}
-
-// pickupAreaDistances are words that make the number before them a distance
-// or a time, not a house number ("2 blocks from Main St", "10 min on the
-// way"). Only these end the street name: "off 12 Oak St" and "12 The Grove
-// Rd" are addresses.
-var pickupAreaDistances = map[string]bool{
-	"block": true, "blocks": true, "mile": true, "miles": true, "mi": true, "min": true,
-	"mins": true, "minute": true, "minutes": true, "km": true,
-}
-
-// readsAsStreetAddress is whether a pickup_area value looks like a street
-// address rather than a public area: a house number followed by a street
-// type with at most three name words between ("12 Oak St.", "11501 Alterra
-// Pkwy"), or a numbered unit ("Apt 4", "#5"). The agent picks the class
-// label, so an address labelled pickup_area would reach everyone a public
-// area may go to. The value is NFKC-normalized ("１２" is "12") with format
-// characters removed first. A ZIP, a street named without a number before it
-// ("Main St corridor", "St. Louis, Ward 3"), a number with no street type
-// ("1600 Broadway") and a number after the street ("Hauptstraße 7") pass: the
-// guard catches the common shape, not every address.
-func readsAsStreetAddress(v string) bool {
-	v = pickupAreaFormat.ReplaceAllString(norm.NFKC.String(v), "")
-	if pickupAreaUnit.MatchString(v) {
-		return true
-	}
-	// A comma or semicolon ends a street address's first line.
-	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
-		words := pickupAreaWord.FindAllString(strings.ToLower(part), -1)
-		for i, w := range words {
-			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaLabels[words[i-1]]) {
-				continue
-			}
-			for _, next := range words[i+1 : min(i+5, len(words))] {
-				if pickupAreaDistances[next] {
-					break
-				}
-				if pickupAreaStreetTypes[next] {
-					return true
-				}
-			}
+// pickupAreaAllowed is whether a value may be sealed as a pickup_area: the
+// public area a listing shows, a neighborhood, city, region or ZIP, never a
+// street address. The agent picks the class label, so a value labelled
+// pickup_area would reach everyone a public area may go to. It is defined by
+// what it may contain rather than by spotting an address, so how an address
+// is written cannot hide it (capsule-cli#399; PM decision 65806c1a). The
+// value is read as written, as it is sealed and sent: an escape (&#83;,
+// %20, \u0053) needs a character outside the set, so it is refused, never
+// decoded. It may hold only:
+//
+//   - letters (with the marks written on them), decimal digits of any
+//     script, spaces (\p{Zs}, but not the Ogham space mark, which draws as
+//     a dash) and pickupAreaPunctuation; any other
+//     character (markup, #, |, &, a symbol, a control such as a tab or a
+//     line break, a format or private-use character, a filler that draws
+//     nothing, an invisible mark such as a variation selector) is refused,
+//     not read past. The one exception is a zero-width joiner or non-joiner
+//     inside a word wholly in a script written with them
+//     (pickupAreaJoinerScripts);
+//   - words whose letters, digits and marks are each in one script (TR39's
+//     mixed-script check), so a Cyrillic S in "St", "Ward ١2३" and "Oakー"
+//     are refused;
+//   - numbers only as five decimal digits at the end of the value (a
+//     closing parenthesis or period may follow: "Austin, TX 78701"), or as
+//     a number of up to 3 digits: an ordinal ("5th", "112th"), right after
+//     a pickupAreaLabels word and ending its part (before a comma or at
+//     the end: "Exit 12, Commerce Dr"), or right before a
+//     pickupAreaDistances word ("2 blocks"). A ZIP+4 narrows to a building
+//     and is refused, and so is a postal code of another country; two
+//     numbers joined by a hyphen are refused whatever surrounds them
+//     (rulings 65806c1a and 4991f25b). A word in another script that draws
+//     as digits (its TR39 skeleton is digits, l and o: "ЗЗ") counts as a
+//     number, and is never a ZIP.
+func pickupAreaAllowed(v string) bool {
+	runes := []rune(v)
+	var words []pickupAreaToken
+	for i := 0; i < len(runes); {
+		r := runes[i]
+		switch {
+		case pickupAreaBetweenWords(r):
+			i++
+			continue
+		case !unicode.IsLetter(r) && !unicode.Is(unicode.Nd, r), ignorable(r):
+			return false
 		}
+		j := i
+		for j < len(runes) && pickupAreaWordRune(runes, j) {
+			j++
+		}
+		if j < len(runes) && !pickupAreaBetweenWords(runes[j]) {
+			return false
+		}
+		w, ok := pickupAreaWord(runes[i:j])
+		if !ok {
+			return false
+		}
+		w.start, w.end = i, j
+		words = append(words, w)
+		i = j
+	}
+	for k, w := range words {
+		if !w.hasDigit && !w.number {
+			continue
+		}
+		// A ZIP+4 or a range ("78701-1234", "12--14", "1st-2nd") whatever
+		// surrounds it.
+		if k > 0 && (words[k-1].number || words[k-1].hasDigit) && strings.ContainsRune(string(runes[words[k-1].end:w.start]), '-') {
+			return false
+		}
+		switch {
+		case w.number && w.digits <= 3 && k > 0 && slices.Contains(pickupAreaLabels, words[k-1].text) &&
+			pickupAreaSpaces(runes[words[k-1].end:w.start]) && pickupAreaEnds(runes, w.end, true):
+		case w.number && w.digits <= 3 && k+1 < len(words) && slices.Contains(pickupAreaDistances, words[k+1].text) &&
+			pickupAreaSpaces(runes[w.end:words[k+1].start]):
+		case pickupAreaOrdinal(w.text) && w.digits <= 3:
+		case w.number && w.letters == 0 && w.digits == 5 && pickupAreaEnds(runes, w.end, false):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// pickupAreaJoinerScripts are the scripts written with a zero-width joiner
+// or non-joiner inside words: Arabic (Persian) and the Indic scripts.
+var pickupAreaJoinerScripts = []string{
+	"Arabic", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Oriya", "Tamil", "Telugu", "Kannada",
+	"Malayalam", "Sinhala",
+}
+
+// pickupAreaOrdinal is whether a word is an ordinal with its own suffix:
+// "1st", "2nd", "3rd", "5th", "11th", "21st"; never "12st".
+func pickupAreaOrdinal(w string) bool {
+	n := strings.TrimRight(w, "abcdefghijklmnopqrstuvwxyz")
+	if n == "" || len(w)-len(n) != 2 || strings.Trim(n, "0123456789") != "" {
+		return false
+	}
+	suffix := "th"
+	if teen := len(n) >= 2 && n[len(n)-2] == '1'; !teen {
+		switch n[len(n)-1] {
+		case '1':
+			suffix = "st"
+		case '2':
+			suffix = "nd"
+		case '3':
+			suffix = "rd"
+		}
+	}
+	return w[len(n):] == suffix
+}
+
+// pickupAreaWordRune is whether runes[j] continues a word: a letter, a
+// digit, a mark on a letter, a mark or a joiner, or a zero-width joiner or
+// non-joiner with a letter or a mark on each side (as Persian and the Indic
+// scripts write words).
+func pickupAreaWordRune(runes []rune, j int) bool {
+	r := runes[j]
+	switch {
+	case unicode.IsLetter(r) && !ignorable(r), unicode.Is(unicode.Nd, r):
+		return true
+	case unicode.Is(unicode.M, r) && !ignorable(r) && !unicode.Is(unicode.Variation_Selector, r):
+		// On a letter, another mark, or a joiner (Bengali ya-phala: র, ZWJ, ্).
+		return j > 0 && (unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]) ||
+			(runes[j-1] == 0x200C || runes[j-1] == 0x200D) && pickupAreaWordRune(runes, j-1))
+	case r == 0x200C || r == 0x200D:
+		// Between letters or marks (a virama on either side); its word's
+		// script must be one written with joiners (pickupAreaWord).
+		return j > 0 && j+1 < len(runes) && (unicode.IsLetter(runes[j+1]) || unicode.Is(unicode.M, runes[j+1])) &&
+			(unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
 	}
 	return false
 }
+
+// pickupAreaBetweenWords is whether r may end a word: a space or one of
+// pickupAreaPunctuation.
+func pickupAreaBetweenWords(r rune) bool {
+	return pickupAreaSpace(r) || strings.ContainsRune(pickupAreaPunctuation, r)
+}
+
+// pickupAreaSpace is a space (\p{Zs}) other than the Ogham space mark,
+// which draws as a dash.
+func pickupAreaSpace(r rune) bool {
+	return unicode.Is(unicode.Zs, r) && r != 0x1680
+}
+
+// pickupAreaSpaces is whether rs is only spaces: a label or distance word
+// goes with its number only right beside it ("Zone, 12 Oak St" is refused).
+func pickupAreaSpaces(rs []rune) bool {
+	return !slices.ContainsFunc(rs, func(r rune) bool { return !pickupAreaSpace(r) })
+}
+
+// pickupAreaEnds is whether only spaces, a closing parenthesis or a period,
+// then the end (or a comma, when atComma), follow runes[end:].
+func pickupAreaEnds(runes []rune, end int, atComma bool) bool {
+	for _, r := range runes[end:] {
+		switch {
+		case r == ',' && atComma:
+			return true
+		case !pickupAreaSpace(r) && r != ')' && r != '.':
+			return false
+		}
+	}
+	return true
+}
+
+// pickupAreaToken is a word of a pickup_area value (pickupAreaWord).
+type pickupAreaToken struct {
+	text     string // its letters and digits, lower case, compatibility forms and digits as ASCII
+	number   bool   // digits only, or letters that draw as digits
+	hasDigit bool
+	digits   int // a number's digits (or letters drawn as digits)
+	letters  int
+	start    int // its first rune in the value
+	end      int // the rune after it
+}
+
+// pickupAreaWord reads one word: false when its letters, digits and marks
+// are in more than one script (Common and Inherited ones, such as the okina
+// in "Hawaiʻi", go with any; Han with kana, Hangul or Bopomofo is one). Its text is lower
+// case, its digits ASCII. It is a number when it is digits only, or when it
+// has a letter outside ASCII and every letter's TR39 skeleton is a digit, l
+// or o, with a digit (a stroke letter such as ǀ counts as 1) among them or
+// more than one letter ("ЗЗ" draws as 33).
+func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
+	var w pickupAreaToken
+	var b, skel strings.Builder
+	scripts := map[string]bool{}
+	letters, nonASCII, digitLike, joiner := 0, false, true, false
+	for _, r := range rs {
+		// Every letter, digit and mark counts toward the word's scripts,
+		// as in TR39; Common and Inherited ones go with any, except the
+		// kana marks, which are kana.
+		if sc := pickupAreaScript(r); sc != "Common" && sc != "Inherited" {
+			scripts[sc] = true
+		}
+		switch {
+		case r == 0x200C || r == 0x200D:
+			joiner = true
+		case unicode.Is(unicode.Nd, r):
+			w.hasDigit = true
+			b.WriteRune('0' + digitValue(r))
+			skel.WriteRune('0' + digitValue(r))
+		case unicode.IsLetter(r):
+			letters++
+			f := foldDecoded(string(r))
+			if ascii := f != "" && isASCIIAlnum(f); r > 0x7f && ascii {
+				b.WriteString(strings.ToLower(f)) // fullwidth Ｅｘｉｔ is exit
+			} else {
+				b.WriteRune(unicode.ToLower(r))
+				nonASCII = nonASCII || r > 0x7f // not a compatibility or accented form of ASCII (Lô is Latin)
+			}
+			sk := strings.ToLower(confusableSkeleton(r))
+			if r > 0x7f && pipeLike(r) {
+				sk = "1" // a stroke letter (ǀ) draws as a 1
+			}
+			if sk == "" || strings.Trim(sk, "0123456789lo") != "" {
+				digitLike = false
+			}
+			skel.WriteString(sk)
+		}
+	}
+	// Han is written with kana in Japanese, with Hangul in Korean and with
+	// Bopomofo in Chinese (TR39's Jpan, Kore and Hanb).
+	if scripts["Han"] && len(scripts) > 1 {
+		delete(scripts, "Han")
+		jpan := len(scripts) <= 2 && !slices.ContainsFunc([]string{"Hangul", "Bopomofo"}, func(sc string) bool { return scripts[sc] })
+		for sc := range scripts {
+			jpan = jpan && (sc == "Hiragana" || sc == "Katakana")
+		}
+		if jpan || len(scripts) == 1 && (scripts["Hangul"] || scripts["Bopomofo"]) {
+			scripts = map[string]bool{"Han": true}
+		} else {
+			scripts["Han"] = true
+		}
+	}
+	if len(scripts) > 1 && !(len(scripts) == 2 && scripts["Hiragana"] && scripts["Katakana"]) {
+		return w, false
+	}
+	if joiner && (len(scripts) != 1 || !slices.ContainsFunc(pickupAreaJoinerScripts, func(sc string) bool { return scripts[sc] })) {
+		return w, false
+	}
+	w.text, w.letters = b.String(), letters
+	switch {
+	case letters == 0:
+		w.number = w.hasDigit
+	case nonASCII && digitLike && (strings.ContainsAny(skel.String(), "0123456789") || letters > 1):
+		w.number, w.hasDigit = true, true
+	}
+	// Its digits: the decimal digits, and when it is letters drawn as digits,
+	// those letters too ("112th" has 3, "ЗЗ1" has 3).
+	for _, r := range rs {
+		if unicode.Is(unicode.Nd, r) || w.number && unicode.IsLetter(r) {
+			w.digits++
+		}
+	}
+	return w, true
+}
+
+// pickupAreaScript is r's script for the mixed-script check: scriptOf, with
+// the kana marks that Unicode puts in Common (the prolonged sound mark ー,
+// the halfwidth sound marks) as Katakana, so "Oakー" mixes scripts.
+func pickupAreaScript(r rune) string {
+	switch r {
+	case 0x30FC, 0x30A0, 0xFF70, 0xFF9E, 0xFF9F, 0x309B, 0x309C:
+		return "Katakana"
+	}
+	return scriptOf(r)
+}
+
+// scriptOf is the name of r's Unicode script, "" when it has none.
+func scriptOf(r rune) string {
+	if r <= 0x7f {
+		if unicode.IsLetter(r) {
+			return "Latin"
+		}
+		return "Common"
+	}
+	if sc, ok := scriptCache.Load(r); ok {
+		return sc.(string)
+	}
+	sc := ""
+	for name, table := range unicode.Scripts {
+		if unicode.Is(table, r) {
+			sc = name
+			break
+		}
+	}
+	scriptCache.Store(r, sc)
+	return sc
+}
+
+var scriptCache sync.Map
 
 // recordsTyped is the record set of a deal sealed in the typed action
 // records (dealOpen.Records).
