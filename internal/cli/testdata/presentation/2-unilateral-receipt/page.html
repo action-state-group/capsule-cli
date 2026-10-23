@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vddwOfhN6YhVmV/+CoXEzdn+aErwVVF9Fc9+Rd+3jlo=' 'sha256-U6rlu0jgxgH6RZFzBLb12W5qkhiCoHgpBvawSovIXMw=' 'sha256-fr+stuSlHZzgr2hzIp8QmgMjyzKF2V636HPzLx708wo=' 'sha256-f04OiwyYSmxbjUfTtad2UlcbTNQu8+bQxJUDdT/F8aU='; style-src 'sha256-6hz7oMtShj7RlVtF3VZaTU93NGKUBUb91j1dhm7bI4U=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-b2dM/3sYIGrujD09GUSiw7b/J3PcfmL4SOeXw388dGI=' 'sha256-LdBUVrCOSscjac9XDVUhhC8BVUCeRTVxPIHho3x2C6I=' 'sha256-cncT4OYMoss7phrDXOY4dpINPZZ9vGmepBpESuOrcC8=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vddwOfhN6YhVmV/+CoXEzdn+aErwVVF9Fc9+Rd+3jlo=' 'sha256-aw41aiveu3cbMx/+hxPKhx5Xob893AFPw/8Pon90QzU=' 'sha256-fr+stuSlHZzgr2hzIp8QmgMjyzKF2V636HPzLx708wo=' 'sha256-f04OiwyYSmxbjUfTtad2UlcbTNQu8+bQxJUDdT/F8aU='; style-src 'sha256-6hz7oMtShj7RlVtF3VZaTU93NGKUBUb91j1dhm7bI4U=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-b2dM/3sYIGrujD09GUSiw7b/J3PcfmL4SOeXw388dGI=' 'sha256-LdBUVrCOSscjac9XDVUhhC8BVUCeRTVxPIHho3x2C6I=' 'sha256-cncT4OYMoss7phrDXOY4dpINPZZ9vGmepBpESuOrcC8=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -12162,7 +12162,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   }
   function builtCommit() {
     if (false) return void 0;
-    return commitPrefix("4e4d55333e6a2ef6d3040a67cb1100a024236746");
+    return commitPrefix("4b08aad14182154523ac46a0b3f93604227a8b9e");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
@@ -12351,7 +12351,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.vd.lede": "Repeat offline with the open-source verifier.",
       "lines.vd.note": "This bundle's own checkpoint \u2014 an append-only Merkle Mountain Range over the sealed records \u2014 not a month-level RFC 6962 tree computed in the browser. Repeat this check offline with the open-source verifier.",
       "lines.rp.toggle": "Proofs for this report: the terms, what ran, and how to verify the whole bundle",
-      "lines.rp.tamper": 'This page only ever renders a bundle that already verified: there is no interactive "try tampering" control, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and the whole page is replaced by the verification-failed banner, before anything here is drawn.',
+      "lines.rp.tamper": `This report is drawn only for a bundle that verified: there is no interactive "try tampering" control, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and this report is not drawn: the page shows the red "Check failed" callout, the checks that failed and each record's id and status, with no record content.`,
       "lines.verdict.met": "met",
       "lines.verdict.not_met": "not met",
       "lines.verdict.not_applicable": "did not apply",
@@ -12643,7 +12643,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "groups.ran.sessions": "Sessions",
       "groups.ran.period": "Period",
       "groups.ran.sealed": "Sealed",
-      "groups.vd.note": "This bundle's own checkpoint, an append-only Merkle Mountain Range over the sealed records. Repeat every check on this page offline with the open-source verifier. This page only ever renders a bundle that already verified: tamper with any claim, record or checkpoint and the whole page is replaced by the verification-failed banner.",
+      "groups.vd.note": `This bundle's own checkpoint, an append-only Merkle Mountain Range over the sealed records. Repeat every check on this page offline with the open-source verifier. This report is drawn only for a bundle that verified: tamper with any claim, record or checkpoint and the report is not drawn. The page then shows the red "Check failed" callout, the checks that failed and each record's id and status, with no record content.`,
       "groups.verdict.met": "met",
       "groups.verdict.not_met": "not met",
       "groups.verdict.not_applicable": "did not apply",
@@ -13639,8 +13639,8 @@ ${key}`);
     return problems.map((p) => `${pack.id}: ${p}`);
   }
   var DEFAULT_PACK_SHA256 = Object.freeze({
-    lines: "6f3b65411e5c87a0b7b2507ae9de7debdb7d78885263df05ed600c11cb53ba57",
-    groups: "1fca80b898ceea4232962277df7518414be8802ad6d6d01002ebdb6425408208"
+    lines: "d8dee82f9a1b0545ddf56bc54493a81ad0af66c06615325eb41c1f23abea1086",
+    groups: "f293cd727adf77b3647c6de6e15690b2b1219dad55c376bbd25f1f3c3f74372c"
   });
   function fill(key, text2, vars) {
     return text2.replace(PLACEHOLDER, (whole, name) => {
@@ -17226,9 +17226,16 @@ ${pad.repeat(depth)}`;
     const details = document.createElement("details");
     details.dataset.records = "coverage-detail";
     details.open = depth === "L2";
+    const listings = /* @__PURE__ */ new Map();
+    for (const record of records)
+      listings.set(record.capsuleId, [
+        ...listings.get(record.capsuleId) ?? [],
+        record
+      ]);
+    const count2 = listings.size === records.length ? recordsWord(listings.size) : `${recordsWord(listings.size)} (${records.length} listings)`;
     const summary = element6(
       "summary",
-      `Records in this bundle: ${recordsWord(records.length)}, by capsule id`
+      `Records in this bundle: ${count2}, by capsule id`
     );
     details.append(summary);
     if (!entries.verified) {
@@ -17263,15 +17270,25 @@ ${pad.repeat(depth)}`;
       anchor.id = name;
       return anchor;
     };
-    for (const record of records) {
+    for (const [capsuleId, listed] of listings) {
+      const record = listed[0];
       const item = element6("li");
-      item.dataset.capsuleId = record.capsuleId;
-      const kind = entries.kind(record.capsuleId);
-      const status2 = element6("span", COVERAGE_LABEL[record.status]);
-      status2.dataset.recordStatus = record.status;
-      status2.className = `seal-${record.status}`;
-      const label = `${record.capsuleId} \xB7 ${kind ?? "kind not stated"} \xB7 `;
-      const read = entries.read.get(record.capsuleId);
+      item.dataset.capsuleId = capsuleId;
+      const kind = entries.kind(capsuleId);
+      const status2 = element6("span");
+      listed.forEach((one, i) => {
+        if (i > 0) status2.append(" / ");
+        const word = element6("span", COVERAGE_LABEL[one.status]);
+        word.dataset.recordStatus = one.status;
+        word.className = `seal-${one.status}`;
+        status2.append(word);
+      });
+      if (listed.length > 1) {
+        item.dataset.listed = String(listed.length);
+        status2.append(` \xB7 listed ${listed.length} times in this bundle`);
+      }
+      const label = `${capsuleId} \xB7 ${kind ?? "kind not stated"} \xB7 `;
+      const read = entries.read.get(capsuleId);
       if (!entries.verified || read === void 0) {
         item.append(document.createTextNode(label), status2);
         list.append(item);

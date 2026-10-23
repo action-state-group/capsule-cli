@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Report pages: the failed-bundle notes and repeated record ids (capsule-viewer#77)
+
+- **Changed:** the pages capsulectl writes take capsule-viewer at
+  `4b08aad`. The two report notes on tampering say what a bundle that did
+  not verify gets: no report, the red "Check failed" callout, the checks
+  that failed and each record's id and status, with no record content. A
+  capsule id the bundle lists more than once has one entry in "Records in
+  this bundle", with one address and a note of how many times it is listed;
+  the summary counts ids and names the listings when they differ.
+- **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
+  from capsule-viewer `4b08aad` and agent-action-capsule `1d655a1`
+  (`ts/v0.6.1`). `go.mod`'s `capsule-viewer/go` moves to the same viewer
+  commit; `agent-action-capsule/go` stays at v0.12.0. The presentation
+  goldens' pages and snapshots, and the presentation pass's build
+  snapshots, are re-emitted from their unchanged bundles.
+
 ## v0.1.0-rc22
 
 ### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #74, #75, #76)
