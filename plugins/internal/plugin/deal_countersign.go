@@ -174,7 +174,7 @@ func (s *dealSession) dealBundleOf(path, dealID string, events []sealedEvent) (m
 		return nil, notThis("its log is not this deal's")
 	}
 	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
+	statement, err := base64.RawURLEncoding.DecodeString(fmt.Sprint(cp["cose"]))
 	if err != nil {
 		return nil, notThis("its checkpoint is unreadable")
 	}

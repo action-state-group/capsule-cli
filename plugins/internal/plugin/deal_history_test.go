@@ -1033,7 +1033,10 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		// copy, so it still matches its seal and the member verifies).
 		member := historyExt(readHistory(t, path))["deals"].(map[string]any)[d.closed].(map[string]any)
 		first := member["records"].([]any)[0].(map[string]any)["capsule_id"].(string)
-		member["disclosures"].(map[string]any)[first] = keep["disclosures"].(map[string]any)[first]
+		// A copy that withholds every payload carries no disclosures member.
+		_, present := member["disclosures"]
+		require.False(t, present)
+		member["disclosures"] = map[string]any{first: keep["disclosures"].(map[string]any)[first]}
 		edited := sealHistory(t, cli.DealAudienceHistory, "buyer B", []any{map[string]any{"deal_id": d.closed, "bundle_digest": cli.JCSDigest(member), "steps_after_checkpoint": 0}}, map[string]any{d.closed: member})
 		_, entry, findings, err := verifyHistory(t, edited)
 		require.ErrorIs(t, err, cli.ErrBundleInvalid)

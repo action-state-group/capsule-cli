@@ -51,3 +51,24 @@ func TestPresentationGoldensCiteWhatTheyCarry(t *testing.T) {
 	}
 	assert.Positive(t, cited, "some golden cites a record")
 }
+
+// citations are the Capsule IDs a record cites: its chain parent and its
+// agent-action-capsule references, the edges a bundle's closure follows.
+func citations(record map[string]interface{}) []string {
+	var ids []string
+	if chain, ok := record["chain"].(map[string]interface{}); ok {
+		if id, ok := chain["parent_capsule_id"].(string); ok {
+			ids = append(ids, id)
+		}
+	}
+	if references, ok := record["references"].([]interface{}); ok {
+		for _, raw := range references {
+			if ref, ok := raw.(map[string]interface{}); ok && ref["type"] == "agent-action-capsule" && ref["digest_alg"] == "SHA-256" {
+				if id, ok := ref["digest"].(string); ok {
+					ids = append(ids, id)
+				}
+			}
+		}
+	}
+	return ids
+}

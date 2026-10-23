@@ -180,14 +180,11 @@ func (s *dealSession) dealAssembleAtCheckpoint(ctx context.Context, events []sea
 	if err != nil {
 		return nil, nil, err
 	}
-	// The portable checkpoint signature lets a verifier authenticate the
-	// checkpoint in the page instead of labelling it producer-asserted.
 	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
+	statement, err := base64.RawURLEncoding.DecodeString(fmt.Sprint(cp["cose"]))
 	if err != nil {
 		return nil, nil, err
 	}
-	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	// A witness receipt already held for this checkpoint, re-verified now
 	// under the profile's pinned witness key, rides in checkpoint.witnesses,
 	// where `capsulectl verify --bundle --witness-directory` checks it. The
