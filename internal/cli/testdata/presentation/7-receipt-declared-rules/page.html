@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-P34mSXvyAcQR1Kn/3nIKrf7PSGSkJgg8xB7OSz+YUbU=' 'sha256-fr+stuSlHZzgr2hzIp8QmgMjyzKF2V636HPzLx708wo=' 'sha256-f04OiwyYSmxbjUfTtad2UlcbTNQu8+bQxJUDdT/F8aU='; style-src 'sha256-ilBRkm9wDzE9AtN3BFRzmcUf0L1EeHbcejOPj1q4+Yo=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-lLLNCifs95B0qPAIVcKPWccZ1IA0O6Sr6n1pSnXDBK0=' 'sha256-B5j5rq6EVXY8l9wTMYcuYV6earnyDu/nwn+uJr6klrY=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-U6rlu0jgxgH6RZFzBLb12W5qkhiCoHgpBvawSovIXMw=' 'sha256-fr+stuSlHZzgr2hzIp8QmgMjyzKF2V636HPzLx708wo=' 'sha256-f04OiwyYSmxbjUfTtad2UlcbTNQu8+bQxJUDdT/F8aU='; style-src 'sha256-6hz7oMtShj7RlVtF3VZaTU93NGKUBUb91j1dhm7bI4U=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-b2dM/3sYIGrujD09GUSiw7b/J3PcfmL4SOeXw388dGI=' 'sha256-LdBUVrCOSscjac9XDVUhhC8BVUCeRTVxPIHho3x2C6I=' 'sha256-cncT4OYMoss7phrDXOY4dpINPZZ9vGmepBpESuOrcC8=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -34,6 +34,10 @@
         --aac-gutter: 1rem;
         --aac-page-pad-block: 1.5rem 2.5rem;
         --aac-radius: 10px;
+        /* A report's frame: the page colour behind its cards, and the one
+           inset every card's content starts at. */
+        --aac-page-bg: #eef0f3;
+        --aac-inset: clamp(20px, 5vw, 56px);
       }
       :where(html) {
         -webkit-text-size-adjust: 100%;
@@ -61,7 +65,10 @@
          with an #app selector of its own. */
       #app.cv-shell-chrome {
         max-width: none;
-        padding: 0;
+        padding: 0 var(--aac-gutter);
+      }
+      :where(body:has(> #app.cv-shell-chrome)) {
+        background: var(--aac-page-bg);
       }
       #app .cv-page {
         max-width: none;
@@ -111,7 +118,10 @@
         max-width: 1080px;
         box-sizing: border-box;
         margin: 1rem auto 0;
-        padding: 0.75rem 1rem;
+        /* The 6px left border is part of the inset: the text starts where
+           every card's content starts. */
+        padding: 0.75rem calc(var(--aac-inset) - 1px) 0.75rem
+          calc(var(--aac-inset) - 5px);
         justify-content: flex-start;
         gap: 0.375rem 0.75rem;
         border: 1px solid var(--aac-ok);
@@ -135,16 +145,51 @@
         font-size: 0.875rem;
         font-weight: 600;
       }
+      /* A bundle that did not verify: on every page the core draws the
+         bar as a red callout, the verdict first, then the check section's
+         counts and the link to it (open on such a page). No report renders
+         on a failed bundle, so this does not wait for a report's frame. */
+      :where(.cv-shell-bar.cv-failed) {
+        box-sizing: border-box;
+        padding: 0.75rem 1rem;
+        justify-content: flex-start;
+        gap: 0.375rem 0.75rem;
+        border: 1px solid var(--aac-bad);
+        border-left-width: 6px;
+        border-radius: 10px;
+        background: var(--aac-bad-bg);
+      }
+      :where(.cv-shell-bar.cv-failed .cv-pill) {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      :where(.cv-shell-bar.cv-failed .cv-shell-detail) {
+        font-size: 0.875rem;
+        color: var(--aac-fg);
+      }
+      :where(.cv-shell-bar.cv-failed .cv-shell-link) {
+        margin-left: auto;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
       :where(details.cv-checked) {
         margin: 2rem 0 0;
         padding: 0.75rem 0 0;
         border-top: 1px solid var(--aac-line);
       }
-      #app.cv-shell-chrome > :where(details.cv-checked) {
+      /* In a report's frame the check section is a card like the
+         report's own, folded to its one line until opened. */
+      #app.cv-shell-chrome :where(details.cv-checked) {
+        box-sizing: border-box;
         max-width: 1080px;
-        margin: 0 auto;
-        padding: 1rem var(--aac-gutter) 2.5rem;
-        border-top: 0;
+        margin: 0 auto 16px;
+        padding: 18px var(--aac-inset);
+        border: 1px solid var(--aac-line);
+        border-radius: 14px;
+        background: var(--aac-bg);
       }
       :where(details.cv-checked > summary) {
         font-size: 0.875rem;
@@ -5112,6 +5157,18 @@ var EvidenceGraph = (() => {
     };
   }
 
+  // agent-action-capsule/ts/src/contract-report.ts
+  var CONTRACT_REPORT_KIND = "contract-report/v1";
+  function readContractReport(bundle) {
+    if (bundle === null || typeof bundle !== "object" || Array.isArray(bundle))
+      return false;
+    const extensions2 = bundle.extensions;
+    if (extensions2 === null || typeof extensions2 !== "object" || Array.isArray(extensions2) || !Object.hasOwn(extensions2, CONTRACT_REPORT_KIND))
+      return false;
+    const block = extensions2[CONTRACT_REPORT_KIND];
+    return block !== null && typeof block === "object" && !Array.isArray(block) && Object.keys(block).length === 0;
+  }
+
   // agent-action-capsule/ts/src/outcome-report-presentation.ts
   function object5(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
@@ -5209,6 +5266,13 @@ var EvidenceGraph = (() => {
     "eu-ai-act-compliance/v1": {
       id: "compliance-card",
       accepts: (bundle) => readCompliancePresentation(bundle) !== void 0
+    },
+    // contract-report.ts readContractReport, the descriptor's reader (a closed
+    // empty object only, as go/presentation/descriptor.go contractReportEngaged).
+    // Only a runtime that registers a contract-report module applies it.
+    [CONTRACT_REPORT_KIND]: {
+      id: "contract-report",
+      accepts: readContractReport
     },
     // evidence-graph-view.ts composition section -> composed.ts verifyComposed;
     // a malformed block yields no composition result, so it is not interpreted.
@@ -7880,18 +7944,6 @@ ${body}
         `non-conforming Capsule: ${result.findings.map((item) => item.code).join(", ")}`
       );
     return Object.freeze(value);
-  }
-
-  // agent-action-capsule/ts/src/contract-report.ts
-  var CONTRACT_REPORT_KIND = "contract-report/v1";
-  function readContractReport(bundle) {
-    if (bundle === null || typeof bundle !== "object" || Array.isArray(bundle))
-      return false;
-    const extensions2 = bundle.extensions;
-    if (extensions2 === null || typeof extensions2 !== "object" || Array.isArray(extensions2) || !Object.hasOwn(extensions2, CONTRACT_REPORT_KIND))
-      return false;
-    const block = extensions2[CONTRACT_REPORT_KIND];
-    return block !== null && typeof block === "object" && !Array.isArray(block) && Object.keys(block).length === 0;
   }
 
   // agent-action-capsule/ts/src/evidence-graph.ts
@@ -11351,21 +11403,28 @@ ${body}
     if (typeof summary === "string") head2.textContent = summary;
     else head2.append(summary);
     details.append(head2);
-    let built = false;
-    const fill2 = () => {
-      if (built) return;
-      built = true;
-      const body = build();
-      details.append(body);
-      openBuiltToDepth(details);
-    };
-    if (options.eager === true) fill2();
-    else
-      details.addEventListener("toggle", () => {
-        if (details.open) fill2();
-      });
+    deferBody(details, build, options.eager === true);
     return details;
   }
+  function deferBody(details, build, eager = false, into = details) {
+    const fill2 = () => {
+      if (details.dataset.body !== "pending") return;
+      pendingToggles.delete(details);
+      details.dataset.body = "built";
+      into.append(build());
+      openBuiltToDepth(into);
+    };
+    details.dataset.body = "pending";
+    if (eager) {
+      fill2();
+      return;
+    }
+    pendingToggles.set(details, fill2);
+    details.addEventListener("toggle", () => {
+      if (details.open) fill2();
+    });
+  }
+  var pendingToggles = /* @__PURE__ */ new WeakMap();
   function openBuiltToDepth(body) {
     if (body.closest("[data-open-all]") === null) return;
     for (const toggle of body.querySelectorAll("details.lv"))
@@ -11536,6 +11595,10 @@ ${body}
         })
       )
     );
+    wrap.append(renderTurns(turns, w));
+    return wrap;
+  }
+  function renderTurns(turns, w) {
     const list = el("ol", "turns");
     turns.forEach((turn, index) => {
       const role = turn.role === "user" || turn.role === "assistant" || turn.role === "tool" || turn.role === "system" ? turn.role : "other";
@@ -11565,8 +11628,79 @@ ${body}
       }
       list.append(item);
     });
-    wrap.append(list);
+    return list;
+  }
+  function recordAddress(recordId) {
+    return `record-${recordId}`;
+  }
+  function conversationFold(transcript, caseRecord3, w) {
+    const wrap = el("div", "chat-fold");
+    const record = (transcript.state === "verified" || transcript.state === "cited") && transcript.transcriptRecordId !== void 0 ? transcript.transcriptRecordId : void 0;
+    let toggle;
+    const bar = () => {
+      const line = el("div", "chat-bar");
+      const close = el("a", "chat-close", w.t("chat.close"));
+      close.setAttribute("href", "#");
+      close.setAttribute("role", "button");
+      close.addEventListener("click", (event) => {
+        event.preventDefault();
+        toggle.open = false;
+        toggle.querySelector(":scope > summary")?.scrollIntoView?.({
+          block: "nearest"
+        });
+      });
+      line.append(close);
+      if (record !== void 0) {
+        const link = el("a", "chat-records", w.t("chat.in-records"));
+        link.setAttribute("href", `#${recordAddress(record)}`);
+        link.addEventListener("click", () => revealRecord(link, record));
+        line.append(link);
+      }
+      return line;
+    };
+    toggle = levelToggle(2, w.t("card.h.conversation"), () => {
+      const body = el("div", "chat-body");
+      body.append(bar(), renderChat(transcript, caseRecord3, w), bar());
+      return body;
+    });
+    toggle.dataset.section = "conversation";
+    if (record !== void 0) {
+      toggle.dataset.record = record;
+      const link = el("a", "chat-static", w.t("chat.read"));
+      link.setAttribute("href", `#${recordAddress(record)}`);
+      link.hidden = true;
+      wrap.append(link);
+    }
+    wrap.append(toggle);
     return wrap;
+  }
+  function revealRecord(from, recordId) {
+    const doc = from.nodeType === 9 ? from : from.ownerDocument;
+    const target = doc.getElementById(recordAddress(recordId));
+    if (target === null) return;
+    for (let at = target.parentElement?.closest("details") ?? null; at !== null; at = at.parentElement?.closest("details") ?? null)
+      if (!at.open) openToggle(at);
+    target.scrollIntoView?.();
+  }
+  var hashWatched = /* @__PURE__ */ new WeakSet();
+  function revealRecordsByHash(doc) {
+    const view = doc.defaultView;
+    if (view === null) return;
+    const go = () => {
+      const hash2 = view.location.hash;
+      if (!hash2.startsWith("#record-")) return;
+      let id;
+      try {
+        id = decodeURIComponent(hash2.slice("#record-".length));
+      } catch {
+        return;
+      }
+      revealRecord(doc, id);
+    };
+    go();
+    if (hashWatched.has(doc)) return;
+    hashWatched.add(doc);
+    view.addEventListener("hashchange", go);
   }
   function reportSummary(w) {
     const text2 = w.section3("report.summary");
@@ -11648,6 +11782,11 @@ ${s} .chat li.turn.user{justify-self:end;background:var(--person-l);border-color
 ${s} .chat li.turn.assistant{justify-self:start}
 ${s} .chat li.turn.tool,${s} .chat li.turn.system{justify-self:center;max-width:96%;border-style:dashed;background:#fff}
 ${s} .chat li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:2px}
+${s} .chat-body{padding:4px 12px 12px}
+${s} .chat-bar{display:flex;align-items:center;gap:12px;margin:6px 0;font-size:13px}
+${s} .chat-bar .chat-close{font-weight:600}
+${s} .chat-bar .chat-records{margin-left:auto}
+${s} a.chat-static:not([hidden]){display:inline-block;margin-top:8px;font-size:13.5px;font-weight:600}
 ${s} .chat li.turn .say{white-space:pre-wrap;word-break:break-word}
 ${s} .chat li.turn pre.say{margin:0;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;max-height:180px;overflow:auto;color:var(--slate)}
 ${s} .chat li.turn.system .say{max-height:120px;overflow:auto;font-size:12px;color:var(--slate)}
@@ -11676,8 +11815,11 @@ ${s} dl.prov dd{margin:0;color:var(--ink);word-break:break-word}
   function frontCss(scope) {
     const s = scope;
     return `
-${s} .mockline{max-width:1080px;margin:18px auto 0;padding:9px 14px;border:1px solid #F0D7A8;background:var(--gold-l);color:#8A5A0B;border-radius:10px;font-weight:600;font-size:14px}
-${s} .front-card{background:#fff;max-width:1080px;margin:14px auto;border:1px solid var(--line);border-radius:var(--r);padding:16px 24px}
+${s}{--inset:clamp(20px,5vw,56px)}
+${s} .mockmark{display:inline-block;margin:8px 0 0;padding:3px 10px;border:1px solid #F0D7A8;background:var(--gold-l);color:#8A5A0B;border-radius:8px;font-weight:600;font-size:13px;line-height:1.45;text-align:left}
+${s} .front-card{background:#fff;max-width:1080px;margin:0 auto 16px;border:1px solid var(--line);border-radius:var(--r);padding:32px var(--inset)}
+${s} .prov-row{padding-bottom:16px;margin-bottom:12px;border-bottom:1px solid var(--line)}
+${s} .front-card > .prov-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0}
 ${s} .agg{margin:8px 0 28px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:#FAF8F4}
 ${s} .agg-line{font-size:14px;margin:0 0 12px;color:var(--ink)}
 ${s} .agg-buckets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
@@ -11689,10 +11831,10 @@ ${s} .agg-note{font-size:12.5px;color:var(--slate);margin:6px 0 0}
 ${s} .agg-bucket.met b{color:var(--ok)}
 ${s} .agg-bucket.not_met b{color:var(--bad)}
 ${s} .agg-bucket.not_evaluable b{color:#5F6672}
-${s} .findings{border-left:4px solid var(--gold,#E8A33D);background:#FFFBF2;border-radius:var(--r);padding:16px 20px;margin:16px 0}
+${s} .findings{border:1px solid var(--line);border-left:4px solid var(--gold,#E8A33D);background:#FFFBF2;border-radius:var(--r);padding:32px calc(var(--inset) - 3px);margin:0 0 16px}
 ${s} .findings h2{font-size:19px;margin:4px 0 10px}
 ${s} .plabel{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8A5A0B}
-${s} .footnotes{margin:22px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--slate);display:grid;gap:4px}
+${s} .footnotes{margin:22px 0 0;font-size:12.5px;color:var(--slate);display:grid;gap:4px}
 ${s} details.prov-fold{border:0;margin:0;background:transparent}
 ${s} details.prov-fold > summary{padding:2px 0;font-weight:500;color:var(--ink)}
 ${s} details.prov-fold .prov-brief{font-size:13.5px}
@@ -11712,7 +11854,7 @@ ${s} .anchor{background:var(--cream);border-radius:8px;padding:8px 10px;font-siz
 ${s} .anchor .k{display:block;color:var(--slate);margin-bottom:2px}
 ${s} .anchor code{font-size:11px;word-break:break-all}
 ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.6}
-@media (max-width:640px){${s} .front-card{padding:14px 16px}${s} .agg-buckets{grid-template-columns:minmax(0,1fr)}${s} .agg-bucket{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 10px}${s} .agg-bucket b{font-size:22px}}
+@media (max-width:640px){${s} .front-card{padding:24px var(--inset)}${s} .agg-buckets{grid-template-columns:minmax(0,1fr)}${s} .agg-bucket{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 10px}${s} .agg-bucket b{font-size:22px}}
 `;
   }
 
@@ -11786,14 +11928,26 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
 .cc .fnd .own{font-size:12.5px;color:var(--slate);margin-top:2px}
 .cc .ck .h .tname{color:var(--navy)}
 .cc .ck .h .applic{font-weight:400}
-.cc section.rp{padding:16px 24px;border-radius:0 0 var(--r) var(--r)}
 .cc .rp-s{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 .cc .rp-s h3{font-size:17px;margin:0 0 8px}
 .cc .pf-b .ev{font-size:12px;color:var(--slate);margin:4px 0;word-break:break-all}
 .cc .pf-b .ev code{background:var(--cream);padding:1px 6px;border-radius:5px;margin-right:4px;font-size:11.5px}
 .cc .obd{margin:10px 0 16px}
 @media (max-width:760px){.cc .ran{grid-template-columns:1fr}}
-` + levelCss("cc") + frontCss(".cc");
+` + levelCss("cc") + frontCss(".cc") + // The page layout (one left edge, bordered cards 16px apart, the header
+  // on white like the Outcomes report's): last, so it wins over the rules
+  // above. The page colour is the shell's (emitter-shell.html).
+  `
+.cc{background:transparent;padding:0;margin:0 auto;display:flow-root}
+.cc .l0-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:40px var(--inset);margin:16px 0}
+.cc .l0-card .hd{background:transparent;color:var(--ink);padding:0;margin:0 0 24px;border-radius:0}
+.cc .l0-card .hd h1{color:var(--navy);font-size:30px;margin:0}
+.cc .l0-card .hd .sub{color:var(--slate);margin-top:8px}
+.cc .l0-card section.agg{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0}
+.cc > section{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:32px var(--inset);margin:0 0 16px}
+.cc > section.findings{padding:32px calc(var(--inset) - 3px)}
+@media (min-width:821px){.cc table.grid th{white-space:nowrap}}
+`;
 
   // capsule-viewer/ts/src/outcome-report-styles.ts
   var OUTCOME_REPORT_CSS = `
@@ -11986,7 +12140,20 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   .oi{background:#fff}
   .oi .sheet,.oi .sec{box-shadow:none;margin:0 0 12px}
 }
-` + levelCss("oi") + frontCss(".oi");
+` + levelCss("oi") + frontCss(".oi") + // The page layout (one left edge, bordered cards 16px apart): last, so
+  // it wins over the card's older rules above. The page colour is the
+  // shell's (emitter-shell.html), so the frame itself stays transparent.
+  `
+.oi{background:transparent;display:flow-root}
+.oi .sheet{margin:16px auto;border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
+.oi .sheet .pad{padding:40px var(--inset)}
+.oi .sec{margin:0 auto 16px;padding:32px var(--inset);border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
+.oi .sec.rp{padding:32px var(--inset)}
+.oi .pnote{margin:0 auto 16px;padding:24px calc(var(--inset) - 5px);border-radius:var(--r)}
+@media (min-width:821px){.oi table.rules th{white-space:nowrap}}
+.oi table.rules tr.grp td{font-family:inherit;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--slate);padding-top:22px;border-bottom:1px solid var(--line)}
+@media (max-width:820px){.oi .sheet .pad,.oi .sec,.oi .sec.rp{padding:24px var(--inset)}}
+`;
 
   // capsule-viewer/ts/src/viewer-build.ts
   var COMMIT_SHA = /^[0-9a-f]{40}$/u;
@@ -11995,14 +12162,14 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   }
   function builtCommit() {
     if (false) return void 0;
-    return commitPrefix("20f815da0688035e9ac6205a865e4376054834a6");
+    return commitPrefix("4e4d55333e6a2ef6d3040a67cb1100a024236746");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
     viewer: "@action-state-group/capsule-viewer",
     viewerVersion: "0.1.0",
     verifier: "@action-state-group/agent-action-capsule",
-    verifierVersion: "0.6.0",
+    verifierVersion: "0.6.1",
     cllVersion: "0.2.1",
     ...commit === void 0 ? {} : { commit }
   };
@@ -12220,6 +12387,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "chat.state.cited": "The conversation of the case every claim cites. The judge's reports are withheld, so which conversation the judge read is not shown.",
       "chat.state.verified": "The exact conversation the judge read, checked on this page (see the proofs).",
       "chat.called": "called ",
+      "chat.close": "Close the conversation",
+      "chat.in-records": "In the records",
+      "chat.read": "Read the conversation",
       "card.not-stated": "not stated",
       "card.span": "{from} \u2013 {to}",
       "card.span.unknown": "unknown",
@@ -12500,6 +12670,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "chat.state.cited": "The conversation of the case every claim cites. The judge's reports are withheld, so which conversation the judge read is not shown.",
       "chat.state.verified": "The exact conversation the judge read, checked on this page (see the proofs).",
       "chat.called": "called ",
+      "chat.close": "Close the conversation",
+      "chat.in-records": "In the records",
+      "chat.read": "Read the conversation",
       "card.not-stated": "not stated",
       "card.span": "{from} \u2013 {to}",
       "card.span.unknown": "unknown",
@@ -13466,8 +13639,8 @@ ${key}`);
     return problems.map((p) => `${pack.id}: ${p}`);
   }
   var DEFAULT_PACK_SHA256 = Object.freeze({
-    lines: "06244cb985e97d44bdf934dcac5a3bf899925865adf11f9d18bc093973906390",
-    groups: "f6698171c64d097348b9053874b7e7042d2cbef9b55c6f7d2028448305a9dbd8"
+    lines: "6f3b65411e5c87a0b7b2507ae9de7debdb7d78885263df05ed600c11cb53ba57",
+    groups: "1fca80b898ceea4232962277df7518414be8802ad6d6d01002ebdb6425408208"
   });
   function fill(key, text2, vars) {
     return text2.replace(PLACEHOLDER, (whole, name) => {
@@ -13734,8 +13907,11 @@ ${key}`);
       text: parts.join("; "),
       // "mixed" with one pin means some results name no pin; only two or
       // more pins are "several".
-      brief: w.t(
-        judgedByMock(tally) ? "prov.brief.judge.mock" : state === "mixed" && judged === 1 ? "prov.brief.judge.partial" : `prov.brief.judge.${state}`
+      // A mock judge is said once, by the L0 mark (report-front.ts,
+      // decision D5 (b)); the brief leaves the judge out rather than say it
+      // again. The judge's full line stays in the opened block.
+      brief: judgedByMock(tally) ? "" : w.t(
+        state === "mixed" && judged === 1 ? "prov.brief.judge.partial" : `prov.brief.judge.${state}`
       ),
       state
     };
@@ -13864,7 +14040,7 @@ ${key}`);
   function renderProvenance(lines) {
     const brief = document.createElement("span");
     brief.className = "prov-brief";
-    brief.textContent = lines.map((line) => line.brief).join(" \xB7 ");
+    brief.textContent = lines.map((line) => line.brief).filter((text2) => text2 !== "").join(" \xB7 ");
     const toggle = levelToggle(
       1,
       brief,
@@ -13913,9 +14089,21 @@ ${key}`);
   }
   function renderMockJudgeLine(tally, w) {
     if (!judgedByMock(tally)) return void 0;
-    const line = el2("p", "mockline", w.t("front.mock"));
+    const line = el2("p", "mockmark", w.t("front.mock"));
     line.dataset.section = "mock-judge";
     return line;
+  }
+  function placeMockMark(header, mark) {
+    if (mark === void 0) return;
+    const title = header.querySelector("h1");
+    if (title === null) header.prepend(mark);
+    else title.after(mark);
+  }
+  function leadWithProvenance(host, section, provenance) {
+    const row2 = el2("div", "prov-row");
+    row2.append(provenance);
+    if (section === null) host.prepend(frontCard(row2));
+    else section.prepend(row2);
   }
   function renderAggregate(result, w) {
     const section = el2("section", "agg");
@@ -14070,18 +14258,7 @@ ${key}`);
     name.replaceWith(toggle);
     summary.append(name);
     toggle.append(summary);
-    let built = false;
-    const fill2 = () => {
-      if (built) return;
-      built = true;
-      cell.append(build());
-      openBuiltToDepth(cell);
-    };
-    if (eager) fill2();
-    else
-      toggle.addEventListener("toggle", () => {
-        if (toggle.open) fill2();
-      });
+    deferBody(toggle, build, eager, cell);
     row2.addEventListener("click", (event) => {
       if (event.target.closest("summary") !== null) return;
       if (toggle.open) toggle.open = false;
@@ -14480,9 +14657,8 @@ ${key}`);
       gap.dataset.gaps = "true";
       body.append(gap);
     }
-    body.append(el3("h4", "", w.t("card.h.conversation")));
     body.append(
-      renderChat(conversation.transcript, conversation.sourceCapsuleId, w)
+      conversationFold(conversation.transcript, conversation.sourceCapsuleId, w)
     );
     body.append(
       levelToggle(
@@ -15481,25 +15657,27 @@ ${key}`);
       await tallyJudges(result.records, claims),
       w
     );
-    if (mock !== void 0) levels.L0.append(mock);
     const sheet = el3("div", "sheet");
     const pad = el3("div", "pad");
     const notes = el3("aside", "footnotes");
     notes.dataset.section = "footnotes";
     renderMeta(pad, model, w, notes);
+    const title = pad.querySelector(".ih-title");
+    if (title !== null) placeMockMark(title, mock);
+    else if (mock !== void 0) pad.prepend(mock);
     pad.append(renderAggregate(result, w));
     renderLines(pad, model, runInfo, w, notes);
     if (notes.childElementCount > 0) pad.append(notes);
     sheet.append(pad);
     levels.L0.append(sheet);
-    levels.L1.append(
-      frontCard(
-        renderProvenance(
-          await provenanceLines(result.records, claims, bundle, verified, w)
-        )
+    renderRules(levels.L1, model, runInfo, w);
+    leadWithProvenance(
+      levels.L1,
+      levels.L1.querySelector('[data-section="rules"]'),
+      renderProvenance(
+        await provenanceLines(result.records, claims, bundle, verified, w)
       )
     );
-    renderRules(levels.L1, model, runInfo, w);
     levels.L2.append(renderCheckYourself(bundle, w));
     renderCalendar(levels.L2, model, w);
     renderHumanChecks(levels.L2, model.calibration, w);
@@ -16016,8 +16194,7 @@ ${key}`);
       gap.dataset.gaps = "true";
       body.append(gap);
     }
-    body.append(el4("h4", "", w.t("card.h.conversation")));
-    body.append(renderChat(session.transcript, session.sourceCapsuleId, w));
+    body.append(conversationFold(session.transcript, session.sourceCapsuleId, w));
     body.append(
       levelToggle(
         2,
@@ -16266,17 +16443,21 @@ ${key}`);
       await tallyJudges(result.records, claims),
       w
     );
-    if (mock !== void 0) levels.L0.append(mock);
-    renderHeader(levels.L0, model, w);
-    levels.L0.append(renderAggregate(result, w));
-    levels.L1.append(
-      frontCard(
-        renderProvenance(
-          await provenanceLines(result.records, claims, bundle, verified, w)
-        )
+    const sheet = el4("div", "l0-card");
+    renderHeader(sheet, model, w);
+    const header = sheet.querySelector(".hd");
+    if (header !== null) placeMockMark(header, mock);
+    else if (mock !== void 0) sheet.prepend(mock);
+    sheet.append(renderAggregate(result, w));
+    levels.L0.append(sheet);
+    renderSummary(levels.L1, model, presentation, w);
+    leadWithProvenance(
+      levels.L1,
+      levels.L1.querySelector('[data-section="summary"]'),
+      renderProvenance(
+        await provenanceLines(result.records, claims, bundle, verified, w)
       )
     );
-    renderSummary(levels.L1, model, presentation, w);
     renderFindings(levels.L1, model, w);
     levels.L2.append(renderCheckYourself(bundle, w));
     renderReportProofs2(levels.L2, model, bundle, verified, w);
@@ -16550,6 +16731,111 @@ ${key}`);
     render: renderComposed
   };
 
+  // capsule-viewer/ts/src/record-content.ts
+  var isObject3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  function canonicalJson(value, indent) {
+    const pad = indent === void 0 ? "" : " ".repeat(indent);
+    const write = (v, depth) => {
+      const open = pad === "" ? "" : `
+${pad.repeat(depth + 1)}`;
+      const close = pad === "" ? "" : `
+${pad.repeat(depth)}`;
+      const colon = pad === "" ? ":" : ": ";
+      if (Array.isArray(v))
+        return v.length === 0 ? "[]" : `[${v.map((item) => open + write(item, depth + 1)).join(",")}${close}]`;
+      if (isObject3(v)) {
+        const keys = Object.keys(v).sort(byCodeUnits);
+        return keys.length === 0 ? "{}" : `{${keys.map(
+          (key) => `${open}${JSON.stringify(key)}${colon}${write(v[key], depth + 1)}`
+        ).join(",")}${close}}`;
+      }
+      return JSON.stringify(v) ?? "null";
+    };
+    return write(value, 0);
+  }
+  function byCodeUnits(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  function conversationTurns(content) {
+    if (!isObject3(content)) return void 0;
+    const interaction = isObject3(content.agent_interaction) ? content.agent_interaction : void 0;
+    if (interaction === void 0 || !Array.isArray(interaction.messages))
+      return void 0;
+    return interaction.messages.flatMap((m) => {
+      if (!isObject3(m)) return [];
+      const role = typeof m.role === "string" ? m.role : "unknown";
+      const text2 = typeof m.content === "string" ? m.content : void 0;
+      const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+      return [
+        {
+          role,
+          ...text2 === void 0 ? {} : { content: text2 },
+          toolCalls: calls.flatMap(
+            (call) => isObject3(call) ? [
+              {
+                name: typeof call.name === "string" ? call.name : "unnamed",
+                // Re-serialised as there, but in canonical member order,
+                // so every packaging shows the same text.
+                arguments: canonicalJson(call.arguments ?? null)
+              }
+            ] : []
+          )
+        }
+      ];
+    });
+  }
+  var conversationModule = {
+    id: "conversation",
+    matches: (content) => conversationTurns(content) !== void 0,
+    // Content only: what was checked is the core's to say, beside the block
+    // (presentation contract section 6.1).
+    render(content, w) {
+      const wrap = document.createElement("div");
+      wrap.className = "chat";
+      wrap.append(renderTurns(conversationTurns(content) ?? [], w));
+      return wrap;
+    }
+  };
+  var CONTENT_MODULES = [conversationModule];
+  function pickContentModule(content, modules = CONTENT_MODULES) {
+    return modules.find((module) => module.matches(content));
+  }
+  function renderContent(content, w, modules = CONTENT_MODULES) {
+    const block = document.createElement("div");
+    block.className = "cv-content";
+    const module = pickContentModule(content, modules);
+    if (module !== void 0) {
+      block.dataset.contentModule = module.id;
+      block.append(module.render(content, w));
+      return block;
+    }
+    block.dataset.contentModule = "as-recorded";
+    const pre = document.createElement("pre");
+    let text2;
+    try {
+      text2 = canonicalJson(content, 2);
+    } catch {
+      text2 = String(content);
+    }
+    pre.textContent = text2;
+    pre.dataset.exact = "as-parsed";
+    block.append(pre);
+    return block;
+  }
+  var RECORD_CONTENT_CSS = `
+.cv-content pre{margin:4px 0;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;font-size:12px;max-height:420px;overflow:auto}
+.cv-content .chat .chat-k{font-size:12.5px;margin:4px 0 6px}
+.cv-content .chat ol.turns{list-style:none;margin:0;padding:10px;display:grid;gap:6px;max-height:620px;overflow:auto;border:1px solid #E3DED3;border-radius:10px;background:#FAF8F4}
+.cv-content .chat li.turn{border-radius:10px;padding:6px 10px;max-width:86%;background:#fff;border:1px solid #E3DED3;font-size:13.5px}
+.cv-content .chat li.turn.user{justify-self:end;background:#ECE8F7;border-color:transparent}
+.cv-content .chat li.turn.assistant{justify-self:start}
+.cv-content .chat li.turn.tool,.cv-content .chat li.turn.system{justify-self:center;max-width:96%;border-style:dashed}
+.cv-content .chat li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.cv-content .chat li.turn .say{white-space:pre-wrap;word-break:break-word}
+.cv-content .chat li.turn pre.say{margin:0;font-size:11.5px;max-height:180px}
+.cv-content .chat .call{margin-top:4px;font-size:12.5px;background:#FBEFD9;border-radius:6px;padding:3px 8px;word-break:break-word}
+`;
+
   // capsule-viewer/ts/src/compliance-presentation.ts
   function object11(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
@@ -16701,7 +16987,7 @@ ${key}`);
   };
   function renderVerificationBanner(root, verified, coverage) {
     const bar = element6("div");
-    bar.className = "cv-shell-bar";
+    bar.className = verified ? "cv-shell-bar" : "cv-shell-bar cv-failed";
     const banner = element6(
       "span",
       verified ? BANNER_LINES.verified : BANNER_LINES.failed
@@ -16916,7 +17202,7 @@ ${key}`);
     membership_invalid: "membership invalid",
     unverified: "membership unverified"
   });
-  function renderCheckpointCoverage(host, records, uncheckpointed, coverage) {
+  function renderCheckpointCoverage(host, records, uncheckpointed, coverage, entries, depth) {
     host.append(element6("h4", "Checkpoint coverage"));
     if (coverage.status === "established") {
       const count2 = element6(
@@ -16931,29 +17217,134 @@ ${key}`);
       line.dataset.coverage = "not-established";
       line.dataset.claim = coverage.status;
       host.append(line);
-      if (coverage.status === "withheld") return;
     }
-    host.append(renderCoverageStatusCounts(records));
-    const details = element6("details");
+    if (coverage.status !== "withheld")
+      host.append(renderCoverageStatusCounts(records));
+    host.append(renderRecordsList(records, entries, depth));
+  }
+  function renderRecordsList(records, entries, depth) {
+    const details = document.createElement("details");
     details.dataset.records = "coverage-detail";
+    details.open = depth === "L2";
     const summary = element6(
       "summary",
-      `${recordsWord(records.length)}, by capsule id`
+      `Records in this bundle: ${recordsWord(records.length)}, by capsule id`
     );
     details.append(summary);
+    if (!entries.verified) {
+      const note = element6(
+        "p",
+        "Record content is not shown: this bundle did not verify."
+      );
+      note.dataset.records = "not-shown";
+      details.append(note);
+    }
     const list = element6("ul");
     list.dataset.records = "coverage";
+    const owners = /* @__PURE__ */ new Map();
+    for (const record of records)
+      if (entries.verified && entries.read.has(record.capsuleId)) {
+        if (!owners.has(record.capsuleId))
+          owners.set(record.capsuleId, record.capsuleId);
+      }
+    const own = new Set(records.map((record) => record.capsuleId));
     for (const record of records) {
-      const item = element6("li", `${record.capsuleId} \xB7 `);
+      const carried = entries.read.get(record.capsuleId)?.carriedCapsuleId;
+      if (entries.verified && carried !== void 0 && !own.has(carried) && !owners.has(carried))
+        owners.set(carried, record.capsuleId);
+    }
+    const used = /* @__PURE__ */ new Set();
+    const address = (id, holder) => {
+      const name = recordAddress(id);
+      if (owners.get(id) !== holder || used.has(name)) return void 0;
+      used.add(name);
+      const anchor = element6("span");
+      anchor.className = "cv-record-anchor";
+      anchor.id = name;
+      return anchor;
+    };
+    for (const record of records) {
+      const item = element6("li");
+      item.dataset.capsuleId = record.capsuleId;
+      const kind = entries.kind(record.capsuleId);
       const status2 = element6("span", COVERAGE_LABEL[record.status]);
       status2.dataset.recordStatus = record.status;
       status2.className = `seal-${record.status}`;
-      item.dataset.capsuleId = record.capsuleId;
-      item.append(status2);
+      const label = `${record.capsuleId} \xB7 ${kind ?? "kind not stated"} \xB7 `;
+      const read = entries.read.get(record.capsuleId);
+      if (!entries.verified || read === void 0) {
+        item.append(document.createTextNode(label), status2);
+        list.append(item);
+        continue;
+      }
+      const fold = document.createElement("details");
+      fold.className = "cv-record";
+      fold.dataset.record = record.capsuleId;
+      const head2 = element6("summary", label);
+      head2.append(status2);
+      fold.append(head2);
+      const anchors = [record.capsuleId, read.carriedCapsuleId].filter((id) => id !== void 0).map((id) => address(id, record.capsuleId)).filter((a) => a !== void 0);
+      fold.append(...anchors);
+      deferBody(fold, () => entries.build(record.capsuleId, read));
+      fold.addEventListener("toggle", () => {
+        const hash2 = fold.ownerDocument.defaultView?.location.hash;
+        const target = anchors.find((a) => hash2 === `#${a.id}`);
+        if (fold.open && target !== void 0) target.scrollIntoView?.();
+      });
+      item.append(fold);
       list.append(item);
     }
     details.append(list);
-    host.append(details);
+    return details;
+  }
+  async function recordEntries(context, result) {
+    const read = /* @__PURE__ */ new Map();
+    for (const record of result?.records.values() ?? []) {
+      const id = record.bookRecordId ?? record.capsuleId;
+      if (!read.has(id)) read.set(id, record);
+    }
+    const bundle = object12(context.bundle);
+    const memberships2 = context.completeness.memberships;
+    const extensions2 = object12(bundle.extensions);
+    const payloads = object12(extensions2[BOOK_PAYLOADS_EXTENSION]);
+    const originals = object12(extensions2[AGENT_INPUT_ORIGINALS_EXTENSION]);
+    for (const raw of context.records) {
+      const id = raw.capsule_id;
+      if (read.has(id)) continue;
+      const agentInput = disclosureOf(context, id, "agent_input");
+      const header = agentInput.state === "disclosed" && object12(agentInput.payload).record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? agentInput.payload : void 0;
+      const carried = header === void 0 ? void 0 : await carriedCapsuleCommitment(header, payloads);
+      const carriedInput = header === void 0 ? void 0 : await resolveCarriedInput(header, payloads, originals);
+      const references = Array.isArray(raw.references) ? raw.references : [];
+      const agentInputDigest = committedDigest(raw, "agent_input");
+      const agentOutputDigest = committedDigest(raw, "agent_output");
+      const coordinates = logCoordinates(memberships2, id);
+      read.set(id, {
+        ...recordTimes(raw),
+        capsuleId: id,
+        agentInput,
+        agentOutput: disclosureOf(context, id, "agent_output"),
+        ...agentInputDigest === void 0 ? {} : { agentInputDigest },
+        ...agentOutputDigest === void 0 ? {} : { agentOutputDigest },
+        ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
+        ...carriedInput === void 0 ? {} : { carriedInput },
+        ...carried === void 0 ? {} : {
+          carriedCapsuleId: carried.capsuleId,
+          carriedInputDigest: carried.inputDigest
+        },
+        cites: references.flatMap((ref) => {
+          const r = object12(ref);
+          return r.citation_purpose === "acted_on" && typeof r.digest === "string" ? [r.digest] : [];
+        })
+      });
+    }
+    return read;
+  }
+  function recordKind(raw, read) {
+    const header = read?.agentInput.state === "disclosed" ? object12(read.agentInput.payload).record_type : void 0;
+    if (typeof header === "string") return header;
+    const own = object12(raw).action_type;
+    return typeof own === "string" ? own : void 0;
   }
   function renderCoverageStatusCounts(records) {
     const counts = /* @__PURE__ */ new Map();
@@ -17122,11 +17513,32 @@ ${key}`);
       witness.dataset.witness = "self";
       page.append(witness);
     }
+    const contentStyle = element6("style");
+    contentStyle.textContent = RECORD_CONTENT_CSS;
+    page.append(contentStyle);
+    let result;
+    try {
+      result = bundleVerified(verified) ? await resultRootOf(context) : void 0;
+    } catch {
+      result = void 0;
+    }
+    const read = bundleVerified(verified) ? await recordEntries(context, result) : /* @__PURE__ */ new Map();
+    const rawRecords = /* @__PURE__ */ new Map();
+    for (const raw of Array.isArray(object12(bundle).records) ? object12(bundle).records : [])
+      if (typeof object12(raw).capsule_id === "string")
+        rawRecords.set(object12(raw).capsule_id, raw);
     renderCheckpointCoverage(
       page,
       model.records,
       model.uncheckpointedCount,
-      model.coverage
+      model.coverage,
+      {
+        verified: bundleVerified(verified),
+        read,
+        kind: (id) => recordKind(rawRecords.get(id), read.get(id)),
+        build: (id, record) => renderRecordEntry(id, record)
+      },
+      depth
     );
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
@@ -17378,16 +17790,25 @@ ${key}`);
     );
     root.append(section);
   }
-  function renderCitedMember(host, field, resolution, committed) {
-    if (resolution.state !== "disclosed" && committed === void 0) return;
-    host.append(element6("h5", field));
+  function renderCitedMember(host, field, resolution, committed, label = field) {
+    if (resolution.state !== "disclosed" && resolution.state !== "disclosure_mismatch" && committed === void 0)
+      return;
+    host.append(element6("h5", label));
     if (resolution.state === "disclosed") {
-      host.append(element6("pre", display(resolution.payload)));
+      const checked = element6(
+        "p",
+        "The content shown matches the digest the record commits to."
+      );
+      checked.dataset.contentCheck = "digest";
+      host.append(
+        checked,
+        renderContent(resolution.payload, DEFAULT_WORDS.lines)
+      );
       return;
     }
     const note = element6(
       "p",
-      resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
+      resolution.state === "disclosure_mismatch" ? committed === void 0 ? "withheld: the disclosed value does not match the committed digest" : `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
     );
     note.dataset.disclosure = resolution.state;
     host.append(note);
@@ -17410,11 +17831,54 @@ ${key}`);
       record.agentOutput,
       record.agentOutputDigest
     );
+    renderCarriedInput(section, record);
     if (record.cites.length > 0) {
       section.append(element6("h5", "Cites"));
       renderCitationList(record.cites, records, section);
     }
     host.append(section);
+  }
+  function renderCarriedInput(host, record) {
+    if (record.carriedInput === void 0) return;
+    renderCitedMember(
+      host,
+      "agent_input",
+      record.carriedInput,
+      record.carriedInputDigest,
+      "agent_input of the capsule it carries"
+    );
+  }
+  function renderRecordEntry(capsuleId, record) {
+    const body = element6("div");
+    body.className = "cv-record-body";
+    body.append(renderProvenance2(capsuleId, record.logCoordinates, record));
+    renderCitedMember(
+      body,
+      "agent_input",
+      record.agentInput,
+      record.agentInputDigest
+    );
+    renderCitedMember(
+      body,
+      "agent_output",
+      record.agentOutput,
+      record.agentOutputDigest
+    );
+    renderCarriedInput(body, record);
+    if (record.cites.length > 0) {
+      body.append(element6("h5", "Cites"));
+      const list = element6("ul");
+      for (const id of record.cites) {
+        const item = element6("li");
+        const link = element6("a", id);
+        link.setAttribute("href", `#${recordAddress(id)}`);
+        link.addEventListener("click", () => revealRecord(link, id));
+        item.append(link);
+        list.append(item);
+      }
+      body.append(list);
+    }
+    return body;
   }
   function renderCitationList(ids, records, host) {
     const list = element6("ul");
@@ -18059,7 +18523,8 @@ ${key}`);
     if (id === CONTRACT_REPORT_MANIFEST.id) {
       const drawn = typeof bundle === "object" && bundle !== null ? contractReportDrawn.get(bundle) : void 0;
       const input = drawn === void 0 ? contractReportInput(bundle) : drawn ?? void 0;
-      return input === void 0 ? ["result-root"] : [
+      return input === void 0 ? ["contract-report", "result-root"] : [
+        "contract-report",
         "result-root",
         input.grouping === "lines" ? "outcome-report-card" : "compliance-card"
       ];
@@ -18319,6 +18784,7 @@ ${key}`);
     );
     const summary = root.querySelector("[data-verify-summary]");
     if (summary !== null) summary.textContent = checkedLine;
+    revealRecordsByHash(root.ownerDocument);
   }
 
   // capsule-viewer/ts/src/presentation-mount.ts
