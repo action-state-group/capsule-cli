@@ -6,8 +6,8 @@
 
 - **Changed:** `bundle`, `disclose`, `permalink`, `countersign request`
   and the deal commands build their Evidence Bundles with
-  agent-action-capsule's `BuildEvidenceBundle`, the one producer every
-  language shares, instead of capsulectl's own assembler. Book profiles
+  agent-action-capsule's `BuildEvidenceBundle`, the producer AAC's
+  libraries share, instead of capsulectl's own assembler. Book profiles
   are unchanged. A new bundle differs from an rc21 one in five ways:
   `checkpoint` carries the signed checkpoint once, as `cose`, without the
   older `statement` copy; `checkpoint` no longer repeats the signing
