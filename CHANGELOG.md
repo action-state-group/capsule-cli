@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #75, #76)
+
+- **Changed:** the pages capsulectl writes take capsule-viewer at
+  `4e4d553`. The check section's "Records in this bundle" lists every
+  record once, each with its own `#record-<capsule id>` address, kind,
+  times, seal status and disclosed content (capsule-viewer#76). A report's
+  conversation opens in place inside its card; on a static page the card
+  links to the record instead. The mock-judge line is a mark under the
+  report title, the provenance line opens the first section card, and
+  every panel starts at one inset (capsule-viewer#75). The verification
+  page lists `contract-report/v1` as interpreted when the contract-report
+  module drew the page (capsule-viewer#73).
+- **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
+  from capsule-viewer `4e4d553` and agent-action-capsule `1d655a1`
+  (`ts/v0.6.1`). `go.mod`'s `capsule-viewer/go` moves to the same viewer
+  commit; `agent-action-capsule/go` stays at v0.12.0. The presentation
+  goldens' pages and snapshots, and the presentation pass's build
+  snapshots, are re-emitted from their unchanged bundles.
+
 ### Report pages take capsule-viewer's contract-report module (capsule-viewer#58, #66, #70)
 
 - **Changed:** the pages capsulectl writes take capsule-viewer at
