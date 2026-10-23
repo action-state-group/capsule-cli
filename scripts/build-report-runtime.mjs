@@ -50,7 +50,7 @@ const common = { absWorkingDir: work, preserveSymlinks: true, bundle: true };
 // came from, through the define capsule-viewer's own ts/scripts/build-iife.mjs
 // sets (capsule-cli#363). It is the checkout's HEAD: the commit
 // evidenceGraphIIFESource pins, so the bytes stay reproducible.
-const cvCommit = execFileSync("git", ["-C", resolve(cvArg), "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const cvCommit = execFileSync("git", ["-C", join(work, "capsule-viewer"), "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 if (!/^[0-9a-f]{40}$/.test(cvCommit)) throw new Error(`capsule-viewer checkout HEAD is not a commit: ${cvCommit}`);
 const { build } = createRequire(join(cvTs, "package.json"))("esbuild");
 
