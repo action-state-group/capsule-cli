@@ -2776,15 +2776,16 @@ func (d dealDisclosure) validate() error {
 
 // pickupAreaRefused is why a pickup_area value is refused: it holds more
 // than a public area may (pickupAreaAllowed).
-const pickupAreaRefused = "a pickup_area is a neighborhood, city, region or 5-digit ZIP: letters, spaces and , . - ' ( ) /, " +
-	"each word in one script, with a number only as a 5-digit ZIP at the end or before a comma, an ordinal (5th), " +
-	"or right after district, ward, zone, exit, route or highway, or right before block(s), mile(s), min(s) or km. " +
+const pickupAreaRefused = "a pickup_area is a neighborhood, city, region or 5-digit ZIP: letters, spaces and , . - ' \u2019 ( ) /, " +
+	"each word in one script, with a number only as a 5-digit ZIP at the end, or as a number of up to 3 digits: " +
+	"an ordinal (5th), right after district, ward, zone, exit, route or highway and ending its part (before a comma or at the end), " +
+	"or right before block(s), mile(s), min(s) or km. " +
 	"This value holds more, such as a house number, a unit or other characters: " +
 	"give an exact spot as pickup_location, which waits for an accepted offer"
 
 // pickupAreaPunctuation is the punctuation a pickup_area may hold besides
 // spaces (pickupAreaAllowed).
-const pickupAreaPunctuation = ",.-'()/"
+const pickupAreaPunctuation = ",.-'\u2019()/"
 
 // pickupAreaLabels are the words a number may follow ("District 9", "Exit
 // 12"), and pickupAreaDistances the words it may come before ("2 blocks",
@@ -2814,13 +2815,15 @@ var (
 //     (pickupAreaJoinerScripts);
 //   - words whose letters are each in one script (TR39's mixed-script
 //     check), so a Cyrillic S in "St" is refused;
-//   - numbers only as five decimal digits ending their part of the value
-//     (before a comma or at the end, a closing parenthesis or period
-//     allowed: "Austin, TX 78701"), an ordinal ("5th", "21st"), or right
-//     after a pickupAreaLabels word or right before a pickupAreaDistances
-//     word. A ZIP+4 narrows to a building and is refused, and so is a
-//     postal code of another country; two numbers joined by a hyphen are
-//     refused whatever surrounds them. A word in another script that draws
+//   - numbers only as five decimal digits at the end of the value (a
+//     closing parenthesis or period may follow: "Austin, TX 78701"), or as
+//     a number of up to 3 digits: an ordinal ("5th", "112th"), right after
+//     a pickupAreaLabels word and ending its part (before a comma or at
+//     the end: "Exit 12, Commerce Dr"), or right before a
+//     pickupAreaDistances word ("2 blocks"). A ZIP+4 narrows to a building
+//     and is refused, and so is a postal code of another country; two
+//     numbers joined by a hyphen are refused whatever surrounds them
+//     (rulings 65806c1a and 4991f25b). A word in another script that draws
 //     as digits (its TR39 skeleton is digits, l and o: "ЗЗ") counts as a
 //     number, and is never a ZIP.
 func pickupAreaAllowed(v string) bool {
@@ -2860,12 +2863,12 @@ func pickupAreaAllowed(v string) bool {
 			return false
 		}
 		switch {
-		case w.number && k > 0 && slices.Contains(pickupAreaLabels, words[k-1].text) &&
-			pickupAreaSpaces(runes[words[k-1].end:w.start]):
-		case w.number && k+1 < len(words) && slices.Contains(pickupAreaDistances, words[k+1].text) &&
+		case w.number && w.digits <= 3 && k > 0 && slices.Contains(pickupAreaLabels, words[k-1].text) &&
+			pickupAreaSpaces(runes[words[k-1].end:w.start]) && pickupAreaEnds(runes, w.end, true):
+		case w.number && w.digits <= 3 && k+1 < len(words) && slices.Contains(pickupAreaDistances, words[k+1].text) &&
 			pickupAreaSpaces(runes[w.end:words[k+1].start]):
-		case pickupAreaOrdinal(w.text):
-		case w.number && w.letters == 0 && len(w.text) == 5 && pickupAreaEndsPart(runes, w.end):
+		case pickupAreaOrdinal(w.text) && w.digits <= 3:
+		case w.number && w.letters == 0 && w.digits == 5 && pickupAreaEnds(runes, w.end, false):
 		default:
 			return false
 		}
@@ -2932,12 +2935,12 @@ func pickupAreaSpaces(rs []rune) bool {
 	return !slices.ContainsFunc(rs, func(r rune) bool { return !unicode.Is(unicode.Zs, r) })
 }
 
-// pickupAreaEndsPart is whether only spaces, a closing parenthesis or a
-// period, then a comma or the end, follow runes[end:].
-func pickupAreaEndsPart(runes []rune, end int) bool {
+// pickupAreaEnds is whether only spaces, a closing parenthesis or a period,
+// then the end (or a comma, when atComma), follow runes[end:].
+func pickupAreaEnds(runes []rune, end int, atComma bool) bool {
 	for _, r := range runes[end:] {
 		switch {
-		case r == ',':
+		case r == ',' && atComma:
 			return true
 		case !unicode.Is(unicode.Zs, r) && r != ')' && r != '.':
 			return false
@@ -2951,6 +2954,7 @@ type pickupAreaToken struct {
 	text     string // its letters and digits, lower case, compatibility forms and digits as ASCII
 	number   bool   // digits only, or letters that draw as digits
 	hasDigit bool
+	digits   int // a number's digits (or letters drawn as digits)
 	letters  int
 	start    int // its first rune in the value
 	end      int // the rune after it
@@ -3025,6 +3029,13 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 		w.number = w.hasDigit
 	case nonASCII && digitLike && (strings.ContainsAny(skel.String(), "0123456789") || letters > 1):
 		w.number, w.hasDigit = true, true
+	}
+	// Its digits: the decimal digits, and when it is letters drawn as digits,
+	// those letters too ("112th" has 3, "ЗЗ1" has 3).
+	for _, r := range rs {
+		if unicode.Is(unicode.Nd, r) || w.number && unicode.IsLetter(r) {
+			w.digits++
+		}
 	}
 	return w, true
 }

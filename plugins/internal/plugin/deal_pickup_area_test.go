@@ -55,6 +55,11 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"\u13ce12, Main St", "\u0417\u0417\u0417\u0417\u0417", "&#1600; Pennsylvania Ave", "&#4512; Duval St", "Hyde&nbsp;Park",
 		"%41ustin", "12st Oak", "Oak 12St", "3nd Ave", "11st Ave", "12-14 Oak",
 		"1st-2nd Ave", "Zone 78701--1234 km", "Zone 78701 -- 1234 km", "Zone 78701-/1234 km", "Zone 78701-(1234 km)",
+		// Rulings 4991f25b: a number of up to 3 digits in a context; a label
+		// number ends its part; a ZIP only in the last part.
+		"Ward 1600 Pennsylvania Ave", "Ward 123 Main St", "Exit 12 Commerce Dr", "Route 66 corridor", "Highway 1010",
+		"1600 km Pennsylvania Ave", "1600th Pennsylvania Ave", "Zone 78701 1234 km", "12345, Oak St",
+		"78701, Austin", "Hauptstra\u00dfe 12345, Berlin",
 		// A label or distance word goes with its number only right beside it.
 		"Zone, 12 Oak St", "Exit (12) Oak St", "12, km from Oak St",
 	} {
@@ -69,10 +74,10 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"Hyde Park", "Downtown Austin", "Capitol Hill, Seattle", "Bay Area", "St. Louis, MO 63101",
 		"St. Louis, Ward 3", "Oak Lane neighborhood", "Park Place area", "Main St corridor", "near 5th Ave",
 		"Midway, Utah 84049", "District 9", "Union Square", "Community Unit area", "Ward 3, near Main St",
-		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr", "Zone 2, Park Place",
-		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66 corridor",
-		"Highway 101 area", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
-		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12 area", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
+		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Zone 2, Park Place",
+		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66, Barstow",
+		"Highway 101", "Exit 421", "123rd St area", "St. John\u2019s", "St. John's", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
+		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12, north side", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
 		// Letters of any one script, written any way that is still letters.
 		"Z\u00fcrich Kreis", "Cafe\u0301 district", "Hawai\u02bbi Kai", "K\u00f6ln-Ehrenfeld",
 		"\uff28\uff59\uff44\uff45 \uff30\uff41\uff52\uff4b", "\uff17\uff18\uff17\uff10\uff11",
