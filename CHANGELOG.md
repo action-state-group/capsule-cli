@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc22
+
 ### Report pages: one record view, conversations in place, the layout pass (capsule-viewer#73, #74, #75, #76)
 
 - **Changed:** the pages capsulectl writes take capsule-viewer at
@@ -92,6 +94,12 @@
   markup no longer hide a street address. Values that passed before and
   are now refused include `78701-1234`, `Pier 39`, `Exit 12 Commerce Dr`
   (it needs a comma) and `<b>Hyde Park</b>`.
+
+### Docs
+
+- A design note says how the book and deal plugins leave this repository
+  (`docs/design/326-plugins-leave-the-core.md`, capsule-cli#326). No
+  behavior change.
 
 ## v0.1.0-rc21
 
