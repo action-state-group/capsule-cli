@@ -2779,7 +2779,7 @@ func (d dealDisclosure) validate() error {
 const pickupAreaRefused = "a pickup_area is a neighborhood, city, region or 5-digit ZIP: letters, spaces and , . - ' \u2019 ( ) /, " +
 	"each word in one script, with a number only as a 5-digit ZIP at the end, or as a number of up to 3 digits: " +
 	"an ordinal (5th), right after district, ward, zone, exit, route or highway and ending its part (before a comma or at the end), " +
-	"or right before block(s), mile(s), min(s) or km. " +
+	"or right before block(s), mile(s), min(s) or km; two numbers joined by a hyphen are refused. " +
 	"This value holds more, such as a house number, a unit or other characters: " +
 	"give an exact spot as pickup_location, which waits for an accepted offer"
 
@@ -2806,15 +2806,17 @@ var (
 // decoded. It may hold only:
 //
 //   - letters (with the marks written on them), decimal digits of any
-//     script, spaces (\p{Zs}) and pickupAreaPunctuation; any other
+//     script, spaces (\p{Zs}, but not the Ogham space mark, which draws as
+//     a dash) and pickupAreaPunctuation; any other
 //     character (markup, #, |, &, a symbol, a control such as a tab or a
 //     line break, a format or private-use character, a filler that draws
 //     nothing, an invisible mark such as a variation selector) is refused,
 //     not read past. The one exception is a zero-width joiner or non-joiner
 //     inside a word wholly in a script written with them
 //     (pickupAreaJoinerScripts);
-//   - words whose letters are each in one script (TR39's mixed-script
-//     check), so a Cyrillic S in "St" is refused;
+//   - words whose letters, digits and marks are each in one script (TR39's
+//     mixed-script check), so a Cyrillic S in "St", "Ward ١2३" and "Oakー"
+//     are refused;
 //   - numbers only as five decimal digits at the end of the value (a
 //     closing parenthesis or period may follow: "Austin, TX 78701"), or as
 //     a number of up to 3 digits: an ordinal ("5th", "112th"), right after
@@ -2913,11 +2915,13 @@ func pickupAreaWordRune(runes []rune, j int) bool {
 	case unicode.IsLetter(r) && !ignorable(r), unicode.Is(unicode.Nd, r):
 		return true
 	case unicode.Is(unicode.M, r) && !ignorable(r) && !unicode.Is(unicode.Variation_Selector, r):
-		return j > 0 && (unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
+		// On a letter, another mark, or a joiner (Bengali ya-phala: র, ZWJ, ্).
+		return j > 0 && (unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]) ||
+			(runes[j-1] == 0x200C || runes[j-1] == 0x200D) && pickupAreaWordRune(runes, j-1))
 	case r == 0x200C || r == 0x200D:
-		// After a letter or a mark (a virama), before a letter; its word's
+		// Between letters or marks (a virama on either side); its word's
 		// script must be one written with joiners (pickupAreaWord).
-		return j > 0 && j+1 < len(runes) && unicode.IsLetter(runes[j+1]) &&
+		return j > 0 && j+1 < len(runes) && (unicode.IsLetter(runes[j+1]) || unicode.Is(unicode.M, runes[j+1])) &&
 			(unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
 	}
 	return false
@@ -2926,13 +2930,19 @@ func pickupAreaWordRune(runes []rune, j int) bool {
 // pickupAreaBetweenWords is whether r may end a word: a space or one of
 // pickupAreaPunctuation.
 func pickupAreaBetweenWords(r rune) bool {
-	return unicode.Is(unicode.Zs, r) || strings.ContainsRune(pickupAreaPunctuation, r)
+	return pickupAreaSpace(r) || strings.ContainsRune(pickupAreaPunctuation, r)
+}
+
+// pickupAreaSpace is a space (\p{Zs}) other than the Ogham space mark,
+// which draws as a dash.
+func pickupAreaSpace(r rune) bool {
+	return unicode.Is(unicode.Zs, r) && r != 0x1680
 }
 
 // pickupAreaSpaces is whether rs is only spaces: a label or distance word
 // goes with its number only right beside it ("Zone, 12 Oak St" is refused).
 func pickupAreaSpaces(rs []rune) bool {
-	return !slices.ContainsFunc(rs, func(r rune) bool { return !unicode.Is(unicode.Zs, r) })
+	return !slices.ContainsFunc(rs, func(r rune) bool { return !pickupAreaSpace(r) })
 }
 
 // pickupAreaEnds is whether only spaces, a closing parenthesis or a period,
@@ -2942,7 +2952,7 @@ func pickupAreaEnds(runes []rune, end int, atComma bool) bool {
 		switch {
 		case r == ',' && atComma:
 			return true
-		case !unicode.Is(unicode.Zs, r) && r != ')' && r != '.':
+		case !pickupAreaSpace(r) && r != ')' && r != '.':
 			return false
 		}
 	}
@@ -2973,6 +2983,12 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 	scripts := map[string]bool{}
 	letters, nonASCII, digitLike, joiner := 0, false, true, false
 	for _, r := range rs {
+		// Every letter, digit and mark counts toward the word's scripts,
+		// as in TR39; Common and Inherited ones go with any, except the
+		// kana marks, which are kana.
+		if sc := pickupAreaScript(r); sc != "Common" && sc != "Inherited" {
+			scripts[sc] = true
+		}
 		switch {
 		case r == 0x200C || r == 0x200D:
 			joiner = true
@@ -2982,16 +2998,12 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 			skel.WriteRune('0' + digitValue(r))
 		case unicode.IsLetter(r):
 			letters++
-			if sc := scriptOf(r); sc != "Common" && sc != "Inherited" {
-				scripts[sc] = true
-			}
-			if f := foldDecoded(string(r)); r > 0x7f && f != "" && isASCIIAlnum(f) {
+			f := foldDecoded(string(r))
+			if ascii := f != "" && isASCIIAlnum(f); r > 0x7f && ascii {
 				b.WriteString(strings.ToLower(f)) // fullwidth Ｅｘｉｔ is exit
 			} else {
 				b.WriteRune(unicode.ToLower(r))
-			}
-			if f := foldDecoded(string(r)); r > 0x7f && !(f != "" && isASCIIAlnum(f)) {
-				nonASCII = true // not a compatibility or accented form of ASCII (Lô is Latin)
+				nonASCII = nonASCII || r > 0x7f // not a compatibility or accented form of ASCII (Lô is Latin)
 			}
 			sk := strings.ToLower(confusableSkeleton(r))
 			if r > 0x7f && pipeLike(r) {
@@ -3038,6 +3050,17 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 		}
 	}
 	return w, true
+}
+
+// pickupAreaScript is r's script for the mixed-script check: scriptOf, with
+// the kana marks that Unicode puts in Common (the prolonged sound mark ー,
+// the halfwidth sound marks) as Katakana, so "Oakー" mixes scripts.
+func pickupAreaScript(r rune) string {
+	switch r {
+	case 0x30FC, 0x30A0, 0xFF70, 0xFF9E, 0xFF9F, 0x309B, 0x309C:
+		return "Katakana"
+	}
+	return scriptOf(r)
 }
 
 // scriptOf is the name of r's Unicode script, "" when it has none.

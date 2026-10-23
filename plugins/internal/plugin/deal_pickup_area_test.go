@@ -59,7 +59,10 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		// number ends its part; a ZIP only in the last part.
 		"Ward 1600 Pennsylvania Ave", "Ward 123 Main St", "Exit 12 Commerce Dr", "Route 66 corridor", "Highway 1010",
 		"1600 km Pennsylvania Ave", "1600th Pennsylvania Ave", "Zone 78701 1234 km", "12345, Oak St",
-		"78701, Austin", "Hauptstra\u00dfe 12345, Berlin",
+		"78701, Austin", "Hauptstra\u00dfe 12345, Berlin", "Austin 7870", "Austin 787012",
+		// Review round 3: digits and marks count toward a word's script; the
+		// Ogham space mark draws as a dash.
+		"Ward \u06612\u0969", "\u0661\u0662th St area", "Oak\u30fc", "Oak\u0483", "12th\u168014th", "\u6c5f\u30ca\ud55c area",
 		// A label or distance word goes with its number only right beside it.
 		"Zone, 12 Oak St", "Exit (12) Oak St", "12, km from Oak St",
 	} {
@@ -76,7 +79,7 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"Midway, Utah 84049", "District 9", "Union Square", "Community Unit area", "Ward 3, near Main St",
 		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Zone 2, Park Place",
 		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66, Barstow",
-		"Highway 101", "Exit 421", "123rd St area", "St. John\u2019s", "St. John's", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
+		"Highway 101", "999 km from Austin", "\u09b0\u200d\u09cd\u09af area", "Ward \u0661\u0662", "Exit 421", "123rd St area", "St. John\u2019s", "St. John's", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
 		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12, north side", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
 		// Letters of any one script, written any way that is still letters.
 		"Z\u00fcrich Kreis", "Cafe\u0301 district", "Hawai\u02bbi Kai", "K\u00f6ln-Ehrenfeld",
