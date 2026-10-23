@@ -1,6 +1,6 @@
 # Design note: the book and deal plugins leave the neutral repository
 
-capsule-cli#326. Status: draft for review, round 4. Checked against `main` at
+capsule-cli#326. Status: converged (round 4). Checked against `main` at
 `df68c51` (after v0.1.0-rc21), evidencebook `main` (`v0.7.0`), actionstate-site
 `main` (`install/` and `scripts/install-*`) and actionstate-muse `main`.
 
@@ -241,7 +241,7 @@ exists, the spec is the source of `x-deal/v0`, and
 | `deal.go`, `deal_ids.go`, `deal_share.go`, `deal_sale.go`, `deal_rules.go`, `deal_errors.go`, `deal_cadence.go` | reachable from the core's own commands (`deadcode`): verify, bundle, the cadence, `canary`, and the error classes `SafeError` maps for every binary |
 | `materiality.go`, `assets/materiality/neutral.json` | the core evaluates a predicate a profile or pack supplies; it holds no deal policy |
 | `rules_checker*.go` | the pinned external-check seam the core runs |
-| `capsulectl.deal-view/v0` (`assets/deal-view.{js,css,manifest.json}`) | the core's own page module for a deal bundle (#325). It requires `x-deal-v0` and carries product wording, so it is not basic rendering under J.8, which keeps company modules out of capsule-viewer. It leaves the core before donation (#428). Where it goes, the deal plugin as a plugin presentation module or capsule-viewer once `x-deal/v0` is a neutral spec and the product wording is gone, is a boundary question under #428 |
+| `capsulectl.deal-view/v0` (`assets/deal-view.{js,css,manifest.json}`) | the core's own page module for a deal bundle (#325). It requires `x-deal-v0` and carries product wording, so it is not basic rendering under J.8, which keeps company modules out of capsule-viewer. SEAMS ruling 8 already places it: our pages and wording packs ship in our plugin, built on capsule-viewer's kit. So it moves to the deal plugin as that plugin's presentation module before donation (#428). capsule-viewer gains only generic kit pieces, and a neutral `x-deal/v0` renderer, once u451 lands, would be new work built from the kit, not a move of deal-view |
 | the deal entries of the built-in wording pack | see section 4.3 |
 | `pluginhost.go`: launcher names `book` and `deal`, the three deal hooks, the hand-over of book-profile verbs | the CLI-level contract `docs/PLUGINS.md` documents. It becomes generic before donation (#428) |
 | `canary`, the deal-plugin check in `doctor --install-check` | they run deal verbs or check the deal plugin through the command line (#428) |
@@ -351,13 +351,26 @@ The page needs a matching change, because `deal-view.js` (lines 436-445)
 compares every step's producer version with `page_version` as capsule-cli
 tags, and links capsule-cli's release notes:
 
-- the deal report's `page_built_by` and `page_version` (`deal_report.go:292`)
-  take the same stamp;
+- the deal report's page data gains a structured `page_producer` (name,
+  version, commit) next to `page_built_by` and `page_version`
+  (`deal_report.go:292`), so deal-view compares names without parsing a
+  display string;
 - deal-view compares versions only between producers with the same name,
   and treats a bare `capsulectl` stamp (records sealed before the move) as
   older than any `capsulectl-deal`;
 - the release-notes link comes from the page data the plugin writes (a new
   `release_notes` field), so the core asset names no company repository.
+  Without that field (pages from a plugin built inside capsule-cli),
+  deal-view keeps today's text and link.
+
+A shared copy accepts a producer only in a fixed shape
+(`shareableProducer`, `deal_share.go:918-931`): the name matches
+`^[a-z][a-z0-9-]{0,31}$`, the version
+`^v?\d{1,4}\.\d{1,4}\.\d{1,4}(-(rc|alpha|beta|dev)\d{0,3})?$`, and the
+commit `^([0-9a-f]{7,40}|unknown)$`. `capsulectl-deal` and the `v*` tags in
+section 5 fit, and plugin tags must stay inside that shape. Step 1's tests
+seal a `capsulectl-deal` stamp and check that it survives `deal report
+--share`.
 
 Step 1 makes this change, with tests. The stamp's new value is a one-way
 door (section 9).
@@ -548,7 +561,9 @@ which is RELEASING.md's release-triple rule.
      fallback, and a test that builds a plugin with the `replace` in place;
    - delete `scitt_receipt.go`;
    - add the module allowlist, and the path check in warn mode;
-   - commit the fixed-key fixtures, and rewrite the core halves of
+   - commit the fixed-key fixtures, whose `PROVENANCE.json` names the
+     capsule-cli commit that built them until the first deal release
+     restamps them; rewrite the core halves of
      `check-html-render.sh` and `check-portability.sh` onto them;
    - make the producer stamp and deal-view's comparison changes in section
      4.2.
@@ -564,7 +579,7 @@ which is RELEASING.md's release-triple rule.
    it without a Steven ruling, and it was created that day: public,
    Apache-2.0, squash and rebase merges only, and a "release tags" ruleset
    that blocks updating or deleting a tag. The release environments and
-   immutable releases come with its first pipeline PR.
+   immutable releases are applied before the import in step 5.
 5. **Freeze and import:** a capsule-cli CI check refuses any change under
    `plugins/` or `skills/deal/` from the cut commit on, so daily deal PRs
    can't create two sources of truth. `evidencebook-deal` and
