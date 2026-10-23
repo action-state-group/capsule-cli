@@ -51,7 +51,9 @@ func withheldBundleFixture(t *testing.T) (map[string]interface{}, Profile, ed255
 	require.NoError(t, err)
 	_, hasDisclosures := bundle["disclosures"]
 	require.False(t, hasDisclosures, "payloads=none must never carry a disclosures overlay")
-	assert.Equal(t, "none", bundle["completeness"].(map[string]interface{})["payloads_mode"])
+	// The draft's payloads_mode has no "none": a digests-only bundle is a
+	// selection that reveals nothing.
+	assert.Equal(t, "selected", bundle["completeness"].(map[string]interface{})["payloads_mode"])
 	return bundle, profile, key
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,4 +214,60 @@ func bundleRecord(t *testing.T, key ed25519.PrivateKey, chain *emit.Chain, refer
 	record, err := Seal(request, key)
 	require.NoError(t, err)
 	return record
+}
+
+// AssembleBundle's bundle is AAC's producer output for the same options:
+// capsulectl adds nothing after assembly.
+func TestAssembleBundleIsAACsProducerOutput(t *testing.T) {
+	profile, key := profileFixture(t)
+	store, log, root := checkpointedStore(t, key, profile.LogID)
+	public := key.Public().(ed25519.PublicKey)
+
+	got, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: root, ClosureDepth: 2, Payloads: "none", ProducerKey: public})
+	require.NoError(t, err)
+	depth := 2
+	want, err := aacbundle.BuildEvidenceBundle(t.Context(), aacbundle.ProofSourceFromCLL(log, bundleRecords{store}), aacbundle.BuildOptions{
+		Root: root, IntervalFrom: 1, ClosureDepth: &depth, PayloadsMode: "selected", SuppressedFields: []string{}, ProducerKey: public,
+		Verification: map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
+	})
+	require.NoError(t, err)
+	gotDigest, err := aacbundle.BundleDigest(got)
+	require.NoError(t, err)
+	wantDigest, err := aacbundle.BundleDigest(want)
+	require.NoError(t, err)
+	assert.Equal(t, wantDigest, gotDigest)
+
+	checkpoint := got["checkpoint"].(map[string]interface{})
+	assert.NotEmpty(t, checkpoint["cose"])
+	keys := make([]string, 0, len(checkpoint))
+	for key := range checkpoint {
+		keys = append(keys, key)
+	}
+	// The signed fields and the COSE statement once, as cose: no legacy
+	// statement copy, and not the signing body's kind and v.
+	assert.ElementsMatch(t, []string{"log_id", "mmr_size", "root", "prev_size", "prev_root", "key_id", "timestamp", "cose"}, keys)
+	assert.NotContains(t, got, "disclosures")
+}
+
+func TestAssembleBundleRefusals(t *testing.T) {
+	profile, key := profileFixture(t)
+	store, log, root := checkpointedStore(t, key, profile.LogID)
+
+	_, err := AssembleBundle(t.Context(), store, log, "another/log", BundleOptions{Root: root, ClosureDepth: 2})
+	assert.ErrorContains(t, err, "names log "+profile.LogID+", not another/log")
+
+	unchecked := memory.New()
+	t.Cleanup(func() { require.NoError(t, unchecked.Close()) })
+	value, err := hex.DecodeString(root)
+	require.NoError(t, err)
+	_, err = unchecked.Append(t.Context(), cll.AppendInput{Value: value, AppendedAt: time.Now().UTC()})
+	require.NoError(t, err)
+	_, err = AssembleBundle(t.Context(), store, unchecked, profile.LogID, BundleOptions{Root: root, ClosureDepth: 2})
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "the log has no checkpoint yet")
+
+	// A root that is not a record is the producer's refusal.
+	_, err = AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: strings.Repeat("a", 64), ClosureDepth: 2})
+	var refused *aacbundle.BuildError
+	assert.ErrorAs(t, err, &refused)
 }

@@ -437,3 +437,17 @@ func TestWitnessStandingFollowsTheProfilesWitness(t *testing.T) {
 	status, _ := bundleWitnesses(result)
 	assert.Equal(t, "pass", status, "the bundle's chain runs through the new witness's tick")
 }
+
+// A report bundle a released build wrote still reads as this deal's own
+// (#353). The deal plugin reads the checkpoint from cose, which every deal
+// bundle has carried since the first release; the rc16 bundle also has the
+// legacy statement copy, which new bundles drop.
+func TestARC16ReportBundleStillReads(t *testing.T) {
+	_, deals, _ := rc16Store(t)
+	path := filepath.Join("testdata", "deal", "rc16-store", "bundle-a.json")
+	cp := readBundleFile(t, path)["checkpoint"].(map[string]interface{})
+	require.Contains(t, cp, "cose")
+	require.Contains(t, cp, "statement")
+	out := dealRun(t, "report", "--deal", deals.Closed, "--from-bundle", path)
+	assert.NotEmpty(t, out["assurance"])
+}

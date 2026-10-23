@@ -254,11 +254,10 @@ func (s *dealSession) resultsBundle(ctx context.Context, dealID, root string, wi
 		return nil, nil, err
 	}
 	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
+	statement, err := base64.RawURLEncoding.DecodeString(fmt.Sprint(cp["cose"]))
 	if err != nil {
 		return nil, nil, err
 	}
-	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	cadence, err := s.logWitnessState(ctx, lp.LogID, statement)
 	if err != nil {
 		return nil, nil, err

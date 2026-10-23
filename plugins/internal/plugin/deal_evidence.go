@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1162,12 +1161,6 @@ func (s *dealSession) sealComposition(ctx context.Context, dealID, digest string
 	b, err := cli.AssembleBundle(ctx, t.Artifacts, t.Log, lp.LogID, cli.BundleOptions{Root: pub.CapsuleID, Payloads: "selected", WithDisclosure: true})
 	if err != nil {
 		return nil, err
-	}
-	cp, _ := b["checkpoint"].(map[string]interface{})
-	if statement, ok := cp["statement"].(string); ok {
-		if decoded, err := base64.StdEncoding.DecodeString(statement); err == nil {
-			cp["cose"] = base64.RawURLEncoding.EncodeToString(decoded)
-		}
 	}
 	return b, nil
 }

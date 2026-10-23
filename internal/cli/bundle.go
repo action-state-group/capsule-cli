@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,7 +20,6 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
-	"github.com/action-state-group/checkpointed-local-log/go/mmr"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +41,7 @@ type BundleOptions struct {
 	Withhold       map[string]bool
 	WithDisclosure bool
 	// ProducerKey, when set, is declared in the bundle's producer-key/v1
-	// extension (see producerKeyExtension). Nil emits no extension.
+	// extension (ProducerKeyExtensionKind). Nil emits no extension.
 	ProducerKey ed25519.PublicKey
 }
 
@@ -59,15 +57,6 @@ type BundleOptions struct {
 // independent, never more: a viewer treats the declared key as the
 // producer's own.
 const ProducerKeyExtensionKind = "producer-key/v1"
-
-// producerKeyExtension returns the extensions member declaring key as the
-// producer's: {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}.
-func ProducerKeyExtension(key ed25519.PublicKey) (map[string]interface{}, error) {
-	if len(key) != ed25519.PublicKeySize {
-		return nil, InputError("producer key must be a 32-byte Ed25519 public key")
-	}
-	return map[string]interface{}{ProducerKeyExtensionKind: map[string]interface{}{"public_key": hex.EncodeToString(key)}}, nil
-}
 
 // declaredProducerKey reads a bundle's producer-key/v1 public_key, accepting
 // only the form the AAC viewer accepts (64 lowercase hex). Anything else is
@@ -117,10 +106,13 @@ func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, er
 
 func Integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", value)) }
 
-// AssembleBundle builds a self-verifying v2 Evidence Bundle. The proof range
-// deliberately spans the checkpointed log: the authoritative verifier requires
-// a membership entry for every sequence in a claimed interval, not merely the
-// graph-closure records.
+// AssembleBundle builds a self-verifying v2 Evidence Bundle with AAC's
+// producer (bundle.BuildEvidenceBundle) over the log and the artifact store.
+// The proof range deliberately spans the checkpointed log: the authoritative
+// verifier requires a membership entry for every sequence in a claimed
+// interval, not merely the graph-closure records. What stays here is the CLI's
+// policy: which originals are disclosed, which records are withheld, and the
+// payloads mode the command claims.
 func AssembleBundle(ctx context.Context, artifacts BundleArtifacts, log cll.Backend, logID string, options BundleOptions) (map[string]interface{}, error) {
 	if len(options.Root) != 64 {
 		return nil, InputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
@@ -138,208 +130,185 @@ func AssembleBundle(ctx context.Context, artifacts BundleArtifacts, log cll.Back
 	}
 	// "none" is a digests-only bundle (no disclosures overlay at all), the
 	// withheld form a countersign request submits; it is not a disclosure mode.
+	// The draft's payloads_mode has no "none": such a bundle states selected.
 	if options.Payloads == "none" && options.WithDisclosure {
 		return nil, InputError("--payloads none cannot be combined with disclosure")
 	}
 	if options.Payloads == "all" && len(options.Withhold) != 0 {
 		return nil, InputError("--payloads all discloses every record, so it cannot withhold any: a shared copy uses --payloads selected")
 	}
-
-	root, err := GetCapsule(ctx, artifacts, options.Root)
-	if err != nil {
-		return nil, err
-	}
-	closure, missing, err := citationClosure(ctx, artifacts, root, options.ClosureDepth)
-	if err != nil {
-		return nil, err
-	}
-	state, err := log.LoadCLL(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if state.Checkpoint == nil {
-		return nil, InputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
-	}
-	checkpointSize := state.Checkpoint.Size
-	checkpointSeq := state.Checkpoint.IndexedSeq
-	if checkpointSeq == 0 {
-		return nil, InputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
-	}
-	// The emitted range must end at the checkpoint tip (leaf_count(size) ==
-	// checkpointSeq); the verifier enforces this, so refuse to emit a cert that
-	// would fail rather than produce one that only some verifiers accept.
-	if leaves, ok := mmr.LeafCount(checkpointSize); !ok || leaves != checkpointSeq {
-		return nil, InputError("covering checkpoint is not tip-aligned (leaf_count(size) != indexed seq)")
-	}
-	entries, err := allEntries(ctx, log, checkpointSeq)
-	if err != nil {
-		return nil, err
-	}
-	if uint64(len(entries)) != checkpointSeq {
-		return nil, errors.New("log scan does not cover the checkpointed size")
-	}
-	for index, entry := range entries {
-		if entry.Seq != uint64(index+1) || len(entry.Value) != cll.EntryBytes {
-			return nil, errors.New("log scan is not a dense Capsule-ID interval")
-		}
-	}
-	tree, err := mmr.New(state.Nodes)
-	if err != nil {
-		return nil, err
-	}
-	rangeRoot := mmr.RootFromPeaks(state.Checkpoint.Peaks)
-
-	recordsByID := closure
-	sequenceByID := make(map[string]uint64, len(entries))
-	for _, entry := range entries {
-		id := hex.EncodeToString(entry.Value)
-		sequenceByID[id] = entry.Seq
-		record, found := recordsByID[id]
-		if !found {
-			record, err = GetCapsule(ctx, artifacts, id)
-			if errors.Is(err, artifact.ErrNotFound) {
-				// A checkpointed entry the store does not hold: before
-				// disclosures were sealed as capsules, disclose appended a
-				// disclosure record's bare digest, kept nowhere else; or a record
-				// was lost. The two cannot be told apart here, and either way no
-				// bundle can supply it, since the verifier requires every entry.
-				return nil, InputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", entry.Seq))
-			}
-			if err != nil {
-				return nil, fmt.Errorf("checkpointed record %s is unavailable: %w", id, err)
-			}
-			recordsByID[id] = record
-		}
-	}
-	for id := range closure {
-		if _, found := sequenceByID[id]; !found {
-			return nil, fmt.Errorf("cited record %s is not in the checkpointed log", id)
-		}
+	if options.ProducerKey != nil && len(options.ProducerKey) != ed25519.PublicKeySize {
+		return nil, InputError("producer key must be a 32-byte Ed25519 public key")
 	}
 
-	ids := make([]string, 0, len(recordsByID))
-	for id := range recordsByID {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool { return sequenceByID[ids[i]] < sequenceByID[ids[j]] })
-	records := make([]interface{}, 0, len(ids))
-	memberships := make(map[string]interface{}, len(ids))
-	for _, id := range ids {
-		seq := sequenceByID[id]
-		proof, proofErr := tree.InclusionProof(seq-1, checkpointSize)
-		if proofErr != nil {
-			return nil, proofErr
-		}
-		records = append(records, recordsByID[id])
-		memberships[id] = map[string]interface{}{
-			"log_coordinates": map[string]interface{}{"log_id": logID, "seq": Integer(seq), "leaf_index": Integer(seq - 1)},
-			"inclusion_proof": ProofJSON(proof),
-		}
-	}
-	// CLL #13 range proof over the whole checkpointed interval [1, checkpointSeq]
-	// plus the ordered body digests of every leaf in it, so a verifier binds each
-	// record, not just the two endpoints.
-	rangeP, err := tree.RangeProof(0, checkpointSeq-1, checkpointSize)
+	source := &bundleSource{ProofSource: aacbundle.ProofSourceFromCLL(log, bundleRecords{artifacts})}
+	leaves, err := source.Leaves(ctx)
 	if err != nil {
 		return nil, err
 	}
-	bodyDigests := make([]interface{}, len(entries))
-	for i, entry := range entries {
-		bodyDigests[i] = hex.EncodeToString(entry.Value)
+	payloads := options.Payloads
+	if payloads == "none" {
+		payloads = "selected"
 	}
-	witnessJSON := make([]interface{}, len(rangeP.Witness))
-	for i, w := range rangeP.Witness {
-		witnessJSON[i] = hex.EncodeToString(w)
-	}
-	// A disclosure capsule's input says what was disclosed to someone. A
-	// later bundle proves its place in the log but withholds its input, so a
-	// copy made for one party never shows what was disclosed to another; the
-	// bundle then states payloads selected, which is what it is.
-	payloads, withhold := options.Payloads, options.Withhold
+	var overlay map[string]map[string]interface{}
 	if options.WithDisclosure {
-		for id, record := range recordsByID {
-			if record["action_id"] != disclosureActionID || record["action_type"] != "fyi" {
-				continue
-			}
-			if len(withhold) == len(options.Withhold) {
-				withhold = make(map[string]bool, len(options.Withhold)+1)
-				for k, v := range options.Withhold {
-					withhold[k] = v
-				}
-			}
-			withhold[id] = true
-		}
-		if payloads == "all" && len(withhold) != len(options.Withhold) {
-			payloads = "selected"
-		}
-	}
-	missingIDs := make([]interface{}, len(missing))
-	for i := range missing {
-		missingIDs[i] = missing[i]
-	}
-	mode := "complete"
-	if len(missing) != 0 {
-		mode = "declared_incomplete"
-	}
-	checkpointObject, err := bundleCheckpoint(state.Checkpoint.Bytes, rangeRoot, checkpointSize)
-	if err != nil {
-		return nil, err
-	}
-	bundle := map[string]interface{}{
-		"bundle_version": "2",
-		"bundle_kind":    "evidence-bundle/v2",
-		"root":           options.Root,
-		"records":        records,
-		"completeness": map[string]interface{}{
-			"closure_depth": Integer(uint64(options.ClosureDepth)), "records_mode": mode,
-			"payloads_mode": payloads, "suppressed_fields": suppressed(options.Suppress), "missing": missingIDs,
-		},
-		"completeness_certificate": map[string]interface{}{
-			"log_id": logID, "range_root": hex.EncodeToString(rangeRoot), "first_seq": Integer(1), "last_seq": Integer(checkpointSeq),
-			"body_digests": bodyDigests,
-			"range_proof":  map[string]interface{}{"from_seq": Integer(1), "to_seq": Integer(checkpointSeq), "size": Integer(checkpointSize), "from_index": Integer(0), "to_index": Integer(checkpointSeq - 1), "witness": witnessJSON},
-			"memberships":  memberships,
-		},
-		"checkpoint":   checkpointObject,
-		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
-	}
-	if options.WithDisclosure {
-		overlay, disclosureErr := DisclosureOverlay(ctx, artifacts, ids, options.Suppress, withhold)
-		if disclosureErr != nil {
-			return nil, disclosureErr
-		}
-		// payloads=all is a claim to disclose EVERY committed eligible member that
-		// is not suppressed. If any such member's original is not retained it would
-		// verify as WITHHELD, making "all" a false claim -- refuse rather than emit it.
-		if payloads == "all" {
-			for _, id := range ids {
-				members, _ := overlay[id].(map[string]interface{})
-				for _, member := range committedEligibleMembers(recordsByID[id]) {
-					if options.Suppress[member] {
-						continue
-					}
-					// Test presence, not nil value: a retained original that is JSON
-					// null is present (DE-3 validates the value), so `== nil` would
-					// wrongly reject it as not retained.
-					if _, ok := members[member]; members == nil || !ok {
-						return nil, InputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
-					}
-				}
-			}
-		}
-		bundle["disclosures"] = overlay
-	}
-	if options.ProducerKey != nil {
-		extensions, err := ProducerKeyExtension(options.ProducerKey)
-		if err != nil {
+		if payloads, overlay, err = disclosures(ctx, artifacts, leaves, payloads, options); err != nil {
 			return nil, err
 		}
-		bundle["extensions"] = extensions
+	}
+	suppressed := make([]string, 0, len(options.Suppress))
+	for member := range options.Suppress {
+		suppressed = append(suppressed, member)
+	}
+	sort.Strings(suppressed)
+	depth := options.ClosureDepth
+	bundle, err := aacbundle.BuildEvidenceBundle(ctx, source, aacbundle.BuildOptions{
+		Root: options.Root, IntervalFrom: 1, ClosureDepth: &depth,
+		Disclosures: overlay, SuppressedFields: suppressed, PayloadsMode: payloads,
+		ProducerKey:  options.ProducerKey,
+		Verification: map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if certificate, _ := bundle["completeness_certificate"].(map[string]interface{}); certificate["log_id"] != logID {
+		return nil, fmt.Errorf("the log's checkpoint names log %v, not %s", certificate["log_id"], logID)
 	}
 	if err := VerifyProducedBundle(bundle, options.WithDisclosure); err != nil {
 		return nil, err
 	}
 	return bundle, nil
+}
+
+// disclosures is the overlay a disclosing bundle carries, read from the
+// artifact store for every record on the log (the bundle carries them all),
+// and the payloads mode it can honestly claim.
+func disclosures(ctx context.Context, artifacts BundleArtifacts, leaves [][]byte, payloads string, options BundleOptions) (string, map[string]map[string]interface{}, error) {
+	ids := make([]string, len(leaves))
+	records := make(map[string]map[string]interface{}, len(leaves))
+	for i, leaf := range leaves {
+		ids[i] = hex.EncodeToString(leaf)
+		record, err := GetCapsule(ctx, artifacts, ids[i])
+		if errors.Is(err, artifact.ErrNotFound) {
+			return "", nil, unheldEntry(uint64(i + 1))
+		}
+		if err != nil {
+			return "", nil, fmt.Errorf("checkpointed record %s is unavailable: %w", ids[i], err)
+		}
+		records[ids[i]] = record
+	}
+	// A disclosure capsule's input says what was disclosed to someone. A
+	// later bundle proves its place in the log but withholds its input, so a
+	// copy made for one party never shows what was disclosed to another; the
+	// bundle then states payloads selected, which is what it is.
+	withhold := make(map[string]bool, len(options.Withhold))
+	for id, v := range options.Withhold {
+		withhold[id] = v
+	}
+	for id, record := range records {
+		if record["action_id"] == disclosureActionID && record["action_type"] == "fyi" {
+			withhold[id] = true
+			if payloads == "all" {
+				payloads = "selected"
+			}
+		}
+	}
+	overlay, err := DisclosureOverlay(ctx, artifacts, ids, options.Suppress, withhold)
+	if err != nil {
+		return "", nil, err
+	}
+	// payloads=all is a claim to disclose EVERY committed eligible member that
+	// is not suppressed. If any such member's original is not retained it would
+	// verify as WITHHELD, making "all" a false claim -- refuse rather than emit it.
+	if payloads == "all" {
+		for _, id := range ids {
+			members, _ := overlay[id].(map[string]interface{})
+			for _, member := range committedEligibleMembers(records[id]) {
+				if options.Suppress[member] {
+					continue
+				}
+				// Test presence, not nil value: a retained original that is JSON
+				// null is present (DE-3 validates the value), so `== nil` would
+				// wrongly reject it as not retained.
+				if _, ok := members[member]; members == nil || !ok {
+					return "", nil, InputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
+				}
+			}
+		}
+	}
+	byID := make(map[string]map[string]interface{}, len(overlay))
+	for id, members := range overlay {
+		byID[id], _ = members.(map[string]interface{})
+	}
+	return payloads, byID, nil
+}
+
+// unheldEntry is the refusal for a checkpointed entry the store does not
+// hold: before disclosures were sealed as capsules, disclose appended a
+// disclosure record's bare digest, kept nowhere else; or a record was lost.
+// The two cannot be told apart, and either way no bundle can supply it, since
+// the verifier requires every entry.
+func unheldEntry(seq uint64) error {
+	return InputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", seq))
+}
+
+// bundleRecords is the artifact store as AAC's RecordSource.
+type bundleRecords struct{ artifacts BundleArtifacts }
+
+func (r bundleRecords) GetRecord(ctx context.Context, id string) ([]byte, []byte, error) {
+	record, err := r.artifacts.Get(ctx, id)
+	if errors.Is(err, artifact.ErrNotFound) {
+		return nil, nil, fmt.Errorf("%w: %s", aacbundle.ErrRecordNotFound, id)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return record.Capsule, record.ProducerEnvelope, nil
+}
+
+// bundleSource is AAC's CLL proof source with capsulectl's refusals, which
+// name the command that fixes them. It keeps the leaves it read, so the
+// producer and the disclosure overlay see the same scan.
+type bundleSource struct {
+	aacbundle.ProofSource
+	leaves [][]byte
+	seqOf  map[string]uint64
+}
+
+func (s *bundleSource) Leaves(ctx context.Context) ([][]byte, error) {
+	if s.seqOf != nil {
+		return s.leaves, nil
+	}
+	leaves, err := s.ProofSource.Leaves(ctx)
+	var refused *aacbundle.BuildError
+	if errors.As(err, &refused) {
+		// The CLL source's only refusal here is a log with no checkpoint.
+		return nil, InputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(leaves) == 0 {
+		return nil, InputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
+	}
+	s.leaves, s.seqOf = leaves, make(map[string]uint64, len(leaves))
+	for i, leaf := range leaves {
+		if id := hex.EncodeToString(leaf); s.seqOf[id] == 0 {
+			s.seqOf[id] = uint64(i + 1)
+		}
+	}
+	return leaves, nil
+}
+
+// Record refuses a checkpointed entry the store does not hold, which no
+// bundle over the whole log can carry. A citation outside the log stays
+// missing, as the producer states it.
+func (s *bundleSource) Record(ctx context.Context, id string) (aacbundle.StoredRecord, bool, error) {
+	record, found, err := s.ProofSource.Record(ctx, id)
+	if err == nil && !found && s.seqOf[id] != 0 {
+		return record, false, unheldEntry(s.seqOf[id])
+	}
+	return record, found, err
 }
 
 // committedEligibleMembers returns the disclosure-eligible members whose digest
@@ -384,138 +353,6 @@ func GetCapsule(ctx context.Context, artifacts BundleArtifacts, id string) (map[
 		capsule["key_id"] = hex.EncodeToString(signed.PublicKey)
 	}
 	return capsule, nil
-}
-
-// bundleCheckpoint is the bundle's checkpoint object: the signed checkpoint's
-// own fields (log_id, mmr_size, root, prev_size, prev_root, key_id,
-// timestamp, as the COSE statement signs them), plus the statement itself as
-// cose (the draft's portable authenticator, unpadded base64url) and as
-// statement (the same bytes, for readers of the earlier shape).
-func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[string]interface{}, error) {
-	object, err := SignedCheckpoint(statement)
-	if err != nil {
-		return nil, fmt.Errorf("parse checkpoint statement: %w", err)
-	}
-	if object["root"] != hex.EncodeToString(rangeRoot) || fmt.Sprint(object["mmr_size"]) != fmt.Sprint(checkpointSize) {
-		return nil, errors.New("checkpoint statement does not sign the bundle's range root and size")
-	}
-	object["cose"] = base64.RawURLEncoding.EncodeToString(statement)
-	object["statement"] = base64.StdEncoding.EncodeToString(statement)
-	return object, nil
-}
-
-func citationClosure(ctx context.Context, artifacts BundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {
-	rootID, _ := root["capsule_id"].(string)
-	records := map[string]map[string]interface{}{rootID: root}
-	missingSet := make(map[string]bool)
-	frontier := []map[string]interface{}{root}
-	for i := 0; i < depth; i++ {
-		var next []map[string]interface{}
-		for _, record := range frontier {
-			for _, id := range citations(record) {
-				if _, found := records[id]; found || missingSet[id] {
-					continue
-				}
-				cited, err := GetCapsule(ctx, artifacts, id)
-				if err != nil {
-					// Only a genuinely absent original is a declared-missing citation.
-					// A decode/identity/authorization/backend error is an execution
-					// failure and must not masquerade as an incomplete graph.
-					if errors.Is(err, artifact.ErrNotFound) {
-						missingSet[id] = true
-						continue
-					}
-					return nil, nil, fmt.Errorf("resolving cited record %s: %w", id, err)
-				}
-				records[id] = cited
-				next = append(next, cited)
-			}
-		}
-		frontier = next
-	}
-	missing := make([]string, 0, len(missingSet))
-	for id := range missingSet {
-		missing = append(missing, id)
-	}
-	sort.Strings(missing)
-	return records, missing, nil
-}
-
-func citations(record map[string]interface{}) []string {
-	var ids []string
-	if chain, ok := record["chain"].(map[string]interface{}); ok {
-		if id, ok := chain["parent_capsule_id"].(string); ok {
-			ids = append(ids, id)
-		}
-	}
-	if references, ok := record["references"].([]interface{}); ok {
-		for _, raw := range references {
-			if ref, ok := raw.(map[string]interface{}); ok && ref["type"] == "agent-action-capsule" && ref["digest_alg"] == "SHA-256" {
-				if id, ok := ref["digest"].(string); ok {
-					ids = append(ids, id)
-				}
-			}
-		}
-	}
-	return ids
-}
-
-func allEntries(ctx context.Context, log cll.EntrySource, size uint64) ([]cll.Entry, error) {
-	entries := make([]cll.Entry, 0, size)
-	for after := uint64(0); after < size; {
-		// Bound each page to the checkpointed range so a log that has grown past
-		// the checkpoint (newer, uncheckpointed entries) does not overshoot size
-		// and fail the dense-interval check.
-		limit := cll.MaxScanLimit
-		if remaining := int(size - after); remaining < limit {
-			limit = remaining
-		}
-		batch, err := log.ScanEntries(ctx, after, limit)
-		if err != nil {
-			return nil, err
-		}
-		if len(batch) == 0 {
-			break
-		}
-		if batch[len(batch)-1].Seq <= after {
-			return nil, errors.New("log scan did not advance")
-		}
-		before := after
-		for _, entry := range batch {
-			if entry.Seq > size {
-				break
-			}
-			entries = append(entries, entry)
-			after = entry.Seq
-		}
-		if after == before {
-			// The batch contained only entries beyond the checkpointed size (a
-			// backend that ignored the limit); advancing is impossible, so stop
-			// rather than spin.
-			return nil, errors.New("log scan returned only entries beyond the checkpointed size")
-		}
-	}
-	return entries, nil
-}
-
-func ProofJSON(proof mmr.InclusionProof) map[string]interface{} {
-	hashes := func(values [][]byte) []interface{} {
-		result := make([]interface{}, len(values))
-		for i := range values {
-			result[i] = hex.EncodeToString(values[i])
-		}
-		return result
-	}
-	return map[string]interface{}{"v": Integer(proof.V), "kind": proof.Kind, "size": Integer(proof.Size), "leaf_index": Integer(proof.LeafIndex), "witness": hashes(proof.Witness), "peaks_left": hashes(proof.PeaksLeft), "peaks_right": hashes(proof.PeaksRight)}
-}
-
-func suppressed(values map[string]bool) []interface{} {
-	result := make([]interface{}, 0, len(values))
-	for value := range values {
-		result = append(result, value)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].(string) < result[j].(string) })
-	return result
 }
 
 func DisclosureOverlay(ctx context.Context, artifacts BundleArtifacts, ids []string, suppress, withhold map[string]bool) (map[string]interface{}, error) {

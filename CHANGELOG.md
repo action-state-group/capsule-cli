@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Evidence Bundles come from AAC's producer (#353)
+
+- **Changed:** `bundle`, `disclose`, `permalink`, `countersign request`
+  and the deal commands build their Evidence Bundles with
+  agent-action-capsule's `BuildEvidenceBundle`, the producer AAC's
+  libraries share, instead of capsulectl's own assembler. Book profiles
+  are unchanged. A new bundle differs from an rc21 one in five ways:
+  `checkpoint` carries the signed checkpoint once, as `cose`, without the
+  older `statement` copy; `checkpoint` no longer repeats the signing
+  body's `kind` and `v`; a countersign request bundle states
+  `payloads_mode` `selected` (the draft's value) instead of `none`; a
+  bundle that reveals nothing has no `disclosures` member instead of an
+  empty one; and `completeness.missing` lists missing citations in the
+  order they are reached. Bundles made earlier still verify.
+
 ### A pickup_area holds only what a public area does (#399)
 
 - **Changed (breaking):** a `pickup_area` may hold only letters, spaces

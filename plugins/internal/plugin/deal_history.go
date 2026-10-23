@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -207,12 +206,6 @@ func (s *dealSession) historyBundle(ctx context.Context, audience, recipient str
 	if err != nil {
 		return nil, "", err
 	}
-	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
-	if err != nil {
-		return nil, "", err
-	}
-	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	return b, pub.CapsuleID, nil
 }
 
