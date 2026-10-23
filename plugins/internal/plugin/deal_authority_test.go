@@ -254,6 +254,87 @@ func TestApprovedAmountOnATypedDO(t *testing.T) {
 	assert.Equal(t, "the amount checked against what you had already asked for", basis)
 }
 
+// An answer with no words of the user's is not what they approved
+// (capsule-cli#421): the merchant's email is set beside an earlier approval
+// of theirs, else their limit, never the card's amount, nor the agreed price
+// that answer adopted. The same answer with the tapped label is theirs.
+func TestApprovedAmountSkipsAnAnswerWithoutWords(t *testing.T) {
+	dealFixture(t)
+	open := func(limit string) string {
+		return dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+			"intent":{"verbatim":"buy me a funny otter sticker"`+limit+`,"allowed":["pay"]},
+			"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+			"terms":{"item":"otter sticker","price_minor":454,"currency":"USD"},
+			"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	}
+	answer := func(id string, amount int, said string) {
+		pay := checkPay(t, id, amount)
+		require.Equal(t, "pause", pay["verdict"], pay["card"])
+		_, err := answerCheck(t, id, pay["check_id"].(string), said, pay["card"].(string))
+		require.NoError(t, err)
+	}
+	approved := func(id string) (*int64, string, bool) {
+		events := chainSteps(t, id)
+		state, err := foldDeal(events)
+		require.NoError(t, err)
+		amount, _, basis, _, limit := approvedAmount(events, state)
+		return amount, basis, limit
+	}
+
+	id := open(`,"max_total_minor":500`)
+	answer(id, 480, "")
+	amount, basis, limit := approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 500, *amount, "the user's limit, not the card's $4.80")
+	assert.Equal(t, dealBasisYourLimit, basis)
+	assert.True(t, limit)
+
+	// A check that passes only against the terms that answer adopted is not
+	// what the user allowed either.
+	require.Equal(t, "pass", checkPay(t, id, 480)["verdict"])
+	amount, basis, _ = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 500, *amount)
+	assert.Equal(t, dealBasisYourLimit, basis)
+
+	// The user's own words after it are theirs again, and stand behind a
+	// re-check that passes on them.
+	answer(id, 490, "Pay $4.90")
+	require.Equal(t, "pass", checkPay(t, id, 490)["verdict"])
+	amount, basis, _ = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 490, *amount)
+	assert.Equal(t, "the amount you approved at the check", basis)
+
+	id = open(`,"max_total_minor":500`)
+	answer(id, 480, "Pay $4.80")
+	amount, basis, limit = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 480, *amount)
+	assert.Equal(t, "the amount you approved at the check", basis)
+	assert.False(t, limit)
+
+	// An earlier approval in the user's words stands behind a later answer
+	// without them.
+	answer(id, 490, "")
+	amount, basis, _ = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 480, *amount)
+	assert.Equal(t, "the amount you approved at the check", basis)
+
+	// With no limit, the agreed price is the card's (the answer adopted it):
+	// nothing is shown as approved.
+	id = open("")
+	answer(id, 480, "")
+	amount, _, _ = approved(id)
+	assert.Nil(t, amount)
+	events := chainSteps(t, id)
+	state, err := foldDeal(events)
+	require.NoError(t, err)
+	_, currency, _, _, _ := approvedAmount(events, state)
+	assert.Equal(t, "USD", currency, "the deal's currency still formats what the agent paid")
+}
+
 // The rule still asks when the user named this very purchase over their
 // limit, and the card says why it is an exception; naming the item without
 // its price is not that.
