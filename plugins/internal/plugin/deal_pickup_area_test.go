@@ -54,6 +54,7 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"Zone 78701-1234 km", "Apt \u0417\u04171", "\u0417123, Oak St", "Oak St \u0417123", "\u01c0234, Oak St",
 		"\u13ce12, Main St", "\u0417\u0417\u0417\u0417\u0417", "&#1600; Pennsylvania Ave", "&#4512; Duval St", "Hyde&nbsp;Park",
 		"%41ustin", "12st Oak", "Oak 12St", "3nd Ave", "11st Ave", "12-14 Oak",
+		"1st-2nd Ave", "Zone 78701--1234 km", "Zone 78701 -- 1234 km", "Zone 78701-/1234 km", "Zone 78701-(1234 km)",
 		// A label or distance word goes with its number only right beside it.
 		"Zone, 12 Oak St", "Exit (12) Oak St", "12, km from Oak St",
 	} {
@@ -70,7 +71,7 @@ func TestAPickupAreaHoldsOnlyAPublicArea(t *testing.T) {
 		"Midway, Utah 84049", "District 9", "Union Square", "Community Unit area", "Ward 3, near Main St",
 		"2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr", "Zone 2, Park Place",
 		"10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown", "Route 66 corridor",
-		"Highway 101 area", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
+		"Highway 101 area", "Saint-L\u00f4", "Saint-L\u00f4 (Manche)", "21st and Main area", "11th St area", "2nd Ave", "3rd St", "13th St", "112th St",
 		"Austin 78701.", "Austin (78701)", "\uff25\uff58\uff49\uff54 12 area", "\uff15\uff54\uff48 Ave area", "Coeur d'Alene (north side)", "Wilkes-Barre / Scranton",
 		// Letters of any one script, written any way that is still letters.
 		"Z\u00fcrich Kreis", "Cafe\u0301 district", "Hawai\u02bbi Kai", "K\u00f6ln-Ehrenfeld",
@@ -201,6 +202,11 @@ func TestAPickupAreaWrittenToHideAnAddressIsRefused(t *testing.T) {
 		"an ampersand":                     "Bed & Breakfast row",
 		"a fullwidth number sign":          "\uff035, Hyde Park",
 		"a semicolon":                      "Austin; Hyde Park",
+		"a grapheme joiner":                "Oak S\u034ft",
+		"a variation selector":             "Oak S\ufe0ft",
+		"a joiner between Common letters":  "Hawai\u02bb\u200d\u02bbi",
+		"a joiner after a Latin mark":      "Hy\u0301\u200d\u02bcde Park",
+		"a joiner in a Cyrillic word":      "\u041c\u043e\u200d\u0441\u043a\u0432\u0430",
 		"a tab":                            "Austin\tDowntown",
 		"a line break":                     "Austin\nDowntown",
 		"a joiner in a Latin word":         "Oak S\u200dt",

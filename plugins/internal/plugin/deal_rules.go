@@ -2808,9 +2808,10 @@ var (
 //     script, spaces (\p{Zs}) and pickupAreaPunctuation; any other
 //     character (markup, #, |, &, a symbol, a control such as a tab or a
 //     line break, a format or private-use character, a filler that draws
-//     nothing) is refused, not read past. The one exception is a zero-width
-//     joiner or non-joiner inside a word of a script that is written with
-//     them (Persian, the Indic scripts), never a Latin one;
+//     nothing, an invisible mark such as a variation selector) is refused,
+//     not read past. The one exception is a zero-width joiner or non-joiner
+//     inside a word wholly in a script written with them
+//     (pickupAreaJoinerScripts);
 //   - words whose letters are each in one script (TR39's mixed-script
 //     check), so a Cyrillic S in "St" is refused;
 //   - numbers only as five decimal digits ending their part of the value
@@ -2853,8 +2854,9 @@ func pickupAreaAllowed(v string) bool {
 		if !w.hasDigit && !w.number {
 			continue
 		}
-		// A ZIP+4 or a range ("78701-1234", "12-14") whatever surrounds it.
-		if k > 0 && words[k-1].number && strings.TrimSpace(string(runes[words[k-1].end:w.start])) == "-" {
+		// A ZIP+4 or a range ("78701-1234", "12--14", "1st-2nd") whatever
+		// surrounds it.
+		if k > 0 && (words[k-1].number || words[k-1].hasDigit) && strings.ContainsRune(string(runes[words[k-1].end:w.start]), '-') {
 			return false
 		}
 		switch {
@@ -2869,6 +2871,13 @@ func pickupAreaAllowed(v string) bool {
 		}
 	}
 	return true
+}
+
+// pickupAreaJoinerScripts are the scripts written with a zero-width joiner
+// or non-joiner inside words: Arabic (Persian) and the Indic scripts.
+var pickupAreaJoinerScripts = []string{
+	"Arabic", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Oriya", "Tamil", "Telugu", "Kannada",
+	"Malayalam", "Sinhala",
 }
 
 // pickupAreaOrdinal is whether a word is an ordinal with its own suffix:
@@ -2900,16 +2909,13 @@ func pickupAreaWordRune(runes []rune, j int) bool {
 	switch {
 	case unicode.IsLetter(r) && !ignorable(r), unicode.Is(unicode.Nd, r):
 		return true
-	case unicode.Is(unicode.M, r):
+	case unicode.Is(unicode.M, r) && !ignorable(r) && !unicode.Is(unicode.Variation_Selector, r):
 		return j > 0 && (unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
 	case r == 0x200C || r == 0x200D:
-		// After a letter or a mark (a virama), before a letter, never in a
-		// Latin word.
-		if j == 0 || j+1 >= len(runes) || !unicode.IsLetter(runes[j+1]) ||
-			!(unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1])) {
-			return false
-		}
-		return scriptOf(runes[j+1]) != "Latin" && scriptOf(runes[j-1]) != "Latin"
+		// After a letter or a mark (a virama), before a letter; its word's
+		// script must be one written with joiners (pickupAreaWord).
+		return j > 0 && j+1 < len(runes) && unicode.IsLetter(runes[j+1]) &&
+			(unicode.IsLetter(runes[j-1]) || unicode.Is(unicode.M, runes[j-1]))
 	}
 	return false
 }
@@ -2961,9 +2967,11 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 	var w pickupAreaToken
 	var b, skel strings.Builder
 	scripts := map[string]bool{}
-	letters, nonASCII, digitLike := 0, false, true
+	letters, nonASCII, digitLike, joiner := 0, false, true, false
 	for _, r := range rs {
 		switch {
+		case r == 0x200C || r == 0x200D:
+			joiner = true
 		case unicode.Is(unicode.Nd, r):
 			w.hasDigit = true
 			b.WriteRune('0' + digitValue(r))
@@ -2978,8 +2986,8 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 			} else {
 				b.WriteRune(unicode.ToLower(r))
 			}
-			if r > 0x7f {
-				nonASCII = true
+			if f := foldDecoded(string(r)); r > 0x7f && !(f != "" && isASCIIAlnum(f)) {
+				nonASCII = true // not a compatibility or accented form of ASCII (Lô is Latin)
 			}
 			sk := strings.ToLower(confusableSkeleton(r))
 			if r > 0x7f && pipeLike(r) {
@@ -3006,6 +3014,9 @@ func pickupAreaWord(rs []rune) (pickupAreaToken, bool) {
 		}
 	}
 	if len(scripts) > 1 && !(len(scripts) == 2 && scripts["Hiragana"] && scripts["Katakana"]) {
+		return w, false
+	}
+	if joiner && (len(scripts) != 1 || !slices.ContainsFunc(pickupAreaJoinerScripts, func(sc string) bool { return scripts[sc] })) {
 		return w, false
 	}
 	w.text, w.letters = b.String(), letters
