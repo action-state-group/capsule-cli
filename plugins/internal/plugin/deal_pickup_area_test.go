@@ -238,6 +238,10 @@ func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
 		"a fullwidth stroke between words":        "12 Oak\uff5cSt",
 		"a box stroke between words":              "12 Oak \u2502St",
 		"a danda between words":                   "12 Oak\u0964St",
+		// Review round 4 of #420: a word in two scripts is mixed.
+		"Cyrillic and Greek in one word":           "12 Oak \u0405\u03a4 \u0438 \u03bb",
+		"Greek and Cyrillic in a unit":             "\u0391\u0420\u03a4 4 \u0438 \u03bb",
+		"a lookalike beside a Latin small capital": "12 Oak \u0405\u1d1b \u0438",
 	} {
 		assert.True(t, readsAsStreetAddress(v), "%s: %q", name, v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()

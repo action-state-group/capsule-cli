@@ -2926,7 +2926,7 @@ func readsAsStreetAddress(v string) bool {
 // skeleton (confusableSkeleton) is plain letters and digits, reads as that
 // skeleton, with an i or l in it read as pickupAreaEither and an o as
 // pickupAreaO, so a Cyrillic Ѕ reads s, where TR39 would flag it: in a word
-// that mixes it with ASCII letters, or when the value holds no visible text
+// that mixes scripts or holds a Latin letter (pickupAreaMixed), or when the value holds no visible text
 // in the lookalike's own script (whole-script confusable with Latin). A
 // value that also holds a letter of that script with no such skeleton (и,
 // л, ж for Cyrillic) is text in that script, and its words that are wholly
@@ -2960,7 +2960,7 @@ func pickupAreaReading(v string) string {
 			j = i + 1
 		}
 		word := runes[i:j]
-		mixed := slices.ContainsFunc(word, pickupAreaASCIILetter)
+		mixed := pickupAreaMixed(word)
 		for _, r := range word {
 			switch {
 			case unicode.Is(unicode.M, r) || ignorable(r) || unicode.Is(unicode.Co, r) ||
@@ -3005,6 +3005,27 @@ func pickupAreaReading(v string) string {
 func pickupAreaInWord(r rune) bool {
 	return unicode.IsLetter(r) || unicode.Is(unicode.Nd, r) || unicode.Is(unicode.M, r) || ignorable(r) ||
 		unicode.Is(unicode.Co, r) || (unicode.Is(unicode.Cc, r) && !unicode.IsSpace(r))
+}
+
+// pickupAreaMixed is whether a word's letters are in more than one script,
+// or any is Latin (ASCII, a compatibility form of it, or a Latin lookalike
+// such as a small capital ᴛ): a word wholly in one other script is the only
+// one that may be read as written (pickupAreaReading).
+func pickupAreaMixed(word []rune) bool {
+	scripts := map[string]bool{}
+	for _, r := range word {
+		if !unicode.IsLetter(r) || ignorable(r) {
+			continue
+		}
+		sc := scriptOf(r)
+		if sc == "Latin" || pickupAreaASCIILetter(r) {
+			return true
+		}
+		if sc != "Common" && sc != "Inherited" {
+			scripts[sc] = true
+		}
+	}
+	return len(scripts) > 1
 }
 
 // scriptOf is the name of r's Unicode script, "" when it has none.
