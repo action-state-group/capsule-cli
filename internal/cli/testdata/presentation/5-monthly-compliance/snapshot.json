@@ -70,7 +70,7 @@
     "Witnessed by",
     "not stated in this bundle: it carries no witness receipt for its checkpoint. The checkpoint: log \"example-log\", size 32, root aec893838e0c…; this page did not check its signature.",
     "Verified by",
-    "this page's code: @action-state-group/capsule-viewer 0.1.0 at commit not stated, verifier @action-state-group/agent-action-capsule 0.6.0 with cll 0.2.1. The bundle's own report, which this page does not check, names the tool that built it as \"capsulectl\", version not stated.",
+    "this page's code: @action-state-group/capsule-viewer 0.1.0 at 20f815da0688, verifier @action-state-group/agent-action-capsule 0.6.0 with cll 0.2.1. The bundle's own report, which this page does not check, names the tool that built it as \"capsulectl\", version not stated.",
     "Regulation (EU) 2024/1689 (the EU AI Act)",
     "What was checked and what we found",
     "Each session (one conversation with the agent) was checked against 4 tests under 3 obligations. Results are counts of sessions: there is no overall score. Open a test to read the sessions behind its exceptions.",

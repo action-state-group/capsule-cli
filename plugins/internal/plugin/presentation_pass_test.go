@@ -97,7 +97,7 @@ func TestPresentationPass(t *testing.T) {
 				}
 			}
 			if f.dir == "6-generic-fallback-unknown-extension" && seen != nil {
-				assert.Contains(t, strings.Join(seen.Text, " "), "x-example-unknown/v1 covered Integrity verified; meaning not interpreted by this viewer")
+				assert.Contains(t, strings.Join(seen.Text, " "), "x-example-unknown/v1 covered Covered by the file's fingerprint; not interpreted by this page's checks")
 			}
 		})
 	}
@@ -318,7 +318,7 @@ func passChrome(t *testing.T) *headlessChrome {
 
 // passCardRow is the extension row the card block adds to a report build
 // page: an extension the viewer does not interpret.
-const passCardRow = cli.CardExtension + " covered Integrity verified; meaning not interpreted by this viewer"
+const passCardRow = cli.CardExtension + " covered Covered by the file's fingerprint; not interpreted by this page's checks"
 
 // The deal view is offered by list and not carried by build (the open
 // question of whether build should register it): list names it, build's page
@@ -417,19 +417,29 @@ func TestPresentationPassFlipsLeaveTheEvidence(t *testing.T) {
 			if chrome == nil {
 				return
 			}
-			evidence := func(page string) (string, string) {
+			evidence := func(page string) presentationSnapshot {
 				path := filepath.Join(t.TempDir(), "page.html")
 				require.NoError(t, os.WriteFile(path, []byte(page), 0o600))
 				var s presentationSnapshot
 				chrome.open(t, "file://"+path, presentationViews[1]).eval(t, snapshotScript, &s)
 				require.NotEmpty(t, s.EvidenceIDs)
-				return passMarshal(t, s.EvidenceIDs), passMarshal(t, s.Verification)
+				return s
 			}
-			baseIDs, baseState := evidence(pages[""])
+			base := evidence(pages[""])
 			for _, flip := range flips {
-				ids, state := evidence(pages[flip.name])
-				assert.Equal(t, baseIDs, ids, "the %s flip leaves every evidence identifier", flip.name)
-				assert.Equal(t, baseState, state, "the %s flip leaves the verification state", flip.name)
+				got := evidence(pages[flip.name])
+				if strings.HasPrefix(flip.name, "depth ") {
+					// A deeper level opens more of the page (presentation
+					// contract section 9.1): it may add identifiers and
+					// checks, never drop one, and the verdict is the same.
+					for _, id := range base.EvidenceIDs {
+						assert.Contains(t, got.EvidenceIDs, id, "the %s flip keeps every evidence identifier", flip.name)
+					}
+					assert.Equal(t, base.Verification.Verify, got.Verification.Verify, "the %s flip leaves the verification state", flip.name)
+					continue
+				}
+				assert.Equal(t, passMarshal(t, base.EvidenceIDs), passMarshal(t, got.EvidenceIDs), "the %s flip leaves every evidence identifier", flip.name)
+				assert.Equal(t, passMarshal(t, base.Verification), passMarshal(t, got.Verification), "the %s flip leaves the verification state", flip.name)
 			}
 		})
 	}

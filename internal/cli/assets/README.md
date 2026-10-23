@@ -28,8 +28,8 @@ file, never to render a report.
 |---|---|
 | page code | capsule-viewer main @ `20f815da0688035e9ac6205a865e4376054834a6`, a merged commit (the same one `go.mod`'s `capsule-viewer/go v0.1.2-0.20261023061903-20f815da0688` names) |
 | verifier | agent-action-capsule main @ `17f0c9f7e56a6d019c6bb50b0cbfc9da9d57b6e5`, a merged commit (the one `ts/v0.6.0` tags), pinned apart from `go.mod`; registry `@action-state-group/cll` `0.2.1` |
-| build | `npm ci` in both `ts/` directories, then `node scripts/build-report-runtime.mjs <cv> <aac> <out>`, esbuild 0.28.2 (capsule-viewer's); the output opens with `"use strict";`, as both repositories build under `"strict": true` |
-| sha256 | `aa9bfddbd1a1a35c50795a49feeceb0ec08b466912b58b37a3464bd510e93f59` |
+| build | `npm ci` in both `ts/` directories, then `node scripts/build-report-runtime.mjs <cv> <aac> <out>`, esbuild 0.28.2 (capsule-viewer's); the output opens with `"use strict";`, as both repositories build under `"strict": true`, and defines `__CAPSULE_VIEWER_COMMIT__` as the page-code commit, so the page's "Verified by" line names it (#363) |
+| sha256 | `3f7e26497bf201c411d4a9ffde720aadfecf4864a426083cc41ece4b3f9851b5` |
 
 The digest is pinned again in `evidence_graph_assets.go` (`evidenceGraphIIFEDigest`) and
 checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds

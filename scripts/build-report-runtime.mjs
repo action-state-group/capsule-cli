@@ -23,6 +23,7 @@
 // Both checkouts need `npm ci` in ts/ first; esbuild is capsule-viewer's
 // pinned devDependency. Node is a build-time tool here, never a render-time one.
 import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -45,6 +46,12 @@ process.chdir(work);
 const cvTs = join(work, "capsule-viewer", "ts");
 const aacTs = join(work, "agent-action-capsule", "ts");
 const common = { absWorkingDir: work, preserveSymlinks: true, bundle: true };
+// The page's "Verified by" line names the capsule-viewer commit the page code
+// came from, through the define capsule-viewer's own ts/scripts/build-iife.mjs
+// sets (capsule-cli#363). It is the checkout's HEAD: the commit
+// evidenceGraphIIFESource pins, so the bytes stay reproducible.
+const cvCommit = execFileSync("git", ["-C", resolve(cvArg), "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+if (!/^[0-9a-f]{40}$/.test(cvCommit)) throw new Error(`capsule-viewer checkout HEAD is not a commit: ${cvCommit}`);
 const { build } = createRequire(join(cvTs, "package.json"))("esbuild");
 
 // aac's browser entry, read rather than restated, minus the views
@@ -99,6 +106,7 @@ const out = await build({
   ...common,
   format: "iife",
   globalName: "EvidenceGraph",
+  define: { __CAPSULE_VIEWER_COMMIT__: JSON.stringify(cvCommit) },
   // The runtime runs in strict mode, as the verifier and the views are
   // written and tested: aac and capsule-viewer both build under
   // `"strict": true`. A stdin entry has no tsconfig, so esbuild would not

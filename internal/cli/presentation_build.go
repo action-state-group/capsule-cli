@@ -50,6 +50,25 @@ var presentationRuntime = struct {
 //go:embed assets/presentation/builtin/*.json
 var builtinPresentationFS embed.FS
 
+// contractReportBuiltinID is agent-action-capsule's built-in manifest for a
+// contract-report/v1 Result, and contractReportPageID the module the page's
+// runtime (capsule-viewer's CONTRACT_REPORT_MANIFEST) registers in its place,
+// never beside it (spec/contract-report-v1.md section 4). The manifest is
+// otherwise the same, so this tool lists and checks it under the id the page
+// runs.
+const (
+	contractReportBuiltinID = "aac.builtin.result-contract-report/v0"
+	contractReportPageID    = "capsuleviewer.contract-report/v0"
+)
+
+// pageModuleID is the id the page registers for a built-in manifest's id.
+func pageModuleID(id string) string {
+	if id == contractReportBuiltinID {
+		return contractReportPageID
+	}
+	return id
+}
+
 func BuiltinPresentationManifests() ([]map[string]interface{}, error) {
 	entries, err := builtinPresentationFS.ReadDir("assets/presentation/builtin")
 	if err != nil {
@@ -64,6 +83,9 @@ func BuiltinPresentationManifests() ([]map[string]interface{}, error) {
 		var m map[string]interface{}
 		if err := json.Unmarshal(raw, &m); err != nil {
 			return nil, fmt.Errorf("built-in presentation manifest %s: %w", entry.Name(), err)
+		}
+		if id, ok := m["id"].(string); ok {
+			m["id"] = pageModuleID(id)
 		}
 		out = append(out, m)
 	}

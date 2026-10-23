@@ -20,17 +20,27 @@
 
   Bundles that carry only the earlier `outcome-report/v1` or
   `eu-ai-act-compliance/v1` block keep their cards, which now share the
-  same layout.
+  same layout. A page built with no `--depth` now opens at L0, the first
+  screen with its rows closed, where it opened fully before; `--depth L2`
+  still opens everything.
+- **Fixed:** the "Verified by" line names the capsule-viewer commit the page
+  came from ("at 20f815da0688"), where it read "at commit not stated"
+  (#363): `scripts/build-report-runtime.mjs` defines
+  `__CAPSULE_VIEWER_COMMIT__` as the pinned commit.
 - **Changed:** `agent-action-capsule/go` moves from v0.11.0 to v0.12.0 in
-  both modules. It registers `contract-report/v1` and carries Result v0's
-  `out_of_scope` verdict and `applies_from`. `presentation list` now shows
-  seven built-in manifests, `aac.builtin.result-contract-report/v0` among
-  them, vendored from that release.
+  both modules, so the Go resolver knows `contract-report/v1` as the page
+  does: v0.12.0 registers it and adds its built-in manifest (the seven
+  built-ins are vendored from that release), and its interop verifier
+  accepts `out_of_scope` in the pair invariant. `result build` and this
+  tool's Result schema are unchanged. `presentation list` names the
+  contract-report module by the id the page registers in place of
+  agent-action-capsule's built-in, `capsuleviewer.contract-report/v0`.
 - **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
   from capsule-viewer `20f815d` and agent-action-capsule `17f0c9f`
   (`ts/v0.6.0`), the verifier the viewer now builds against. `go.mod`'s
   `capsule-viewer/go` moves to the same commit. The presentation goldens'
-  pages and snapshots are re-emitted from their unchanged bundles.
+  pages and snapshots, and the presentation pass's build snapshots, are
+  re-emitted from their unchanged bundles.
 
 ### Evidence Bundles come from AAC's producer (#353)
 

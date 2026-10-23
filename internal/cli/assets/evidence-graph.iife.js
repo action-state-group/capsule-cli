@@ -11764,8 +11764,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     return COMMIT_SHA.test(value) ? value.slice(0, 12) : void 0;
   }
   function builtCommit() {
-    if (typeof __CAPSULE_VIEWER_COMMIT__ !== "string") return void 0;
-    return commitPrefix(__CAPSULE_VIEWER_COMMIT__);
+    if (false) return void 0;
+    return commitPrefix("20f815da0688035e9ac6205a865e4376054834a6");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
