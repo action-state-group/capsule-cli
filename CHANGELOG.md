@@ -45,7 +45,8 @@
   `eu-ai-act-compliance/v1` block keep their cards, which now share the
   same layout. A page built with no `--depth` now opens at L0, the first
   screen with its rows closed, where it opened fully before; `--depth L2`
-  still opens everything.
+  still opens every section, but each entry under "Records in this bundle"
+  stays closed until it is opened (capsule-viewer#76).
 - **Fixed:** the "Verified by" line names the capsule-viewer commit the page
   came from ("at 20f815da0688"), where it read "at commit not stated"
   (#363): `scripts/build-report-runtime.mjs` defines
