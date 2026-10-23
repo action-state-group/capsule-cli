@@ -1,6 +1,6 @@
 # Design note: the book and deal plugins leave the neutral repository
 
-capsule-cli#326. Status: draft for review, round 3. Checked against `main` at
+capsule-cli#326. Status: draft for review, round 4. Checked against `main` at
 `df68c51` (after v0.1.0-rc21), evidencebook `main` (`v0.7.0`), actionstate-site
 `main` (`install/` and `scripts/install-*`) and actionstate-muse `main`.
 
@@ -144,7 +144,9 @@ update variables are set (lines 34-37, 165, 175). After the move:
   (`presentation_fixtures_test.go` and others). It updates them only when a
   format or coverage changes, not each time a deal page changes.
 
-So a change to a deal page needs no capsule-cli PR.
+So a change to a deal page's data needs no capsule-cli PR. A change to the
+page's script or words still does, because `deal-view` and the wording pack
+are core code until #428 moves them (sections 3.3 and 4.3).
 
 **Wording key coverage.** `TestEveryWordingKeyTheCodeNamesIsInThePack`
 (`narration_test.go:56-74`) globs `../../plugins/internal/plugin/*.go` as
@@ -273,12 +275,12 @@ exists, the spec is the source of `x-deal/v0`, and
   repository paths. It exempts vendored files (`evidence-graph.iife.js`, the
   presentation `page.html` goldens), `CHANGELOG.md` and `docs/design/`, and
   it doesn't match URL paths such as `/api/plugins/...`.
-- **`scripts/gradestrings`** gains path arguments in place of its fixed
-  `git ls-files` patterns and plugin paths (`main.go:46`, `:55`). Each
-  repository can then run it on its own files with `go run
-  github.com/action-state-group/capsule-cli/scripts/gradestrings@<pinned version> <paths>`,
-  so the grade vocabulary keeps one checker. It is a contributor tool, not a
-  CI gate today, and this note doesn't make it one.
+- **`scripts/gradestrings`** is a contributor tool, not a CI gate. Step 6
+  drops the plugin paths from it (`main.go:46`, `:55`), so it checks the
+  core's files. The plugin repositories don't get a port of it in this
+  move. Running it there would need explicit inputs (its fixed read of
+  `deal-view.js` at lines 109-112 and its path-based classification), plus a
+  refusal of an empty scan. That waits until someone needs it.
 
 ## 4. The plugin contract and versioning
 
@@ -333,16 +335,32 @@ rules are unchanged: a release core refuses at install unless
 `--allow-version-mismatch`, warns at dispatch, and `doctor` fails; a
 development core doesn't check.
 
-**The producer stamp doesn't change at the move.** Sealed deal records
-and deal pages name the producer as `capsulectl <CLIVersion>
-(<CLICommit>)` (`deal_rules.go:861`; `deal_report.go:292`: `produced_by`,
-`page_built_by`, `page_version`). `deal-view.js` (lines 436-445) compares
-each step's producer version with `page_version` as core release tags, and
-links capsule-cli's release notes. With `CLIVersion` still the embedded
-core's tag, the stamp stays true, and the comparison and links keep
-working. Recording the plugin's own version in sealed records would change
-a sealed format and what deal-view compares, so it is left out of this
-move (section 10).
+**The producer stamp names the deal build.** Sealed deal records name
+the producer as `capsulectl <CLIVersion> (<CLICommit>)`
+(`deal_rules.go:861`). The schema defines `producer` as "the software build
+that sealed this record" (`x-deal-v0.schema.json:167`), and after the move
+that build is `capsulectl-deal`. If the stamp kept the core's tag, two deal
+releases built against the same core would seal identical stamps, and
+sealed records keep them for good. So, once `PluginVersion` is set, the
+stamp is `capsulectl-deal <PluginVersion> (<PluginCommit>)`. The schema
+already accepts any non-empty name, version and commit (lines 168-172), and
+`check_profile.py` checks only that, so this changes a value, not the
+format.
+
+The page needs a matching change, because `deal-view.js` (lines 436-445)
+compares every step's producer version with `page_version` as capsule-cli
+tags, and links capsule-cli's release notes:
+
+- the deal report's `page_built_by` and `page_version` (`deal_report.go:292`)
+  take the same stamp;
+- deal-view compares versions only between producers with the same name,
+  and treats a bare `capsulectl` stamp (records sealed before the move) as
+  older than any `capsulectl-deal`;
+- the release-notes link comes from the page data the plugin writes (a new
+  `release_notes` field), so the core asset names no company repository.
+
+Step 1 makes this change, with tests. The stamp's new value is a one-way
+door (section 9).
 
 Every core release still needs a plugin release built against it. This is
 RELEASING.md step 6, "re-cut the companion plugin", which already exists
@@ -493,8 +511,12 @@ The generator and its checks:
   ("`<deal tag> <deal plugin sha256>`").
 - `scripts/seller-sale-e2e.sh` (lines 49-51) and `buyer-exits-e2e.sh`
   (lines 48-50) read the third field of `CAPSULECTL_PIN` and exit 2 without
-  it. `real-capsulectl-test.sh` (lines 63-67) runs both. They read
-  `CAPSULECTL_DEAL_PIN` instead.
+  it. They read `CAPSULECTL_DEAL_PIN` instead. When run on their own,
+  without the binaries `real-capsulectl-test.sh` (lines 63-67) passes in,
+  they also build the deal asset's name and download it from the core
+  release (`seller-sale-e2e.sh` lines 56 and 86, `buyer-exits-e2e.sh` lines
+  53 and 91). Those downloads switch to the `evidencebook-deal` release,
+  and that standalone path is tested.
 - `scripts/real-capsulectl-test.sh`, `demo-acp.sh`, `demo-ucp.sh`,
   `staged-install-test.sh` and `.github/workflows/install.yml` build the
   deal asset's name and URL from the capsule-cli release, check it against
@@ -526,7 +548,10 @@ which is RELEASING.md's release-triple rule.
      fallback, and a test that builds a plugin with the `replace` in place;
    - delete `scitt_receipt.go`;
    - add the module allowlist, and the path check in warn mode;
-   - commit the fixed-key fixtures, and give `gradestrings` path arguments.
+   - commit the fixed-key fixtures, and rewrite the core halves of
+     `check-html-render.sh` and `check-portability.sh` onto them;
+   - make the producer stamp and deal-view's comparison changes in section
+     4.2.
 2. **evidencebook, two PRs:** the library functions (Result sealing,
    request and response reading) with tests, released as a minor version;
    and the settings for the `capsulectl/v*` track.
@@ -535,8 +560,11 @@ which is RELEASING.md's release-triple rule.
    evidencebook release from step 2, with one `request` and `respond` per
    plugin; classify the test files and move the core-behavior tests into
    the core against a stub launcher. CI runs both full command trees.
-4. **Ethan or Steven creates `evidencebook-deal`:** public, Apache-2.0,
-   with its release settings applied.
+4. **`evidencebook-deal` exists.** Ethan decided on 2026-10-22 to create
+   it without a Steven ruling, and it was created that day: public,
+   Apache-2.0, squash and rebase merges only, and a "release tags" ruleset
+   that blocks updating or deleting a tag. The release environments and
+   immutable releases come with its first pipeline PR.
 5. **Freeze and import:** a capsule-cli CI check refuses any change under
    `plugins/` or `skills/deal/` from the cut commit on, so daily deal PRs
    can't create two sources of truth. `evidencebook-deal` and
@@ -550,6 +578,11 @@ which is RELEASING.md's release-triple rule.
    path check to fail mode; make install by name refuse, with the advice,
    doc and dead-code changes in section 6.1; move the book verbs out of the
    `capsulectl` skill; drop the plugin glob from `narration_test.go:60`;
+   move `scripts/presentation-goldens/build-fixtures.sh` (which builds the
+   fixtures from a deal build and reads
+   `plugins/internal/plugin/testdata/deal/`) to `evidencebook-deal`, and
+   delete the deal halves of `check-html-render.sh` and
+   `check-portability.sh`, which moved in step 5;
    point the comment at `deal_profile.go:11` away from
    `skills/deal/profile/PROFILE.md`; update `docs/PLUGINS.md`, `docs/RELEASING.md`,
    `README.md`, `docs/CANARY.md`, `docs/HARNESS.md` and the `CHANGELOG.md`
@@ -574,7 +607,8 @@ forwards them by launcher name.
 
 ## 8. The new repository's name
 
-Proposed: **`evidencebook-deal`**.
+**`evidencebook-deal`.** It was proposed here and created on 2026-10-22
+(section 7, step 4).
 
 - It is in the evidencebook family (`evidencebook`, `evidencebook-skills`)
   and says what the repository is: the deal application on evidence books.
@@ -600,6 +634,7 @@ deal`. Users see no rename.
 | The new exported evidencebook functions | Public library API |
 | Asset names and URLs in the new releases, `actionstate-install-release/2`, and the install summary entries | Install folders, the repin and Muse pins freeze them |
 | The handshake field `core_version` | It joins the published `cli-plugin/v1` contract |
+| The producer stamp `capsulectl-deal <tag> (<commit>)` | Sealed records keep it |
 | Removing `plugin install book\|deal` | A command users can see stops fetching |
 
 ## 10. Follow-ups
@@ -612,8 +647,6 @@ deal`. Users see no rename.
   each deal format the core verifies.
 - Moving settlement verification to AAC (J.8), after which the deal plugin
   drops `capsule-cli/settlement`.
-- Recording the deal plugin's own version in sealed records, with deal-view
-  comparing producers by name. That is a format change with its own design.
 
 ## 11. Acceptance, as #326 states it
 
