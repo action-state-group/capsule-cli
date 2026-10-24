@@ -631,3 +631,42 @@ func TestReceiptsClaimIsAACsVerifyReceipts(t *testing.T) {
 	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, claim)
 	assert.Empty(t, receipts)
 }
+
+// A deal's cadence chain is checked only against the deal checkpoint whose
+// claim passed: with no authenticated statement it is withheld with no
+// receipts (capsule-cli#438).
+func TestCadenceClaimWithholdsAChainWithoutAVerifiedCheckpoint(t *testing.T) {
+	value := map[string]interface{}{"extensions": map[string]interface{}{
+		DealCadenceExtension: map[string]interface{}{"state": "witnessed"},
+	}}
+	claim, receipts, present := cadenceClaim(value, nil, nil)
+	assert.True(t, present)
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
+	assert.Empty(t, receipts)
+}
+
+// The cadence chain's receipts go through the same mapping of AAC's
+// witness.VerifyReceipts: against a verified statement, a receipt whose
+// receipt_b64 is not canonical base64 is malformed and fails with no
+// directory at all, and is not listed (capsule-cli#438, AAC go/v0.13.1).
+func TestReceiptsClaimFailsANonCanonicalCadenceReceiptWithoutADirectory(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(producedBundle(t, witnessed(t, private)))
+	require.NoError(t, err)
+	value, err := DecodeBundleJSON(raw)
+	require.NoError(t, err)
+	_, statement := CheckpointClaim(value)
+	require.NotNil(t, statement)
+	entry := witnessEntry(value)
+	encoded := entry["receipt_b64"].(string)
+
+	claim, _ := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_unverified:" + testWitness}}, claim, "a canonical receipt with no directory is only not checked")
+
+	entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
+	claim, receipts := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "fail", Findings: []string{"witness_receipt_malformed:0"}}, claim)
+	assert.Empty(t, receipts)
+}
