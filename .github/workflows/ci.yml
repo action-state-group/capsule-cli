@@ -159,7 +159,7 @@ jobs:
       # re-emitted and opened at 390px, 1280px and in print: each must show
       # a reader what its snapshot.json says, and be no wider than
       # known-overflow.json records (see
-      # cli/presentation_golden_test.go). Widths depend on the
+      # plugins/internal/deal/presentation_golden_test.go). Widths depend on the
       # browser and the fonts, so both are pinned: Chrome for Testing at the
       # version known-overflow.json names, and DejaVu as the only fonts.
       - name: Set up the pinned Chrome

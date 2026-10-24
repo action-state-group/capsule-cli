@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,9 +14,8 @@ import (
 const presentationDir = "../../../cli/testdata/presentation"
 
 // TestReportBuildGoldens re-emits each fixture page `book report build`
-// wrote and holds it to the committed page while the vendored viewer is the
-// one it was emitted with, so the browser checks that read the committed page
-// measure what this plugin writes.
+// wrote and holds the committed page to it byte for byte, so the browser
+// checks that read the committed page measure what this plugin writes.
 func TestReportBuildGoldens(t *testing.T) {
 	entries, err := os.ReadDir(presentationDir)
 	require.NoError(t, err)
@@ -44,10 +41,16 @@ func TestReportBuildGoldens(t *testing.T) {
 			_, err := invoke(t, "", "report", "build", "--bundle", filepath.Join(dir, "bundle.json"), "--card", meta.Card, "--out", out)
 			require.NoError(t, err, "the page gate must let this fixture's page through")
 			page := mustRead(t, out)
-			committed := mustRead(t, filepath.Join(dir, "page.html"))
-			if strings.Contains(string(committed), string(cli.EvidenceGraphIIFE)) {
-				require.Equal(t, string(committed), string(page), "the re-emitted page differs from the one capsulectl emitted")
+			pageFile := filepath.Join(dir, "page.html")
+			if os.Getenv("CAPSULECTL_UPDATE_PRESENTATION_PAGES") == "1" {
+				require.NoError(t, os.WriteFile(pageFile, page, 0o644))
+				return
 			}
+			// The browser checks (capsulectl-deal's TestPresentationGoldens)
+			// measure the committed page, so it must be exactly what this
+			// build writes: a page from an older viewer fails here, and
+			// CAPSULECTL_UPDATE_PRESENTATION_PAGES=1 rewrites it.
+			require.Equal(t, string(page), string(mustRead(t, pageFile)), "the committed page is not what `book report build` writes now; rewrite it with CAPSULECTL_UPDATE_PRESENTATION_PAGES=1")
 		})
 	}
 	require.Positive(t, seen, "no report-build fixture found")

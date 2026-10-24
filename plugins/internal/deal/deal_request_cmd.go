@@ -17,10 +17,13 @@ func requestCommand() *cobra.Command {
 		// Witness receipts a deal copy carries are checked against its anchor
 		// under this directory, the requester's own; without one, a copy
 		// carrying any receipt is recorded as failed.
-		if in.WitnessDirectory != nil {
-			var e error
-			if responder.Witnesses, e = evidencebook.ParseWitnessDirectory(in.WitnessDirectory); e != nil {
-				return cli.Hint(cli.ErrInput, "--witness-directory "+in.WitnessDirectoryPath+": "+e.Error())
+		if in.WitnessDirectory != "" {
+			raw, e := cli.ReadInput(in.WitnessDirectory)
+			if e != nil {
+				return e
+			}
+			if responder.Witnesses, e = evidencebook.ParseWitnessDirectory(raw); e != nil {
+				return cli.Hint(cli.ErrInput, "--witness-directory "+in.WitnessDirectory+": "+e.Error())
 			}
 		}
 		return dealRequest(c, p, in.Request, in.Response, in.For, in.WindowEnd, responder)

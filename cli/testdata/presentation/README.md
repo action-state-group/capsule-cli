@@ -3,11 +3,15 @@
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`; the pages and snapshots
 are now those of the viewer `cli/assets/README.md` pins. `TestPresentationGoldens`
-(`cli/presentation_golden_test.go`) holds every later viewer to them:
+(`plugins/internal/deal/presentation_golden_test.go`) holds every later viewer to them:
 
 - **Without Chrome:** it re-emits each page from its `bundle.json` the way capsulectl
   does and checks the page gate's decision. While the vendored viewer is unchanged,
-  the result must equal `page.html` byte for byte.
+  the result must equal `page.html` byte for byte. The two pages `book report build`
+  writes (`4-monthly-outcome`, `5-monthly-compliance`) are re-emitted by capsulectl-book's
+  `TestReportBuildGoldens` (`plugins/internal/book/presentation_golden_test.go`), which
+  fails unless `page.html` is exactly what it writes now; the browser checks below
+  read that page.
 - **With `CAPSULECTL_CHROME` set:** it also opens each page headless, with no network:
   Chrome resolves no host name or IP literal, and a request for anything outside the
   page fails the test, whether the page, one of its iframes or workers, or a WebSocket

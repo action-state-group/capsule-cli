@@ -66,7 +66,7 @@ func TestEvidenceRequestCommandChecks(t *testing.T) {
 	assert.Equal(t, `{"a":1}`, string(got.Response))
 	assert.Equal(t, "r1", got.For)
 	assert.Equal(t, hex.EncodeToString(signer), got.ResponderSigner, "keys arrive as lowercase hex")
-	assert.Equal(t, `{"w":1}`, string(got.WitnessDirectory))
+	assert.NotEmpty(t, got.WitnessDirectory, "the path, for the plugin to read after its own checks")
 
 	require.NoError(t, runShared(t, cmd(), "--absent-until", "2026-10-24T00:00:00Z", "--for", "r1", "--route", "email"))
 	assert.Equal(t, "2026-10-24T00:00:00Z", got.WindowEnd.Format("2006-01-02T15:04:05Z07:00"))

@@ -907,7 +907,7 @@ func exportRecord(ctx context.Context, store *evidencebook.FileStore, p cli.Prof
 // capsulectl-deal's `deal request` shares.
 func requestCommand() *cobra.Command {
 	return cli.EvidenceRequestCommand(func(c *cobra.Command, p cli.Profile, in cli.EvidenceRequestInput) (err error) {
-		if in.WitnessDirectory != nil {
+		if in.WitnessDirectory != "" {
 			return cli.InputError("--witness-directory checks the witness receipts a deal copy carries; a book's answer is a profile envelope and carries none")
 		}
 		opened, e := openBook(c.Context(), p, false)

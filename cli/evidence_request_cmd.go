@@ -27,10 +27,10 @@ type EvidenceRequestInput struct {
 	// obtained independently and pins. A response that does not verify under
 	// them is refused and never recorded, so it cannot foreclose the request.
 	ResponderSigner, ResponderCheckpoint string
-	// WitnessDirectory is the --witness-directory file's bytes, set only with
-	// Response; WitnessDirectoryPath names it in refusals.
-	WitnessDirectory     []byte
-	WitnessDirectoryPath string
+	// WitnessDirectory is --witness-directory as given, set only with
+	// Response. The plugin reads it, after its own checks: a book refuses
+	// the flag without opening the file.
+	WitnessDirectory string
 	// Responder, Output and Route are the flags as given.
 	Responder, Output, Route string
 }
@@ -100,12 +100,7 @@ func EvidenceRequestCommand(run func(c *cobra.Command, p Profile, in EvidenceReq
 		if in.Response, e = ReadInput(answer); e != nil {
 			return e
 		}
-		if witnesses != "" {
-			if in.WitnessDirectory, e = ReadInput(witnesses); e != nil {
-				return e
-			}
-			in.WitnessDirectoryPath = witnesses
-		}
+		in.WitnessDirectory = witnesses
 		return run(c, p, in)
 	}}
 	cmd.Flags().String("request", "", "Evidence request JSON to ask with: the request map of draft-mih-agent-evidence-request-00 (a one-member subject such as {\"full_history\":null}, and coverage with exactly one of expected_pin or min_freshness); on a deal profile, the deal copy request")

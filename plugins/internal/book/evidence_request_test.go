@@ -71,6 +71,12 @@ func TestBookAnswerTakesNoWitnessDirectory(t *testing.T) {
 		"--witness-directory", writeDirectory(t))
 	assert.ErrorIs(t, err, cli.ErrInput)
 	assert.ErrorContains(t, err, "deal copy")
+	// Refused before the file is opened: a path that does not exist gets the
+	// same refusal, not a missing-file error.
+	_, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(x.dir, "history.response"),
+		"--responder-key", hex.EncodeToString(x.bKeys.record), "--responder-checkpoint-key", hex.EncodeToString(x.bKeys.checkpoint),
+		"--witness-directory", filepath.Join(t.TempDir(), "no-such-witnesses.json"))
+	assert.ErrorContains(t, err, "deal copy")
 	_, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--absent-until", day1.Format(time.RFC3339), "--witness-directory", writeDirectory(t))
 	assert.ErrorIs(t, err, cli.ErrInput, "--witness-directory goes with --response only")
 }

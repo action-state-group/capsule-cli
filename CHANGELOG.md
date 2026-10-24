@@ -14,7 +14,9 @@
   runs its own mode on what they read. On a deal profile,
   `capsulectl book request` and `book respond` already refused and pointed to
   `capsulectl deal request` and `deal respond`; capsulectl-book no longer
-  carries the deal code behind them.
+  carries the deal code behind them. `deal respond --policy` now refuses the
+  flag before reading the file, so a missing or malformed policy file gets
+  the same refusal instead of a read or JSON error.
 - **Changed:** the guard on identifier fields of host-supplied records (no
   card-number-like or phone-like values) is one function, `cli.GuardMetadata`,
   which `book backfill` and `deal audit-host` both apply.
