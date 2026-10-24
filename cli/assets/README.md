@@ -1,8 +1,9 @@
-# Vendored browser runtime for `report build`
+# Vendored browser runtime
 
-`evidence-graph.iife.js` is the browser runtime every `report.html` that
-`capsulectl report build` writes embeds (`deal report --html` and
-`presentation build` embed the same file). It bundles two sources:
+`evidence-graph.iife.js` is the browser runtime the pages capsulectl writes
+embed: `presentation build`, and `bundle` or `disclose --html`. (`report build`
+and `deal report --html` are the book and deal plugins' verbs, built in their
+own repositories since #326.) It bundles two sources:
 
 - **the page code** from capsule-viewer's `ts/src` (the views, the
   presentation mount and registry, the outcome and EU report cards), the
@@ -32,7 +33,7 @@ file, never to render a report.
 | sha256 | `14e4eca08a978421af8c61c6b0cb6fca5bdae2d840f0c54c6ee40ee0041ed497` |
 
 The digest is pinned again in `evidence_graph_assets.go` (`evidenceGraphIIFEDigest`) and
-checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds
+checked by `TestIIFEIsPinned`, and again in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds
 and replaces the file, and `make iife-check CV=<cv checkout> AAC=<aac checkout>` diffs the
 vendored copy against a fresh build. Refresh the file, the digest here and
 the constants in `evidence_graph_assets.go` together. The shell's CSP style

@@ -6,10 +6,15 @@
   (`presentation build`, and `bundle` or `disclose --html`) draw the
   verification banner in the presentation contract's words
   (capsule-viewer#80): one of checking, verified, incomplete, failed or
-  unable, with a details line naming the findings. A bundle whose checks pass
-  but some were not run, such as one with unsigned records or an unsigned
-  checkpoint, now reads incomplete; it read "Contents checked" before. The
-  vendored browser runtime is rebuilt from capsule-viewer `d100e32` and
+  unable, with a details line naming the findings. Old to new: "Contents
+  checked" becomes "✓ Unchanged since it was sealed" only when every check ran
+  on the page and passed; a bundle whose checks pass but some were not run,
+  such as one with unsigned records or an unsigned checkpoint, now reads "None
+  of the bundle's checks failed, but some were not run" (with ': see "Not
+  checked on this page" below' when the page lists them). "Check failed"
+  becomes "✗ A check failed: do not rely on this page", or "✗ This bundle did
+  not verify: do not rely on it" when the records are withheld. The vendored
+  browser runtime is rebuilt from capsule-viewer `d100e32` and
   agent-action-capsule `ts/v0.7.0` (`cd68af7`), and `go.mod` names the same
   capsule-viewer commit.
 - **Changed:** `presentation list` resolves with capsule-viewer's

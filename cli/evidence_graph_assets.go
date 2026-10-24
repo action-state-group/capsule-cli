@@ -41,9 +41,9 @@ var (
 // here with its digest pinned in code; TestIIFEIsPinned keeps the two in
 // step. The shell's style hashes (runtime-style-hashes.txt in the Go module)
 // cover the runtime's styles, so the Go module and the IIFE's
-// capsule-viewer commit move together. The file and its digest are the same ones `deal
-// report` and `presentation build` embed (EvidenceGraphIIFE,
-// EvidenceGraphIIFESHA256, below);
+// capsule-viewer commit move together. The file and its digest are the ones
+// `presentation build` and `bundle` or `disclose --html` embed
+// (EvidenceGraphIIFE, EvidenceGraphIIFESHA256, below);
 // scripts/build-evidence-graph-iife.sh rebuilds it from the two commits
 // evidenceGraphIIFESource records, and scripts/iife-sync.sh from any
 // capsule-viewer and aac checkouts. The report is only as
