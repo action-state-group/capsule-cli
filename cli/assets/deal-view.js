@@ -236,9 +236,15 @@ const dealViewModel = async (context) => {
     name: typeof pp.name === "string" && pp.name ? pp.name : "capsulectl",
     version: typeof pp.version === "string" ? pp.version : typeof report.page_version === "string" ? report.page_version : "",
   };
+  // olderBuilds are older versions of the page's own build; earlierBuilds are
+  // capsulectl builds from before the deal plugin, which are not versions of
+  // it and are said apart.
   const olderBuilds = builds
-    .filter((b) => b.version === undefined || (b.producer === pageBuild.name ? versionBefore(b.version, pageBuild.version) : b.producer === "capsulectl" && pageBuild.name === "capsulectl-deal"))
-    .map((b) => (b.version === undefined ? "unrecorded" : b.producer === pageBuild.name ? b.version : `${b.producer} ${b.version}`));
+    .filter((b) => b.version === undefined || (b.producer === pageBuild.name && versionBefore(b.version, pageBuild.version)))
+    .map((b) => b.version || "unrecorded");
+  const earlierBuilds = builds
+    .filter((b) => b.version !== undefined && b.producer === "capsulectl" && pageBuild.name === "capsulectl-deal")
+    .map((b) => `${b.producer} ${b.version}`);
   const releaseNotes = typeof report.release_notes === "string" && report.release_notes.startsWith("https://") ? report.release_notes : "https://github.com/action-state-group/capsule-cli/releases";
 
   // Each statement's class, as sealed with it (undefined when its sealed step
@@ -262,6 +268,7 @@ const dealViewModel = async (context) => {
     builds,
     pageBuild,
     olderBuilds,
+    earlierBuilds,
     releaseNotes,
     claimClasses,
   };
@@ -452,9 +459,12 @@ const dealViewRender = (model, regions) => {
   const builds = model.builds;
   if (builds.length > 0) provenance.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
   if (typeof report.instructions === "string" && report.instructions) provenance.append(el("p", report.instructions, "deal-note"));
-  const { pageBuild, olderBuilds, releaseNotes } = model;
-  if (pageBuild.version && olderBuilds.length > 0) {
-    const what = el("p", `Produced by an older version (${olderBuilds.join(", ")}) than the ${pageBuild.name} that made this page (${pageBuild.version}). What changed: `, "deal-note");
+  const { pageBuild, olderBuilds, earlierBuilds, releaseNotes } = model;
+  if (pageBuild.version && (olderBuilds.length > 0 || earlierBuilds.length > 0)) {
+    const said = [];
+    if (olderBuilds.length > 0) said.push(`Produced by an older version (${olderBuilds.join(", ")}) than the ${pageBuild.name} that made this page (${pageBuild.version}).`);
+    if (earlierBuilds.length > 0) said.push(`Some steps were sealed by ${earlierBuilds.join(", ")}, the build that sealed deals before ${pageBuild.name} did; ${pageBuild.name} ${pageBuild.version} made this page.`);
+    const what = el("p", `${said.join(" ")} What changed: `, "deal-note");
     const link = document.createElement("a");
     link.href = releaseNotes;
     link.textContent = "the release notes";
