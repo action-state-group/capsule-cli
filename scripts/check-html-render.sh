@@ -35,6 +35,21 @@ export PATH="$work/bin:$PATH"
 export CAPSULECTL_PLUGIN_ROOTS="$work/no-plugins"
 cd "$work"
 
+# pill_reads DOM STATE LINE [STATE LINE ...]: the banner's pill is in one of
+# the given states and reads that state's line.
+pill_reads() {
+  local dom=$1
+  shift
+  while (($# >= 2)); do
+    if grep -qF "class=\"cv-pill\" data-verify=\"$1\"" "$dom" && grep -qF ">$2</span>" "$dom"; then
+      echo "     banner: $1"
+      return 0
+    fi
+    shift 2
+  done
+  return 1
+}
+
 # The README's worked example: the first bash block under its heading, run as
 # written in an empty directory.
 awk '/^## Example: a self-checking report of records you sealed$/ {in_section = 1; next}
@@ -55,8 +70,12 @@ cp example/bundle.json example/report.html .
 render report.html
 check "the error hook ran in the page" contains report.html.dom 'data-render-hook="installed"'
 # The pill element itself: the page's stylesheet names data-verify values too.
-check "the page says the bundle verified" contains report.html.dom 'class="cv-pill" data-verify="verified"'
-check "the pill reads 'Contents checked'" contains report.html.dom '>Contents checked</span>'
+# Its line is the presentation contract's for its state (capsule-viewer#80):
+# verified only when the page itself authenticated everything, otherwise
+# incomplete, never failed, for a bundle verify --bundle calls VALID.
+check "the page's banner is verified or incomplete, in the contract's words" pill_reads report.html.dom \
+  verified '✓ Unchanged since it was sealed' \
+  incomplete "None of the bundle's checks failed, but some were not run: see \"Not checked on this page\" below"
 # The rendered markup, not the bundle's JSON the page also carries.
 check "the page renders the report" contains report.html.dom 'data-page="report-rows"><h1>Example checks</h1>'
 check "the page renders the row 'Config file'" contains report.html.dom 'data-row-id="config">Config file</button></td><td data-row-status="same">same<'
@@ -70,20 +89,18 @@ sed 's/"check":"permissions","result":"different"/"check":"permissions","result"
 check "the tampered copy differs" differs report.html tampered.html
 render tampered.html
 check "the tampered page says verification failed" contains tampered.html.dom 'class="cv-pill" data-verify="failed"'
-check "the tampered page's pill reads 'Check failed'" contains tampered.html.dom '>Check failed</span>'
+check "the tampered page's banner says it did not verify" contains tampered.html.dom '>✗ This bundle did not verify: do not rely on it</span>'
 check "the tampered page renders no rows" lacks tampered.html.dom 'data-page="report-rows"'
 permissions=$(jq -r '.disclosures | to_entries[] | select(.value.agent_input.check == "permissions") | .key' bundle.json)
 jq --arg id "$permissions" '.disclosures[$id].agent_input.result = "same"' bundle.json >tampered.json
 capsulectl verify --bundle tampered.json >tampered-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "verify --bundle on the tampered bundle: INVALID, exit 1" test "$verdict" -eq 1
 
-# The page should state a verdict (data-verdict: valid, incomplete or
-# invalid) that claims no more than verify --bundle's on the same bundle. It
-# may claim less: a browser that cannot authenticate the checkpoint can
-# honestly say incomplete for a bundle the CLI calls VALID; it must never say
-# valid for one the CLI calls INCOMPLETE or INVALID. Checked once the vendored
-# viewer sets data-verdict: until then its banner reads "passed" for an
-# INCOMPLETE bundle too.
+# The page states a verdict (data-verdict: valid, incomplete or invalid)
+# that claims no more than verify --bundle's on the same bundle. It may claim
+# less: a browser that cannot authenticate the checkpoint can honestly say
+# incomplete for a bundle the CLI calls VALID; it must never say valid for
+# one the CLI calls INCOMPLETE or INVALID.
 rank() { case "$1" in invalid) echo 0 ;; incomplete) echo 1 ;; valid) echo 2 ;; *) echo -1 ;; esac; }
 claims_no_more() { # DOM, verify --bundle output
   local page cli
@@ -92,12 +109,8 @@ claims_no_more() { # DOM, verify --bundle output
   echo "     page: ${page:-none}, verify --bundle: $cli"
   [[ $(rank "$page") -ge 0 && $(rank "$cli") -ge 0 && $(rank "$page") -le $(rank "$cli") ]]
 }
-if contains report.html.dom 'data-verdict='; then
-  check "the page's verdict claims no more than verify --bundle's" claims_no_more report.html.dom verify.json
-  check "the tampered page's verdict claims no more than verify --bundle's" claims_no_more tampered.html.dom tampered-verify.json
-else
-  echo "skip the page's verdict against verify --bundle's: the vendored viewer sets no data-verdict yet (see agent-action-capsule's issue on the viewer's verdict wording)"
-fi
+check "the page's verdict claims no more than verify --bundle's" claims_no_more report.html.dom verify.json
+check "the tampered page's verdict claims no more than verify --bundle's" claims_no_more tampered.html.dom tampered-verify.json
 
 
 # A page is written only for a bundle `verify --bundle` calls VALID whose
@@ -132,14 +145,8 @@ check "incomplete-bundle: the page carries the changed bundle" differs report.ht
 capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$verdict" -eq 3
 render incomplete.html
-if contains incomplete.html.dom 'data-verdict='; then
-  check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
-  # The pill's accessible name is where the page says "passed" (the attribute,
-  # not the viewer's inline script, which holds the same words).
-  check "incomplete-bundle: the page never says the bundle passed" lacks incomplete.html.dom 'aria-label="Contents checked: bundle verification passed"'
-else
-  echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'Contents checked' for it (agent-action-capsule's issue on the viewer's verdict wording)"
-fi
+check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
+check "incomplete-bundle: the page never says the bundle verified" lacks incomplete.html.dom 'class="cv-pill" data-verify="verified"'
 
 # A deal receipt's page (the deal plugin's) is checked in evidencebook-deal
 # (scripts/check-deal-pages.sh) since the plugin moved there (capsule-cli#326).

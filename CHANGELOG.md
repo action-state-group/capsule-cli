@@ -12,12 +12,11 @@
   vendored browser runtime is rebuilt from capsule-viewer `d100e32` and
   agent-action-capsule `ts/v0.7.0` (`cd68af7`), and `go.mod` names the same
   capsule-viewer commit.
-- **Changed:** `presentation list` and `presentation build` resolve with
-  capsule-viewer's `go/presentation`, which moved there from
-  agent-action-capsule unchanged (agent-action-capsule#379). Resolution is
-  the same, except that a valid producer-selected bundle now resolves its
-  module instead of a refusal, as the browser page already did
-  (agent-action-capsule#395).
+- **Changed:** `presentation list` resolves with capsule-viewer's
+  `go/presentation`, which moved there from agent-action-capsule unchanged
+  (agent-action-capsule#379). Resolution is the same, except that a valid
+  producer-selected bundle now resolves its module instead of a refusal, as
+  the browser page already did (agent-action-capsule#395).
 
 ## v0.1.0-rc23
 
