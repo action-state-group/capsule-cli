@@ -66,8 +66,13 @@ fi
 # CI runs the passes as separate jobs and splits the race pass across several:
 #   CAPSULE_TEST_PASS=race|plain   one pass only (default: both)
 #   CAPSULE_TEST_SHARD=i/n         only the top-level tests in shard i of n
-# A shard is every n-th name of the sorted `go test -list` output, so the n
-# shards together run every test; a name two packages share runs in each.
+# The shards are cut by time: each test, heaviest first, goes to the shard with
+# the least time so far, using the seconds in scripts/test-weights (refreshed
+# from a CI run by scripts/test-weights.sh). A test not listed there counts as
+# CAPSULE_TEST_DEFAULT_WEIGHT seconds (default 2), so new tests spread over the
+# shards until the next refresh. Every shard computes the same split from the
+# sorted `go test -list` output, so the n shards together run every test; a name
+# two packages share runs in each.
 # Each pass ends with its per-package times and slowest tests, and warns when
 # a package takes longer than CAPSULE_TEST_BUDGET seconds (default 420).
 # Both modules: the core (the repository root) and the first-party plugins
@@ -77,8 +82,16 @@ modules=(. plugins)
 run=()
 if ((shard_count > 1)); then
   listed=$(for m in "${modules[@]}"; do (cd "$m" && go test -list '.*' ./...); done)
+  weights=scripts/test-weights
+  [[ -f "$weights" ]] || weights=/dev/null
   names=$(printf '%s\n' "$listed" | grep -E '^(Test|Example|Fuzz)' | sort -u |
-    awk -v i="$shard_index" -v n="$shard_count" '(NR - 1) % n == i - 1')
+    awk -v w="$weights" -v d="${CAPSULE_TEST_DEFAULT_WEIGHT:-2}" '
+      BEGIN { while ((getline l < w) > 0) if (l !~ /^#/) { split(l, a, " "); wt[a[2]] = a[1] } }
+      { print ($0 in wt ? wt[$0] : d), $0 }' |
+    LC_ALL=C sort -k1,1gr -k2,2 |
+    awk -v i="$shard_index" -v n="$shard_count" '
+      { m = 1; for (k = 2; k <= n; k++) if (load[k] < load[m]) m = k
+        load[m] += $1; if (m == i) print $2 }')
   if [[ -z "$names" ]]; then
     printf 'Shard %s has no tests.\n' "$shard" >&2
     exit 1
