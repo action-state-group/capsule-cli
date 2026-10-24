@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### verify --bundle: producer signatures from AAC's strict verifier (#438)
+### verify --bundle: producer signatures and the checkpoint from AAC's strict verifier (#438)
 
 - **Changed:** `verify --bundle` reads each record's producer signature
   from AAC's strict verifier (`VerifyStrict`'s `signatures` claim) instead
@@ -20,10 +20,20 @@
   in it fails the claim instead of withholding it. A composed member that
   is not an evidence-bundle/v2 reports `not_an_evidence_bundle_v2` as its
   signature claim, with no per-record verdicts. Each of these bundles was
-  INVALID already. The checkpoint claim
-  moves to AAC once an AAC Go release carries `bundle.VerifyCheckpoint`;
-  that change will make a checkpoint without its own `log_id`, and a
-  `mmr_size` or `prev_size` written as a float (`0e0`, `1.0`), INVALID.
+  INVALID already.
+- **Changed:** the `checkpoint` claim is AAC strict's
+  (`bundle.VerifyCheckpoint`) instead of the CLI's own. Its shape and
+  finding codes are unchanged. A checkpoint whose JSON copy has no
+  `log_id`, which only its completeness certificate states, was VALID and
+  is now INVALID (`checkpoint_field_missing:log_id`). A `mmr_size` or
+  `prev_size` written as a float (`0e0`, `1.0`) is not the signed integer,
+  and fails `checkpoint_field_mismatch`. A `prev_size` written that way was
+  VALID before. A `checkpoint.cose` that is not a string fails as
+  `checkpoint_signature_malformed` instead of being read as absent (it was
+  INVALID already). Every bundle capsulectl and AAC write carries the
+  checkpoint's own `log_id` and integer sizes, so none of them is affected.
+- **Changed:** `go.mod` (root and `plugins/`) moves
+  `agent-action-capsule/go` to v0.13.0.
 
 ### Report pages: the failed-bundle notes and repeated record ids (capsule-viewer#77)
 

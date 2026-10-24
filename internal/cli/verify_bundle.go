@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,78 +14,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// signedCheckpointFields are the checkpoint fields a COSE checkpoint signs;
-// a bundle's JSON copy of any of them must equal the signed value.
-var signedCheckpointFields = []string{"log_id", "mmr_size", "root", "key_id", "timestamp", "prev_size", "prev_root"}
-
-// checkpointClaim holds the bundle's checkpoint to its signature: the COSE
-// checkpoint must verify, and every signed field the JSON copy carries must
-// equal the signed value (mmr_size and root must be carried). The log id
-// may be stated in the completeness certificate, the checkpoint, or both:
-// the bundle draft requires the signed log identifier to equal "the
-// certificate and checkpoint values", so at least one copy must be stated
-// and every stated copy must equal the signed one. A bundle with no
-// checkpoint.cose is not shown ("withheld"). The verified statement's bytes
-// are returned when the claim passes, else nil.
+// CheckpointClaim is AAC strict's checkpoint claim (bundle.VerifyCheckpoint):
+// checkpoint.cose must verify, and the JSON copy, and the completeness
+// certificate's log_id when stated, must equal the signed statement. A bundle
+// with no checkpoint.cose is not shown ("withheld"). The verified statement's
+// bytes are returned when the claim passes, else nil, for the witness and
+// cadence checks against it.
 func CheckpointClaim(value map[string]interface{}) (aacbundle.ClaimResult, []byte) {
-	stated, _ := value["checkpoint"].(map[string]interface{})
-	encoded, present := stated["cose"].(string)
-	if !present {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_signature_absent"}}, nil
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(encoded)
-	if err != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_malformed"}}, nil
-	}
-	signed, err := SignedCheckpoint(raw)
-	if err != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}, nil
-	}
-	var findings []string
-	for _, field := range signedCheckpointFields {
-		if field == "log_id" {
-			if finding := logIDFinding(value, stated, signed[field]); finding != "" {
-				findings = append(findings, finding)
-			}
-			continue
-		}
-		got, carried := stated[field]
-		if !carried {
-			if field == "mmr_size" || field == "root" {
-				findings = append(findings, "checkpoint_field_missing:"+field)
-			}
-			continue
-		}
-		if !sameJSONValue(got, signed[field]) {
-			findings = append(findings, "checkpoint_field_mismatch:"+field)
-		}
-	}
-	if len(findings) != 0 {
-		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, nil
-	}
-	return aacbundle.ClaimResult{Status: "pass"}, raw
-}
-
-// logIDFinding holds every log id the bundle states (the completeness
-// certificate's and the checkpoint's) to the signed one: at least one must be
-// stated, and each stated copy must equal it.
-func logIDFinding(value, stated map[string]interface{}, signed interface{}) string {
-	certificate, _ := value["completeness_certificate"].(map[string]interface{})
-	copies := 0
-	for _, holder := range []map[string]interface{}{certificate, stated} {
-		got, carried := holder["log_id"]
-		if !carried {
-			continue
-		}
-		copies++
-		if !sameJSONValue(got, signed) {
-			return "checkpoint_field_mismatch:log_id"
-		}
-	}
-	if copies == 0 {
-		return "checkpoint_field_missing:log_id"
-	}
-	return ""
+	claim, _, statement := aacbundle.VerifyCheckpoint(value)
+	return claim, statement
 }
 
 // signaturesClaim is AAC strict's producer-signature claim and each record's
@@ -195,21 +131,12 @@ var bundleOptions = aacbundle.Options{RefusalSignature: verifyRefusalSignature, 
 // withheld (selection_not_checkable) and each record's own inclusion proof
 // is checked against the signed checkpoint. Every other bundle keeps the
 // plain verifier's reading, so no other verdict moves.
-//
-// Strict checks those proofs only once its own checkpoint check passes,
-// which is stricter than CheckpointClaim (it requires checkpoint.log_id
-// itself). So that a tampered proof cannot hide behind that difference, a
-// failing strict checkpoint claim is returned too, and the caller reports it
-// as the bundle's checkpoint claim; nil otherwise.
-func withSelection(value map[string]interface{}, result aacbundle.VerificationResult, strict aacbundle.StrictResult) (aacbundle.VerificationResult, *aacbundle.ClaimResult) {
+func withSelection(value map[string]interface{}, result aacbundle.VerificationResult, strict aacbundle.StrictResult) aacbundle.VerificationResult {
 	if completeness, _ := value["completeness"].(map[string]interface{}); completeness["selection"] != aacbundle.SelectionProducerSelected {
-		return result, nil
+		return result
 	}
 	result.IntervalCoverage, result.PerRecordMembership = strict.IntervalCoverage, strict.PerRecordMembership
-	if checkpoint := strict.Claim("checkpoint"); checkpoint != nil && checkpoint.Status == "fail" {
-		return result, checkpoint
-	}
-	return result, nil
+	return result
 }
 
 // assessBundle reports one Evidence Bundle's claims and its verdict. A
@@ -219,7 +146,7 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // something not shown makes it INCOMPLETE.
 func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string) {
 	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
-	result, strictCheckpoint := withSelection(value, result, strict)
+	result = withSelection(value, result, strict)
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {
@@ -268,9 +195,6 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 
 	signatures, signatureStates := signaturesClaim(strict)
 	signedCheckpoint, statement := CheckpointClaim(value)
-	if strictCheckpoint != nil && signedCheckpoint.Status != "fail" {
-		signedCheckpoint = *strictCheckpoint
-	}
 	witnesses, witnessReceipts := witnessClaim(value, statement, directory)
 	// A deal bundle's receipt is on the cadence checkpoint its own
 	// checkpoint is anchored in; that chain is the bundle's witness claim.
