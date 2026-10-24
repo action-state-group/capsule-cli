@@ -25,6 +25,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Two commits: on a pull request, HEAD is GitHub's merge commit and
+          # HEAD^1 the base it merged into (the freeze step below).
+          fetch-depth: 2
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -60,19 +64,16 @@ jobs:
             exit 1
           fi
       - name: The plugins and the deal skill are frozen for the move
-        # capsule-cli#326, step 5: plugins/ and skills/deal/ were imported
-        # into evidencebook (capsulectl/) and evidencebook-deal at the commit
-        # that added this step. A change to them here would not reach either,
-        # so it goes to that repository instead. Deleting them is the
-        # removal (step 6), so deletions pass.
+        # capsule-cli#326, step 5: plugins/, skills/deal/ and the deal-only
+        # files beside them were imported into evidencebook (capsulectl/) and
+        # evidencebook-deal at the commit that added this step. A change to
+        # them here would not reach either, so it goes to that repository
+        # instead. Deleting them is the removal (step 6), so deletions pass.
         if: github.event_name == 'pull_request'
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags --depth=1 origin "$BASE"
-          changed="$(git diff --name-only --diff-filter=d "$BASE" HEAD -- plugins skills/deal)"
+          changed="$(git diff --name-only --diff-filter=d HEAD^1 HEAD -- plugins skills/deal third_party/unicode scripts/update-confusables.sh)"
           if [ -n "$changed" ]; then
-            printf '::error::plugins/ and skills/deal/ moved to evidencebook and evidencebook-deal (capsule-cli#326); make this change there:\n%s\n' "$changed"
+            printf '::error::plugins/, skills/deal/ and the deal-only files beside them moved to evidencebook and evidencebook-deal (capsule-cli#326); make this change there:\n%s\n' "$changed"
             exit 1
           fi
       - name: Paths that leave with the plugins
