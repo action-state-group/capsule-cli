@@ -28,12 +28,29 @@
   is now INVALID (`checkpoint_field_missing:log_id`). A `mmr_size` or
   `prev_size` written as a float (`0e0`, `1.0`) is not the signed integer,
   and fails `checkpoint_field_mismatch`. A `prev_size` written that way was
-  VALID before. A `checkpoint.cose` that is not a string fails as
-  `checkpoint_signature_malformed` instead of being read as absent (it was
-  INVALID already). Every bundle capsulectl and AAC write carries the
-  checkpoint's own `log_id` and integer sizes, so none of them is affected.
+  VALID before. A `checkpoint.cose` must be strict unpadded base64url: one
+  with a line break, or with non-zero trailing bits, was VALID when its
+  signature verified and now fails as `checkpoint_signature_malformed`. A
+  `cose` that is not a string fails the same way instead of being read as
+  absent (it was INVALID already). Findings list every mismatch before any
+  missing field, so a checkpoint with no `log_id` beside a certificate
+  naming another log reports both. Every bundle capsulectl and AAC write
+  carries the checkpoint's own `log_id`, integer sizes and strict base64url,
+  so none of them is affected.
+- **Changed:** witness receipts and a deal's cadence chain are checked only
+  against a checkpoint whose claim passed, as AAC strict checks them. So on
+  a bundle whose checkpoint claim newly fails, `witnesses` reads `withheld`
+  (`checkpoint_unverified`) with no receipts. A deal History reports
+  `deal_log_unbound` for such a carried deal. A producer-selected bundle
+  whose certificate names another log has its membership withheld
+  (`checkpoint_unverified`) instead of checked. Each of these bundles is
+  INVALID.
 - **Changed:** `go.mod` (root and `plugins/`) moves
-  `agent-action-capsule/go` to v0.13.0.
+  `agent-action-capsule/go` to v0.13.0. Besides the checkpoint claim, that
+  release caps AAC's Class 1 number findings (agent-action-capsule#387):
+  `verify --capsule` lists at most 64 `float_in_digest_field` and 64
+  `unsafe_integer_in_digest_field` codes, and a quoted path is cut at 256
+  characters. Verdicts don't change.
 
 ### Report pages: the failed-bundle notes and repeated record ids (capsule-viewer#77)
 
