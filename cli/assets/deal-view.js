@@ -157,6 +157,36 @@ const dealStandaloneReport = async (context, bundle, x, sealedId) => {
   return { report };
 };
 
+// dealBuildsCompared compares the builds that sealed the steps with the build
+// that made this page: page_producer when the plugin wrote one
+// (capsule-cli#326), else the core version a page built inside capsule-cli
+// carries. Versions compare only between builds of the same name. On a
+// capsulectl-deal page a step sealed by capsulectl itself, with or without a
+// recorded version, predates any capsulectl-deal: it is an earlier build, said
+// apart, not an older version. The plugin names its own release notes; a page
+// without them is from a build inside capsule-cli. buildNote is the sentence
+// the page shows, empty when there is nothing to say.
+const dealBuildsCompared = (builds, report) => {
+  const pp = report.page_producer && typeof report.page_producer === "object" ? report.page_producer : {};
+  const pageBuild = {
+    name: typeof pp.name === "string" && pp.name ? pp.name : "capsulectl",
+    version: typeof pp.version === "string" ? pp.version : typeof report.page_version === "string" ? report.page_version : "",
+  };
+  const earlier = (b) => b.producer === "capsulectl" && pageBuild.name === "capsulectl-deal";
+  const olderBuilds = builds
+    .filter((b) => !earlier(b) && b.producer === pageBuild.name && (b.version === undefined || versionBefore(b.version, pageBuild.version)))
+    .map((b) => b.version || "unrecorded");
+  const earlierBuilds = builds.filter(earlier).map((b) => (b.version === undefined ? b.name : `${b.producer} ${b.version}`));
+  const releaseNotes = typeof report.release_notes === "string" && report.release_notes.startsWith("https://") ? report.release_notes : "https://github.com/action-state-group/capsule-cli/releases";
+  const said = [];
+  if (pageBuild.version && olderBuilds.length > 0) said.push(`Produced by an older version (${olderBuilds.join(", ")}) than the ${pageBuild.name} that made this page (${pageBuild.version}).`);
+  if (pageBuild.version && earlierBuilds.length > 0) {
+    const what = earlierBuilds.length > 1 ? "the builds that sealed" : "the build that sealed";
+    said.push(`Some steps were sealed by ${earlierBuilds.join(", ")}, ${what} deals before ${pageBuild.name} did; ${pageBuild.name} ${pageBuild.version} made this page.`);
+  }
+  return { pageBuild, olderBuilds, earlierBuilds, releaseNotes, buildNote: said.join(" ") };
+};
+
 const dealViewModel = async (context) => {
   const page = globalThis.capsulectlDealPage || {};
   // The context's own frozen copy of the bundle, read only for what no
@@ -221,9 +251,11 @@ const dealViewModel = async (context) => {
     const rec = payload(id) || {};
     // An x-deal-v0 record names its producer in its block; a typed record, in its header.
     const p = (rec["x-deal-v0"] || rec).producer;
-    const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
-    if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
+    const producer = (p && p.name) || "capsulectl";
+    const name = p && typeof p.version === "string" ? `${producer} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
+    if (!builds.some((b) => b.name === name)) builds.push({ name, producer, version: p && p.version });
   });
+  const { pageBuild, olderBuilds, earlierBuilds, releaseNotes, buildNote } = dealBuildsCompared(builds, report);
 
   // Each statement's class, as sealed with it (undefined when its sealed step
   // holds no such claim).
@@ -244,6 +276,11 @@ const dealViewModel = async (context) => {
     matched,
     recorded: [...context.recordIndex.keys()],
     builds,
+    pageBuild,
+    olderBuilds,
+    earlierBuilds,
+    releaseNotes,
+    buildNote,
     claimClasses,
   };
 };
@@ -433,12 +470,11 @@ const dealViewRender = (model, regions) => {
   const builds = model.builds;
   if (builds.length > 0) provenance.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
   if (typeof report.instructions === "string" && report.instructions) provenance.append(el("p", report.instructions, "deal-note"));
-  const pageVersion = typeof report.page_version === "string" ? report.page_version : "";
-  const older = builds.filter((b) => b.version === undefined || versionBefore(b.version, pageVersion));
-  if (pageVersion && older.length > 0) {
-    const what = el("p", `Produced by an older version (${older.map((b) => b.version || "unrecorded").join(", ")}) than the capsulectl that made this page (${pageVersion}). What changed: `, "deal-note");
+  const { releaseNotes, buildNote } = model;
+  if (buildNote) {
+    const what = el("p", `${buildNote} What changed: `, "deal-note");
     const link = document.createElement("a");
-    link.href = "https://github.com/action-state-group/capsule-cli/releases";
+    link.href = releaseNotes;
     link.textContent = "the release notes";
     link.rel = "noopener";
     what.append(link);
