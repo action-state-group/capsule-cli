@@ -301,7 +301,7 @@ func TestVerifyBundleChecksAScrapiReceipt(t *testing.T) {
 	assert.Empty(t, findings)
 	receipt := result["witnesses"].(map[string]interface{})["receipts"].([]interface{})[0].(map[string]interface{})
 	assert.Equal(t, "scrapi", receipt["binding"])
-	assert.Equal(t, "verified under test witness's key", receipt["reason"])
+	assert.Equal(t, "ok", receipt["reason"], "the reason is AAC's (capsule-cli#438)")
 
 	result, err = verifyWithDirectory(t, producedBundle(t, scrapi(otherKey)), directory)
 	assert.ErrorIs(t, err, ErrBundleInvalid)
@@ -404,7 +404,8 @@ func TestVerifyBundleFailsAMalformedReceiptWithoutARow(t *testing.T) {
 	}
 }
 
-// Findings are listed in entry order.
+// Findings are AAC's: malformed entries first, in entry order, then one per
+// receipt that did not pass (capsule-cli#438).
 func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, private, err := ed25519.GenerateKey(rand.Reader)
@@ -418,10 +419,10 @@ func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
 	assert.ErrorIs(t, err, ErrBundleInvalid)
 	_, findings := bundleWitnesses(result)
 	assert.Equal(t, []interface{}{
-		"witness_unverified:" + testWitness,
 		"witness_receipt_malformed:1",
-		"witness_unverified:" + testWitness,
 		"witness_receipt_malformed:3",
+		"witness_unverified:" + testWitness,
+		"witness_unverified:" + testWitness,
 	}, findings)
 }
 
@@ -555,8 +556,8 @@ func TestVerifyBundleReadsLaxDirectoryRowsAsAACDoes(t *testing.T) {
 }
 
 // A receipt_b64 wrapped across lines is not canonical base64, which
-// agent-action-capsule requires, so the receipt fails. (capsule-cli writes
-// its receipts unwrapped.)
+// agent-action-capsule requires, so the entry is malformed and fails.
+// (capsule-cli writes its receipts unwrapped.)
 func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -570,7 +571,7 @@ func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	result, _ := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(testWitness, public)))
 	state, findings := bundleWitnesses(result)
 	assert.Equal(t, "fail", state)
-	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
+	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
 	assert.Equal(t, "INVALID", result["verdict"])
 }
 
