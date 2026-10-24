@@ -68,6 +68,7 @@ var hexDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // nothing unselected is carried; and every nested record is signed by the
 // selection record's key (holder_key), the one key the deals share. A
 // finding names the deal it is about.
+//
 // signatures is each record's producer-signature verdict by capsule id, as
 // AAC strict gives it (verify --bundle's record_signatures).
 func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, signatures map[string]string, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
