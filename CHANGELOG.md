@@ -45,6 +45,13 @@
   about paths that leave with the plugins (`scripts/check-moved-paths.sh`).
 - **Removed:** an unused SCITT statement-receipt check with no callers.
 
+### CI shards the tests by measured time (#407)
+
+- **Changed:** `scripts/test.sh` cuts its shards by the seconds each test took
+  (`scripts/test-weights`, refreshed from a CI run by `scripts/test-weights.sh`)
+  instead of by name, and the race pass runs on eight jobs instead of six, so
+  no shard sits near go test's 15-minute limit.
+
 ### verify --bundle: producer signatures and the checkpoint from AAC's strict verifier (#438)
 
 - **Changed:** `verify --bundle` reads each record's producer signature

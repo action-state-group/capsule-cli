@@ -26,7 +26,7 @@ gh run view "$run" --repo "$repo" --log |
   awk -F'\t' '$1 ~ /^test \(race / { sub(/^[^ ]+ /, "", $3); print $3 }' |
   awk '/^--- (PASS|FAIL)/ { t = $4; gsub(/[()s]/, "", t); sum[$3] += t }
        END { for (n in sum) printf "%.2f %s\n", sum[n], n }' |
-  sort -k2 >"$tmp"
+  LC_ALL=C sort -k2,2 >"$tmp"
 
 if [[ ! -s "$tmp" ]]; then
   printf 'No race-shard test results in run %s.\n' "$run" >&2
