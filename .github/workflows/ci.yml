@@ -80,6 +80,8 @@ jobs:
         # Warns while the plugin and deal-skill trees are still here; the removal
         # (capsule-cli#326, step 6) turns it to --fail.
         run: bash scripts/check-moved-paths.sh
+      - name: The test sharding script splits every test once
+        run: bash scripts/check-shard-tests.sh
       - name: Vet
         run: |
           go vet ./...
@@ -90,22 +92,25 @@ jobs:
         run: make build
 
   tests:
-    # The race detector (the slowest case loops sampled) split by test name
-    # across six jobs, and every case without it across two: see
-    # scripts/test.sh. One job running both passes took 13-15 minutes and
-    # hit go test's 15-minute timeout on PR runs and on the nightly; at four
+    # The race detector (the slowest case loops sampled) split by measured test
+    # time across eight jobs, and every case without it across two: see
+    # scripts/test.sh and scripts/test-weights.sh. One job running both
+    # passes took 13-15 minutes and hit go test's 15-minute timeout on PR runs and on the nightly; at four
     # race shards and one plain job, the plugin package grew past the race
-    # shard's 15 minutes and the plain pass's 10 (capsule-cli#403).
+    # shard's 15 minutes and the plain pass's 10 (capsule-cli#403). Cut by
+    # name, six race shards still ran at 14 minutes (capsule-cli#407).
     strategy:
       fail-fast: false
       matrix:
         part:
-          - { pass: race, shard: 1/6 }
-          - { pass: race, shard: 2/6 }
-          - { pass: race, shard: 3/6 }
-          - { pass: race, shard: 4/6 }
-          - { pass: race, shard: 5/6 }
-          - { pass: race, shard: 6/6 }
+          - { pass: race, shard: 1/8 }
+          - { pass: race, shard: 2/8 }
+          - { pass: race, shard: 3/8 }
+          - { pass: race, shard: 4/8 }
+          - { pass: race, shard: 5/8 }
+          - { pass: race, shard: 6/8 }
+          - { pass: race, shard: 7/8 }
+          - { pass: race, shard: 8/8 }
           - { pass: plain, shard: 1/2 }
           - { pass: plain, shard: 2/2 }
     name: test (${{ matrix.part.pass }} ${{ matrix.part.shard }})
