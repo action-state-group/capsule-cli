@@ -205,11 +205,11 @@ func pluginInstallCheck(name string) (map[string]any, string) {
 			check["version_check"] = "not checked: development build " + CLIVersion
 		case info.coreVersion() != CLIVersion:
 			check["version_check"] = "mismatch"
-			return check, fmt.Sprintf("capsulectl-%s is built for capsulectl %s, this capsulectl is %s: run capsulectl plugin install %s", name, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion, name)
+			return check, fmt.Sprintf("capsulectl-%s is built for capsulectl %s, this capsulectl is %s: install the plugin file built for this release, then run capsulectl plugin install ./capsulectl-%s", name, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion, name)
 		default:
 			check["version_check"] = "matches"
 		}
 		return check, ""
 	}
-	return check, "capsulectl-" + name + " is not installed: run capsulectl plugin install " + name
+	return check, "capsulectl-" + name + " is not installed: install the plugin file from its release, then run capsulectl plugin install ./capsulectl-" + name
 }

@@ -49,10 +49,10 @@ by its pinned values, not by "the newest one":
   never gets that change, so the page never offers it.
 - **Other installers that pin the values the same way**, such as an agent
   platform's packaged capsulectl, are held by their own reviewed change.
-- **`capsulectl plugin install book|deal`**, and a manual install checked
-  only against `SHA256SUMS`, trust the release's own `SHA256SUMS`. The
-  plugin comes from the release of the capsulectl that runs it; the
-  attestation is checked only when `gh` is installed. That trust rests on
+- **A manual install checked only against `SHA256SUMS`** trusts the
+  release's own `SHA256SUMS`, and the attestation only when it is checked.
+  The first-party plugins come from their own releases (docs/PLUGINS.md),
+  each with its own `SHA256SUMS` and attestation. That trust rests on
   the release staying what it was when it was pinned, which GitHub's
   immutable releases setting enforces (RELEASING.md, "Repository
   settings"). The setting covers releases published after it was turned

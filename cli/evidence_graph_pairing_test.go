@@ -57,17 +57,3 @@ func TestRuntimeAndShellComeFromOneViewerCommit(t *testing.T) {
 		"the vendored runtime is from capsule-viewer %s but go.mod's capsule-viewer/go %s is %s: move them together",
 		runtimeCommit, version, moduleCommit)
 }
-
-// deal report and presentation build resolve capsule-viewer through the
-// plugins module, so it must pin the same version the test above checks.
-func TestPluginsPinTheSameViewerModule(t *testing.T) {
-	line := regexp.MustCompile(`(?m)^\s*github\.com/action-state-group/capsule-viewer/go (\S+)`)
-	read := func(path string) string {
-		raw, err := os.ReadFile(path)
-		require.NoError(t, err)
-		m := line.FindSubmatch(raw)
-		require.NotNil(t, m, "%s requires capsule-viewer/go", path)
-		return string(m[1])
-	}
-	require.Equal(t, read(filepath.Join("..", "go.mod")), read(filepath.Join("..", "plugins", "go.mod")))
-}

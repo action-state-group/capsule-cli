@@ -74,10 +74,9 @@ fi
 # together run every test; a name two packages share runs in each.
 # Each pass ends with its per-package times and slowest tests, and warns when
 # a package takes longer than CAPSULE_TEST_BUDGET seconds (default 420).
-# Both modules: the core (the repository root) and the first-party plugins
-# (plugins/, capsule-cli#236). go test ./... in a module does not reach into a
-# nested one, so every go command below runs once per module.
-modules=(. plugins)
+# One module: the repository root. The first-party plugins test in their own
+# repositories (capsule-cli#326).
+modules=(.)
 run=()
 if ((shard_count > 1)); then
   listed=$(for m in "${modules[@]}"; do (cd "$m" && go test -list '.*' ./...); done)

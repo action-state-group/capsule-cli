@@ -62,9 +62,9 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Check the tag follows the release tag policy
-        # The same policy as cli/plugin_install.go (releaseTagPolicy):
-        # a core whose version matches it is a release build, so
-        # `plugin install book|deal` fetches from its release.
+        # The same policy as cli/plugin_install.go (releaseTagPolicy): a core
+        # whose version matches it is a release build, which checks a
+        # first-party plugin's core_version against its own.
         env:
           VERSION: ${{ github.ref_name }}
         run: |

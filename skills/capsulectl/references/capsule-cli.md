@@ -222,109 +222,28 @@ discovered on the trusted plugin roots (`{roots: [...], plugins: [{name,
 vendor, version, plugin_api, subcommands, path}, ...]}`).
 
 Installing a plugin is the user's step, outside this skill's authority.
-`capsulectl plugin install book|deal|./FILE` and `capsulectl plugin remove
-NAME` exist for the user. When a command says a plugin is not installed,
-stop and show the user the exact command it prints; never run `plugin
+`capsulectl plugin install ./FILE` (a plugin file downloaded from its own
+release) and `capsulectl plugin remove NAME` exist for the user. When a
+command says a plugin is not installed, stop and show the user the exact command it prints; never run `plugin
 install` or `plugin remove` yourself.
 
-## Seal a Result into the book
+## Seal a Result
 
 ```sh
-capsulectl result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
+capsulectl result build --profile NAME --result RESULT.json [--contract REF] [--out SEALED.json] [--capsule-out CAPSULE.json]
 ```
 
-Requires a jsonl profile with `log_id`, `operator`, a signing key the
-profile trusts and a checkpoint signing key it trusts (the same footing as
-`close`). RESULT is an Evidence Result v0 document (agent-action-capsule
+RESULT is an Evidence Result v0 document (agent-action-capsule
 `schemas/evidence-result-v0.json`, vendored in the binary with its digest
 pinned); the skill never writes one -- it seals what a judging step
-produced. The verb refuses, in one sentence each: a document outside the
-schema; buckets that do not partition the claims under their own verdicts,
-or coverage counts that do not add up; a claim naming a contract other than
-`--contract`; a cited digest (`claims[].evidence`, a disclosure carrier's
-evidence, `close.peer_close_ref`) the book holds neither as a published
-capsule nor as a record; a claim citing nothing; a close claim whose
-`close_ref` (or `peer_close_ref`, when present) is not among its own
-`evidence[]`, or does not name a Close; a close claim whose `close_state` is
-not what the COUNTERPARTY's links to the cited Close read (`rebuts` ->
-CONTESTED, `acknowledges` -> AGREED, neither -> UNILATERAL), where a link
-counts only from a record of another book than the Close's, that book the
-claim's named `peer`, signed under another key than the Close -- every
-record in this book is this book's own, so a link held here never counts --
-or whose `peer_close_ref` is not the record whose link decided it; a Close,
-or a record linking to it, whose Producer Envelope does not verify under its
-`key_id` (the signer is verified, never read as stated); a reconcile
-claim whose tallies are not what the cited Close sealed, or whose
-`sufficiency` is not the one those tallies derive (`INSUFFICIENT > 0` is GAP,
-else `UNRESOLVED > 0` is UNKNOWN, else SATISFIED); a close or reconcile
-claim whose `period` is not the window its Close sealed, when this tool's
-`close` sealed it (its `capsulectl-close/v1` profile names the period); any
-headline count or tally written as other than an integer literal (`7.0`,
-`7e0`). On success one
-`evidence_result` record is appended -- its statement is the document, its
-`cites` links name every resolved record -- and a checkpoint covers it.
-Output: `record_id`, `seq`, `contract_refs`, `claims`, `cites`,
-`statement_digest` (SHA-256 of `--out`, the document's canonical form),
-`already_built`. A repeat of the same document returns the existing record
-and, with the same `--out`/`--capsule-out`, rewrites nothing (the files
-already hold those bytes); a file holding anything else at either path is
-refused by name, nothing overwritten. A repeat whose record is not yet under
-a checkpoint (an earlier run sealed it, then failed) checkpoints it.
-
-Sealed as the producer states them, not checked: a reconcile claim's
-`join_key` and `state_of_record`; the `period` of a claim whose Close
-another producer sealed; a close claim's `verdict` and `sufficiency` beyond
-the schema's rule that a CONTESTED Close is never met.
-
-**Only UNILATERAL close claims can be sealed end to end today.** A link
-makes a Close AGREED or CONTESTED only from the named peer's book under
-another verified key, and a book holds only its own records, so the book's
-own `Acknowledge` / `Rebut` of its Close is ignored -- where evidencebook's
-own status reading would count it. Sealing AGREED or CONTESTED needs the
-peer's acknowledging or rebutting record in the book; no verb imports one
-yet (a follow-up).
-`disclose --profile NAME --root RECORD_ID --payloads selected --out B.json`
-then builds the bundle a report is rendered from; it refuses `--suppress
-agent_input` on that root, because the header is the Result.
-
-The book stores digests, never text: a published capsule's record commits
-the capsule and its producer envelope only. When a report should show what
-the cited capsules were given, add `--attach-input-originals` to `disclose`
-(jsonl profiles): each published capsule in the bundle whose agent_input
-original the artifact store retains rides in the bundle extension
-`capsulectl/agent-input-originals/v1` (capsule id to base64url bytes), after
-its JSON-DIGEST is checked against the capsule's `agent_input_digest`; the
-disclosure record commits to that bundle. It cannot be combined with
-`--suppress agent_input`. A record an earlier build wrote with the original
-as a committed payload has those bytes withheld by `--suppress agent_input`
-(which then needs `--payloads selected`).
-
-## Render a report
-
-```sh
-capsulectl report build --bundle B.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
-```
-
-Read-only over a held file; no profile, no store, no record. The bundle is
-verified first (interval and membership must pass, no disclosed member may
-mismatch; a graph closure the bundle declares incomplete is accepted as
-withheld), then
-its root must be a sealed Result v0 -- a disclosed member that is the
-document, or an `evidence_result` record header whose `statement` is the
-document (a book bundle; its header is then also checked by the evidence-
-book verifier) -- and the document must pass the same schema and
-cross-checks `result build` applies. CARD is one of the Evidence Contract's
-profiles (`attribution`, `human_role`, `obligation`, `outcome`, `process`,
-`quality`, `settlement`) and is recorded in the page's `report-card/v1`
-block; P.json carries at most `producer_display_name`, `logo_data_url`
-(inline `data:image/` only) and `title`, recorded as `presentation/v1`. A
-bundle already carrying a different block of either kind is refused.
-Output: `root`, `form` (`payload` or `book`), `card`, `claims`,
-`unsupported_claims` (claims citing evidence the bundle does not hold; the
-viewer renders them unsupported, never met), `report`, `bundle_digest`,
-`verification` (`pass`, or `graph_closure withheld` when the bundle declares
-records of its closure missing -- the claims citing them count as
-unsupported), and `permalink` when asked. `--dry-run` writes the
-page with `draft: true` in its card block and mints no permalink. The page
-is self-contained: the bundle and the browser runtime are inline and nothing
-is loaded from the network.
+produced. Checked before anything is sealed: the schema, under which every
+claim cites at least one record; every headline count recomputes from the
+claims (integer literals only: `7`, not `7.0` or `7e0`); every record a claim
+cites is in the profile's log, and its Capsule in the artifact store. Everything else a claim states is sealed as
+stated. On success one Capsule whose payload is the Result is appended; it
+cites every record the Result cites (`acted_on`), so a bundle rooted on it
+carries them. Next: `cll checkpoint create`, then `disclose --root` with the
+`capsule_id`, then `presentation build --bundle` for the Result page. A
+repeat with the same document and key returns the Capsule already in the
+log. On a book profile this is the book plugin's `book result build`, which
+seals into the evidence book.

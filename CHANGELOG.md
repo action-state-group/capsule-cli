@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Upgrade note: the book and deal plugins and the deal skill ship from their own releases (#326)
+
+- **Changed:** `capsulectl-book` now builds and releases from evidencebook
+  (the nested module `capsulectl/`, tags `capsulectl/vX.Y.Z`), and
+  `capsulectl-deal` and the deal skill from evidencebook-deal (tags
+  `vX.Y.Z`). This repository no longer holds `plugins/`, `skills/deal/`,
+  `third_party/unicode/`, `docs/BACKFILL.md` or the deal-only scripts, and its
+  releases no longer carry `capsulectl-<tag>-plugin-<name>-<os>-<arch>`
+  assets. Published releases are unchanged.
+- **Removed:** `capsulectl plugin install book|deal` (install by name). It
+  refuses and gives the file form: download the plugin file built for your
+  capsulectl release from the plugin's own release, check it, then
+  `capsulectl plugin install ./capsulectl-<name>`. The hidden `--release-url`
+  flag is gone. The missing-plugin, version-mismatch and `doctor
+  --install-check` messages give the file form.
+- **Changed:** the `capsulectl` skill lists the core verbs only; the book
+  verbs (`request`, `respond`, `close`, `reconcile`, `report build`, and
+  `result build` on a book profile) are the book plugin's. `result build` on
+  a plain profile stays a core verb. Its scripted demo runs on a sqlite
+  profile, now including `result build`, and passes again (it needed the book
+  plugin since #236).
+- **Added:** `TestPresentationFixturesVerifyOffline` checks every committed
+  presentation fixture, deal copies included, verifies to its recorded
+  verdict with the core alone. The deal page and portability checks run in
+  evidencebook-deal.
+- **Changed:** CI fails on any path into the trees that moved out
+  (`scripts/check-moved-paths.sh --fail`, which now also fails when its
+  `git grep` cannot run), and drops the plugin jobs.
+
 ### The book and deal plugins are separate packages (#326)
 
 - **Changed:** `plugins/internal/plugin` is split into `plugins/internal/book`

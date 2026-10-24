@@ -71,3 +71,31 @@ func TestCheckMovedPaths(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "::error::docs/a.md")
 }
+
+// With --fail, a repository with nothing pointing into the moved trees
+// passes; one where a moved tree still exists fails; and a git grep that
+// cannot run (here, no repository at all) fails the check rather than
+// reading as no hits.
+func TestCheckMovedPathsFailMode(t *testing.T) {
+	clean := scriptRepo(t, "check-moved-paths.sh", map[string]string{"docs/a.md": "nothing moved here\n"})
+	out, err := exec.Command("bash", filepath.Join(clean, "scripts", "check-moved-paths.sh"), "--fail").CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	tree := scriptRepo(t, "check-moved-paths.sh", map[string]string{"plugins/go.mod": "module x\n"})
+	out, err = exec.Command("bash", filepath.Join(tree, "scripts", "check-moved-paths.sh"), "--fail").CombinedOutput()
+	require.Error(t, err)
+	assert.Contains(t, string(out), "::error::plugins/ still exists")
+
+	norepo := t.TempDir()
+	body, err := os.ReadFile(filepath.Join("..", "scripts", "check-moved-paths.sh"))
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Join(norepo, "scripts"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(norepo, "scripts", "check-moved-paths.sh"), body, 0o755))
+	cmd := exec.Command("bash", filepath.Join(norepo, "scripts", "check-moved-paths.sh"), "--fail")
+	cmd.Env = append(os.Environ(), "GIT_CEILING_DIRECTORIES="+filepath.Dir(norepo))
+	out, err = cmd.CombinedOutput()
+	var exit *exec.ExitError
+	require.ErrorAs(t, err, &exit, string(out))
+	assert.Equal(t, 2, exit.ExitCode(), string(out))
+	assert.Contains(t, string(out), "git grep failed")
+}

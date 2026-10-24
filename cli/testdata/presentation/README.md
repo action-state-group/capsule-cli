@@ -2,35 +2,42 @@
 
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`; the pages and snapshots
-are now those of the viewer `cli/assets/README.md` pins. `TestPresentationGoldens`
-(`plugins/internal/deal/presentation_golden_test.go`) holds every later viewer to them:
+are now those of the viewer `cli/assets/README.md` pins.
 
-- **Without Chrome:** it re-emits each page from its `bundle.json` the way capsulectl
-  does and checks the page gate's decision. While the vendored viewer is unchanged,
-  the result must equal `page.html` byte for byte. The two pages `book report build`
-  writes (`4-monthly-outcome`, `5-monthly-compliance`) are re-emitted by capsulectl-book's
-  `TestReportBuildGoldens` (`plugins/internal/book/presentation_golden_test.go`), which
-  fails unless `page.html` is exactly what it writes now; the browser checks below
-  read that page.
+**Here, in the core,** they are committed test data: `TestPresentationGoldensCiteWhatTheyCarry`
+and `TestPresentationFixturesVerifyOffline` (`cli/presentation_fixtures_test.go`) check what
+each bundle cites and that each bundle and page verifies to its `meta.json` verdict with the
+core alone, and the `presentation build` and `list` tests read them.
+
+**The rendering checks below run where the pages are built** (capsule-cli#326):
+evidencebook-deal's `TestPresentationGoldens` (`internal/deal/presentation_golden_test.go`), on
+its own copy of these fixtures, and, for the two pages `book report build` writes
+(`4-monthly-outcome`, `5-monthly-compliance`), evidencebook's `TestReportBuildGoldens`
+(`capsulectl/internal/book/presentation_golden_test.go`). They hold every later viewer to them:
+
+- **Without Chrome:** each page is re-emitted from its `bundle.json` the way capsulectl
+  does, and the page gate's decision checked. While the vendored viewer is unchanged,
+  the result must equal `page.html` byte for byte.
 - **With `CAPSULECTL_CHROME` set:** it also opens each page headless, with no network:
   Chrome resolves no host name or IP literal, and a request for anything outside the
   page fails the test, whether the page, one of its iframes or workers, or a WebSocket
   makes it. At 1280px its DOM must match `snapshot.json`: the verification state, the
   views, the evidence identifiers, and the words in order. Layout is not compared.
-- **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (CI only), the browser must be the
-  Chrome `known-overflow.json` names. At 390px, 1280px and in print, each page is held
+- **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (evidencebook-deal's CI only), the
+  browser must be the Chrome its `known-overflow.json` names. At 390px, 1280px and in print, each page is held
   to that file:
   - an overflow it does not list fails;
   - a listed view wider than recorded by more than `tolerance_px` fails;
   - a listed view that no longer overflows fails until it is removed from the list.
 
   Widths depend on the browser and the fonts, so CI pins both: Chrome for Testing at
-  the named version, and DejaVu as the only fonts (`fonts.conf`). Elsewhere widths are
-  logged, not compared.
+  the named version, and DejaVu as the only fonts (its `fonts.conf`). Elsewhere widths
+  are logged, not compared. Both files are evidencebook-deal's.
 
 Every fixture is synthetic: example operators, example cases, example criteria,
-generated keys. `scripts/presentation-goldens/build-fixtures.sh` rebuilds them all
-through the real CLI. Run it only to change a fixture on purpose.
+generated keys. evidencebook-deal's `scripts/presentation-goldens/build-fixtures.sh`
+rebuilds them through the real CLI and plugins; a fixture changed there on purpose is
+copied here, where the core's tests read it.
 
 | Fixture | What it is | How the page is emitted | Page |
 | --- | --- | --- | --- |
@@ -76,7 +83,7 @@ through the real CLI. Run it only to change a fixture on purpose.
   2267px wide at 1280px and 2091px in print, because its members table holds unbroken
   64-hex ids (capsule-viewer#57); it fits at 390px. It was 2091px at 1280px too until
   capsule-viewer's page shell gave every page a 60rem frame (capsule-viewer#60).
-  `known-overflow.json` lists those two views. No other page overflows. Four did when the fixtures were taken: the
+  evidencebook-deal's `known-overflow.json` lists those two views. No other page overflows. Four did when the fixtures were taken: the
   compliance page (793px), the fallback page (686px, fixtures 6 and 6-unknown-extension),
   the rules comparison (682px) and the outcome report (421px, fixed in
   agent-action-capsule#323; capsule-cli#150).
@@ -86,8 +93,8 @@ through the real CLI. Run it only to change a fixture on purpose.
 
 ## The presentation pass
 
-`TestPresentationPass` and its siblings (`cli/presentation_pass_test.go`, CI job
-`presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
+`TestPresentationPass` and its siblings (evidencebook-deal's
+`internal/deal/presentation_pass_test.go`, CI job `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
 the one registry, shell and builder capsulectl has, with no plugin installed:
 
 - **One page per (bundle, audience), for audiences `*` and `counterparty`.** The html page is

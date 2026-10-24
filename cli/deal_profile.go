@@ -8,12 +8,9 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// This file is the only place that knows the sealed wire shape of a deal step:
-// the x-deal-v0 record (skills/deal/profile/PROFILE.md). Everything else works
-// with dealEvent, which holds raw values and lives only in the local store.
-// A record is derived deterministically from its local event, the steps before
-// it, and the deal key, so the local store can be re-checked against every
-// sealed record on every read.
+// The x-deal-v0 record's names, which verify reads deal bundles by. The
+// capsulectl-deal plugin builds the records, and its deal skill's
+// profile/PROFILE.md defines them (evidencebook-deal, capsule-cli#326).
 
 const (
 	DealProfile   = "x-deal-v0"

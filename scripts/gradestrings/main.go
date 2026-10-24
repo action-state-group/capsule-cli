@@ -40,11 +40,9 @@ import (
 var vocabulary = regexp.MustCompile(`(?i)(?:^|[^a-z])(?:self[- _]?attested|attest(?:s|ed|ation)?|witness(?:ed)?|countersign(?:ed|ature)?|self[- _]countersigned|unresolved[- _]signer|anchored|notari[sz]ed|tamper[- ]evident|non-repudiation|unsigned)(?:[^a-z]|$)`)
 
 var (
-	rungLine    = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
-	helpLine    = regexp.MustCompile(`Short:|Use:|Flags\(\)|Errorf|inputError|errors\.New`)
-	timeRung    = regexp.MustCompile(`timeRung|time_rung`)
-	receiptFile = map[string]bool{"plugins/internal/deal/deal_email.go": true, "plugins/internal/deal/deal_countersign.go": true, "plugins/internal/deal/deal_report.go": true, "plugins/internal/deal/deal_obligation.go": true}
-	escape      = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
+	rungLine = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
+	timeRung = regexp.MustCompile(`timeRung|time_rung`)
+	escape   = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
 	// goToken and jsLiteral are the independent tokenizer and the page
 	// script's literals: comments are consumed so their quotes do not count.
 	goToken   = regexp.MustCompile("(?s)//[^\\n]*|/\\*.*?\\*/|'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"|`[^`]*`")
@@ -52,7 +50,7 @@ var (
 )
 
 func main() {
-	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go", "plugins/internal/deal/*.go", "plugins/internal/book/*.go", "plugins/cmd/*.go").Output()
+	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go").Output()
 	if err != nil {
 		fail(err)
 	}
@@ -154,8 +152,7 @@ func goClass(path, line, v string) string {
 		return "rung-value"
 	case !strings.Contains(strings.TrimSpace(v), " "):
 		return "identifier"
-	case receiptFile[path] && !helpLine.MatchString(line),
-		path == "cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
+	case path == "cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
 		return "receipt-copy"
 	}
 	return "operator"

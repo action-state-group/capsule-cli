@@ -25,10 +25,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Two commits: on a pull request, HEAD is GitHub's merge commit and
-          # HEAD^1 the base it merged into (the freeze step below).
-          fetch-depth: 2
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -46,13 +42,10 @@ jobs:
             exit 1
           fi
       - name: Check formatting and module files
-        # Two modules: the core (the repository root) and the first-party
-        # plugins (plugins/, capsule-cli#236).
         run: |
           test -z "$(gofmt -l .)"
           go mod tidy
-          (cd plugins && go mod tidy)
-          git diff --exit-code -- go.mod go.sum plugins/go.mod plugins/go.sum
+          git diff --exit-code -- go.mod go.sum
       - name: The core depends only on neutral modules
         # The donatable core (capsule-cli#236, #326): every action-state-group
         # module in its build graph, tests included, is on the neutral list,
@@ -63,29 +56,15 @@ jobs:
             echo "::error::the core go.mod requires evidencebook"
             exit 1
           fi
-      - name: The plugins and the deal skill are frozen for the move
-        # capsule-cli#326, step 5: plugins/, skills/deal/ and the deal-only
-        # files beside them were imported into evidencebook (capsulectl/) and
-        # evidencebook-deal at the commit that added this step. A change to
-        # them here would not reach either, so it goes to that repository
-        # instead. Deleting them is the removal (step 6), so deletions pass.
-        if: github.event_name == 'pull_request'
-        run: |
-          changed="$(git diff --name-only --diff-filter=d HEAD^1 HEAD -- plugins skills/deal third_party/unicode scripts/update-confusables.sh)"
-          if [ -n "$changed" ]; then
-            printf '::error::plugins/, skills/deal/ and the deal-only files beside them moved to evidencebook and evidencebook-deal (capsule-cli#326); make this change there:\n%s\n' "$changed"
-            exit 1
-          fi
-      - name: Paths that leave with the plugins
-        # Warns while the plugin and deal-skill trees are still here; the removal
-        # (capsule-cli#326, step 6) turns it to --fail.
-        run: bash scripts/check-moved-paths.sh
+      - name: Nothing points into the trees that moved out
+        # The first-party plugins and the deal skill live in evidencebook and
+        # evidencebook-deal (capsule-cli#326): their trees are gone, and no
+        # file here names a path in them.
+        run: bash scripts/check-moved-paths.sh --fail
       - name: The test sharding script splits every test once
         run: bash scripts/check-shard-tests.sh
       - name: Vet
-        run: |
-          go vet ./...
-          (cd plugins && go vet ./...)
+        run: go vet ./...
       - name: Check the rendered skill files match spec.yaml
         run: go run ./cmd/skillgen --check
       - name: Build CLI
@@ -177,163 +156,6 @@ jobs:
         env:
           CHROME: google-chrome
         run: bash scripts/check-html-render.sh
-      # Six synthetic bundles' pages (cli/testdata/presentation),
-      # re-emitted and opened at 390px, 1280px and in print: each must show
-      # a reader what its snapshot.json says, and be no wider than
-      # known-overflow.json records (see
-      # plugins/internal/deal/presentation_golden_test.go). Widths depend on the
-      # browser and the fonts, so both are pinned: Chrome for Testing at the
-      # version known-overflow.json names, and DejaVu as the only fonts.
-      - name: Set up the pinned Chrome
-        id: chrome
-        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
-        with:
-          chrome-version: 155.0.8059.39
-          install-dependencies: true
-      - name: Install the pinned fonts
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core fontconfig
-          FONTCONFIG_FILE="$GITHUB_WORKSPACE/cli/testdata/presentation/fonts.conf" fc-list : family | sort -u
-      - name: Presentation goldens
-        env:
-          CAPSULECTL_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-          CAPSULECTL_PRESENTATION_PINNED: "1"
-          CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
-          FONTCONFIG_FILE: ${{ github.workspace }}/cli/testdata/presentation/fonts.conf
-        # The presentation pass has a job of its own (presentation-pass).
-        # The goldens are deal and book bundles' pages: the plugins module's tests.
-        working-directory: plugins
-        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/deal
-      - name: Keep the presentation renders
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: presentation-renders
-          path: ${{ runner.temp }}/presentation-renders
-          if-no-files-found: ignore
-
-  portability:
-    # A deal's shared copy and exported records stand on their own
-    # (capsule-cli#243): the deal plugin's flow on a shelf book, shared and
-    # exported, the session deleted, then the page opened offline in
-    # headless Chrome (the runner's own), `capsulectl verify --bundle`, and
-    # the facts read back from the exported typed records, with capsulectl
-    # alone. An edited bundle, a dropped record and an edited exported record
-    # must each fail the same check. See scripts/check-portability.sh.
-    name: shared deal copy verifies without the session
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Deal, share, export, delete the session, verify offline
-        env:
-          CHROME: google-chrome
-        run: bash scripts/check-portability.sh
-
-  presentation-pass:
-    # The presentation goldens' bundles through `presentation list` and
-    # `presentation build` (plugins/internal/deal/presentation_pass_test.go): each page
-    # is the one offline packaging per (bundle, audience), the packagings not
-    # built are refusals, wording, locale and depth flips leave every evidence
-    # identifier and verification state, and a failing bundle gets the
-    # refusal only. Each page is opened at
-    # 390px, 1280px and in print in the same pinned Chrome and fonts as the
-    # goldens, and compared semantically (the DOM's text, identifiers and
-    # verification state): never layout.
-    name: presentation pass (390px, 1280px, print)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Set up the pinned Chrome
-        id: chrome
-        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
-        with:
-          chrome-version: 155.0.8059.39
-          install-dependencies: true
-      - name: Install the pinned fonts
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core fontconfig
-      - name: Presentation pass
-        env:
-          CAPSULECTL_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-          # The pass fails, rather than skips its browser checks, without this
-          # Chrome (presentation_pass_test.go passChrome).
-          CAPSULECTL_PRESENTATION_PINNED: "1"
-          FONTCONFIG_FILE: ${{ github.workspace }}/cli/testdata/presentation/fonts.conf
-        working-directory: plugins
-        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/deal
-
-  interop-at-resolved-versions:
-    # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
-    # capsulectl links newer ones (minimal version selection), so here the same
-    # round trip runs with evidencebook as THIS go.mod resolves it, compiled with
-    # this module's graph. The log prints `go list -m all`. Python verifier
-    # scripts come from evidencebook at the resolved version; the Python stack is
-    # pinned as evidencebook's CI pins it.
-    name: interop at the resolved versions (Go <-> Python)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: The evidencebook version this module resolves
-        id: resolved
-        # evidencebook is the plugins module's (capsule-cli#236), not the core's.
-        working-directory: plugins
-        run: |
-          version=$(go list -m -f '{{.Version}}' github.com/action-state-group/evidencebook)
-          # Module pseudo-versions are not Git refs. Origin identifies the same
-          # source commit for both tagged releases and preparation revisions.
-          commit=$(go mod download -json "github.com/action-state-group/evidencebook@$version" | jq -er '.Origin.Hash')
-          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          echo "evidencebook=$commit" >> "$GITHUB_OUTPUT"
-      - name: Check out evidencebook at that version (its Python verifier scripts)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: action-state-group/evidencebook
-          ref: ${{ steps.resolved.outputs.evidencebook }}
-          path: .interop/evidencebook
-      - name: Check out Python CLL (as evidencebook's CI pins it)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: action-state-group/checkpointed-local-log
-          ref: 88e99d405241aee790f6795fda612527679114ba
-          path: .interop/checkpointed-local-log
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.12"
-      - name: Install Python CLL, the AAC bundle verifier and capsule-emit (locked, with hashes)
-        # Python CLL from its pinned commit, without dependencies (a checkout cannot be
-        # hash-pinned); then everything else, its dependencies included, from the
-        # hash-locked file. See scripts/interop-requirements.in for how it is made.
-        run: |
-          python -m pip install --no-deps ./.interop/checkpointed-local-log
-          python -m pip install --require-hashes -r scripts/interop-requirements.txt
-          python -m pip check
-      - name: The round trip, both ways, with the tampered copies refused
-        working-directory: plugins
-        run: bash ../scripts/interop-resolved.sh ../.interop/evidencebook
 
   iife:
     # The vendored evidence-graph IIFE (cli/assets) must equal a

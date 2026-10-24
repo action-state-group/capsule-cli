@@ -14,7 +14,7 @@ Right after installing, before the first deal:
 ```bash
 capsulectl doctor --install-check --profile deal \
   --expect-version <tag> --expect-commit <the tag's full commit> \
-  --expect-skill-sha256 <sha256 of the tag's skills/deal/SKILL.md> \
+  --expect-skill-sha256 <sha256 of the deal skill's SKILL.md from the deal plugin's release> \
   --skills-dir <the directory the agent loads skills from> \
   --evidence-out install-check.json
 ```
