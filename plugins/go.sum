@@ -14,8 +14,8 @@ github.com/action-state-group/capsule-viewer/go v0.1.2-0.20261023134630-4b08aad1
 github.com/action-state-group/capsule-viewer/go v0.1.2-0.20261023134630-4b08aad14182/go.mod h1:HRXe0qhySOdJ0bxrDKB9F03F8pKAVhdhP2qWYedH1tQ=
 github.com/action-state-group/checkpointed-local-log/go v0.1.0 h1:bDJSW+fy3eZnwneJBOGuvqYXe0VlvDfPKEJ6ecHnTek=
 github.com/action-state-group/checkpointed-local-log/go v0.1.0/go.mod h1:zyHyXVNqA4pMTJ14xtcRoDHZF0n4QyjS5KMDD3KwQ2Q=
-github.com/action-state-group/evidencebook v0.7.0 h1:3b8soL1fCRSTlPX7axdSlArUWsvZJ6sR/mcPjwMj2No=
-github.com/action-state-group/evidencebook v0.7.0/go.mod h1:c1nsSve4+e8U6Yfzb7PmOEaDHKJy62KOMgOiza1Tgxk=
+github.com/action-state-group/evidencebook v0.7.1-0.20261024142715-b2e1a96e2635 h1:YhQf1iw6m5x5t4o/ilvWJOcsNmxMdI47SnmLq51R+PY=
+github.com/action-state-group/evidencebook v0.7.1-0.20261024142715-b2e1a96e2635/go.mod h1:c1nsSve4+e8U6Yfzb7PmOEaDHKJy62KOMgOiza1Tgxk=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

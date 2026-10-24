@@ -4,7 +4,7 @@ capsule-cli's CI has no engine, so this end-to-end run is by hand, at each
 rules-checker pin bump (capsule-cli#348):
 
     cd plugins
-    E2E_OUT=/tmp/e2e go test ./internal/plugin/ -run TestCapturePlatformCheckInputsForTheEngine
+    E2E_OUT=/tmp/e2e go test ./internal/deal/ -run TestCapturePlatformCheckInputsForTheEngine
     <engine venv>/bin/python scripts/engine-e2e/decide_platform.py <capsule-engine checkout> /tmp/e2e
 
 Expected under everyday 0.3.7 and seller 0.1.4: email to a platform allow;

@@ -11,16 +11,16 @@ import (
 	"syscall"
 
 	"github.com/action-state-group/capsule-cli/cli"
-	"github.com/action-state-group/capsule-cli/plugins/internal/plugin"
+	"github.com/action-state-group/capsule-cli/plugins/internal/book"
 )
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	cli.SetBookBackend(plugin.BookBackend{})
+	cli.SetBookBackend(book.BookBackend{})
 	// The error line on stderr, and an error object on stdout when the
 	// command printed nothing (capsule-cli#345).
-	code := cli.Run(ctx, cli.NewPluginCommand(plugin.BookMetadata, append(plugin.BookCommands(), plugin.BookAliases()...)...), "capsulectl-book")
+	code := cli.Run(ctx, cli.NewPluginCommand(book.BookMetadata, append(book.BookCommands(), book.BookAliases()...)...), "capsulectl-book")
 	cancel()
 	os.Exit(code)
 }

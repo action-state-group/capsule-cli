@@ -43,7 +43,7 @@ var (
 	rungLine    = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
 	helpLine    = regexp.MustCompile(`Short:|Use:|Flags\(\)|Errorf|inputError|errors\.New`)
 	timeRung    = regexp.MustCompile(`timeRung|time_rung`)
-	receiptFile = map[string]bool{"plugins/internal/plugin/deal_email.go": true, "plugins/internal/plugin/deal_countersign.go": true, "plugins/internal/plugin/deal_report.go": true, "plugins/internal/plugin/deal_obligation.go": true}
+	receiptFile = map[string]bool{"plugins/internal/deal/deal_email.go": true, "plugins/internal/deal/deal_countersign.go": true, "plugins/internal/deal/deal_report.go": true, "plugins/internal/deal/deal_obligation.go": true}
 	escape      = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
 	// goToken and jsLiteral are the independent tokenizer and the page
 	// script's literals: comments are consumed so their quotes do not count.
@@ -52,7 +52,7 @@ var (
 )
 
 func main() {
-	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go", "plugins/internal/plugin/*.go", "plugins/cmd/*.go").Output()
+	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go", "plugins/internal/deal/*.go", "plugins/internal/book/*.go", "plugins/cmd/*.go").Output()
 	if err != nil {
 		fail(err)
 	}

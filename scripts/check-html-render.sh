@@ -158,7 +158,7 @@ fi
 # INVALID. The deal is the synthetic retail-checkout demo. The page's refusal
 # of a downgraded receipt sealed on the deal's log, as capsulectl wrote before
 # capsule-cli#294, is checked under node in
-# plugins/internal/plugin/deal_page_standalone_test.go.
+# plugins/internal/deal/deal_page_standalone_test.go.
 demo="$root/skills/deal/demo/retail-checkout"
 mkdir deal-receipt
 (

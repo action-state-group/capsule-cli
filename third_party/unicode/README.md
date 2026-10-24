@@ -7,4 +7,4 @@ use are at https://www.unicode.org/terms_of_use.html. `confusables.txt.sha256`
 is its digest.
 
 Refresh it with `scripts/update-confusables.sh VERSION`. That also regenerates
-`plugins/internal/plugin/confusables_table.go`, which holds the mappings alone.
+`plugins/internal/deal/confusables_table.go`, which holds the mappings alone.
