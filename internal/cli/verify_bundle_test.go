@@ -269,6 +269,48 @@ func TestVerifyBundleProducerSignaturesAreAACStrict(t *testing.T) {
 	}
 }
 
+// The claim lists invalid records before unsigned ones, whatever their order
+// in the bundle (the AAC strict README), and record_signatures keeps the
+// last verdict for a repeated capsule id, as the History check reads it.
+func TestVerifyBundleListsInvalidSignaturesFirst(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path := producedBundle(t, func(b map[string]interface{}) {
+		signed := b["records"].([]interface{})[0].(map[string]interface{})
+		unsigned, forged := map[string]interface{}{}, map[string]interface{}{}
+		for k, v := range signed {
+			unsigned[k], forged[k] = v, v
+		}
+		delete(unsigned, "signature")
+		delete(unsigned, "key_id")
+		forged["signature"] = strings.Repeat("00", 64)
+		b["records"] = []interface{}{unsigned, forged}
+	})
+	result, err := verifyBundleOutput(t, path)
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	signatures := result["producer_signatures"].(map[string]interface{})
+	findings := signatures["findings"].([]interface{})
+	require.Len(t, findings, 2)
+	assert.True(t, strings.HasPrefix(findings[0].(string), "producer_signature_invalid:"), findings)
+	assert.True(t, strings.HasPrefix(findings[1].(string), "producer_signature_unclaimed:"), findings)
+	for _, state := range result["record_signatures"].(map[string]interface{}) {
+		assert.Equal(t, "invalid", state)
+	}
+}
+
+// AAC verifies the envelope over the Capsule ID recomputed from the record,
+// so editing only the carried capsule_id leaves the signature authored; the
+// record's identity fails it instead.
+func TestVerifyBundleCarriedCapsuleIDEditFailsIdentityNotSignature(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+		b["records"].([]interface{})[0].(map[string]interface{})["capsule_id"] = strings.Repeat("ab", 32)
+	}))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "INVALID", result["verdict"])
+	assert.Equal(t, "pass", status(result, "producer_signatures"))
+	assert.Equal(t, map[string]interface{}{strings.Repeat("ab", 32): "authored"}, result["record_signatures"])
+}
+
 // A value AAC strict refuses before reading its records reports that
 // refusal as its producer-signature claim.
 func TestSignaturesClaimCarriesAStrictRefusal(t *testing.T) {

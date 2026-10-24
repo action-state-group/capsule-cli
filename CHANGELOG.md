@@ -11,9 +11,16 @@
   present as `null` (or as anything but hex strings) was read as unsigned
   and the bundle INCOMPLETE; it is now an invalid signature and the bundle
   INVALID. A record edited under a kept signature now also fails
-  `producer_signatures` (it was INVALID already). The claim lists invalid
-  records before unsigned ones, and a non-object entry in `records` no
-  longer adds an unsigned finding with an empty id. The checkpoint claim
+  `producer_signatures` (it was INVALID already). A record whose carried
+  `capsule_id` alone was edited now reads `authored`, since the envelope
+  signs the Capsule ID recomputed from its content; `record_identity` still
+  fails it, so the bundle stays INVALID. The claim lists invalid records
+  before unsigned ones. A non-object entry in `records` no longer adds an
+  unsigned finding with an empty id, and a `records` list with no object
+  in it fails the claim instead of withholding it. A composed member that
+  is not an evidence-bundle/v2 reports `not_an_evidence_bundle_v2` as its
+  signature claim, with no per-record verdicts. Each of these bundles was
+  INVALID already. The checkpoint claim
   moves to AAC once an AAC Go release carries `bundle.VerifyCheckpoint`;
   that change will make a checkpoint without its own `log_id`, and a
   `mmr_size` or `prev_size` written as a float (`0e0`, `1.0`), INVALID.

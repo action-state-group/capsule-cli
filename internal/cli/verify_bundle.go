@@ -304,7 +304,7 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			claims = append(claims, claim)
 		}
 		if x.Kind == HistorySelectionExtension {
-			history, claim := historyEntry(value, result, directory)
+			history, claim := historyEntry(value, result, signatureStates, directory)
 			entry = history
 			claims = append(claims, claim)
 		}
