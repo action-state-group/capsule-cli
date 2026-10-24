@@ -233,7 +233,32 @@ func TestVerifyBundleCheckpointIntegersAndCOSEKeepTheirType(t *testing.T) {
 		assert.ErrorIs(t, err, ErrBundleInvalid, name)
 		assert.Equal(t, "INVALID", result["verdict"], name)
 		assert.Equal(t, []interface{}{c.finding}, result["checkpoint"].(map[string]interface{})["findings"], name)
+		if strings.HasPrefix(name, "cose") {
+			// INVALID through the plain claims too: AAC's interval check
+			// reads cose as strictly as the checkpoint claim does.
+			assert.Equal(t, "fail", status(result, "interval_coverage"), name)
+		}
 	}
+}
+
+// A checkpoint claim that fails returns no statement, so nothing (witness
+// receipts, a deal's cadence chain, a History's log check) is checked
+// against it (capsule-cli#438).
+func TestCheckpointClaimReturnsNoStatementWhenItFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := func(edit func(map[string]interface{})) map[string]interface{} {
+		raw, err := os.ReadFile(producedBundle(t, edit))
+		require.NoError(t, err)
+		v, err := DecodeBundleJSON(raw)
+		require.NoError(t, err)
+		return v
+	}
+	claim, statement := CheckpointClaim(value(nil))
+	assert.Equal(t, "pass", claim.Status)
+	assert.NotEmpty(t, statement)
+	claim, statement = CheckpointClaim(value(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }))
+	assert.Equal(t, "fail", claim.Status)
+	assert.Nil(t, statement)
 }
 
 // verify --bundle's checkpoint claim is AAC strict's, on every bundle, and so

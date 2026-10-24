@@ -29,10 +29,10 @@
   `prev_size` written as a float (`0e0`, `1.0`) is not the signed integer,
   and fails `checkpoint_field_mismatch`. A `prev_size` written that way was
   VALID before. A `checkpoint.cose` must be strict unpadded base64url: one
-  with a line break, or with non-zero trailing bits, was VALID when its
-  signature verified and now fails as `checkpoint_signature_malformed`. A
-  `cose` that is not a string fails the same way instead of being read as
-  absent (it was INVALID already). Findings list every mismatch before any
+  with a line break, or with non-zero trailing bits, passed the CLI's claim
+  and now fails it as `checkpoint_signature_malformed`, as does a `cose`
+  that is not a string, which was read as absent. Each was INVALID already,
+  through interval coverage. Findings list every mismatch before any
   missing field, so a checkpoint with no `log_id` beside a certificate
   naming another log reports both. Every bundle capsulectl and AAC write
   carries the checkpoint's own `log_id`, integer sizes and strict base64url,
