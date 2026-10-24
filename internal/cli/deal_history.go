@@ -8,6 +8,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
@@ -67,7 +68,10 @@ var hexDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // nothing unselected is carried; and every nested record is signed by the
 // selection record's key (holder_key), the one key the deals share. A
 // finding names the deal it is about.
-func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
+//
+// signatures is each record's producer-signature verdict by capsule id, as
+// AAC strict gives it (verify --bundle's record_signatures).
+func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, signatures map[string]string, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
 	var failed, notShown []string
 	exts, _ := value["extensions"].(map[string]interface{})
 	ext, _ := exts[HistorySelectionExtension].(map[string]interface{})
@@ -86,7 +90,6 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	d, _ := disclosures[recordID].(map[string]interface{})
 	sealed, _ := d["agent_input"].(map[string]interface{})
 	rawRecords, _ := value["records"].([]interface{})
-	_, signatureStates := producerSignatureClaim(rawRecords)
 	holder := ""
 	for _, raw := range rawRecords {
 		r, _ := raw.(map[string]interface{})
@@ -98,7 +101,7 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	switch {
 	case !matched || sealed["type"] != "history_selection" || sealed["profile"] != HistorySelectionExtension:
 		failed = append(failed, "selection_record_unverified")
-	case holder == "" || signatureStates[recordID] != "authored":
+	case holder == "" || signatures[recordID] != envelope.Authored:
 		failed = append(failed, "selection_record_unsigned")
 	}
 	if value["root"] != recordID {
