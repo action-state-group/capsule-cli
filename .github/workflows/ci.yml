@@ -159,7 +159,7 @@ jobs:
       # re-emitted and opened at 390px, 1280px and in print: each must show
       # a reader what its snapshot.json says, and be no wider than
       # known-overflow.json records (see
-      # cli/presentation_golden_test.go). Widths depend on the
+      # plugins/internal/deal/presentation_golden_test.go). Widths depend on the
       # browser and the fonts, so both are pinned: Chrome for Testing at the
       # version known-overflow.json names, and DejaVu as the only fonts.
       - name: Set up the pinned Chrome
@@ -182,7 +182,7 @@ jobs:
         # The presentation pass has a job of its own (presentation-pass).
         # The goldens are deal and book bundles' pages: the plugins module's tests.
         working-directory: plugins
-        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/plugin
+        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/deal
       - name: Keep the presentation renders
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -217,7 +217,7 @@ jobs:
 
   presentation-pass:
     # The presentation goldens' bundles through `presentation list` and
-    # `presentation build` (plugins/internal/plugin/presentation_pass_test.go): each page
+    # `presentation build` (plugins/internal/deal/presentation_pass_test.go): each page
     # is the one offline packaging per (bundle, audience), the packagings not
     # built are refusals, wording, locale and depth flips leave every evidence
     # identifier and verification state, and a failing bundle gets the
@@ -254,7 +254,7 @@ jobs:
           CAPSULECTL_PRESENTATION_PINNED: "1"
           FONTCONFIG_FILE: ${{ github.workspace }}/cli/testdata/presentation/fonts.conf
         working-directory: plugins
-        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/plugin
+        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/deal
 
   interop-at-resolved-versions:
     # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;

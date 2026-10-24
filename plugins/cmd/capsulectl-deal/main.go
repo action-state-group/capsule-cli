@@ -11,16 +11,16 @@ import (
 	"syscall"
 
 	"github.com/action-state-group/capsule-cli/cli"
-	"github.com/action-state-group/capsule-cli/plugins/internal/plugin"
+	"github.com/action-state-group/capsule-cli/plugins/internal/deal"
 )
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	plugin.InstallDealHooks()
+	deal.InstallDealHooks()
 	// The error line on stderr, and an error object on stdout when the
 	// command printed nothing (capsule-cli#345).
-	code := cli.Run(ctx, cli.NewPluginCommand(plugin.DealMetadata, plugin.DealCommands()...), "capsulectl-deal")
+	code := cli.Run(ctx, cli.NewPluginCommand(deal.DealMetadata, deal.DealCommands()...), "capsulectl-deal")
 	cancel()
 	os.Exit(code)
 }

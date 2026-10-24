@@ -1,0 +1,125 @@
+{
+  "result_version": "evidence-result-v0",
+  "generated_at": "2026-09-27T18:00:00Z",
+  "claims": [
+    {
+      "id": "reconcile-amount",
+      "type": "reconcile",
+      "contract_ref": "ec:deal-reconcile@1",
+      "requirement_ref": "amount-commitment-matched",
+      "tier": "recomputed",
+      "grade": "self-attested",
+      "sufficiency": "SATISFIED",
+      "verdict": "met",
+      "evidence": [
+        {
+          "digest": "1c72aa0b0d27a349fb2e84a7dc5c7776ac6cf3d15d3ab1bf8afcc75590318ed7",
+          "digest_alg": "SHA-256"
+        },
+        {
+          "digest": "7e828c2efc73668451eaf13a0bbb1a553d04831c7bf6d66ff913bd2418ff7aba",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "proofs": [],
+      "presentation": {
+        "kind": "disclosure",
+        "status": "SATISFIED",
+        "evidence": [
+          {
+            "digest": "1c72aa0b0d27a349fb2e84a7dc5c7776ac6cf3d15d3ab1bf8afcc75590318ed7",
+            "digest_alg": "SHA-256"
+          },
+          {
+            "digest": "7e828c2efc73668451eaf13a0bbb1a553d04831c7bf6d66ff913bd2418ff7aba",
+            "digest_alg": "SHA-256"
+          }
+        ]
+      },
+      "reconcile": {
+        "join_key": "deal_id",
+        "peer": "48ddbb9137a3e02fd5932f1a8cc497cd7b19ae2ab439b1666b4c45e0f5fa2783",
+        "period": {
+          "start": "2026-09-27T18:00:00Z",
+          "end": "2026-09-27T18:00:01Z"
+        },
+        "tallies": {
+          "matched": 1,
+          "a_only": 0,
+          "b_only": 0,
+          "conflicting": 0,
+          "insufficient": 0,
+          "unresolved": 0
+        },
+        "state_of_record": "none"
+      }
+    },
+    {
+      "id": "reconcile-currency",
+      "type": "reconcile",
+      "contract_ref": "ec:deal-reconcile@1",
+      "requirement_ref": "currency-commitment-matched",
+      "tier": "recomputed",
+      "grade": "self-attested",
+      "sufficiency": "SATISFIED",
+      "verdict": "met",
+      "evidence": [
+        {
+          "digest": "1c72aa0b0d27a349fb2e84a7dc5c7776ac6cf3d15d3ab1bf8afcc75590318ed7",
+          "digest_alg": "SHA-256"
+        },
+        {
+          "digest": "7e828c2efc73668451eaf13a0bbb1a553d04831c7bf6d66ff913bd2418ff7aba",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "proofs": [],
+      "presentation": {
+        "kind": "disclosure",
+        "status": "SATISFIED",
+        "evidence": [
+          {
+            "digest": "1c72aa0b0d27a349fb2e84a7dc5c7776ac6cf3d15d3ab1bf8afcc75590318ed7",
+            "digest_alg": "SHA-256"
+          },
+          {
+            "digest": "7e828c2efc73668451eaf13a0bbb1a553d04831c7bf6d66ff913bd2418ff7aba",
+            "digest_alg": "SHA-256"
+          }
+        ]
+      },
+      "reconcile": {
+        "join_key": "deal_id",
+        "peer": "48ddbb9137a3e02fd5932f1a8cc497cd7b19ae2ab439b1666b4c45e0f5fa2783",
+        "period": {
+          "start": "2026-09-27T18:00:00Z",
+          "end": "2026-09-27T18:00:01Z"
+        },
+        "tallies": {
+          "matched": 1,
+          "a_only": 0,
+          "b_only": 0,
+          "conflicting": 0,
+          "insufficient": 0,
+          "unresolved": 0
+        },
+        "state_of_record": "none"
+      }
+    }
+  ],
+  "aggregate": {
+    "coverage": {
+      "evaluated_population": 2,
+      "excluded_not_applicable": 0,
+      "unknown_count": 0
+    },
+    "buckets": {
+      "met": [
+        "reconcile-amount",
+        "reconcile-currency"
+      ],
+      "not_met": [],
+      "not_evaluable": []
+    }
+  }
+}

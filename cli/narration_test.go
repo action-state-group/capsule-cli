@@ -57,7 +57,7 @@ func TestEveryWordingKeyTheCodeNamesIsInThePack(t *testing.T) {
 	w := BuiltinWording()
 	key := regexp.MustCompile(`"((?:say|card|report|action)\.[a-z_.]*[a-z_])"`)
 	var missing []string
-	for _, dir := range []string{".", "../plugins/internal/plugin"} {
+	for _, dir := range []string{".", "../plugins/internal/deal", "../plugins/internal/book"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		require.NoError(t, err)
 		for _, f := range files {

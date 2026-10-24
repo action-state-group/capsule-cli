@@ -429,7 +429,7 @@ consequential actions that have no deal record; see
 The book verbs (`capsulectl book close`, `reconcile`, `request`, `respond`)
 and a book profile's log (`publish`, `cll append`, `cll list`) run over an
 evidence book from the `evidencebook` Go library, in the `capsulectl-book`
-plugin (`plugins/internal/plugin/book.go`, `booklog.go`). The CLI does not
+plugin (`plugins/internal/book/book.go`, `booklog.go`). The CLI does not
 implement an evidence book of its own: it chooses windows, reads files and
 writes results, and the library composes every proof. A profile declares
 whether its log is the core's CLL (`log: cll`) or an evidence book
@@ -474,9 +474,9 @@ override is enabled.
 | `cli/` | every core command, and the host package the first-party plugins build against (no compatibility promise before v1) |
 | `cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
 | `cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
-| `plugins/` | the second Go module: `cmd/capsulectl-book` and `cmd/capsulectl-deal`, the first-party plugins, and `internal/plugin`, their evidence book and deal commands; the only module that requires evidencebook |
-| `plugins/internal/plugin/assets/` | the deal profile schema, the typed record schemas and the external-check result schema |
-| `plugins/internal/plugin/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `plugins/scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
+| `plugins/` | the second Go module: `cmd/capsulectl-book` and `cmd/capsulectl-deal`, the first-party plugins, and `internal/book` and `internal/deal`, their evidence book and deal commands; the only module that requires evidencebook |
+| `plugins/internal/deal/assets/` | the deal profile schema, the typed record schemas and the external-check result schema |
+| `plugins/internal/deal/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `plugins/scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
 | `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
 | `skills/` | the `capsulectl` skill (generated) and the `deal` skill, each with contributor demo scripts (`plugins/scripts/bookdemo` is a small Go program the scripted demo runs); `skills/SKILL-SPEC.md` is the spec format |
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |

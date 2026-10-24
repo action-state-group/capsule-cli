@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The book and deal plugins are separate packages (#326)
+
+- **Changed:** `plugins/internal/plugin` is split into `plugins/internal/book`
+  (capsulectl-book) and `plugins/internal/deal` (capsulectl-deal), so each
+  plugin can move to its own repository (docs/design/326-plugins-leave-the-core.md,
+  step 3). Neither imports the other.
+- **Changed:** `request` and `respond` keep one implementation of their flags,
+  input checks and output shape, in the host package
+  (`cli.EvidenceRequestCommand`, `cli.EvidenceRespondCommand`); each plugin
+  runs its own mode on what they read. On a deal profile,
+  `capsulectl book request` and `book respond` already refused and pointed to
+  `capsulectl deal request` and `deal respond`; capsulectl-book no longer
+  carries the deal code behind them. `deal respond --policy` now refuses the
+  flag before reading the file, so a missing or malformed policy file gets
+  the same refusal instead of a read or JSON error.
+- **Changed:** the guard on identifier fields of host-supplied records (no
+  card-number-like or phone-like values) is one function, `cli.GuardMetadata`,
+  which `book backfill` and `deal audit-host` both apply.
+- **Changed:** sealing an Evidence Result (`book result build`, `deal
+  terms-result`) goes through evidencebook's `Book.SealResult`
+  (evidencebook#103); the plugins module requires evidencebook at that commit.
+
 ### The plugins' host package is public (#326)
 
 - **Changed:** `internal/cli` is now `github.com/action-state-group/capsule-cli/cli`

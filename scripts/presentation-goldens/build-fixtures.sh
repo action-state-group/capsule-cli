@@ -194,7 +194,7 @@ meta 8-seller-buyer-copy "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "sell
 
 # --- 9. a seller's Receipt with later evidence under the close -------------
 # Seller PRD §5.4 and exit criterion 9, from the deal plugin's fixture
-# (plugins/internal/plugin/testdata/deal/seller-later-evidence). The user
+# (plugins/internal/deal/testdata/deal/seller-later-evidence). The user
 # sells the example bicycle; the agent states its condition (ordered) and its
 # refund terms (approved in the user's words), offers, the buyer accepts, the
 # agent commits, and the delivery is due. The sale closes with that due date
@@ -203,7 +203,7 @@ meta 8-seller-buyer-copy "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "sell
 # unverified) is about the refund terms; both chain `confirms` to the close.
 fixture 9-seller-later-evidence
 export CAPSULE_DEAL_CHECK_URL=
-src="$root/plugins/internal/plugin/testdata/deal/seller-later-evidence"
+src="$root/plugins/internal/deal/testdata/deal/seller-later-evidence"
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 id=$(capsulectl --profile deal deal open --records typed --input "$src/open.json" | jq -r .deal_id)
 note() { capsulectl --profile deal deal note --deal "$id" "$@"; }
