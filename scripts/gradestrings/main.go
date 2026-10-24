@@ -41,13 +41,8 @@ var vocabulary = regexp.MustCompile(`(?i)(?:^|[^a-z])(?:self[- _]?attested|attes
 
 var (
 	rungLine = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
-	helpLine = regexp.MustCompile(`Short:|Use:|Flags\(\)|Errorf|inputError|errors\.New`)
 	timeRung = regexp.MustCompile(`timeRung|time_rung`)
-	// receiptFile names the files whose words a receipt, email or page
-	// shows. Those were the deal plugin's, which left with it
-	// (capsule-cli#326).
-	receiptFile = map[string]bool{}
-	escape      = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
+	escape   = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
 	// goToken and jsLiteral are the independent tokenizer and the page
 	// script's literals: comments are consumed so their quotes do not count.
 	goToken   = regexp.MustCompile("(?s)//[^\\n]*|/\\*.*?\\*/|'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"|`[^`]*`")
@@ -157,8 +152,7 @@ func goClass(path, line, v string) string {
 		return "rung-value"
 	case !strings.Contains(strings.TrimSpace(v), " "):
 		return "identifier"
-	case receiptFile[path] && !helpLine.MatchString(line),
-		path == "cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
+	case path == "cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
 		return "receipt-copy"
 	}
 	return "operator"

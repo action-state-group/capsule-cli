@@ -306,7 +306,9 @@ Each release publishes the plugin's binaries
 `SHA256SUMS` and a build attestation from that repository's workflow. Each
 binary is built against one capsulectl release, which its handshake reports as
 `core_version` (see "Versions"). Download the one built for your capsulectl,
-check it, and install it with `capsulectl plugin install ./capsulectl-<name>`.
+check it, and install the downloaded file, such as `capsulectl plugin install
+./capsulectl-deal-<version>-<os>-<arch>`. Install names the plugin by its
+handshake, not by the file name.
 
 Each plugin is a whole `capsulectl` command tree with its own commands
 added, so the core can hand it a core command it cannot run itself:

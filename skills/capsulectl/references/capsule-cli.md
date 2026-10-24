@@ -239,7 +239,7 @@ pinned); the skill never writes one -- it seals what a judging step
 produced. Checked before anything is sealed: the schema, under which every
 claim cites at least one record; every headline count recomputes from the
 claims (integer literals only: `7`, not `7.0` or `7e0`); every record a claim
-cites is in the profile's log. Everything else a claim states is sealed as
+cites is in the profile's log, and its Capsule in the artifact store. Everything else a claim states is sealed as
 stated. On success one Capsule whose payload is the Result is appended; it
 cites every record the Result cites (`acted_on`), so a bundle rooted on it
 carries them. Next: `cll checkpoint create`, then `disclose --root` with the

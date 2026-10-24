@@ -246,7 +246,8 @@ verbs:
       profile's log as the Capsule a Result page is rooted on, citing every
       record its claims name. Refuses a document whose headline values do
       not recompute from its claims, or that cites a record the profile's
-      log does not hold. A repeat of the same document seals nothing new.
+      log and artifact store do not hold. A repeat of the same document
+      seals nothing new.
       On a book profile it is the book plugin's `book result build`.
     emits: (the Result's Capsule itself; --capsule-out writes it for verify)
     emission_mode: primary-action

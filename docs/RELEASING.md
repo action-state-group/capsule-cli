@@ -122,7 +122,7 @@ never asks for credentials or a token with which it could.
 6. **Release capsulectl-book and capsulectl-deal against this tag** (in evidencebook's
    `capsulectl/` and in evidencebook-deal: bump `go.mod` to the tag, merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
    source. Hand over
-   both `.sha256` files with them, unregenerated, so the install page can compare them byte for
+   each release's `.sha256` files with them, unregenerated, so the install page can compare them byte for
    byte.
 7. **Re-aim the install page at the new triple.**
    - Add the new version alongside the existing ones. Leave every older binary, plugin and skill
