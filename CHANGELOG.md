@@ -53,8 +53,11 @@
   receipt that did not pass, where the CLI listed them in entry order. A
   passing receipt's `reason` is AAC's text (`ok`, or the grade note), not
   "verified under <row>'s key". A `receipt_b64` wrapped across lines, or
-  with non-zero trailing bits, is `witness_receipt_malformed` instead of
-  `witness_receipt_invalid` (it was INVALID already).
+  with non-zero trailing bits, is not canonical standard base64, so the
+  entry is `witness_receipt_malformed` and fails. With a directory row for
+  its witness it was `witness_receipt_invalid`, and INVALID already. Without
+  a usable row, or as a stub, it was withheld: a bundle that was VALID is
+  now INVALID (exit 1), and the receipt is no longer listed.
 - **Changed:** `go.mod` (root and `plugins/`) moves
   `agent-action-capsule/go` to v0.13.1: v0.13.0 for the checkpoint claim,
   and v0.13.1 for the witness rule. v0.13.0 also caps AAC's Class 1 number

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
@@ -406,7 +407,7 @@ func TestVerifyBundleFailsAMalformedReceiptWithoutARow(t *testing.T) {
 
 // Findings are AAC's: malformed entries first, in entry order, then one per
 // receipt that did not pass (capsule-cli#438).
-func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
+func TestVerifyBundleListsMalformedWitnessFindingsFirst(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -593,4 +594,40 @@ func TestVerifyBundleChecksNoReceiptAgainstAFailedCheckpointClaim(t *testing.T) 
 	assert.Equal(t, "withheld", state)
 	assert.Equal(t, []interface{}{"checkpoint_unverified"}, findings)
 	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
+}
+
+// A receipt_b64 that is not canonical standard base64 is malformed whether or
+// not a row trusts its witness: without one, a bundle that read VALID with
+// the receipt withheld is INVALID (capsule-cli#438, AAC go/v0.13.1).
+func TestVerifyBundleFailsANonCanonicalReceiptWithoutARow(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		entry := witnessEntry(b)
+		encoded := entry["receipt_b64"].(string)
+		entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
+	})
+	result, err := verifyWithDirectory(t, path, "")
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Equal(t, "INVALID", result["verdict"])
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
+	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
+}
+
+// A cadence checkpoint's receipts are AAC's witness.VerifyReceipts results:
+// with no verified statement, or no receipts, nothing is checked.
+func TestReceiptsClaimIsAACsVerifyReceipts(t *testing.T) {
+	entries := []interface{}{map[string]interface{}{"ts_url": testWitness, "entry_hash": "ab", "receipt_b64": "AA==", "leaf_index": 0, "tree_size": 1}}
+	claim, receipts := receiptsClaim(entries, nil, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
+	assert.Empty(t, receipts)
+
+	claim, receipts = receiptsClaim(nil, nil, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, claim)
+	assert.Empty(t, receipts)
 }
