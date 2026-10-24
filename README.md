@@ -119,6 +119,7 @@ built for this capsulectl release, check it as you checked the binary
 own repository), then install the file:
 
 ```bash
+capsulectl plugin install ./capsulectl-book   # book profiles: close, reconcile, result, report, ...
 capsulectl plugin install ./capsulectl-deal   # deal profiles: capsulectl deal ...
 ```
 
@@ -274,7 +275,7 @@ stale name does not shadow the new one:
 
 ```bash
 BIN="$(go env GOBIN)"; GOPATH="$(go env GOPATH)"; rm -f "${BIN:-${GOPATH%%:*}/bin}/capsule"
-make install   # installs capsulectl and its book and deal plugins
+make install   # installs capsulectl
 ```
 
 ## Commands
@@ -1159,8 +1160,8 @@ Automated tests use isolated local services, never production.
 ## Tests
 
 ```bash
-go test ./... && (cd plugins && go test ./...)
-go vet ./... && (cd plugins && go vet ./...)
+go test ./...
+go vet ./...
 CAPSULE_CLI_TEST_MYSQL_PORT=<disposable-local-port> go test -race -timeout=15m ./...
 ```
 

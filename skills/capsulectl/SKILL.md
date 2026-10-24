@@ -54,6 +54,7 @@ Every consequential action taken by this skill must produce an evidence record. 
 | `judge drift pin` | `FILE_A FILE_B` | Confirm two judge-pin inputs describe the same reproducible judge configuration before treating their outputs as comparable. | (no capsule — this is local comparison, not a consequential action) | not consequential — no capsule |
 | `judge drift reports` | `FILE_A FILE_B` | Compare two evaluation-report/v1 sets by case_id and show drift as a real delta (pin mismatch, label mismatch, or both) — never as a silent disagreement the skill quietly drops. | (no capsule — this is local comparison, not a consequential action) | not consequential — no capsule |
 | `calibration summarize` | `REPORTS_FILE RATINGS_FILE` | Fold an evaluation-report/v1 set and a human-rating/v1 set into k-of-n agreement per judge_pin_digest before citing the result into a calibration-summary/v1 the skill is about to seal. | (no capsule — this is a pure computation over caller-supplied input) | not consequential — no capsule |
+| `result build` | `--profile NAME --result FILE`<br>`--profile NAME --result FILE --contract REF --out FILE --capsule-out FILE` | Seal a caller-supplied, schema-valid Evidence Result v0 into the profile's log as the Capsule a Result page is rooted on, citing every record its claims name. Refuses a document whose headline values do not recompute from its claims, or that cites a record the profile's log does not hold. A repeat of the same document seals nothing new. On a book profile it is the book plugin's `book result build`. | (the Result's Capsule itself; --capsule-out writes it for verify) | primary action (running it *is* the record) |
 
 ## Capsule emission
 
@@ -67,13 +68,12 @@ mechanisms applies to an actually-consequential verb:
 - **self-sealing** — the verb has its own `--seal-output` flag (`discover`,
   mandated by the binary itself). Nothing further is needed.
 - **primary action** — the verb's entire job already is creating or persisting
-  a capsule (`publish`, `cll append`) or a signed book record
-  (`request`, `respond`, `close`, `result build`). Running it
+  a capsule (`publish`, `cll append`, `result build`). Running it
   satisfies the invariant by itself; nothing wraps it.
 
 Every other verb this skill calls (`verify`, `contract validate`,
 `plugin ls`, `cll list`, `get`, the `judge` and `calibration`
-computations, `reconcile`, `report build`) is `not-consequential`: it runs, and
+computations) is `not-consequential`: it runs, and
 that is the end of it — **no wrapper seal, no synthetic evidence record.**
 
 See [references/capsule-cli.md](references/capsule-cli.md) for the `publish`/
@@ -84,13 +84,12 @@ whose verb surface actually needs it — this one does not).
 ## Exercise this skill
 
 [scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
-verb above against a throwaway jsonl profile in a temp directory: the
-consequential actions (`discover`, `publish`, `cll append`) each seal or
-persist a capsule and every one of those is verified, and the consequential
-book verbs (`request`, `respond`, `close`, `result build`) each
-return the signed book record that is their evidence; the not-consequential
+verb above against a throwaway sqlite profile in a temp directory: the
+consequential actions (`discover`, `publish`, `cll append`,
+`result build`) each seal or persist a capsule and every one of those is
+verified; the not-consequential
 actions (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`,
-`judge`, `calibration`, `reconcile`, `report build`)
+`judge`, `calibration`)
 run and produce no capsule at all — the script asserts both halves, not just
 that capsules exist. It never touches a real profile or a real CLL. It is a
 contributor check, run after any change to the verb surface or the emission

@@ -264,7 +264,7 @@ the temporary file. A killed install can leave a `.install-*` file behind.
 It is inert, and `plugin ls` lists it under `interrupted_installs`.
 
 **No install by name.** The first-party plugins ship from their own
-releases (below), which the core does not name: `plugin install book` and
+releases (below), which the core's messages do not name: `plugin install book` and
 `plugin install deal` refuse, and say to install the plugin file from its
 release with the file form.
 
@@ -279,8 +279,8 @@ another root.
 - **First-party plugins.** `book` and `deal` embed the core's code, so the
   core release they embed, their `core_version`, is expected to equal the
   core's. A plugin without `core_version` is compared by its `version`,
-  which every first-party plugin released before `core_version` existed sets to
-the core's:
+  which every first-party plugin released before `core_version` existed sets
+  to the core's:
   - `plugin install` refuses a mismatch on a release core unless
     `--allow-version-mismatch` is given.
   - A development core does not check it.

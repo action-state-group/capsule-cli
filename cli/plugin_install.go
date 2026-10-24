@@ -333,8 +333,7 @@ func stageInRoot(r *os.Root, suffix string, mode os.FileMode, write func(io.Writ
 }
 
 // finishInstall checks the staged launcher and renames it into place.
-// expected is the first-party name a by-name install fetched, or "".
-func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool, checks []string) (pluginInstallResult, error) {
+func finishInstall(r *os.Root, root, staged string, allowMismatch bool) (pluginInstallResult, error) {
 	info, err := readPluginMetadata(filepath.Join(root, staged), "the candidate")
 	if err != nil {
 		return pluginInstallResult{}, InputError("not installed: " + err.Error())
@@ -345,12 +344,8 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 		return pluginInstallResult{}, InputError(fmt.Sprintf("not installed: the plugin names itself %q; a plugin name is a lowercase letter then up to 62 lowercase letters, digits or hyphens", name))
 	case reservedPluginNames()[name]:
 		return pluginInstallResult{}, InputError(fmt.Sprintf("not installed: %q is a core command, which a plugin can never replace", name))
-	case expected != "" && name != expected:
-		return pluginInstallResult{}, InputError(fmt.Sprintf("not installed: the downloaded launcher names itself %q, not %q", name, expected))
 	}
-	if !slices.Contains(checks, "handshake (cli-plugin-metadata)") {
-		checks = append(checks, "handshake (cli-plugin-metadata)")
-	}
+	checks := []string{"handshake (cli-plugin-metadata)"}
 	result := pluginInstallResult{Name: name, Version: info.Version, Path: filepath.Join(root, pluginLauncherPrefix+name), Checks: checks, VersionCheck: "not applicable (not a first-party plugin)"}
 	if isFirstParty(name) {
 		switch {
@@ -483,7 +478,7 @@ func installOperand(home, operand string, allow bool) (pluginInstallResult, erro
 	if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
 		return pluginInstallResult{}, err
 	}
-	result, err := finishInstall(r, root, staged, "", allow, []string{"handshake (cli-plugin-metadata)"})
+	result, err := finishInstall(r, root, staged, allow)
 	if err == nil || errors.Is(err, errPluginDurability) {
 		staged = ""
 	}

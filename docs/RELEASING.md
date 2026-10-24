@@ -8,10 +8,10 @@ followed, written down once and generalised to rcNN. The tag runs
 outsider checks it, is in [RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md). This page does not
 repeat either; it says what to do, and in which order.
 
-> **The deal plugin and the deal skill ship from evidencebook-deal's release, built against
-> this one** (capsule-cli#326). A capsulectl release that users install needs a
-> capsulectl-deal release whose `go.mod` requires it; that repository's RELEASING.md is the
-> procedure.
+> **The book plugin ships from evidencebook's `capsulectl/vX.Y.Z` release, and the deal plugin
+> and the deal skill from evidencebook-deal's, each built against this one** (capsule-cli#326).
+> A capsulectl release that users install needs a capsulectl-book and a capsulectl-deal release
+> whose `go.mod` requires it; each repository's RELEASING.md is the procedure.
 
 **Provenance.** This is the rc10 cutover procedure, generalised. The verification standard is the
 one the rc9 and rc10 cuts used.
@@ -20,8 +20,9 @@ one the rc9 and rc10 cuts used.
 
 **The shipping unit is the release triple, not the tag.** It has three parts:
 1. capsulectl's binaries and their release assets;
-2. capsulectl-deal and the deal skill (`deal-skill-<tag>.tar.gz`), from an
-   evidencebook-deal release built against this capsulectl release;
+2. capsulectl-book, from an evidencebook `capsulectl/vX.Y.Z` release, and capsulectl-deal and
+   the deal skill (`deal-skill-<tag>.tar.gz`), from an evidencebook-deal release, each built
+   against this capsulectl release;
 3. the companion plugin and skill, if you serve them.
 
 A tag can be cut and published while installs stay on the previous triple. A release is shipped
@@ -30,6 +31,7 @@ when the install page moves to the new triple (step 7).
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
 | Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
+| capsulectl-book | an evidencebook `capsulectl/vX.Y.Z` release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
 | capsulectl-deal and the deal skill | an evidencebook-deal release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
 | The companion plugin and skill, if you serve them | their own release, built separately | their own published SHA-256 files, served byte for byte |
 
@@ -43,8 +45,6 @@ A. **Everything the tag must carry has merged.**
 B. **CI on `main` is green.** In particular, these jobs block a release:
    - `iife`: the vendored report viewer (the evidence-graph IIFE) equals a fresh build from the
      upstream commit it pins, and that commit is on the upstream main;
-   - `interop at the resolved versions (Go <-> Python)`: the resolved dependency versions agree
-     across implementations;
    - `report page renders and checks itself`: the shipped page renders and verifies its own
      bundle.
 
@@ -107,9 +107,9 @@ never asks for credentials or a token with which it could.
    ```
 
    Record the tag, its commit, each binary's SHA-256 and the attestation bundle's. The install
-   page and the companion releases compare against these values, not against a build. The deal
-   plugin and skill are verified the same way from their own release (evidencebook-deal's
-   RELEASING.md).
+   page and the companion releases compare against these values, not against a build. The book
+   and deal plugins and the deal skill are verified the same way from their own releases
+   (evidencebook's `capsulectl/RELEASING.md`, evidencebook-deal's RELEASING.md).
 5. **Publish the reviewed release notes, the upgrade note and security first.** When the release
    cannot be undone on an existing store, its upgrade note opens the notes: it is what a reader
    must act on before installing. A fix that changes what verification accepts or what a record
@@ -119,8 +119,8 @@ never asks for credentials or a token with which it could.
 
 ## After the tag
 
-6. **Release capsulectl-deal against this tag** (evidencebook-deal: bump `go.mod` to the tag,
-   merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
+6. **Release capsulectl-book and capsulectl-deal against this tag** (in evidencebook's
+   `capsulectl/` and in evidencebook-deal: bump `go.mod` to the tag, merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
    source. Hand over
    both `.sha256` files with them, unregenerated, so the install page can compare them byte for
    byte.

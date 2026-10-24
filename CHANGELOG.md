@@ -18,9 +18,11 @@
   flag is gone. The missing-plugin, version-mismatch and `doctor
   --install-check` messages give the file form.
 - **Changed:** the `capsulectl` skill lists the core verbs only; the book
-  verbs (`request`, `respond`, `close`, `reconcile`, `result build`, `report
-  build`) are the book plugin's. Its scripted demo runs on a sqlite profile
-  and passes again (it needed the book plugin since #236).
+  verbs (`request`, `respond`, `close`, `reconcile`, `report build`, and
+  `result build` on a book profile) are the book plugin's. `result build` on
+  a plain profile stays a core verb. Its scripted demo runs on a sqlite
+  profile, now including `result build`, and passes again (it needed the book
+  plugin since #236).
 - **Added:** `TestPresentationFixturesVerifyOffline` checks every committed
   presentation fixture, deal copies included, verifies to its recorded
   verdict with the core alone. The deal page and portability checks run in

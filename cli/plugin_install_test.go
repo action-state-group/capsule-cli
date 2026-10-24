@@ -959,7 +959,7 @@ func TestPluginInstallUsesTheCheckedCanonicalRoot(t *testing.T) {
 	src := launcherScript("acme", "1", "")
 	staged, err := stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.WriteString(w, src); return err })
 	require.NoError(t, err)
-	_, err = finishInstall(r, root, staged, "", false, nil)
+	_, err = finishInstall(r, root, staged, false)
 	require.NoError(t, err)
 	firstReal, _ := filepath.EvalSymlinks(first)
 	_, err = os.Stat(filepath.Join(firstReal, "lib", "capsulectl", "plugins", "capsulectl-acme"))
