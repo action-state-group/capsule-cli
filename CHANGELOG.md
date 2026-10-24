@@ -45,9 +45,23 @@
   whose certificate names another log has its membership withheld
   (`checkpoint_unverified`) instead of checked. Each of these bundles is
   INVALID.
+- **Changed:** witness receipts, on the bundle and on a deal's cadence
+  chain, are AAC's `witness.VerifyReceipts` results as they stand. The CLI's
+  own well-formedness check and tally are gone; AAC go/v0.13.1 makes the
+  same entries malformed (agent-action-capsule#386). The shape and codes
+  are unchanged. Findings list malformed entries first, then one per
+  receipt that did not pass, where the CLI listed them in entry order. A
+  passing receipt's `reason` is AAC's text (`ok`, or the grade note), not
+  "verified under <row>'s key". A `receipt_b64` wrapped across lines, or
+  with non-zero trailing bits, is not canonical standard base64, so the
+  entry is `witness_receipt_malformed` and fails. With a directory row for
+  its witness it was `witness_receipt_invalid`, and INVALID already. Without
+  a usable row, or as a stub, it was withheld: a bundle that was VALID is
+  now INVALID (exit 1), and the receipt is no longer listed.
 - **Changed:** `go.mod` (root and `plugins/`) moves
-  `agent-action-capsule/go` to v0.13.0. Besides the checkpoint claim, that
-  release caps AAC's Class 1 number findings (agent-action-capsule#387):
+  `agent-action-capsule/go` to v0.13.1: v0.13.0 for the checkpoint claim,
+  and v0.13.1 for the witness rule. v0.13.0 also caps AAC's Class 1 number
+  findings (agent-action-capsule#387):
   `verify --capsule` lists at most 64 `float_in_digest_field` and 64
   `unsafe_integer_in_digest_field` codes, and a quoted path is cut at 256
   characters. Verdicts don't change.

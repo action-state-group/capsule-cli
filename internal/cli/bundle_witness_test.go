@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
@@ -301,7 +302,7 @@ func TestVerifyBundleChecksAScrapiReceipt(t *testing.T) {
 	assert.Empty(t, findings)
 	receipt := result["witnesses"].(map[string]interface{})["receipts"].([]interface{})[0].(map[string]interface{})
 	assert.Equal(t, "scrapi", receipt["binding"])
-	assert.Equal(t, "verified under test witness's key", receipt["reason"])
+	assert.Equal(t, "ok", receipt["reason"], "the reason is AAC's (capsule-cli#438)")
 
 	result, err = verifyWithDirectory(t, producedBundle(t, scrapi(otherKey)), directory)
 	assert.ErrorIs(t, err, ErrBundleInvalid)
@@ -404,8 +405,9 @@ func TestVerifyBundleFailsAMalformedReceiptWithoutARow(t *testing.T) {
 	}
 }
 
-// Findings are listed in entry order.
-func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
+// Findings are AAC's: malformed entries first, in entry order, then one per
+// receipt that did not pass (capsule-cli#438).
+func TestVerifyBundleListsMalformedWitnessFindingsFirst(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -418,10 +420,10 @@ func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
 	assert.ErrorIs(t, err, ErrBundleInvalid)
 	_, findings := bundleWitnesses(result)
 	assert.Equal(t, []interface{}{
-		"witness_unverified:" + testWitness,
 		"witness_receipt_malformed:1",
-		"witness_unverified:" + testWitness,
 		"witness_receipt_malformed:3",
+		"witness_unverified:" + testWitness,
+		"witness_unverified:" + testWitness,
 	}, findings)
 }
 
@@ -555,8 +557,8 @@ func TestVerifyBundleReadsLaxDirectoryRowsAsAACDoes(t *testing.T) {
 }
 
 // A receipt_b64 wrapped across lines is not canonical base64, which
-// agent-action-capsule requires, so the receipt fails. (capsule-cli writes
-// its receipts unwrapped.)
+// agent-action-capsule requires, so the entry is malformed and fails.
+// (capsule-cli writes its receipts unwrapped.)
 func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -570,7 +572,7 @@ func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	result, _ := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(testWitness, public)))
 	state, findings := bundleWitnesses(result)
 	assert.Equal(t, "fail", state)
-	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
+	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
 	assert.Equal(t, "INVALID", result["verdict"])
 }
 
@@ -592,4 +594,79 @@ func TestVerifyBundleChecksNoReceiptAgainstAFailedCheckpointClaim(t *testing.T) 
 	assert.Equal(t, "withheld", state)
 	assert.Equal(t, []interface{}{"checkpoint_unverified"}, findings)
 	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
+}
+
+// A receipt_b64 that is not canonical standard base64 is malformed whether or
+// not a row trusts its witness: without one, a bundle that read VALID with
+// the receipt withheld is INVALID (capsule-cli#438, AAC go/v0.13.1).
+func TestVerifyBundleFailsANonCanonicalReceiptWithoutARow(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		entry := witnessEntry(b)
+		encoded := entry["receipt_b64"].(string)
+		entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
+	})
+	result, err := verifyWithDirectory(t, path, "")
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Equal(t, "INVALID", result["verdict"])
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
+	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
+}
+
+// A cadence checkpoint's receipts are AAC's witness.VerifyReceipts results:
+// with no verified statement, or no receipts, nothing is checked.
+func TestReceiptsClaimIsAACsVerifyReceipts(t *testing.T) {
+	entries := []interface{}{map[string]interface{}{"ts_url": testWitness, "entry_hash": "ab", "receipt_b64": "AA==", "leaf_index": 0, "tree_size": 1}}
+	claim, receipts := receiptsClaim(entries, nil, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
+	assert.Empty(t, receipts)
+
+	claim, receipts = receiptsClaim(nil, nil, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, claim)
+	assert.Empty(t, receipts)
+}
+
+// A deal's cadence chain is checked only against the deal checkpoint whose
+// claim passed: with no authenticated statement it is withheld with no
+// receipts (capsule-cli#438).
+func TestCadenceClaimWithholdsAChainWithoutAVerifiedCheckpoint(t *testing.T) {
+	value := map[string]interface{}{"extensions": map[string]interface{}{
+		DealCadenceExtension: map[string]interface{}{"state": "witnessed"},
+	}}
+	claim, receipts, present := cadenceClaim(value, nil, nil)
+	assert.True(t, present)
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
+	assert.Empty(t, receipts)
+}
+
+// The cadence chain's receipts go through the same mapping of AAC's
+// witness.VerifyReceipts: against a verified statement, a receipt whose
+// receipt_b64 is not canonical base64 is malformed and fails with no
+// directory at all, and is not listed (capsule-cli#438, AAC go/v0.13.1).
+func TestReceiptsClaimFailsANonCanonicalCadenceReceiptWithoutADirectory(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(producedBundle(t, witnessed(t, private)))
+	require.NoError(t, err)
+	value, err := DecodeBundleJSON(raw)
+	require.NoError(t, err)
+	_, statement := CheckpointClaim(value)
+	require.NotNil(t, statement)
+	entry := witnessEntry(value)
+	encoded := entry["receipt_b64"].(string)
+
+	claim, _ := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_unverified:" + testWitness}}, claim, "a canonical receipt with no directory is only not checked")
+
+	entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
+	claim, receipts := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	assert.Equal(t, aacbundle.ClaimResult{Status: "fail", Findings: []string{"witness_receipt_malformed:0"}}, claim)
+	assert.Empty(t, receipts)
 }

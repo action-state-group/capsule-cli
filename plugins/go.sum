@@ -6,8 +6,8 @@ github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOEl
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/action-state-group/agent-action-capsule/go v0.13.0 h1:mWacIZZvAQAFuYj9hTB91boEy0UvBtp8p3fWRXmYZ7E=
-github.com/action-state-group/agent-action-capsule/go v0.13.0/go.mod h1:Q1yzmSvtxEQiE/rMZZaN7qrSEN8JYQnfwF4VNtqsmTM=
+github.com/action-state-group/agent-action-capsule/go v0.13.1 h1:ww7xkK2+eeZAcF0ceFIVz02F+EQ5Sgd7xRFf+yefHa4=
+github.com/action-state-group/agent-action-capsule/go v0.13.1/go.mod h1:Q1yzmSvtxEQiE/rMZZaN7qrSEN8JYQnfwF4VNtqsmTM=
 github.com/action-state-group/capsule-emit/go v0.3.0 h1:DEFDSHktFQoUxWScjeIbMKfET/4Kjgm/ZQsWJp4AI+Y=
 github.com/action-state-group/capsule-emit/go v0.3.0/go.mod h1:TKXiVniDy7RlksGjEAF6k9rj5NcwvwdQ6EGajzhghuo=
 github.com/action-state-group/capsule-viewer/go v0.1.2-0.20261023134630-4b08aad14182 h1:qI/nc6axFoqiz2wuIw2YYmg+P7bsLdviVz2ZT4/wHJ0=

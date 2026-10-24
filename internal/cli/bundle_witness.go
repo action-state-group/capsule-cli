@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"strconv"
 	"strings"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -63,107 +61,31 @@ func witnessClaim(value map[string]interface{}, statement []byte, directory *wit
 	return receiptsClaim(stated["witnesses"], statement, directory, "")
 }
 
-// receiptsClaim checks one checkpoint's receipts in this CLI's report shape.
-// statement is the checkpoint's COSE statement, nil when it did not verify;
-// trusted is the witness directory, nil when none was given; via, when set,
-// is added to each receipt.
-//
-// An entry that is not a receipt this CLI reads (wellFormedReceipt) is
-// malformed. Every other entry is checked by agent-action-capsule's
-// witness.VerifyReceipts: pass when it verifies under one of its row's keys;
-// withheld when it is a stub or there is no row or no usable key; fail when
-// it does not verify. Overall: fail if any entry is malformed or fails, else
-// pass if any passes, else withheld. Findings are in entry order.
+// receiptsClaim is agent-action-capsule's witness.VerifyReceipts on one
+// checkpoint's receipts, in this CLI's report shape. statement is the
+// checkpoint's COSE statement, nil when it did not verify; trusted is the
+// witness directory, nil when none was given (no witness is trusted); via,
+// when set, is added to each receipt. The claim, its findings (malformed
+// entries first) and each receipt's status and reason are AAC's.
 func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory, via string) (aacbundle.ClaimResult, []map[string]string) {
-	list, _ := entries.([]interface{})
-	if len(list) == 0 {
-		return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: []string{"witness_receipt_absent"}}, []map[string]string{}
-	}
 	var signed *witness.SignedCheckpoint
 	if statement != nil {
 		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
 			signed = &parsed
 		}
 	}
-	if signed == nil {
-		return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: []string{"checkpoint_unverified"}}, []map[string]string{}
-	}
-	var directory witness.Directory // no directory trusts no witness
+	var directory witness.Directory
 	if trusted != nil {
 		directory = *trusted
 	}
-	var wellFormed []interface{}
-	for _, entry := range list {
-		if wellFormedReceipt(entry) {
-			wellFormed = append(wellFormed, entry)
-		}
-	}
-	var results []witness.ReceiptResult
-	if len(wellFormed) > 0 {
-		_, _, results = witness.VerifyReceipts(wellFormed, signed, statement, directory)
-	}
-
-	var findings []string
+	status, findings, results := witness.VerifyReceipts(entries, signed, statement, directory)
 	receipts := make([]map[string]string, 0, len(results))
-	sawPass, sawFail := false, false
-	next := 0
-	for index, entry := range list {
-		if !wellFormedReceipt(entry) {
-			sawFail = true
-			findings = append(findings, "witness_receipt_malformed:"+strconv.Itoa(index))
-			continue
-		}
-		r := results[next]
-		next++
-		reason := r.Reason
-		switch r.Status {
-		case witness.StatusPass:
-			sawPass = true
-			if row, found := directory.RowFor(r.TSURL); found {
-				reason = "verified under " + row.Name + "'s key"
-			}
-		case witness.StatusWithheld:
-			findings = append(findings, "witness_unverified:"+r.TSURL)
-		default:
-			sawFail = true
-			findings = append(findings, "witness_receipt_invalid:"+r.TSURL)
-		}
-		receipt := map[string]string{"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": reason}
+	for _, r := range results {
+		receipt := map[string]string{"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason}
 		if via != "" {
 			receipt["via"] = via
 		}
 		receipts = append(receipts, receipt)
 	}
-	switch {
-	case sawFail:
-		return aacbundle.ClaimResult{Status: witness.StatusFail, Findings: findings}, receipts
-	case sawPass:
-		return aacbundle.ClaimResult{Status: witness.StatusPass, Findings: findings}, receipts
-	}
-	return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: findings}, receipts
-}
-
-// wellFormedReceipt is a checkpoint.witnesses entry this CLI reads: an object
-// with non-empty string ts_url, entry_hash and receipt_b64 (standard base64),
-// and leaf_index and tree_size present. It is stricter than
-// witness.VerifyReceipts' own record check, which only requires the members
-// to be present: an entry that is not a receipt is malformed, never merely
-// not checked.
-func wellFormedReceipt(entry interface{}) bool {
-	fields, isObject := entry.(map[string]interface{})
-	if !isObject {
-		return false
-	}
-	url, _ := fields["ts_url"].(string)
-	entryHash, _ := fields["entry_hash"].(string)
-	encoded, _ := fields["receipt_b64"].(string)
-	if url == "" || entryHash == "" || encoded == "" {
-		return false
-	}
-	if _, err := base64.StdEncoding.DecodeString(encoded); err != nil {
-		return false
-	}
-	_, hasLeaf := fields["leaf_index"]
-	_, hasSize := fields["tree_size"]
-	return hasLeaf && hasSize
+	return aacbundle.ClaimResult{Status: status, Findings: findings}, receipts
 }
