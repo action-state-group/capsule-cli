@@ -144,12 +144,12 @@ func TestVerifyBundleHoldsEveryCheckpointFieldToItsSignature(t *testing.T) {
 	}
 }
 
-// The signed log id must equal the log id the bundle states: the bundle
-// draft has the verifier "require its log identifier, MMR size, and root to
-// equal the certificate and checkpoint values", so the log id may be stated
-// in the completeness certificate, the checkpoint, or both, and every copy
-// stated must equal the signed one.
-func TestVerifyBundleTakesTheLogIDFromTheCertificateOrTheCheckpoint(t *testing.T) {
+// The checkpoint claim is AAC strict's (bundle.VerifyCheckpoint): the
+// checkpoint's JSON copy must carry the log id, and every copy stated, the
+// checkpoint's and the completeness certificate's, must equal the signed one.
+// The bundle draft has the verifier "require its log identifier, MMR size,
+// and root to equal the certificate and checkpoint values".
+func TestVerifyBundleHoldsBothLogIDCopiesToTheSignedOne(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	checkpoint := func(result map[string]interface{}) map[string]interface{} {
 		return result["checkpoint"].(map[string]interface{})
@@ -161,12 +161,15 @@ func TestVerifyBundleTakesTheLogIDFromTheCertificateOrTheCheckpoint(t *testing.T
 		assert.Equal(t, "pass", checkpoint(result)["status"])
 	})
 
+	// capsule-cli#438: a copy without its own log id was VALID here while
+	// AAC strict failed it.
 	t.Run("only the certificate's", func(t *testing.T) {
 		result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
 			delete(b["checkpoint"].(map[string]interface{}), "log_id")
 		}))
-		require.NoError(t, err)
-		assert.Equal(t, "pass", checkpoint(result)["status"], "a log id stated in the certificate is enough")
+		assert.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, "INVALID", result["verdict"])
+		assert.Equal(t, []interface{}{"checkpoint_field_missing:log_id"}, checkpoint(result)["findings"])
 	})
 
 	t.Run("the certificate's differs from the signed one", func(t *testing.T) {
@@ -183,6 +186,12 @@ func TestVerifyBundleTakesTheLogIDFromTheCertificateOrTheCheckpoint(t *testing.T
 			assert.ErrorIs(t, err, ErrBundleInvalid, name)
 			assert.Contains(t, checkpoint(result)["findings"], "checkpoint_field_mismatch:log_id", name)
 		}
+		// Mismatches come before missing fields (AAC strict's order).
+		result, _ := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+			delete(b["checkpoint"].(map[string]interface{}), "log_id")
+			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
+		}))
+		assert.Equal(t, []interface{}{"checkpoint_field_mismatch:log_id", "checkpoint_field_missing:log_id"}, checkpoint(result)["findings"])
 	})
 
 	t.Run("neither", func(t *testing.T) {
@@ -193,6 +202,100 @@ func TestVerifyBundleTakesTheLogIDFromTheCertificateOrTheCheckpoint(t *testing.T
 		assert.ErrorIs(t, err, ErrBundleInvalid)
 		assert.Contains(t, checkpoint(result)["findings"], "checkpoint_field_missing:log_id")
 	})
+}
+
+// An integer written as a float ("0e0", "1.0") is not the signed integer,
+// and a checkpoint.cose that is not a string is malformed, not absent
+// (capsule-cli#438: both read as AAC strict reads them).
+func TestVerifyBundleCheckpointIntegersAndCOSEKeepTheirType(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for name, c := range map[string]struct {
+		edit    func(map[string]interface{})
+		finding string
+	}{
+		"prev_size as 0e0": {func(cp map[string]interface{}) {
+			cp["prev_size"] = json.Number(cp["prev_size"].(json.Number).String() + "e0")
+		}, "checkpoint_field_mismatch:prev_size"},
+		"mmr_size as N.0": {func(cp map[string]interface{}) {
+			cp["mmr_size"] = json.Number(cp["mmr_size"].(json.Number).String() + ".0")
+		}, "checkpoint_field_mismatch:mmr_size"},
+		"cose a number": {func(cp map[string]interface{}) { cp["cose"] = json.Number("5") }, "checkpoint_signature_malformed"},
+		// Strict unpadded base64url only: a line break inside a cose whose
+		// signature verifies is malformed, as AAC strict reads it.
+		"cose with a line break": {func(cp map[string]interface{}) {
+			encoded := cp["cose"].(string)
+			cp["cose"] = encoded[:16] + "\n" + encoded[16:]
+		}, "checkpoint_signature_malformed"},
+	} {
+		result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+			c.edit(b["checkpoint"].(map[string]interface{}))
+		}))
+		assert.ErrorIs(t, err, ErrBundleInvalid, name)
+		assert.Equal(t, "INVALID", result["verdict"], name)
+		assert.Equal(t, []interface{}{c.finding}, result["checkpoint"].(map[string]interface{})["findings"], name)
+		if strings.HasPrefix(name, "cose") {
+			// INVALID through the plain claims too: AAC's interval check
+			// reads cose as strictly as the checkpoint claim does.
+			assert.Equal(t, "fail", status(result, "interval_coverage"), name)
+		}
+	}
+}
+
+// A checkpoint claim that fails returns no statement, so nothing (witness
+// receipts, a deal's cadence chain, a History's log check) is checked
+// against it (capsule-cli#438).
+func TestCheckpointClaimReturnsNoStatementWhenItFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := func(edit func(map[string]interface{})) map[string]interface{} {
+		raw, err := os.ReadFile(producedBundle(t, edit))
+		require.NoError(t, err)
+		v, err := DecodeBundleJSON(raw)
+		require.NoError(t, err)
+		return v
+	}
+	claim, statement := CheckpointClaim(value(nil))
+	assert.Equal(t, "pass", claim.Status)
+	assert.NotEmpty(t, statement)
+	claim, statement = CheckpointClaim(value(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }))
+	assert.Equal(t, "fail", claim.Status)
+	assert.Nil(t, statement)
+}
+
+// verify --bundle's checkpoint claim is AAC strict's, on every bundle, and so
+// is the verdict wherever the CLI adds no claim of its own.
+func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	produced := func(edit func(map[string]interface{})) map[string]interface{} {
+		raw, err := os.ReadFile(producedBundle(t, edit))
+		require.NoError(t, err)
+		value, err := DecodeBundleJSON(raw)
+		require.NoError(t, err)
+		return value
+	}
+	for name, value := range map[string]map[string]interface{}{
+		"produced":                       produced(nil),
+		"produced, no checkpoint log_id": produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
+		"produced, no cose":              produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
+		"selected":                       selectedBundle(t, nil),
+		"selected, certificate log_id": selectedBundle(t, func(b map[string]interface{}) {
+			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
+		}),
+		"selected, no checkpoint log_id": selectedBundle(t, func(b map[string]interface{}) {
+			delete(b["checkpoint"].(map[string]interface{}), "log_id")
+		}),
+	} {
+		strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+		result, err := verifyBundleOutput(t, writeBundle(t, value))
+		cp := result["checkpoint"].(map[string]interface{})
+		assert.Equal(t, strict.Claim("checkpoint").Status, cp["status"], name)
+		assert.ElementsMatch(t, strict.Claim("checkpoint").Findings, cp["findings"], name)
+		assert.Equal(t, strict.Verdict, result["verdict"], name)
+		if want := verdictError(strict.Verdict); want == nil {
+			assert.NoError(t, err, name)
+		} else {
+			assert.ErrorIs(t, err, want, name)
+		}
+	}
 }
 
 func TestVerifyBundleChecksProducerSignatures(t *testing.T) {

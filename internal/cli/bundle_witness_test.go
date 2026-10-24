@@ -573,3 +573,23 @@ func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
 	assert.Equal(t, "INVALID", result["verdict"])
 }
+
+// Receipts are checked only against a checkpoint whose claim passed, as AAC
+// strict checks them: a checkpoint without its own log_id fails the claim,
+// so a receipt that would verify is not checked (capsule-cli#438).
+func TestVerifyBundleChecksNoReceiptAgainstAFailedCheckpointClaim(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		delete(b["checkpoint"].(map[string]interface{}), "log_id")
+	})
+	result, err := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(testWitness, public)))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "fail", status(result, "checkpoint"))
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "withheld", state)
+	assert.Equal(t, []interface{}{"checkpoint_unverified"}, findings)
+	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
+}

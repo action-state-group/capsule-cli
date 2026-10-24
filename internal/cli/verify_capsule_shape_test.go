@@ -157,3 +157,25 @@ func TestVerifyCapsuleNamesTheWrapperShape(t *testing.T) {
 	assert.Equal(t, "artifact-record", result["shape"])
 	assert.Equal(t, "passed", result["capsule_identity"])
 }
+
+// AAC's Class 1 verifier (go/v0.13.0) reports at most 64 findings of each
+// number kind, so a capsule built with more lists 64 (capsule-cli#438).
+func TestVerifyCapsuleListsAtMost64NumberFindings(t *testing.T) {
+	bareCapsuleProfile(t)
+	raw, err := os.ReadFile(bareCapsuleFixture)
+	require.NoError(t, err)
+	var capsule map[string]any
+	require.NoError(t, json.Unmarshal(raw, &capsule))
+	floats := make([]any, 70)
+	for i := range floats {
+		floats[i] = 0.5
+	}
+	capsule["x"] = floats
+	encoded, err := json.Marshal(capsule)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "capsule.json")
+	require.NoError(t, os.WriteFile(path, encoded, 0o600))
+	result, err := verifyCapsuleOutput(t, path)
+	require.Error(t, err)
+	assert.Equal(t, 64, strings.Count(result["capsule_identity"].(string), "float_in_digest_field"))
+}
