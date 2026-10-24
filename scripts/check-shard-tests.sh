@@ -35,9 +35,15 @@ check missing /dev/null 3 "$work/names"
 printf '0.00 TestA\n0.00 TestB\n0.00 TestC\n0.00 TestD\n0.00 TestE\n0.00 TestF\n0.00 TestG\n' >"$work/zero"
 check zero "$work/zero" 7 "$work/names"
 
-# The heavy test sits alone and the three 10s share the others.
-[[ "$(bash scripts/shard-tests.sh 1 3 "$work/weights" <"$work/names" | head -1)" == TestA ]] || {
-  printf 'the heaviest test is not first on shard 1\n' >&2
-  exit 1
-}
+# The exact split: the 30s test alone, the 10s spread, then the unlisted tests
+# (2s each) and the zero-time one on the lightest shards. A split by name would
+# put TestA, TestD and TestG together.
+want=("TestA" "TestB TestD" "TestC TestF TestG TestE")
+for i in 1 2 3; do
+  got=$(bash scripts/shard-tests.sh "$i" 3 "$work/weights" <"$work/names" | paste -sd ' ' -)
+  if [[ "$got" != "${want[i - 1]}" ]]; then
+    printf 'shard %d/3 is "%s", want "%s"\n' "$i" "$got" "${want[i - 1]}" >&2
+    exit 1
+  fi
+done
 printf 'shard-tests: ok\n'
