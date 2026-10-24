@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### verify --bundle: producer signatures from AAC's strict verifier (#438)
+
+- **Changed:** `verify --bundle` reads each record's producer signature
+  from AAC's strict verifier (`VerifyStrict`'s `signatures` claim) instead
+  of its own copy. `producer_signatures` and `record_signatures` keep their
+  shape and values. A record whose `signature` and `key_id` are both
+  present as `null` (or as anything but hex strings) was read as unsigned
+  and the bundle INCOMPLETE; it is now an invalid signature and the bundle
+  INVALID. A record edited under a kept signature now also fails
+  `producer_signatures` (it was INVALID already). The claim lists invalid
+  records before unsigned ones, and a non-object entry in `records` no
+  longer adds an unsigned finding with an empty id. The checkpoint claim
+  moves to AAC once an AAC Go release carries `bundle.VerifyCheckpoint`;
+  that change will make a checkpoint without its own `log_id`, and a
+  `mmr_size` or `prev_size` written as a float (`0e0`, `1.0`), INVALID.
+
 ### Report pages: the failed-bundle notes and repeated record ids (capsule-viewer#77)
 
 - **Changed:** the pages capsulectl writes take capsule-viewer at

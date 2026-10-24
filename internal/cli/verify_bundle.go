@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
-	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/spf13/cobra"
 )
@@ -91,50 +89,20 @@ func logIDFinding(value, stated map[string]interface{}, signed interface{}) stri
 	return ""
 }
 
-// producerSignatureClaim checks each record's inline producer signature
-// (signature: hex COSE_Sign1 producer envelope over the capsule_id; key_id:
-// the signer's raw public key). A record with neither is unsigned (not
-// shown); one with only one of them, or whose envelope does not verify under
-// its key_id, fails. Returns the claim and each record's state.
-func producerSignatureClaim(records []interface{}) (aacbundle.ClaimResult, map[string]string) {
+// signaturesClaim is AAC strict's producer-signature claim and each record's
+// verdict (authored, unclaimed or invalid) by capsule id. A value strict
+// refuses before reading its records (not an evidence-bundle/v2 object)
+// carries its refusal here too.
+func signaturesClaim(strict aacbundle.StrictResult) (aacbundle.ClaimResult, map[string]string) {
 	states := map[string]string{}
-	var findings []string
-	unsigned := false
-	failed := false
-	for _, raw := range records {
-		record, _ := raw.(map[string]interface{})
-		id, _ := record["capsule_id"].(string)
-		sig, hasSig := record["signature"].(string)
-		key, hasKey := record["key_id"].(string)
-		switch {
-		case !hasSig && !hasKey:
-			states[id] = "unclaimed"
-			unsigned = true
-			findings = append(findings, "producer_signature_unclaimed:"+id)
-			continue
-		case hasSig != hasKey:
-			states[id] = "invalid"
-		default:
-			envelopeBytes, sigErr := hex.DecodeString(sig)
-			keyBytes, keyErr := hex.DecodeString(key)
-			result := envelope.Verify(id, envelopeBytes)
-			if sigErr == nil && keyErr == nil && result.OK && bytes.Equal(result.PublicKey, keyBytes) {
-				states[id] = "authored"
-				continue
-			}
-			states[id] = "invalid"
-		}
-		failed = true
-		findings = append(findings, "producer_signature_invalid:"+id)
+	for _, record := range strict.Records {
+		states[record.CapsuleID] = record.Signature
 	}
-	switch {
-	case failed || len(records) == 0:
-		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, states
-	case unsigned:
-		return aacbundle.ClaimResult{Status: "withheld", Findings: findings}, states
-	default:
-		return aacbundle.ClaimResult{Status: "pass"}, states
+	if signatures := strict.Claim("signatures"); signatures != nil {
+		return *signatures, states
 	}
+	// Strict always reports records first; a refused value has only that.
+	return *strict.Claim("records"), states
 }
 
 // ErrBundleInvalid is a failed Evidence Bundle check: the result was printed,
@@ -233,11 +201,10 @@ var bundleOptions = aacbundle.Options{RefusalSignature: verifyRefusalSignature, 
 // itself). So that a tampered proof cannot hide behind that difference, a
 // failing strict checkpoint claim is returned too, and the caller reports it
 // as the bundle's checkpoint claim; nil otherwise.
-func withSelection(value map[string]interface{}, result aacbundle.VerificationResult) (aacbundle.VerificationResult, *aacbundle.ClaimResult) {
+func withSelection(value map[string]interface{}, result aacbundle.VerificationResult, strict aacbundle.StrictResult) (aacbundle.VerificationResult, *aacbundle.ClaimResult) {
 	if completeness, _ := value["completeness"].(map[string]interface{}); completeness["selection"] != aacbundle.SelectionProducerSelected {
 		return result, nil
 	}
-	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
 	result.IntervalCoverage, result.PerRecordMembership = strict.IntervalCoverage, strict.PerRecordMembership
 	if checkpoint := strict.Claim("checkpoint"); checkpoint != nil && checkpoint.Status == "fail" {
 		return result, checkpoint
@@ -251,7 +218,8 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // Bundle's, but a failed member or block fails the verdict, and one with
 // something not shown makes it INCOMPLETE.
 func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string) {
-	result, strictCheckpoint := withSelection(value, result)
+	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+	result, strictCheckpoint := withSelection(value, result, strict)
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {
@@ -298,8 +266,7 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		countersignatures = append(countersignatures, s.Status)
 	}
 
-	rawRecords, _ := value["records"].([]interface{})
-	signatures, signatureStates := producerSignatureClaim(rawRecords)
+	signatures, signatureStates := signaturesClaim(strict)
 	signedCheckpoint, statement := CheckpointClaim(value)
 	if strictCheckpoint != nil && signedCheckpoint.Status != "fail" {
 		signedCheckpoint = *strictCheckpoint

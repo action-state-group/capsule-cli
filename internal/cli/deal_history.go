@@ -8,6 +8,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
@@ -86,19 +87,19 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	d, _ := disclosures[recordID].(map[string]interface{})
 	sealed, _ := d["agent_input"].(map[string]interface{})
 	rawRecords, _ := value["records"].([]interface{})
-	_, signatureStates := producerSignatureClaim(rawRecords)
-	holder := ""
+	holder, signature := "", ""
 	for _, raw := range rawRecords {
 		r, _ := raw.(map[string]interface{})
 		if r["capsule_id"] == recordID && r["action_id"] == HistoryActionID {
 			holder, _ = r["key_id"].(string)
+			signature, _ = envelope.VerifyRecordSignature(r)
 		}
 	}
 	audience, _ := sealed["audience"].(string)
 	switch {
 	case !matched || sealed["type"] != "history_selection" || sealed["profile"] != HistorySelectionExtension:
 		failed = append(failed, "selection_record_unverified")
-	case holder == "" || signatureStates[recordID] != "authored":
+	case holder == "" || signature != envelope.Authored:
 		failed = append(failed, "selection_record_unsigned")
 	}
 	if value["root"] != recordID {

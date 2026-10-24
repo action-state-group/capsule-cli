@@ -217,11 +217,65 @@ func TestVerifyBundleChecksProducerSignatures(t *testing.T) {
 			record(b)["signature"] = hex.EncodeToString(sig)
 		},
 		"only a signature": func(b map[string]interface{}) { delete(record(b), "key_id") },
+		// Present as null is present (AAC strict vector invalid-null-members),
+		// so this is a malformed signature, not an unsigned record.
+		"signature and key_id null": func(b map[string]interface{}) {
+			record(b)["signature"], record(b)["key_id"] = nil, nil
+		},
+		// The envelope signs the Capsule ID recomputed from the content, not
+		// the capsule_id the record carries.
+		"content edited under a kept signature": func(b map[string]interface{}) { record(b)["operator"] = "x" },
 	} {
 		result, err := verifyBundleOutput(t, producedBundle(t, edit))
 		assert.ErrorIs(t, err, ErrBundleInvalid, name)
 		assert.Equal(t, "fail", status(result, "producer_signatures"), name)
+		for _, state := range result["record_signatures"].(map[string]interface{}) {
+			assert.Equal(t, "invalid", state, name)
+		}
 	}
+}
+
+// verify --bundle's producer_signatures is AAC strict's signatures claim and
+// record_signatures its per-record verdicts, so the CLI and AAC never give
+// two answers for one bundle.
+func TestVerifyBundleProducerSignaturesAreAACStrict(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	record := func(b map[string]interface{}) map[string]interface{} {
+		return b["records"].([]interface{})[0].(map[string]interface{})
+	}
+	for name, edit := range map[string]func(map[string]interface{}){
+		"produced":         nil,
+		"unsigned":         func(b map[string]interface{}) { delete(record(b), "signature"); delete(record(b), "key_id") },
+		"signature number": func(b map[string]interface{}) { record(b)["signature"] = json.Number("5") },
+		"a non-object record": func(b map[string]interface{}) {
+			b["records"] = append(b["records"].([]interface{}), "junk")
+		},
+	} {
+		path := producedBundle(t, edit)
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		value, err := DecodeBundleJSON(raw)
+		require.NoError(t, err)
+		strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+		want := map[string]interface{}{}
+		for _, r := range strict.Records {
+			want[r.CapsuleID] = r.Signature
+		}
+		result, _ := verifyBundleOutput(t, path)
+		signatures := result["producer_signatures"].(map[string]interface{})
+		assert.Equal(t, strict.Claim("signatures").Status, signatures["status"], name)
+		assert.ElementsMatch(t, strict.Claim("signatures").Findings, signatures["findings"], name)
+		assert.Equal(t, want, result["record_signatures"], name)
+	}
+}
+
+// A value AAC strict refuses before reading its records reports that
+// refusal as its producer-signature claim.
+func TestSignaturesClaimCarriesAStrictRefusal(t *testing.T) {
+	strict := aacbundle.VerifyStrict(map[string]interface{}{"bundle_kind": "evidence-bundle/v1"}, aacbundle.StrictOptions{})
+	claim, states := signaturesClaim(strict)
+	assert.Equal(t, aacbundle.ClaimResult{Status: "fail", Findings: []string{"not_an_evidence_bundle_v2"}}, claim)
+	assert.Empty(t, states)
 }
 
 // TestVerifyBundleAgreesWithThePythonVerifier: a bundle this CLI produces,
