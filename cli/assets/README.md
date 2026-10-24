@@ -1,8 +1,9 @@
-# Vendored browser runtime for `report build`
+# Vendored browser runtime
 
-`evidence-graph.iife.js` is the browser runtime every `report.html` that
-`capsulectl report build` writes embeds (`deal report --html` and
-`presentation build` embed the same file). It bundles two sources:
+`evidence-graph.iife.js` is the browser runtime the pages capsulectl writes
+embed: `presentation build`, and `bundle` or `disclose --html`. (`report build`
+and `deal report --html` are the book and deal plugins' verbs, built in their
+own repositories since #326.) It bundles two sources:
 
 - **the page code** from capsule-viewer's `ts/src` (the views, the
   presentation mount and registry, the outcome and EU report cards), the
@@ -26,13 +27,13 @@ file, never to render a report.
 
 | | |
 |---|---|
-| page code | capsule-viewer main @ `4b08aad14182154523ac46a0b3f93604227a8b9e`, a merged commit (the same one `go.mod`'s `capsule-viewer/go v0.1.2-0.20261023134630-4b08aad14182` names) |
-| verifier | agent-action-capsule main @ `1d655a14156f10ca951a1ab6a51122390f757db1`, a merged commit (the one `ts/v0.6.1` tags), pinned apart from `go.mod`; registry `@action-state-group/cll` `0.2.1` |
+| page code | capsule-viewer main @ `d100e320e4748b497a10b8219cf80bd5f4dc0a0b`, a merged commit (the same one `go.mod`'s `capsule-viewer/go v0.1.2-0.20261024221237-d100e320e474` names) |
+| verifier | agent-action-capsule main @ `cd68af7c80b6218efb86b6c749d253472054e590`, a merged commit (the one `ts/v0.7.0` tags), pinned apart from `go.mod`; registry `@action-state-group/cll` `0.2.1` |
 | build | `npm ci` in both `ts/` directories, then `node scripts/build-report-runtime.mjs <cv> <aac> <out>`, esbuild 0.28.2 (capsule-viewer's); the output opens with `"use strict";`, as both repositories build under `"strict": true`, and defines `__CAPSULE_VIEWER_COMMIT__` as the page-code commit, so the page's "Verified by" line names it (#363) |
-| sha256 | `6b0e356a2bdebb771b331ffe8713ca871e57a1bf3ddc014fc3ff0fa27f744335` |
+| sha256 | `14e4eca08a978421af8c61c6b0cb6fca5bdae2d840f0c54c6ee40ee0041ed497` |
 
 The digest is pinned again in `evidence_graph_assets.go` (`evidenceGraphIIFEDigest`) and
-checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds
+checked by `TestIIFEIsPinned`, and again in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds
 and replaces the file, and `make iife-check CV=<cv checkout> AAC=<aac checkout>` diffs the
 vendored copy against a fresh build. Refresh the file, the digest here and
 the constants in `evidence_graph_assets.go` together. The shell's CSP style

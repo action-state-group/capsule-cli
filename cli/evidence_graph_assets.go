@@ -41,9 +41,9 @@ var (
 // here with its digest pinned in code; TestIIFEIsPinned keeps the two in
 // step. The shell's style hashes (runtime-style-hashes.txt in the Go module)
 // cover the runtime's styles, so the Go module and the IIFE's
-// capsule-viewer commit move together. The file and its digest are the same ones `deal
-// report` and `presentation build` embed (EvidenceGraphIIFE,
-// EvidenceGraphIIFESHA256, below);
+// capsule-viewer commit move together. The file and its digest are the ones
+// `presentation build` and `bundle` or `disclose --html` embed
+// (EvidenceGraphIIFE, EvidenceGraphIIFESHA256, below);
 // scripts/build-evidence-graph-iife.sh rebuilds it from the two commits
 // evidenceGraphIIFESource records, and scripts/iife-sync.sh from any
 // capsule-viewer and aac checkouts. The report is only as
@@ -51,14 +51,14 @@ var (
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	EvidenceGraphIIFEDigest = "6b0e356a2bdebb771b331ffe8713ca871e57a1bf3ddc014fc3ff0fa27f744335"
+	EvidenceGraphIIFEDigest = "14e4eca08a978421af8c61c6b0cb6fca5bdae2d840f0c54c6ee40ee0041ed497"
 	// evidenceGraphIIFESource names the commits and build the vendored IIFE
 	// came from: capsule-viewer's page code, and agent-action-capsule's
 	// verifier using released CLL 0.2.1 from its registry lock. Both must be
 	// merged on their repository's main (CI checks). They are pinned apart
 	// from go.mod: the aac Go module may move to a release tag while the
 	// browser verifier stays at this build.
-	evidenceGraphIIFESource = "capsule-viewer main@4b08aad14182154523ac46a0b3f93604227a8b9e ts/src with verifier agent-action-capsule main@1d655a14156f10ca951a1ab6a51122390f757db1 ts/src: scripts/build-report-runtime.mjs (esbuild 0.28.2)"
+	evidenceGraphIIFESource = "capsule-viewer main@d100e320e4748b497a10b8219cf80bd5f4dc0a0b ts/src with verifier agent-action-capsule main@cd68af7c80b6218efb86b6c749d253472054e590 ts/src: scripts/build-report-runtime.mjs (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,
