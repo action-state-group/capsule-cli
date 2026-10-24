@@ -1,12 +1,13 @@
 # capsule-cli
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
-artifact SDK and `cll-go`, and two first-party plugins, `capsulectl-book` and
-`capsulectl-deal`, which add the `evidencebook` Go library's evidence book and
-the deal store ([docs/PLUGINS.md](docs/PLUGINS.md)). The core builds without
-evidencebook. Applications import those libraries, not this CLI: everything
-outside `cmd/` is under Go's `internal/` and cannot be imported. This
-repository is a command-line tool, not an SDK.
+artifact SDK and `cll-go`. Plugins extend it: the first-party ones,
+`capsulectl-book` (the `evidencebook` Go library's evidence book) and
+`capsulectl-deal` (the deal store), build and release from their own
+repositories ([docs/PLUGINS.md](docs/PLUGINS.md)). The core builds without
+evidencebook. Applications import those libraries, not this CLI: the `cli`
+package is the plugins' host package, with no compatibility promise before
+v1. This repository is a command-line tool, not an SDK.
 No application-specific (investigation/evaluation) semantics, database
 migration tools, selective disclosure, or implicit login/default profile are
 included.
@@ -111,25 +112,24 @@ mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
-The evidence book and the deal store are plugins. With the release core
-installed, install the ones you use (both are from the same release as the
-core):
+The evidence book and the deal store are plugins, each with its own release
+(see [docs/PLUGINS.md](docs/PLUGINS.md) for where). Download the plugin file
+built for this capsulectl release, check it as you checked the binary
+(`sha256sum -c SHA256SUMS`, and `gh attestation verify` against the plugin's
+own repository), then install the file:
 
 ```bash
-capsulectl plugin install book   # book profiles: close, reconcile, result, report, ...
-capsulectl plugin install deal   # deal profiles: capsulectl deal ...
+capsulectl plugin install ./capsulectl-deal   # deal profiles: capsulectl deal ...
 ```
 
-Each fetches `capsulectl-$V-plugin-<name>-$OS-$ARCH` from the core's own
-release, checks it against `SHA256SUMS` and, when `gh` is installed, its build
-provenance with the same `gh attestation verify` as above, and puts it in
-`~/.local/lib/capsulectl/plugins`. Its output lists the checks that ran. It
-never runs through `sudo`, and it refuses a plugin root on a path another user
-could change. When the only fault is group or other write on your own
-directories under `$HOME` (a stock Ubuntu account, or a host that makes the
-home `2770`), it removes that write access itself and reports it under
+Install runs the plugin's handshake, checks it is built for this capsulectl
+release, and puts it in `~/.local/lib/capsulectl/plugins`. Its output lists
+the checks that ran. It never runs through `sudo`, and it refuses a plugin
+root on a path another user could change. When the only fault is group or
+other write on your own directories under `$HOME` (a stock Ubuntu account, or a
+host that makes the home `2770`), it removes that write access itself and reports it under
 `plugin_root_healed`.
-From a source checkout, `make install` installs the core and both plugins.
+From a source checkout, `make install` installs the core.
 See [docs/PLUGINS.md](docs/PLUGINS.md).
 
 Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
@@ -171,8 +171,8 @@ files: run `go run ./cmd/skillgen` from the repository root after editing the
 spec, or `go run ./cmd/skillgen --check` to fail when the files on disk differ
 from what the spec renders. A test (`TestCapsulectlSkillMatchesItsSpec`) runs
 that comparison in CI. The format is described in
-[skills/SKILL-SPEC.md](skills/SKILL-SPEC.md). `skills/deal/` is the deal skill,
-written by hand; see [skills/deal](skills/deal/README.md).
+[skills/SKILL-SPEC.md](skills/SKILL-SPEC.md). The deal skill is the deal
+plugin's and lives with it (capsule-cli#326).
 
 `skills/capsulectl/scripts/run-scripted-demo.sh` is a contributor check, not an
 install step: it builds `capsulectl` from a source checkout, so it needs Go and
@@ -423,13 +423,13 @@ one checkpoint of hashes per tick (every 5m, give or take 1m, by default),
 never on activity. `cll checkpoint cadence --wait-up-to 5m`, scheduled every
 5 minutes, is its poll: a run with no tick due publishes nothing.
 `deal audit-host` reads the host's execution records afterwards and lists
-consequential actions that have no deal record; see
-[skills/deal](skills/deal/README.md).
+consequential actions that have no deal record; see the deal skill, in the
+deal plugin's repository.
 
 The book verbs (`capsulectl book close`, `reconcile`, `request`, `respond`)
 and a book profile's log (`publish`, `cll append`, `cll list`) run over an
 evidence book from the `evidencebook` Go library, in the `capsulectl-book`
-plugin (`plugins/internal/book/book.go`, `booklog.go`). The CLI does not
+plugin. The CLI does not
 implement an evidence book of its own: it chooses windows, reads files and
 writes results, and the library composes every proof. A profile declares
 whether its log is the core's CLL (`log: cll`) or an evidence book
@@ -447,8 +447,8 @@ the flag's name.
 approvals) after the fact, as a watermark poll by monotonic cursor: every new
 row by digest, and the rows near a consequential signal as Capsules in
 provenance mode `backfilled`. It shows effects only, never an amount charged
-or an approval, and it gives detectability of absence, not prevention; see
-[docs/BACKFILL.md](docs/BACKFILL.md).
+or an approval, and it gives detectability of absence, not prevention. It is
+the book plugin's; its `BACKFILL.md` moved with it.
 
 `canary run` plays a scripted DEMO deal on a profile of its own and ticks that
 profile's cadence log only when every step succeeded; `canary watch` reads the
@@ -472,18 +472,15 @@ override is enabled.
 | `cmd/capsulectl/` | the CLI's entry point |
 | `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
 | `cli/` | every core command, and the host package the first-party plugins build against (no compatibility promise before v1) |
+| `settlement/` | the settlement leg records, read and checked; public for the deal plugin until settlement verification moves to agent-action-capsule |
 | `cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
 | `cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
-| `plugins/` | the second Go module: `cmd/capsulectl-book` and `cmd/capsulectl-deal`, the first-party plugins, and `internal/book` and `internal/deal`, their evidence book and deal commands; the only module that requires evidencebook |
-| `plugins/internal/deal/assets/` | the deal profile schema, the typed record schemas and the external-check result schema |
-| `plugins/internal/deal/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `plugins/scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
 | `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
-| `skills/` | the `capsulectl` skill (generated) and the `deal` skill, each with contributor demo scripts (`plugins/scripts/bookdemo` is a small Go program the scripted demo runs); `skills/SKILL-SPEC.md` is the spec format |
+| `skills/` | the `capsulectl` skill (generated), with a contributor demo script; `skills/SKILL-SPEC.md` is the spec format |
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
-| `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
+| `docs/` | plugins, release transparency, canary, the test-account harness, the PR capsule profile, and design notes |
 | `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
-| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh` and `build-report-runtime.mjs`, which rebuild the vendored browser runtime (capsule-viewer's page code and agent-action-capsule's verifier), `check-html-render.sh`, which opens the report example's page in headless Chrome, and `check-portability.sh`, which checks a deal's shared copy and exported records with capsulectl alone after the session is deleted (both share `lib/page-checks.sh`) |
-| `third_party/unicode/` | Unicode's confusables data, vendored unmodified with its terms of use |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, `build-evidence-graph-iife.sh` and `build-report-runtime.mjs`, which rebuild the vendored browser runtime (capsule-viewer's page code and agent-action-capsule's verifier), `check-html-render.sh`, which opens the report example's page in headless Chrome (with `lib/page-checks.sh`), and the CI checks `check-neutral-deps.sh` and `check-moved-paths.sh` |
 
 ## Profile setup
 
@@ -1167,8 +1164,8 @@ go vet ./... && (cd plugins && go vet ./...)
 CAPSULE_CLI_TEST_MYSQL_PORT=<disposable-local-port> go test -race -timeout=15m ./...
 ```
 
-The repository is two modules, the core and `plugins/`; `go test ./...` in
-one does not reach the other, and `scripts/test.sh` (`make test`) runs both.
+The repository is one module; the first-party plugins test in their own
+repositories (capsule-cli#326).
 
 Integration tests use only `127.0.0.1` and database `capsule_cli_test`, isolated
 namespaces/logs per run. Tests use testify assert/require, real emitter/artifact/CLL
@@ -1188,11 +1185,10 @@ GitHub Actions runs on pull requests and pushes to `main`, with manual dispatch
 also available. It checks formatting, module-file consistency, vet, and the CLI
 build. It also builds the report above and opens its page in headless Chrome
 (`scripts/check-html-render.sh`): the page must render the report and say it
-verified, and a copy with one payload edited must say it failed. A deal shared with its counterparty and exported
-is then checked with capsulectl alone, after its session is deleted
-(`scripts/check-portability.sh`): its page opens offline and verifies, and its
-exported typed records are the ones the bundle commits to and say what the page
-shows; an edited bundle or record fails the check. Tests run with the race detector against a disposable MySQL 8.4 service;
+verified, and a copy with one payload edited must say it failed. The
+committed presentation fixtures, deal copies among them, are verified offline
+with the core alone (`TestPresentationFixturesVerifyOffline`); the deal
+plugin's own checks of a shared copy run in its repository. Tests run with the race detector against a disposable MySQL 8.4 service;
 `CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
 No production credentials or database tunnels are used.
 

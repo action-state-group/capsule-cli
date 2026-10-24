@@ -40,10 +40,13 @@ import (
 var vocabulary = regexp.MustCompile(`(?i)(?:^|[^a-z])(?:self[- _]?attested|attest(?:s|ed|ation)?|witness(?:ed)?|countersign(?:ed|ature)?|self[- _]countersigned|unresolved[- _]signer|anchored|notari[sz]ed|tamper[- ]evident|non-repudiation|unsigned)(?:[^a-z]|$)`)
 
 var (
-	rungLine    = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
-	helpLine    = regexp.MustCompile(`Short:|Use:|Flags\(\)|Errorf|inputError|errors\.New`)
-	timeRung    = regexp.MustCompile(`timeRung|time_rung`)
-	receiptFile = map[string]bool{"plugins/internal/deal/deal_email.go": true, "plugins/internal/deal/deal_countersign.go": true, "plugins/internal/deal/deal_report.go": true, "plugins/internal/deal/deal_obligation.go": true}
+	rungLine = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
+	helpLine = regexp.MustCompile(`Short:|Use:|Flags\(\)|Errorf|inputError|errors\.New`)
+	timeRung = regexp.MustCompile(`timeRung|time_rung`)
+	// receiptFile names the files whose words a receipt, email or page
+	// shows. Those were the deal plugin's, which left with it
+	// (capsule-cli#326).
+	receiptFile = map[string]bool{}
 	escape      = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
 	// goToken and jsLiteral are the independent tokenizer and the page
 	// script's literals: comments are consumed so their quotes do not count.
@@ -52,7 +55,7 @@ var (
 )
 
 func main() {
-	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go", "plugins/internal/deal/*.go", "plugins/internal/book/*.go", "plugins/cmd/*.go").Output()
+	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go").Output()
 	if err != nil {
 		fail(err)
 	}

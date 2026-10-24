@@ -8,14 +8,10 @@ followed, written down once and generalised to rcNN. The tag runs
 outsider checks it, is in [RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md). This page does not
 repeat either; it says what to do, and in which order.
 
-> **The deal skill ships inside the release. Change its words before the tag, or wait for the
-> next rc.**
->
-> `skills/deal/SKILL.md` is installed from the tag's own source archive, and release verification
-> checks that the installed `SKILL.md` is byte-for-byte the one at the tagged commit. Any wording
-> change to it after the tag moves its digest. Then the install page's published value is wrong,
-> and the release has to be cut again. Every change to `skills/deal/` lands before the tag. If it
-> is not ready, it goes in the next rc.
+> **The deal plugin and the deal skill ship from evidencebook-deal's release, built against
+> this one** (capsule-cli#326). A capsulectl release that users install needs a
+> capsulectl-deal release whose `go.mod` requires it; that repository's RELEASING.md is the
+> procedure.
 
 **Provenance.** This is the rc10 cutover procedure, generalised. The verification standard is the
 one the rc9 and rc10 cuts used.
@@ -24,7 +20,8 @@ one the rc9 and rc10 cuts used.
 
 **The shipping unit is the release triple, not the tag.** It has three parts:
 1. capsulectl's binaries and their release assets;
-2. the deal skill's archive (the tag's source archive);
+2. capsulectl-deal and the deal skill (`deal-skill-<tag>.tar.gz`), from an
+   evidencebook-deal release built against this capsulectl release;
 3. the companion plugin and skill, if you serve them.
 
 A tag can be cut and published while installs stay on the previous triple. A release is shipped
@@ -33,15 +30,14 @@ when the install page moves to the new triple (step 7).
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
 | Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
-| The deal skill | the tag's source archive (`archive/refs/tags/<tag>.tar.gz`), `skills/deal/SKILL.md` inside it | the archive is stable (downloaded twice, same SHA-256), and its `SKILL.md` equals the tagged commit's |
+| capsulectl-deal and the deal skill | an evidencebook-deal release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
 | The companion plugin and skill, if you serve them | their own release, built separately | their own published SHA-256 files, served byte for byte |
 
 ## Before the tag
 
 The checks before the tag are lettered A to C; the release steps after them are numbered 1 to 9.
 
-A. **Everything the tag must carry has merged.** That means every code change, and every change
-   to `skills/deal/` (see the box above).
+A. **Everything the tag must carry has merged.**
    - If the companion plugin embeds definitions this release depends on, their inputs are final
      first. A plugin that embeds a digest re-cuts when that digest moves.
 B. **CI on `main` is green.** In particular, these jobs block a release:
@@ -98,28 +94,22 @@ never asks for credentials or a token with which it could.
    deployments". For a full release, the reviewer who did not push the tag approves.
 3. **Release CI is green.** It builds, checks the version each binary reports, attests the
    binaries, and publishes the release (a pre-release for a tag with a hyphen).
-4. **Verify from the downloaded assets, not from the build.** In an empty directory, with a clone
-   of this repository at `$CLONE` (for the tagged commit's `SKILL.md`):
+4. **Verify from the downloaded assets, not from the build.** In an empty directory:
 
    ```sh
-   V=v0.1.0-rcNN; R=action-state-group/capsule-cli; CLONE=~/src/capsule-cli
+   V=v0.1.0-rcNN; R=action-state-group/capsule-cli
    gh release download "$V" --repo "$R"
    sha256sum -c SHA256SUMS
    for f in capsulectl-"$V"-*-*; do
      gh attestation verify "$f" --bundle "capsulectl-$V.sigstore.json" --repo "$R" \
        --signer-workflow "$R/.github/workflows/release.yml"
    done
-   curl -sSL -o a1.tar.gz "https://github.com/$R/archive/refs/tags/$V.tar.gz"
-   curl -sSL -o a2.tar.gz "https://github.com/$R/archive/refs/tags/$V.tar.gz"
-   sha256sum a1.tar.gz a2.tar.gz          # the skill archive: the same twice
-   tar -xzf a1.tar.gz --to-stdout "capsule-cli-${V#v}/skills/deal/SKILL.md" | sha256sum
-   git -C "$CLONE" fetch --tags origin
-   git -C "$CLONE" show "$V:skills/deal/SKILL.md" | sha256sum   # must equal the line above
    ```
 
-   Record the tag, its commit, each binary's SHA-256, the attestation bundle's, the skill
-   archive's and `SKILL.md`'s. The install page and the companion release compare against these
-   values, not against a build.
+   Record the tag, its commit, each binary's SHA-256 and the attestation bundle's. The install
+   page and the companion releases compare against these values, not against a build. The deal
+   plugin and skill are verified the same way from their own release (evidencebook-deal's
+   RELEASING.md).
 5. **Publish the reviewed release notes, the upgrade note and security first.** When the release
    cannot be undone on an existing store, its upgrade note opens the notes: it is what a reader
    must act on before installing. A fix that changes what verification accepts or what a record
@@ -129,7 +119,9 @@ never asks for credentials or a token with which it could.
 
 ## After the tag
 
-6. **Re-cut the companion plugin and skill, if you serve them,** from their own source. Hand over
+6. **Release capsulectl-deal against this tag** (evidencebook-deal: bump `go.mod` to the tag,
+   merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
+   source. Hand over
    both `.sha256` files with them, unregenerated, so the install page can compare them byte for
    byte.
 7. **Re-aim the install page at the new triple.**
@@ -149,8 +141,6 @@ in an older layout, confirm such a profile does not block the install.
 
 ## When it goes wrong
 
-- **A change to `skills/deal/` merged after the tag.** The install page's skill value no longer
-  matches the tag. Do not edit the published values: cut the next rc.
 - **Release CI failed after the tag was pushed, or a run was rejected.** Fix it on `main` and cut
   the next version (the next rc, or the next patch for a full release). A pushed tag cannot be
   moved or deleted.
@@ -176,7 +166,7 @@ print what it would set, `--apply` to set it, and `--show` to print what GitHub 
   - "release tags: immutable": nobody may update, force-move or delete a release tag. It has no
     bypass actors, so admins are bound too.
 - **Immutable releases:** once a release is published, nobody can replace or remove its assets.
-  `capsulectl plugin install` relies on this: it trusts the `SHA256SUMS` of the release it fetches
+  The install page relies on this: it pins the `SHA256SUMS` of the release it fetches
   from (RELEASE-TRANSPARENCY.md, section 3). It covers releases published after it is turned on.
 
 Each release reviewer watches the repository for releases (Watch, Custom, Releases), so GitHub

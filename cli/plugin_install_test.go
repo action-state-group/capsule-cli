@@ -2,19 +2,13 @@ package cli
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -154,13 +148,13 @@ func TestPluginInstallOperands(t *testing.T) {
 	assert.Contains(t, SafeError(err), "give it as ./capsulectl-acme")
 
 	// A file named deal in the working directory never turns `deal` into a
-	// file install: on a development build the name form says to build it.
+	// file install: the name form is refused with the file form.
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "deal"), []byte(launcherScript("deal", "x", "")), 0o755))
 	t.Chdir(dir)
 	_, err = invoke(t, "", "plugin", "install", "deal")
 	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "development build")
+	assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-deal")
 	out, err := invoke(t, "", "plugin", "install", "./deal")
 	require.NoError(t, err, out)
 	assert.Equal(t, "deal", installOut(t, out).Name)
@@ -858,10 +852,11 @@ func TestReleaseWorkflowEnforcesTheTagPolicy(t *testing.T) {
 func TestMissingPluginSaysHowToInstall(t *testing.T) {
 	old := CLIVersion
 	t.Cleanup(func() { CLIVersion = old })
-	CLIVersion = "v0.2.0"
-	assert.Contains(t, SafeError(missingPluginError("deal", nil)), "install it with: capsulectl plugin install deal")
-	CLIVersion = "0.1.0-dev"
-	assert.Contains(t, SafeError(missingPluginError("deal", nil)), "capsulectl plugin install ./capsulectl-deal")
+	for _, version := range []string{"v0.2.0", "0.1.0-dev"} {
+		CLIVersion = version
+		assert.Contains(t, SafeError(missingPluginError("deal", nil)), "capsulectl plugin install ./capsulectl-deal")
+		assert.NotContains(t, SafeError(missingPluginError("deal", nil)), "https://", "the core names no release location")
+	}
 }
 
 func TestDispatchWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
@@ -874,168 +869,8 @@ func TestDispatchWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
 	out, err := invoke(t, "", "deal", "list")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "warning:")
-	assert.Contains(t, out, "run: capsulectl plugin install deal")
+	assert.Contains(t, out, "run: capsulectl plugin install ./capsulectl-deal")
 	assert.Contains(t, out, "ran deal: list", "the command still runs")
-}
-
-func TestSumFor(t *testing.T) {
-	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)
-	got, err := sumFor([]byte(a+"  x\n"+b+"  y\n"), "y")
-	require.NoError(t, err)
-	assert.Equal(t, b, got)
-	for name, sums := range map[string]string{
-		"missing":   a + "  x\n",
-		"duplicate": b + "  y\n" + b + "  y\n",
-		"malformed": "zz  y\n",
-		"one space": b + " y\n",
-	} {
-		_, err := sumFor([]byte(sums), "y")
-		assert.Error(t, err, name)
-	}
-}
-
-// releaseServer serves a release of the deal plugin for version over TLS,
-// and points the download client at it. files may override any path; a nil
-// value makes that path a 404.
-func releaseServer(t *testing.T, version string, files map[string][]byte) string {
-	t.Helper()
-	platform := runtime.GOOS + "/" + runtime.GOARCH
-	if !slices.Contains(releasePlatforms, platform) {
-		t.Skip("no release build for " + platform)
-	}
-	asset := fmt.Sprintf("capsulectl-%s-plugin-deal-%s-%s", version, runtime.GOOS, runtime.GOARCH)
-	body := []byte(launcherScript("deal", version, ""))
-	bundle := []byte(`{"bundle":true}`)
-	sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
-	served := map[string][]byte{
-		"/" + version + "/" + asset:                                 body,
-		"/" + version + "/capsulectl-" + version + ".sigstore.json": bundle,
-		"/" + version + "/SHA256SUMS":                               []byte(sum(body) + "  " + asset + "\n" + sum(bundle) + "  capsulectl-" + version + ".sigstore.json\n"),
-	}
-	for k, v := range files {
-		if v == nil {
-			delete(served, k) // a 404
-			continue
-		}
-		served[k] = v
-	}
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/redirect-http" {
-			http.Redirect(w, r, "http://example.invalid/x", http.StatusFound)
-			return
-		}
-		data, ok := served[r.URL.Path]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write(data)
-	}))
-	t.Cleanup(srv.Close)
-	oldTransport := pluginDownloadClient.Transport
-	pluginDownloadClient.Transport = srv.Client().Transport
-	t.Cleanup(func() { pluginDownloadClient.Transport = oldTransport })
-	oldVersion := CLIVersion
-	CLIVersion = version
-	t.Cleanup(func() { CLIVersion = oldVersion })
-	return srv.URL
-}
-
-// pathWithGh puts a fake gh on PATH that prints out and exits with code, or
-// no gh at all when out is "".
-func pathWithGh(t *testing.T, out string, code int) {
-	t.Helper()
-	dir := t.TempDir()
-	if out != "" {
-		script := fmt.Sprintf("#!/bin/sh\necho %q\nexit %d\n", out, code)
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755))
-	}
-	t.Setenv("PATH", dir)
-}
-
-func TestPluginInstallByName(t *testing.T) {
-	_, root := installHome(t)
-	base := releaseServer(t, "v0.2.0", nil)
-	pathWithGh(t, "", 0)
-	out, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.NoError(t, err, out)
-	r := installOut(t, out)
-	assert.Equal(t, "deal", r.Name)
-	assert.Equal(t, []string{"sha256 (SHA256SUMS)", "provenance: not checked (gh not installed)", "handshake (cli-plugin-metadata)"}, r.Checks)
-	assert.Equal(t, "matches capsulectl v0.2.0", r.VersionCheck)
-	noLeftovers(t, root)
-
-	pathWithGh(t, "ok", 0)
-	out, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.NoError(t, err, out)
-	assert.Contains(t, installOut(t, out).Checks, "provenance (gh attestation verify)")
-	noLeftovers(t, root)
-
-	// gh 2.102.0's own wording for a tampered artifact, a wrong --repo or a
-	// wrong --signer-workflow: a failed check, with no way around it.
-	pathWithGh(t, `Error: verifying with issuer "sigstore.dev"`, 1)
-	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.ErrorIs(t, err, ErrConflict)
-	assert.Contains(t, SafeError(err), "provenance check failed")
-	assert.NotContains(t, SafeError(err), "without gh", "a failed check offers no bypass")
-
-	pathWithGh(t, "Error: error creating Sigstore verifier: failed to fetch trust root", 1)
-	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.ErrorIs(t, err, errPluginFetch)
-	assert.Contains(t, SafeError(err), "could not run")
-	assert.Equal(t, 1, ExitCode(err))
-	noLeftovers(t, root)
-}
-
-func TestPluginInstallByNameRefusals(t *testing.T) {
-	_, root := installHome(t)
-	pathWithGh(t, "", 0)
-	asset := fmt.Sprintf("capsulectl-v0.2.0-plugin-deal-%s-%s", runtime.GOOS, runtime.GOARCH)
-	for name, tc := range map[string]struct {
-		files map[string][]byte
-		class error
-		says  string
-	}{
-		"hash mismatch":  {map[string][]byte{"/v0.2.0/" + asset: []byte("tampered")}, ErrConflict, "does not match its SHA256SUMS line"},
-		"no sums line":   {map[string][]byte{"/v0.2.0/SHA256SUMS": []byte(strings.Repeat("a", 64) + "  other\n")}, ErrInput, "may not ship plugins"},
-		"malformed sums": {map[string][]byte{"/v0.2.0/SHA256SUMS": []byte("not a sums file\n")}, ErrInput, "is not `<sha256>  <file>`"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			base := releaseServer(t, "v0.2.0", tc.files)
-			_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-			require.ErrorIs(t, err, tc.class)
-			assert.Contains(t, SafeError(err), tc.says)
-			noLeftovers(t, root)
-			_, statErr := os.Stat(filepath.Join(root, "capsulectl-deal"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
-		})
-	}
-
-	t.Run("no release", func(t *testing.T) {
-		base := releaseServer(t, "v0.2.0", nil)
-		CLIVersion = "v0.3.0"
-		_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-		require.ErrorIs(t, err, ErrInput)
-		assert.Contains(t, SafeError(err), "has no SHA256SUMS")
-	})
-	t.Run("oversized", func(t *testing.T) {
-		base := releaseServer(t, "v0.2.0", nil)
-		old := maxPluginSums
-		maxPluginSums = 10
-		t.Cleanup(func() { maxPluginSums = old })
-		_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-		require.ErrorIs(t, err, errPluginFetch)
-		assert.Contains(t, SafeError(err), "refusing to keep part of it")
-	})
-	t.Run("http redirect", func(t *testing.T) {
-		base := releaseServer(t, "v0.2.0", nil)
-		var sink strings.Builder
-		_, err := downloadTo(t.Context(), base+"/redirect-http", &sink, 100)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "downloads stay on HTTPS")
-		_, err = downloadTo(t.Context(), "http://example.invalid/x", &sink, 100)
-		assert.ErrorContains(t, err, "downloads use HTTPS")
-	})
 }
 
 // Replacing a launcher others could have changed never runs it.
@@ -1133,25 +968,6 @@ func TestPluginInstallUsesTheCheckedCanonicalRoot(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist, "nothing reaches the swapped-in target")
 }
 
-func TestPluginInstallByNameCapsTheAssetAndTheBundle(t *testing.T) {
-	_, root := installHome(t)
-	for name, cap := range map[string]*int64{"asset": &maxPluginAsset, "bundle": &maxPluginBundle} {
-		t.Run(name, func(t *testing.T) {
-			base := releaseServer(t, "v0.2.0", nil)
-			pathWithGh(t, "ok", 0)
-			old := *cap
-			*cap = 8
-			t.Cleanup(func() { *cap = old })
-			_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-			require.ErrorIs(t, err, errPluginFetch)
-			assert.Contains(t, SafeError(err), "refusing to keep part of it")
-			noLeftovers(t, root)
-			_, statErr := os.Stat(filepath.Join(root, "capsulectl-deal"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
-		})
-	}
-}
-
 func TestPluginRemoveEdgeCases(t *testing.T) {
 	home, root := installHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "capsulectl-dir"), 0o755))
@@ -1190,24 +1006,6 @@ func TestPluginInstallListsEveryUnsafeComponent(t *testing.T) {
 	assert.Contains(t, msg, "is group-writable")
 	assert.Contains(t, msg, "is other-writable")
 	assert.Regexp(t, `chmod go-w \S+ \S+\.local \S+\.local/lib`, msg, "one combined fix")
-}
-
-func TestPluginInstallByNameAssetMissingOrPlatform(t *testing.T) {
-	_, root := installHome(t)
-	pathWithGh(t, "", 0)
-	asset := fmt.Sprintf("capsulectl-v0.2.0-plugin-deal-%s-%s", runtime.GOOS, runtime.GOARCH)
-	base := releaseServer(t, "v0.2.0", map[string][]byte{"/v0.2.0/" + asset: nil})
-	_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "has no asset "+asset)
-	noLeftovers(t, root)
-
-	old := releasePlatforms
-	releasePlatforms = []string{"plan9/none"}
-	t.Cleanup(func() { releasePlatforms = old })
-	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "no release build of the plugins for "+runtime.GOOS+"/"+runtime.GOARCH)
 }
 
 // A hand-over (here the transitional `compose` alias, through
@@ -1540,4 +1338,22 @@ func TestDriftWarningAndDoctorCompareCoreVersion(t *testing.T) {
 	check, issue = pluginInstallCheck("deal")
 	assert.Equal(t, "mismatch", check["version_check"])
 	assert.Contains(t, issue, "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
+}
+
+// The first-party plugins ship from their own releases (capsule-cli#326):
+// installing one by name is refused, with the file form, on any core.
+func TestPluginInstallByNameIsRefused(t *testing.T) {
+	_, root := installHome(t)
+	old := CLIVersion
+	t.Cleanup(func() { CLIVersion = old })
+	for _, version := range []string{"v0.2.0", "0.1.0-dev"} {
+		CLIVersion = version
+		for _, name := range []string{"book", "deal"} {
+			_, err := invoke(t, "", "plugin", "install", name)
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-"+name)
+			assert.NotContains(t, SafeError(err), "https://", "the core names no release location")
+		}
+	}
+	noLeftovers(t, root)
 }

@@ -72,3 +72,37 @@ func citations(record map[string]interface{}) []string {
 	}
 	return ids
 }
+
+// TestPresentationFixturesVerifyOffline holds every committed fixture to the
+// verdict its meta.json records, from the bundle and from the page that
+// carries it, with the core alone. The fixtures include deal copies, a
+// seller's copy shared with the buyer among them: the core verifies a deal
+// bundle without the deal plugin (capsule-cli#326, design note section 3.4).
+func TestPresentationFixturesVerifyOffline(t *testing.T) {
+	dirs, err := filepath.Glob("testdata/presentation/*/meta.json")
+	require.NoError(t, err)
+	require.NotEmpty(t, dirs)
+	for _, metaPath := range dirs {
+		dir := filepath.Dir(metaPath)
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			var meta struct {
+				Verify string `json:"verify"`
+			}
+			raw, err := os.ReadFile(metaPath)
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(raw, &meta))
+			for _, file := range []string{"bundle.json", "page.html"} {
+				path := filepath.Join(dir, file)
+				if _, err := os.Stat(path); err != nil {
+					continue
+				}
+				out, _ := invoke(t, "", "verify", "--bundle", path)
+				var result struct {
+					Verdict string `json:"verdict"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(out), &result), out)
+				assert.Equal(t, meta.Verify, result.Verdict, "verify --bundle %s", file)
+			}
+		})
+	}
+}

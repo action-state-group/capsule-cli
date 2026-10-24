@@ -177,7 +177,6 @@ any repeated flag.
 ## Installing plugins
 
 ```
-capsulectl plugin install book|deal         # this release's first-party plugin
 capsulectl plugin install ./capsulectl-x    # a launcher file (an operand containing /)
 capsulectl plugin remove NAME
 ```
@@ -264,22 +263,10 @@ Any refusal before the rename leaves the destination unchanged and removes
 the temporary file. A killed install can leave a `.install-*` file behind.
 It is inert, and `plugin ls` lists it under `interrupted_installs`.
 
-**Install by name** (`book` or `deal`) needs a release build of the core.
-- **Release tag.** A release build's version matches the release tag
-  policy `^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$`,
-  which the release workflow also enforces.
-- **Download.** Install fetches `capsulectl-<tag>-plugin-<name>-<os>-<arch>`
-  and `SHA256SUMS` from the core's own release, over HTTPS only (redirects
-  included), with size caps.
-- **Checksum.** It checks the asset against the one `SHA256SUMS` line that
-  names it.
-- **Provenance.** When `gh` is installed, install also runs the README's
-  `gh attestation verify` against the release's attestation bundle. A
-  failed verification, or a `gh` that could not run (network, trust root),
-  refuses. Without `gh`, provenance is reported as not checked.
-
-The output always lists the checks that ran. A development build refuses
-the name form and gives the file-form command instead.
+**No install by name.** The first-party plugins ship from their own
+releases (below), which the core does not name: `plugin install book` and
+`plugin install deal` refuse, and say to install the plugin file from its
+release with the file form.
 
 **Remove** deletes `capsulectl-NAME` from the per-user root if it is a
 regular file. It leaves a `capsulectl-NAME.d/` presentation directory in
@@ -292,7 +279,8 @@ another root.
 - **First-party plugins.** `book` and `deal` embed the core's code, so the
   core release they embed, their `core_version`, is expected to equal the
   core's. A plugin without `core_version` is compared by its `version`,
-  which every plugin built in this repository sets to the core's:
+  which every first-party plugin released before `core_version` existed sets to
+the core's:
   - `plugin install` refuses a mismatch on a release core unless
     `--allow-version-mismatch` is given.
   - A development core does not check it.
@@ -305,20 +293,20 @@ another root.
 
 The core (capsule-cli#236) keeps no evidence book and no deal store, and
 does not depend on the evidencebook library: an implementer needs neither to
-conform. Two plugins from this repository's `plugins/` module carry them:
+conform. Two plugins carry them, each built and released from its own
+repository (capsule-cli#326):
 
-| Launcher | `capsulectl ...` | What it holds |
-|---|---|---|
-| `capsulectl-book` | `book close`, `reconcile`, `request`, `respond`, `remote list\|get\|head\|request`, `result inspect\|build`, `report build`, `backfill run\|status`, `migrate` | the evidence book behind every book profile |
-| `capsulectl-deal` | `deal ...` (`init`, `open`, `check`, ..., `compose`, `request`, `respond`) | a deal profile's SQLite deal store |
+| Launcher | Repository and release tags | `capsulectl ...` | What it holds |
+|---|---|---|---|
+| `capsulectl-book` | [evidencebook](https://github.com/action-state-group/evidencebook), the nested module `capsulectl/`, tags `capsulectl/vX.Y.Z` | `book close`, `reconcile`, `request`, `respond`, `remote list\|get\|head\|request`, `result inspect\|build`, `report build`, `backfill run\|status`, `migrate` | the evidence book behind every book profile |
+| `capsulectl-deal` | [evidencebook-deal](https://github.com/action-state-group/evidencebook-deal), tags `vX.Y.Z` | `deal ...` (`init`, `open`, `check`, ..., `compose`, `request`, `respond`) | a deal profile's SQLite deal store, and the deal skill |
 
-They ship as two binaries, one per launcher, each answering the handshake
-with the name its filename carries. A release names them
-`capsulectl-<version>-plugin-book-<os>-<arch>` and
-`capsulectl-<version>-plugin-deal-<os>-<arch>`, beside the core's own
-`capsulectl-<version>-<os>-<arch>`, under the same `SHA256SUMS` and attestation. `capsulectl plugin install book` and `... deal` fetch
-and install them; `make build` builds all three, and `make install`
-installs all three.
+Each release publishes the plugin's binaries
+(`capsulectl-book-<version>-<os>-<arch>`, `capsulectl-deal-<version>-<os>-<arch>`),
+`SHA256SUMS` and a build attestation from that repository's workflow. Each
+binary is built against one capsulectl release, which its handshake reports as
+`core_version` (see "Versions"). Download the one built for your capsulectl,
+check it, and install it with `capsulectl plugin install ./capsulectl-<name>`.
 
 Each plugin is a whole `capsulectl` command tree with its own commands
 added, so the core can hand it a core command it cannot run itself:
@@ -342,9 +330,9 @@ as it finds any plugin, by name on a trusted root, with no vendor check: the
 trusted roots' ownership and permission checks are what keep a lookalike
 out. `verify` and `countersign verify` are never handed over.
 
-The `plugins/` module builds against this checkout through `replace ../`,
-so `go install .../plugins/cmd/capsulectl-book@VERSION` does not work:
-build from a checkout (`make build`) or install the release assets.
+A first-party plugin builds against capsule-cli's host package,
+`github.com/action-state-group/capsule-cli/cli`, required at a capsulectl
+release: build it in its own repository, or install its release assets.
 
 ### Transitional aliases
 

@@ -1,27 +1,18 @@
 package cli
 
 import (
-	"bufio"
-	"bytes"
-	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -45,45 +36,9 @@ var pluginNameGrammar = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 
 func isFirstParty(name string) bool { return name == BookPluginName || name == DealPluginName }
 
-// releasePlatforms are the targets scripts/release-build.sh ships.
-var releasePlatforms = []string{"linux/amd64", "linux/arm64", "darwin/arm64"}
+const pluginInstallPrefix = ".install-"
 
-const (
-	pluginReleaseBase   = "https://github.com/action-state-group/capsule-cli/releases/download"
-	pluginInstallPrefix = ".install-"
-	pluginReadIdle      = 60 * time.Second
-	ghVerifyTimeout     = 2 * time.Minute
-)
-
-// Download caps, per kind; variables so tests can lower them.
-var (
-	maxPluginAsset  int64 = 128 << 20
-	maxPluginSums   int64 = 64 << 10
-	maxPluginBundle int64 = 4 << 20
-)
-
-var (
-	errPluginDurability = errors.New("durability not confirmed")
-	// errPluginFetch is a download, or a provenance check that could not
-	// run: nothing was installed, and retrying may succeed (exit 1).
-	errPluginFetch = errors.New("plugin not installed")
-)
-
-// pluginDownloadClient fetches release assets. Every hop must stay on HTTPS
-// (GitHub redirects assets to its object host).
-var pluginDownloadClient = &http.Client{
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if req.URL.Scheme != "https" {
-			return fmt.Errorf("refusing a redirect to %s://%s: downloads stay on HTTPS", req.URL.Scheme, req.URL.Host)
-		}
-		if len(via) >= 10 {
-			return errors.New("too many redirects")
-		}
-		return nil
-	},
-	Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout: 30 * time.Second, ResponseHeaderTimeout: 60 * time.Second},
-}
+var errPluginDurability = errors.New("durability not confirmed")
 
 // requireOwnInstall refuses a run on another user's behalf: through sudo,
 // or by a process that does not own $HOME. Root installing into its own
@@ -457,147 +412,13 @@ func syncRootDir(r *os.Root) error {
 	return d.Sync()
 }
 
-// downloadTo streams url into w, hashing it, and fails past limit bytes or
-// after pluginReadIdle without data.
-func downloadTo(ctx context.Context, url string, w io.Writer, limit int64) (string, error) {
-	if !strings.HasPrefix(url, "https://") {
-		return "", fmt.Errorf("refusing %s: downloads use HTTPS", url)
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := pluginDownloadClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return "", fs.ErrNotExist
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
-	}
-	idle := time.AfterFunc(pluginReadIdle, cancel)
-	defer idle.Stop()
-	h := sha256.New()
-	buf := make([]byte, 32<<10)
-	var total int64
-	for {
-		n, rerr := resp.Body.Read(buf)
-		if n > 0 {
-			idle.Reset(pluginReadIdle)
-			total += int64(n)
-			if total > limit {
-				return "", fmt.Errorf("GET %s: over %d bytes, refusing to keep part of it", url, limit)
-			}
-			h.Write(buf[:n])
-			if _, err := w.Write(buf[:n]); err != nil {
-				return "", err
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			if ctx.Err() != nil {
-				return "", fmt.Errorf("GET %s: no data for %s", url, pluginReadIdle)
-			}
-			return "", rerr
-		}
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-var sumsLine = regexp.MustCompile(`^([0-9a-f]{64})  ([^\s]+)$`)
-
-// sumFor reads sha256sum output and returns the one digest it names for file.
-func sumFor(sums []byte, file string) (string, error) {
-	found := ""
-	scanner := bufio.NewScanner(bytes.NewReader(sums))
-	for line := 1; scanner.Scan(); line++ {
-		text := scanner.Text()
-		if text == "" {
-			continue
-		}
-		m := sumsLine.FindStringSubmatch(text)
-		if m == nil {
-			return "", fmt.Errorf("SHA256SUMS line %d is not `<sha256>  <file>`", line)
-		}
-		if m[2] == file {
-			if found != "" {
-				return "", fmt.Errorf("SHA256SUMS names %s twice", file)
-			}
-			found = m[1]
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-	if found == "" {
-		return "", fmt.Errorf("SHA256SUMS does not name %s", file)
-	}
-	return found, nil
-}
-
-// releaseRepo is the repository whose release workflow builds capsulectl and
-// its first-party plugins.
-const releaseRepo = "action-state-group/capsule-cli"
-
-// lastLine is the last line of s, trimmed: the line a failing tool ends on.
-func lastLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.LastIndex(s, "\n"); i >= 0 {
-		return s[i+1:]
-	}
-	return s
-}
-
-// ghAttestation runs the README's provenance check. ran is false when gh
-// is not installed. Any other non-zero gh exit is a failed check, with no
-// way around it; only a positive sign that gh could not run the check (it
-// did not start, it timed out, or it could not build its Sigstore verifier)
-// is reported as could-not-run.
-func ghAttestation(ctx context.Context, asset, bundle string) (ran bool, err error) {
-	gh, lookErr := exec.LookPath("gh")
-	if lookErr != nil {
-		return false, nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, ghVerifyTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, gh, "attestation", "verify", asset, "--bundle", bundle,
-		"--repo", releaseRepo, "--signer-workflow", releaseRepo+"/.github/workflows/release.yml")
-	cmd.Stdin = nil
-	out, runErr := cmd.CombinedOutput()
-	if runErr == nil {
-		return true, nil
-	}
-	couldNotRun := func(why string) error {
-		return Hint(errPluginFetch, "the provenance check could not run ("+why+"); fix gh's network or trust root and retry, or install without gh on PATH for a checksum-only install")
-	}
-	var exit *exec.ExitError
-	text := strings.ToLower(string(out))
-	switch {
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return true, couldNotRun("gh timed out after " + ghVerifyTimeout.String())
-	case !errors.As(runErr, &exit):
-		return true, couldNotRun(runErr.Error())
-	case strings.Contains(text, "error creating sigstore verifier"), strings.Contains(text, "no valid sigstore verifiers"):
-		return true, couldNotRun(lastLine(string(out)))
-	}
-	return true, Hint(ErrConflict, "not installed: the provenance check failed (gh: "+FirstNonEmpty(lastLine(string(out)), runErr.Error())+")")
-}
-
 func pluginInstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "install book|deal|./PATH",
-		Short: "Install a plugin into ~/.local/lib/capsulectl/plugins: book or deal from this release, or a launcher file (a path containing /)",
+		Use:   "install ./PATH",
+		Short: "Install a plugin launcher file (a path containing /) into ~/.local/lib/capsulectl/plugins",
 		Long: "Install a plugin on the per-user plugin root, ~/.local/lib/capsulectl/plugins.\n\n" +
-			"`book` or `deal` fetches that first-party plugin from the release this capsulectl was built from, checks it against the release's SHA256SUMS and, when gh is installed, its build provenance (gh attestation verify), then installs it. A development build cannot do this: build the plugin and install the file.\n\n" +
-			"An operand containing / is a launcher file (./capsulectl-book after make build, or a third-party plugin). Install runs its cli-plugin-metadata handshake and installs it under the name it gives.\n\n" +
-			"Install never runs through sudo, and refuses a plugin root on a path another user could change. A first-party plugin must be the same version as this capsulectl unless --allow-version-mismatch is given. The output lists the checks that ran.",
+			"The operand is a launcher file, a path containing / (./capsulectl-deal downloaded from its release and checked, or one you built). Install runs its cli-plugin-metadata handshake and installs it under the name it gives.\n\n" +
+			"Install never runs through sudo, and refuses a plugin root on a path another user could change. A first-party plugin (book, deal) must be built for this capsulectl's release unless --allow-version-mismatch is given. The output lists the checks that ran.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			home, err := requireOwnInstall()
@@ -606,24 +427,23 @@ func pluginInstallCommand() *cobra.Command {
 			}
 			operand := args[0]
 			allow, _ := c.Flags().GetBool("allow-version-mismatch")
-			if !strings.Contains(operand, "/") && !isFirstParty(operand) {
+			if isFirstParty(operand) {
+				// The first-party plugins ship from their own releases
+				// (capsule-cli#326), which this capsulectl does not name.
+				return InputError(fmt.Sprintf("capsulectl-%s ships from its own release, not capsulectl's: install the plugin file from its release, then run capsulectl plugin install ./capsulectl-%s", operand, operand))
+			}
+			if !strings.Contains(operand, "/") {
 				hint := ""
 				if strings.HasPrefix(operand, pluginLauncherPrefix) {
 					hint = "; to install that file, give it as ./" + operand
 				}
-				return InputError("plugin install takes book, deal, or a launcher file path containing / (such as ./capsulectl-book)" + hint)
+				return InputError("plugin install takes a launcher file path containing / (such as ./capsulectl-deal)" + hint)
 			}
-			if strings.Contains(operand, "/") {
-				if st, err := os.Stat(operand); err != nil || !st.Mode().IsRegular() {
-					return InputError(operand + " is not a readable regular file")
-				}
-			} else if !isReleaseCore() {
-				return InputError(fmt.Sprintf("this capsulectl is a development build (%s), so there is no release to fetch %s from: build it (make build), then run capsulectl plugin install ./capsulectl-%s", CLIVersion, operand, operand))
-			} else if platform := runtime.GOOS + "/" + runtime.GOARCH; !slices.Contains(releasePlatforms, platform) {
-				return InputError("there is no release build of the plugins for " + platform + " (releases ship " + strings.Join(releasePlatforms, ", ") + "); build it and install the file")
+			if st, err := os.Stat(operand); err != nil || !st.Mode().IsRegular() {
+				return InputError(operand + " is not a readable regular file")
 			}
 			heal := healInstallPath(home)
-			result, err := installOperand(c, home, operand, allow)
+			result, err := installOperand(home, operand, allow)
 			if err != nil {
 				return heal.explain(c, err)
 			}
@@ -633,15 +453,13 @@ func pluginInstallCommand() *cobra.Command {
 			return heal.explain(c, Output(c, result))
 		},
 	}
-	cmd.Flags().Bool("allow-version-mismatch", false, "Install a first-party plugin whose version differs from this capsulectl's")
-	cmd.Flags().String("release-url", pluginReleaseBase, "Base URL of the release downloads (tests)")
-	_ = cmd.Flags().MarkHidden("release-url")
+	cmd.Flags().Bool("allow-version-mismatch", false, "Install a first-party plugin built for another capsulectl release")
 	return cmd
 }
 
 // installOperand installs operand on the per-user root, after the operand
 // checks and install's heal.
-func installOperand(c *cobra.Command, home, operand string, allow bool) (pluginInstallResult, error) {
+func installOperand(home, operand string, allow bool) (pluginInstallResult, error) {
 	root, err := installRoot(home, true)
 	if err != nil {
 		return pluginInstallResult{}, err
@@ -657,95 +475,19 @@ func installOperand(c *cobra.Command, home, operand string, allow bool) (pluginI
 			_ = r.Remove(staged)
 		}
 	}()
-	var checks []string
-	expected := ""
-	if strings.Contains(operand, "/") {
-		src, err := os.Open(operand)
-		if err != nil {
-			return pluginInstallResult{}, InputError(operand + " cannot be read")
-		}
-		defer src.Close()
-		if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
-			return pluginInstallResult{}, err
-		}
-		checks = []string{"handshake (cli-plugin-metadata)"}
-	} else {
-		expected = operand
-		base, _ := c.Flags().GetString("release-url")
-		if staged, checks, err = fetchFirstParty(c.Context(), r, root, base, operand); err != nil {
-			return pluginInstallResult{}, err
-		}
+	src, err := os.Open(operand)
+	if err != nil {
+		return pluginInstallResult{}, InputError(operand + " cannot be read")
 	}
-	result, err := finishInstall(r, root, staged, expected, allow, checks)
+	defer src.Close()
+	if staged, err = stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.Copy(w, src); return err }); err != nil {
+		return pluginInstallResult{}, err
+	}
+	result, err := finishInstall(r, root, staged, "", allow, []string{"handshake (cli-plugin-metadata)"})
 	if err == nil || errors.Is(err, errPluginDurability) {
 		staged = ""
 	}
 	return result, err
-}
-
-// fetchFirstParty downloads this release's plugin asset into the root,
-// checks it against SHA256SUMS and, when gh is installed, its provenance.
-func fetchFirstParty(ctx context.Context, r *os.Root, root, base, name string) (string, []string, error) {
-	tag := CLIVersion
-	asset := fmt.Sprintf("capsulectl-%s-plugin-%s-%s-%s", tag, name, runtime.GOOS, runtime.GOARCH)
-	bundleName := "capsulectl-" + tag + ".sigstore.json"
-	prefix := strings.TrimSuffix(base, "/") + "/" + tag + "/"
-	var sums bytes.Buffer
-	if _, err := downloadTo(ctx, prefix+"SHA256SUMS", &sums, maxPluginSums); errors.Is(err, fs.ErrNotExist) {
-		return "", nil, InputError("release " + tag + " has no SHA256SUMS")
-	} else if err != nil {
-		return "", nil, Hint(errPluginFetch, err.Error())
-	}
-	want, err := sumFor(sums.Bytes(), asset)
-	if err != nil {
-		return "", nil, InputError("not installed: " + err.Error() + " (release " + tag + " may not ship plugins: they ship from the first release after capsule-cli#263)")
-	}
-	var got string
-	staged, err := stageInRoot(r, "", 0o755, func(w io.Writer) error {
-		var derr error
-		got, derr = downloadTo(ctx, prefix+asset, w, maxPluginAsset)
-		return derr
-	})
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return "", nil, InputError("release " + tag + " has no asset " + asset)
-	case err != nil:
-		return "", nil, Hint(errPluginFetch, err.Error())
-	case got != want:
-		_ = r.Remove(staged)
-		return "", nil, Hint(ErrConflict, "not installed: "+asset+" does not match its SHA256SUMS line")
-	}
-	checks := []string{"sha256 (SHA256SUMS)"}
-	if _, lookErr := exec.LookPath("gh"); lookErr != nil {
-		return staged, append(checks, "provenance: not checked (gh not installed)"), nil
-	}
-	wantBundle, err := sumFor(sums.Bytes(), bundleName)
-	if err != nil {
-		_ = r.Remove(staged)
-		return "", nil, InputError("not installed: " + err.Error())
-	}
-	var gotBundle string
-	bundle, err := stageInRoot(r, ".sigstore.json", 0o600, func(w io.Writer) error {
-		var derr error
-		gotBundle, derr = downloadTo(ctx, prefix+bundleName, w, maxPluginBundle)
-		return derr
-	})
-	if err == nil {
-		defer r.Remove(bundle)
-	}
-	switch {
-	case err != nil:
-		_ = r.Remove(staged)
-		return "", nil, Hint(errPluginFetch, err.Error())
-	case gotBundle != wantBundle:
-		_ = r.Remove(staged)
-		return "", nil, Hint(ErrConflict, "not installed: "+bundleName+" does not match its SHA256SUMS line")
-	}
-	if _, err := ghAttestation(ctx, filepath.Join(root, staged), filepath.Join(root, bundle)); err != nil {
-		_ = r.Remove(staged)
-		return "", nil, err
-	}
-	return staged, append(checks, "provenance (gh attestation verify)"), nil
 }
 
 func pluginRemoveCommand() *cobra.Command {
@@ -828,7 +570,7 @@ func driftWarning(info pluginInfo) string {
 	if home := os.Getenv("HOME"); home != "" {
 		c, _, _, err := canonicalPath(userPluginRoot(home))
 		if dir, derr := filepath.EvalSymlinks(filepath.Dir(info.path)); err == nil && derr == nil && dir == c {
-			advice = "run: capsulectl plugin install " + info.Name
+			advice = "install the plugin file built for this release, then run: capsulectl plugin install ./capsulectl-" + info.Name
 		}
 	}
 	return fmt.Sprintf("capsulectl: warning: %s is built for capsulectl %s, this capsulectl is %s; %s", info.path, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion, advice)
