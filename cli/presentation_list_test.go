@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	aacpresentation "github.com/action-state-group/agent-action-capsule/go/presentation"
+	aacpresentation "github.com/action-state-group/capsule-viewer/go/presentation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

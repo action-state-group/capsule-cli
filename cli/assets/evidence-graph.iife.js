@@ -2522,7 +2522,6 @@ var EvidenceGraph = (() => {
   __export(capsulectl_report_runtime_exports, {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
     AGENT_INPUT_ORIGINALS_EXTENSION: () => AGENT_INPUT_ORIGINALS_EXTENSION,
-    BANNER_LINES: () => BANNER_LINES,
     BOOK_PAYLOADS_EXTENSION: () => BOOK_PAYLOADS_EXTENSION,
     BUILTIN_MANIFESTS: () => BUILTIN_MANIFESTS,
     BUILTIN_MANIFEST_COMPOSED: () => BUILTIN_MANIFEST_COMPOSED,
@@ -2695,6 +2694,7 @@ var EvidenceGraph = (() => {
     recomputeCounts: () => recomputeCounts,
     registerPresentation: () => registerPresentation,
     registries: () => registries,
+    renderChecking: () => renderChecking,
     renderCompliancePage: () => renderCompliancePage,
     renderContractReport: () => renderContractReport,
     renderEvidenceGraph: () => renderEvidenceGraph,
@@ -2713,6 +2713,7 @@ var EvidenceGraph = (() => {
     unboundRecordIds: () => unboundRecordIds,
     utcDateOf: () => utcDateOf,
     validateEvidenceResult: () => validateEvidenceResult,
+    verificationBanner: () => verificationBanner,
     verificationCheckLists: () => verificationCheckLists,
     verificationCheckWords: () => verificationCheckWords,
     verifiedBundleContext: () => verifiedBundleContext,
@@ -3665,18 +3666,58 @@ var EvidenceGraph = (() => {
     }
     return sha256Hex(jcs(copy));
   }
-  function pathFind(value, predicate, path2 = "") {
-    if (value instanceof JsonNumber)
-      return predicate(value) ? [path2 || "<root>"] : [];
-    if (Array.isArray(value))
-      return value.flatMap(
-        (child, index) => pathFind(child, predicate, `${path2}[${index}]`)
-      );
-    const record = object2(value);
-    if (record === void 0) return [];
-    return Object.keys(record).sort().flatMap(
-      (key) => pathFind(record[key], predicate, path2 === "" ? key : `${path2}.${key}`)
-    );
+  var MAX_PATH_FINDINGS = 64;
+  var MAX_PATH_CHARS = 256;
+  function byCodePoint(a, b) {
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const x = a.codePointAt(i);
+      const y = b.codePointAt(i);
+      if (x !== y) return x - y;
+      if (x > 65535) i++;
+    }
+    return a.length - b.length;
+  }
+  function pathFind(value, predicate, limit, maxChars) {
+    const out = [];
+    const steps = [];
+    const walk = (node) => {
+      if (node instanceof JsonNumber) {
+        if (out.length < limit && predicate(node))
+          out.push(joinPath(steps, maxChars));
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (let index = 0; index < node.length; index++) {
+          steps.push(index);
+          walk(node[index]);
+          steps.pop();
+        }
+        return;
+      }
+      const record = object2(node);
+      if (record === void 0) return;
+      for (const key of Object.keys(record).sort(byCodePoint)) {
+        steps.push(key);
+        walk(record[key]);
+        steps.pop();
+      }
+    };
+    walk(value);
+    return out;
+  }
+  function joinPath(steps, maxChars) {
+    let text2 = "";
+    let room = maxChars;
+    for (const step of steps) {
+      const piece = typeof step === "number" ? `[${step}]` : text2 === "" ? step : `.${step}`;
+      for (const ch of piece) {
+        if (room === 0) return `${text2}...`;
+        text2 += ch;
+        room--;
+      }
+    }
+    return text2 === "" ? "<root>" : text2;
   }
   var v4IrreversibilityClasses = registries.irreversibility_class;
   function isV4IrreversibilityClass(value) {
@@ -3794,7 +3835,12 @@ var EvidenceGraph = (() => {
         "constraints MUST be an array when present (\xA78.1)",
         1
       );
-    for (const path2 of pathFind(top, (n) => /[.eE]/u.test(n.raw)))
+    for (const path2 of pathFind(
+      top,
+      (n) => /[.eE]/u.test(n.raw),
+      MAX_PATH_FINDINGS,
+      MAX_PATH_CHARS
+    ))
       add(
         "float_in_digest_field",
         `floating-point value at ${path2}; \xA75.1 forbids it`,
@@ -3802,7 +3848,9 @@ var EvidenceGraph = (() => {
       );
     for (const path2 of pathFind(
       top,
-      (n) => !/[.eE]/u.test(n.raw) && (BigInt(n.raw) > 9007199254740991n || BigInt(n.raw) < -9007199254740991n)
+      (n) => !/[.eE]/u.test(n.raw) && (BigInt(n.raw) > 9007199254740991n || BigInt(n.raw) < -9007199254740991n),
+      MAX_PATH_FINDINGS,
+      MAX_PATH_CHARS
     ))
       add(
         "unsafe_integer_in_digest_field",
@@ -4009,7 +4057,7 @@ var EvidenceGraph = (() => {
         7,
         "info"
       );
-    const fields = [
+    const fields2 = [
       ["verdict_class", disposition, "verdict_class"],
       ["disposition.decision", disposition, "decision"],
       ["effect.type", effect, "type"],
@@ -4017,7 +4065,7 @@ var EvidenceGraph = (() => {
       ["effect_attestation", effect, "effect_attestation"],
       ["chain.relation", chain, "relation"]
     ];
-    for (const [registry, block, member] of fields) {
+    for (const [registry, block, member] of fields2) {
       const value = block?.[member];
       const accepted = /* @__PURE__ */ new Set([
         ...registries[registry] ?? [],
@@ -6082,7 +6130,20 @@ ${body}
       rekorPublicKeySpki: key
     });
   }
-  var isRecord = (entry) => object8(entry) && typeof entry.ts_url === "string" && RECORD_FIELDS.every((name) => Object.hasOwn(entry, name));
+  var isRecord = (entry) => {
+    if (!object8(entry) || !RECORD_FIELDS.every((name) => Object.hasOwn(entry, name)))
+      return false;
+    if (!["ts_url", "entry_hash", "receipt_b64"].every(
+      (name) => typeof entry[name] === "string" && entry[name] !== ""
+    ))
+      return false;
+    try {
+      base64Canonical(entry.receipt_b64);
+    } catch {
+      return false;
+    }
+    return true;
+  };
   async function verifyWitnessReceipts(receipts2, signed, cose, directory) {
     if (!Array.isArray(receipts2) || receipts2.length === 0)
       return {
@@ -6367,7 +6428,10 @@ ${body}
       findings: signatureFindings
     };
     const stated = object9(bundle.checkpoint) ? bundle.checkpoint : {};
-    const checkpoint = await strictCheckpoint(stated);
+    const checkpoint = await strictCheckpoint(
+      stated,
+      object9(bundle.completeness_certificate) ? bundle.completeness_certificate : {}
+    );
     const authenticated = checkpoint.signed !== void 0;
     let intervalCoverage = plain2.intervalCoverage, perRecordMembership = plain2.perRecordMembership;
     if (object9(bundle.completeness) && bundle.completeness.selection === SELECTION_PRODUCER_SELECTED) {
@@ -6430,14 +6494,14 @@ ${body}
     };
   }
   var capsuleIdOf = (record) => typeof record.capsule_id === "string" ? record.capsule_id : "";
-  function byCodePoint(a, b) {
+  function byCodePoint2(a, b) {
     const left = Array.from(a, (c) => c.codePointAt(0)), right = Array.from(b, (c) => c.codePointAt(0));
     for (let i = 0; i < Math.min(left.length, right.length); i += 1)
       if (left[i] !== right[i]) return left[i] - right[i];
     return left.length - right.length;
   }
   var sameJson = (stated, signed) => typeof stated === typeof signed && stated === signed;
-  async function strictCheckpoint(stated) {
+  async function strictCheckpoint(stated, certificate) {
     const encoded = stated.cose;
     if (encoded === void 0 || encoded === null)
       return {
@@ -6478,7 +6542,9 @@ ${body}
     };
     const findings = [
       ...SIGNED_CHECKPOINT_FIELDS.filter(
-        (name) => Object.hasOwn(stated, name) && !sameJson(stated[name], signed[name])
+        (name) => Object.hasOwn(stated, name) && !sameJson(stated[name], signed[name]) || // The certificate's log_id is a second stated copy of the signed one
+        // (bundle -01 §Completeness): either copy differing is one mismatch.
+        name === "log_id" && Object.hasOwn(certificate, "log_id") && !sameJson(certificate.log_id, signed.log_id)
       ).map((name) => `checkpoint_field_mismatch:${name}`),
       ...["log_id", "mmr_size", "root"].filter((name) => !Object.hasOwn(stated, name)).map((name) => `checkpoint_field_missing:${name}`)
     ];
@@ -6519,7 +6585,7 @@ ${body}
       if (!proof || !isHex64(id) || proof.size !== signed.mmr_size || proof.leaf_index !== index || !await verifyProof(root, id, proof, index))
         findings.push(`membership_proof_invalid:${id}`);
     }
-    for (const id of Object.keys(members).sort(byCodePoint))
+    for (const id of Object.keys(members).sort(byCodePoint2))
       if (!ids.includes(id)) findings.push(`membership_record_unknown:${id}`);
     return findings.length ? fail(...findings) : pass();
   }
@@ -7123,7 +7189,7 @@ ${body}
   var PAYLOADS_MODES = ["all", "selected"];
   var toHex2 = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   var eligible = (member) => Object.hasOwn(disclosureEligibleFields, member);
-  var sortedText = (values) => JSON.stringify([...values].sort(byCodePoint));
+  var sortedText = (values) => JSON.stringify([...values].sort(byCodePoint2));
   function proofSourceFromCll(backend, records) {
     let loaded;
     const load = () => loaded ??= backend.loadCll().then((state) => ({ state, tree: new MmrTree2(state.nodes) }));
@@ -7203,7 +7269,7 @@ ${body}
   function committedMembers(record) {
     return Object.entries(disclosureEligibleFields).filter(
       ([, path2]) => typeof resolveDisclosurePath(record, path2) === "string"
-    ).map(([member]) => member).sort(byCodePoint);
+    ).map(([member]) => member).sort(byCodePoint2);
   }
   function copyDisclosures(raw) {
     if (raw === void 0 || raw === null) return {};
@@ -7276,7 +7342,7 @@ ${body}
     return { found, missing };
   }
   function completenessBlock(records, closureDepth, missing, disclosures2, suppressedFields, payloadsMode) {
-    const suppressed = [...new Set(suppressedFields)].sort(byCodePoint);
+    const suppressed = [...new Set(suppressedFields)].sort(byCodePoint2);
     const unrevealed = [];
     for (const record of records) {
       const id = capsuleIdOf(record), revealed = disclosures2[id];
@@ -7491,7 +7557,7 @@ ${body}
         throw new BundleBuildError(
           `intervalFrom ${intervalFrom} is past the checkpoint tip ${tip}`
         );
-      const below = [...carried.keys()].map((id) => [seqOf.get(id), id]).filter(([seq]) => seq < intervalFrom).sort(([a, x], [b, y]) => a - b || byCodePoint(x, y));
+      const below = [...carried.keys()].map((id) => [seqOf.get(id), id]).filter(([seq]) => seq < intervalFrom).sort(([a, x], [b, y]) => a - b || byCodePoint2(x, y));
       if (below.length)
         throw new BundleBuildError(
           `record(s) below intervalFrom ${intervalFrom}: ${below.map(([seq, id]) => `${id} (seq ${seq})`).join(", ")}; lower it or build without a range`
@@ -9014,6 +9080,162 @@ ${body}
     unable: "Couldn't check this page here: check it with a full verifier"
   });
   var UNVERIFIED_BUNDLE_REFUSAL = "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed.";
+  var recordsWord = (count2) => `${count2} ${count2 === 1 ? "record" : "records"}`;
+  var fields = (value) => object10(value) ?? {};
+  var CLAIM_WORDS = {
+    records: "each record's identity",
+    signatures: "the records' producer signatures",
+    graph_closure: "the graph closure",
+    checkpoint: "the signed checkpoint",
+    interval_coverage: "interval coverage",
+    per_record_membership: "per-record membership",
+    disclosures: "the disclosed values"
+  };
+  var findingNames = (findings) => [
+    ...new Set(findings.map((finding) => finding.split(":", 1)[0]))
+  ];
+  function notShownWords(claim, records) {
+    const names2 = findingNames(claim.findings);
+    if (claim.name === "checkpoint")
+      return names2.includes("checkpoint_signature_absent") ? "the checkpoint signature, because the checkpoint is not signed (checkpoint_signature_absent)" : `the checkpoint signature, which this page cannot check (${names2.join(", ")})`;
+    if (claim.name === "signatures") {
+      const unsigned = claim.findings.length;
+      return unsigned === records ? "any record's producer signature, because no record is signed (producer_signature_unclaimed)" : `the producer signature of ${unsigned} of ${recordsWord(records)}, because ${unsigned === 1 ? "that record is" : "those records are"} not signed (producer_signature_unclaimed)`;
+    }
+    const rest = names2.filter((name) => name !== "checkpoint_unverified");
+    if (names2.length > 0 && rest.length === 0) return "";
+    const words = CLAIM_WORDS[claim.name];
+    return rest.length > 0 ? `${words} (${rest.join(", ")})` : words;
+  }
+  function bannerWords(bundle, verification, strict2, rendered, coverage) {
+    const claim = (name) => strict2?.claims.find((entry) => entry.name === name);
+    const checkpointClaim = claim("checkpoint");
+    const cose = fields(fields(bundle).checkpoint).cose;
+    const rejected = [
+      verification.intervalCoverage,
+      verification.perRecordMembership
+    ].some(
+      (entry) => entry.findings.includes("checkpoint_authentication_invalid")
+    );
+    const plainAuthenticated = typeof cose === "string" && cose !== "" && verification.intervalCoverage.status === "pass" && [verification.intervalCoverage, verification.perRecordMembership].every(
+      (entry) => !entry.findings.includes("checkpoint_unverified")
+    );
+    const checkpoint = rejected ? "invalid" : checkpointClaim === void 0 ? cose === void 0 || cose === null ? "absent" : plainAuthenticated ? "verified" : "unverified" : checkpointClaim.status === "pass" ? "verified" : checkpointClaim.status === "fail" ? "invalid" : checkpointClaim.findings.includes("checkpoint_signature_absent") ? "absent" : "unverified";
+    if (!rendered)
+      return {
+        verdict: "invalid",
+        checkpoint,
+        detail: ""
+      };
+    const uncheckpointed = `${coverage.uncheckpointed} of ${recordsWord(coverage.total)} are uncheckpointed (bound to no log position), so per-record membership fails.`;
+    const sentences = [];
+    let verdict2;
+    if (strict2 === void 0) {
+      if (coverage.uncheckpointed > 0) {
+        verdict2 = "invalid";
+        sentences.push(uncheckpointed);
+      } else {
+        verdict2 = "incomplete";
+        const records = fields(bundle).records;
+        const carried = [
+          ...checkpoint === "absent" || checkpoint === "verified" ? [] : ["the checkpoint signature"],
+          ...Array.isArray(records) && records.some((record) => typeof fields(record).signature === "string") ? ["the records' producer signatures"] : []
+        ];
+        sentences.push(
+          carried.length > 0 ? `This page cannot check signatures, so ${carried.join(" and ")} could not be checked.` : checkpoint === "verified" ? "No record is signed." : "Neither the checkpoint nor any record is signed."
+        );
+      }
+    } else {
+      verdict2 = strict2.verdict.toLowerCase();
+      if (verdict2 === "incomplete") {
+        const notChecked2 = strict2.claims.filter((entry) => entry.status !== "pass" || entry.findings.length > 0).map((entry) => notShownWords(entry, strict2.records.length)).filter((words) => words !== "");
+        if (notChecked2.length > 0)
+          sentences.push(`This page did not check ${notChecked2.join("; ")}.`);
+      } else if (verdict2 === "invalid") {
+        const failed2 = strict2.claims.filter((entry) => entry.status === "fail");
+        const unboundOnly = coverage.uncheckpointed > 0 && failed2.length === 1 && failed2[0].name === "per_record_membership" && strict2.witnesses?.status !== "fail";
+        const named = failed2.map((entry) => {
+          const invalid = entry.findings.filter(
+            (f) => f.startsWith("producer_signature_invalid:")
+          ).length;
+          if (entry.name === "signatures" && invalid > 0)
+            return coverage.total === 1 ? "the record's producer signature does not verify (producer_signature_invalid)" : `${invalid} of ${coverage.total} records' producer signatures do not verify (producer_signature_invalid)`;
+          if (entry.name === "checkpoint") {
+            const names2 = findingNames(entry.findings);
+            const words = [
+              ...names2.includes("checkpoint_field_mismatch") ? [
+                "the checkpoint's fields do not match its signature (checkpoint_field_mismatch)"
+              ] : [],
+              ...names2.includes("checkpoint_field_missing") ? [
+                "the checkpoint is missing fields its signature covers (checkpoint_field_missing)"
+              ] : []
+            ];
+            if (words.length > 0) return words.join("; ");
+          }
+          return `${CLAIM_WORDS[entry.name]} (${findingNames(entry.findings).join(", ")})`;
+        });
+        if (strict2.witnesses?.status === "fail") {
+          const carried = fields(fields(bundle).checkpoint).witnesses;
+          const total = Array.isArray(carried) ? carried.length : 0;
+          const count2 = (prefix) => strict2.witnesses.findings.filter((f) => f.startsWith(prefix)).length;
+          const receipts2 = (n, plural, single) => total === 1 ? `the witness receipt ${single}` : `${n} of ${total} witness receipts ${plural}`;
+          const malformed = count2("witness_receipt_malformed:"), invalid = count2("witness_receipt_invalid:");
+          if (malformed > 0)
+            named.push(
+              `${receipts2(malformed, "are malformed", "is malformed")} (witness_receipt_malformed)`
+            );
+          if (invalid > 0)
+            named.push(
+              `${receipts2(invalid, "do not verify", "does not verify")} (witness_receipt_invalid)`
+            );
+        }
+        sentences.push(
+          unboundOnly ? uncheckpointed : `What failed: ${named.join("; ")}.`
+        );
+      }
+    }
+    const proofs = strict2 === void 0 ? [
+      ["interval_coverage", verification.intervalCoverage],
+      ["per_record_membership", verification.perRecordMembership]
+    ] : [
+      ["interval_coverage", claim("interval_coverage")],
+      ["per_record_membership", claim("per_record_membership")]
+    ];
+    const unanchored2 = proofs.filter(
+      ([, entry]) => entry !== void 0 && entry.status !== "fail" && entry.findings.includes("checkpoint_unverified")
+    );
+    if (unanchored2.length > 0 && checkpoint !== "invalid") {
+      const names2 = unanchored2.map(([name]) => CLAIM_WORDS[name]).join(" and ");
+      sentences.push(
+        `${names2[0].toUpperCase()}${names2.slice(1)} ${unanchored2.length === 1 ? "is" : "are"} checkpoint_unverified: relative to a producer-asserted checkpoint ${checkpoint === "absent" ? "that is not signed" : "this page could not authenticate"}.`
+      );
+    }
+    return { verdict: verdict2, checkpoint, detail: sentences.join(" ") };
+  }
+  function verificationBanner(context, stamps) {
+    const { bundle, verification, strict: strict2 } = context;
+    const rendered = bundleVerified(verification);
+    const records = fields(bundle).records;
+    const coverage = {
+      uncheckpointed: unboundRecordIds(verification).length,
+      total: Array.isArray(records) ? records.length : 0
+    };
+    const words = bannerWords(bundle, verification, strict2, rendered, coverage);
+    const state = !rendered ? "failed" : words.verdict === "valid" ? "verified" : words.verdict === "incomplete" ? "incomplete" : "failed";
+    const notCheckedListDrawn = verificationCheckLists(bundle, verification, {
+      stamps,
+      ...strict2 === void 0 ? {} : { strict: strict2 }
+    }).notChecked.length > 0;
+    return {
+      state,
+      line: !rendered ? VERIFICATION_BANNER_LINES.refused : state === "incomplete" && !notCheckedListDrawn ? VERIFICATION_BANNER_LINES.incompleteNoList : VERIFICATION_BANNER_LINES[state],
+      verdict: words.verdict,
+      checkpoint: words.checkpoint,
+      detail: words.detail,
+      uncheckpointed: coverage.uncheckpointed,
+      ...rendered ? {} : { refusal: UNVERIFIED_BUNDLE_REFUSAL }
+    };
+  }
   var CHECKED_ON_THIS_PAGE = "Checked on this page";
   var FAILED_ON_THIS_PAGE = "Failed on this page";
   var NOT_CHECKED_ON_THIS_PAGE = "Not checked on this page";
@@ -10715,6 +10937,167 @@ ${body}
     };
   }
 
+  // capsule-viewer/ts/src/builtin-manifests.ts
+  var BUILTIN_MANIFEST_REPORT_ROWS2 = Object.freeze(
+    {
+      spec_version: "aac.presentation-manifest/v0",
+      id: "aac.builtin.report-rows/v0",
+      presentation_api: "aac.presentation-api/v0",
+      runtime_min: "0.1.0",
+      trust_class: "trusted-executable",
+      requires: {
+        bundle_kind: "evidence-bundle/v2",
+        profiles: ["spec_version:report/v1"]
+      },
+      audiences: ["*"],
+      formats: ["html", "fragment", "embedded"],
+      fallback: false,
+      priority: 1,
+      executable: { carrier: "core-runtime" }
+    }
+  );
+  var BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result-contract-report/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"],
+      extensions: { required: ["contract-report/v1"] }
+    },
+    forbids: { profiles: ["spec_version:report/v1"] },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result-outcome-report/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"],
+      extensions: { required: ["outcome-report/v1"] }
+    },
+    forbids: {
+      profiles: ["spec_version:report/v1"],
+      extensions: ["contract-report/v1"]
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_RESULT_COMPLIANCE2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result-compliance/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"],
+      extensions: { required: ["eu-ai-act-compliance/v1"] }
+    },
+    forbids: {
+      profiles: ["spec_version:report/v1"],
+      extensions: ["contract-report/v1", "outcome-report/v1"]
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_RESULT2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"]
+    },
+    forbids: {
+      profiles: ["spec_version:report/v1"],
+      extensions: [
+        "contract-report/v1",
+        "outcome-report/v1",
+        "eu-ai-act-compliance/v1"
+      ]
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.evaluation-summary-graph/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["spec_version:evaluation-summary/v1"]
+    },
+    forbids: { profiles: ["result_version:evidence-result-v0"] },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_NO_AGGREGATE2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.no-aggregate/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: { bundle_kind: "evidence-bundle/v2" },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: true,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFESTS2 = Object.freeze(
+    [
+      BUILTIN_MANIFEST_REPORT_ROWS2,
+      BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2,
+      BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2,
+      BUILTIN_MANIFEST_RESULT_COMPLIANCE2,
+      BUILTIN_MANIFEST_RESULT2,
+      BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2,
+      BUILTIN_MANIFEST_NO_AGGREGATE2
+    ]
+  );
+  var BUILTIN_MANIFEST_COMPOSED2 = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.composed/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      extensions: { required: ["composed/v1"] }
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_SECTION_MANIFESTS2 = Object.freeze([BUILTIN_MANIFEST_COMPOSED2]);
+
   // capsule-viewer/ts/src/record-dating.ts
   var STATED_DAY2 = /^(\d{4}-\d{2}-\d{2})/u;
   function caseRecord2(result, claims, sourceCapsuleId) {
@@ -11887,17 +12270,111 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   }
   function builtCommit() {
     if (false) return void 0;
-    return commitPrefix("4b08aad14182154523ac46a0b3f93604227a8b9e");
+    return commitPrefix("d100e320e4748b497a10b8219cf80bd5f4dc0a0b");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
     viewer: "@action-state-group/capsule-viewer",
     viewerVersion: "0.1.0",
     verifier: "@action-state-group/agent-action-capsule",
-    verifierVersion: "0.6.1",
+    verifierVersion: "0.7.0",
     cllVersion: "0.2.1",
     ...commit === void 0 ? {} : { commit }
   };
+
+  // capsule-viewer/ts/src/presentation-fragment.ts
+  var PRESENTATION_FRAGMENT_VERSION2 = "aac.presentation-fragment/v0";
+  var FRAGMENT_URL_MAX_LENGTH2 = 1048576;
+  var FRAGMENT_ADDRESS_ALLOWANCE2 = 2048;
+  var FRAGMENT_TOKEN_MAX_LENGTH2 = FRAGMENT_URL_MAX_LENGTH2 - FRAGMENT_ADDRESS_ALLOWANCE2;
+  var FragmentTooLargeError2 = class extends Error {
+    length;
+    maxLength;
+    /** What was too long: `"fragment token"` or `"permalink URL"`. */
+    subject;
+    constructor(length, maxLength, what = "fragment token") {
+      super(
+        `${what} is ${length} characters, over the ${maxLength}-character maximum; it is refused, never truncated. Share the offline .html instead.`
+      );
+      this.name = "FragmentTooLargeError";
+      this.length = length;
+      this.maxLength = maxLength;
+      this.subject = what;
+    }
+  };
+  var FragmentDecodeError2 = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "FragmentDecodeError";
+    }
+  };
+  function decodeFragmentToken2(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
+    const body = token.replace(/^#+/u, "");
+    if (body.length > maxLength)
+      throw new FragmentTooLargeError2(body.length, maxLength);
+    try {
+      return decodeFragment(body);
+    } catch (err) {
+      throw new FragmentDecodeError2(
+        err instanceof Error && err.message === "fragment base64url" ? "fragment token has a character outside the base64url alphabet" : "fragment token is not UTF-8 JSON"
+      );
+    }
+  }
+  var PRESENTATION_DEPTHS2 = [
+    "L0",
+    "L1",
+    "L2"
+  ];
+  var FRAGMENT_MEMBERS2 = /* @__PURE__ */ new Set([
+    "fragment_version",
+    "audience",
+    "presentation",
+    "depth",
+    "title",
+    "theme_css",
+    "wording",
+    "core_runtime_sha256",
+    "module_sha256",
+    "bundle"
+  ]);
+  var isObject3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  function checkPresentationFragment2(value) {
+    const fail2 = (why) => {
+      throw new FragmentDecodeError2(`presentation fragment: ${why}`);
+    };
+    if (!isObject3(value)) fail2("not a JSON object");
+    const v = value;
+    for (const key of Object.keys(v))
+      if (!FRAGMENT_MEMBERS2.has(key))
+        fail2(`unknown member ${JSON.stringify(key)}`);
+    if (v.fragment_version !== PRESENTATION_FRAGMENT_VERSION2)
+      fail2(`fragment_version is not ${PRESENTATION_FRAGMENT_VERSION2}`);
+    if (typeof v.audience !== "string" || v.audience === "")
+      fail2("audience is not a non-empty string");
+    if (typeof v.presentation !== "string" || v.presentation === "")
+      fail2("presentation is not a non-empty string");
+    if (v.depth !== void 0 && !PRESENTATION_DEPTHS2.includes(v.depth))
+      fail2("depth is not L0, L1 or L2");
+    if (v.title !== void 0 && typeof v.title !== "string")
+      fail2("title is not a string");
+    if (v.theme_css !== void 0 && typeof v.theme_css !== "string")
+      fail2("theme_css is not a string");
+    if (v.wording !== void 0) {
+      const w = v.wording;
+      if (!isObject3(w) || Object.keys(w).some((k) => k !== "pack" && k !== "sha256") || typeof w.pack !== "string" || !isHex64(w.sha256))
+        fail2("wording is not {pack, sha256}");
+    }
+    if (!isHex64(v.core_runtime_sha256))
+      fail2("core_runtime_sha256 is not a lowercase hex SHA-256");
+    if (!Array.isArray(v.module_sha256) || !v.module_sha256.every((pin) => isHex64(pin)))
+      fail2("module_sha256 is not a list of lowercase hex SHA-256 pins");
+    if (!("bundle" in v)) fail2("bundle is missing");
+  }
+  function decodePresentationFragment2(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
+    const value = decodeFragmentToken2(token, maxLength);
+    checkPresentationFragment2(value);
+    return value;
+  }
 
   // capsule-viewer/ts/src/wording/contract-report-outcomes.en.json
   var contract_report_outcomes_en_default = {
@@ -12076,7 +12553,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.vd.lede": "Repeat offline with the open-source verifier.",
       "lines.vd.note": "This bundle's own checkpoint \u2014 an append-only Merkle Mountain Range over the sealed records \u2014 not a month-level RFC 6962 tree computed in the browser. Repeat this check offline with the open-source verifier.",
       "lines.rp.toggle": "Proofs for this report: the terms, what ran, and how to verify the whole bundle",
-      "lines.rp.tamper": `This report is drawn only for a bundle that verified: there is no interactive "try tampering" control, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and this report is not drawn: the page shows the red "Check failed" callout, the checks that failed and each record's id and status, with no record content.`,
+      "lines.rp.tamper": `This report is drawn only when this page's checks let the records be shown: there is no interactive "try tampering" control, because this viewer never shows content first and checks second. Tamper with any sealed claim, record, or checkpoint in the underlying bundle and this report is not drawn: the page shows the red "\u2717 This bundle did not verify: do not rely on it" callout, the checks that failed and each record's id and status, with no record content.`,
       "lines.verdict.met": "met",
       "lines.verdict.not_met": "not met",
       "lines.verdict.not_applicable": "did not apply",
@@ -12368,7 +12845,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "groups.ran.sessions": "Sessions",
       "groups.ran.period": "Period",
       "groups.ran.sealed": "Sealed",
-      "groups.vd.note": `This bundle's own checkpoint, an append-only Merkle Mountain Range over the sealed records. Repeat every check on this page offline with the open-source verifier. This report is drawn only for a bundle that verified: tamper with any claim, record or checkpoint and the report is not drawn. The page then shows the red "Check failed" callout, the checks that failed and each record's id and status, with no record content.`,
+      "groups.vd.note": `This bundle's own checkpoint, an append-only Merkle Mountain Range over the sealed records. Repeat every check on this page offline with the open-source verifier. This report is drawn only when this page's checks let the records be shown: tamper with any sealed claim, record or checkpoint and the report is not drawn. The page then shows the red "\u2717 This bundle did not verify: do not rely on it" callout, the checks that failed and each record's id and status, with no record content.`,
       "groups.verdict.met": "met",
       "groups.verdict.not_met": "not met",
       "groups.verdict.not_applicable": "did not apply",
@@ -13364,8 +13841,8 @@ ${key}`);
     return problems.map((p) => `${pack.id}: ${p}`);
   }
   var DEFAULT_PACK_SHA256 = Object.freeze({
-    lines: "d8dee82f9a1b0545ddf56bc54493a81ad0af66c06615325eb41c1f23abea1086",
-    groups: "f293cd727adf77b3647c6de6e15690b2b1219dad55c376bbd25f1f3c3f74372c"
+    lines: "7afc10e1936ddd02e4e4bf8193aa652d12a69dbf35bb4b359bba3579201f77fa",
+    groups: "09224353431aadb2573218a0ea644ec31438b959028b7808ba41c36aaec1a2d7"
   });
   function fill(key, text2, vars) {
     return text2.replace(PLACEHOLDER, (whole, name) => {
@@ -16304,7 +16781,7 @@ ${key}`);
     const result = model.result;
     const section = element5("section");
     section.dataset.section = "composition";
-    section.dataset.module = BUILTIN_MANIFEST_COMPOSED.id;
+    section.dataset.module = BUILTIN_MANIFEST_COMPOSED2.id;
     section.append(element5("h2", "Composition"));
     const status2 = element5("p", `composed/v1 check: ${result.status}`);
     status2.dataset.compositionStatus = result.status;
@@ -16443,13 +16920,13 @@ ${key}`);
     host.L1.append(section);
   }
   var composedSectionModule = {
-    manifest: BUILTIN_MANIFEST_COMPOSED,
+    manifest: BUILTIN_MANIFEST_COMPOSED2,
     canRender: (context) => composedResult(context) !== void 0,
     buildModel: (context) => {
       const result = composedResult(context);
       if (result === void 0)
         throw new Error(
-          `${BUILTIN_MANIFEST_COMPOSED.id}: buildModel called although canRender was false`
+          `${BUILTIN_MANIFEST_COMPOSED2.id}: buildModel called although canRender was false`
         );
       return { result };
     },
@@ -16457,7 +16934,7 @@ ${key}`);
   };
 
   // capsule-viewer/ts/src/record-content.ts
-  var isObject3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var isObject4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   function canonicalJson(value, indent) {
     const pad = indent === void 0 ? "" : " ".repeat(indent);
     const write = (v, depth) => {
@@ -16468,7 +16945,7 @@ ${pad.repeat(depth)}`;
       const colon = pad === "" ? ":" : ": ";
       if (Array.isArray(v))
         return v.length === 0 ? "[]" : `[${v.map((item) => open + write(item, depth + 1)).join(",")}${close}]`;
-      if (isObject3(v)) {
+      if (isObject4(v)) {
         const keys = Object.keys(v).sort(byCodeUnits);
         return keys.length === 0 ? "{}" : `{${keys.map(
           (key) => `${open}${JSON.stringify(key)}${colon}${write(v[key], depth + 1)}`
@@ -16482,12 +16959,12 @@ ${pad.repeat(depth)}`;
     return a < b ? -1 : a > b ? 1 : 0;
   }
   function conversationTurns(content) {
-    if (!isObject3(content)) return void 0;
-    const interaction = isObject3(content.agent_interaction) ? content.agent_interaction : void 0;
+    if (!isObject4(content)) return void 0;
+    const interaction = isObject4(content.agent_interaction) ? content.agent_interaction : void 0;
     if (interaction === void 0 || !Array.isArray(interaction.messages))
       return void 0;
     return interaction.messages.flatMap((m) => {
-      if (!isObject3(m)) return [];
+      if (!isObject4(m)) return [];
       const role = typeof m.role === "string" ? m.role : "unknown";
       const text2 = typeof m.content === "string" ? m.content : void 0;
       const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
@@ -16496,7 +16973,7 @@ ${pad.repeat(depth)}`;
           role,
           ...text2 === void 0 ? {} : { content: text2 },
           toolCalls: calls.flatMap(
-            (call) => isObject3(call) ? [
+            (call) => isObject4(call) ? [
               {
                 name: typeof call.name === "string" ? call.name : "unnamed",
                 // Re-serialised as there, but in canonical member order,
@@ -16661,6 +17138,300 @@ ${pad.repeat(depth)}`;
     };
   }
 
+  // capsule-viewer/ts/src/presentation-registry.ts
+  var PRESENTATION_MANIFEST_VERSION2 = "aac.presentation-manifest/v0";
+  var PRESENTATION_API_V02 = "aac.presentation-api/v0";
+  var REFERENCE_PRESENTATION_RUNTIME2 = Object.freeze({
+    presentationApis: Object.freeze([PRESENTATION_API_V02]),
+    runtimeVersion: "0.1.0"
+  });
+  var PRESENTATION_FORMATS2 = [
+    "html",
+    "fragment",
+    "embedded"
+  ];
+  var RUNTIME_VERSION2 = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
+  var PRESENTATION_API2 = /^aac\.presentation-api\/v(0|[1-9][0-9]*)$/u;
+  function compareVersions2(a, b) {
+    const left = a.split(".").map(Number);
+    const right = b.split(".").map(Number);
+    for (let i = 0; i < 3; i += 1)
+      if (left[i] !== right[i]) return left[i] - right[i];
+    return 0;
+  }
+  function presentationRefusalReason2(manifest, runtime = REFERENCE_PRESENTATION_RUNTIME2) {
+    if (!runtime.presentationApis.includes(manifest.presentation_api))
+      return "presentation_api_unsupported";
+    if (compareVersions2(runtime.runtimeVersion, manifest.runtime_min) < 0)
+      return "runtime_too_old";
+    return void 0;
+  }
+  function refusalOf2(manifest, reason, runtime) {
+    return Object.freeze({
+      id: manifest.id,
+      presentation_api: manifest.presentation_api,
+      runtime_min: manifest.runtime_min,
+      reason,
+      extensions: Object.freeze([
+        ...manifest.requires.extensions?.required ?? []
+      ]),
+      runtimeVersion: runtime.runtimeVersion
+    });
+  }
+  var PresentationAmbiguityError2 = class extends Error {
+    ids;
+    constructor(ids, message) {
+      super(
+        message ?? `presentation is ambiguous: ${ids.join(", ")} all match; a tie is an error, never first-wins`
+      );
+      this.name = "PresentationAmbiguityError";
+      this.ids = ids;
+    }
+  };
+  var PresentationRegistrationError2 = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "PresentationRegistrationError";
+    }
+  };
+  function membershipProvenOrUnbound2(result) {
+    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
+  }
+  function bundleVerified2(result) {
+    const selected = isProducerSelection(result);
+    return result.graphClosure.status === "pass" && (selected || result.intervalCoverage.status === "pass") && membershipProvenOrUnbound2(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
+      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
+    );
+  }
+  var isPlainObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var EXTENSION_READERS2 = {
+    [CONTRACT_REPORT_KIND]: readContractReport,
+    "outcome-report/v1": (bundle) => readOutcomeReportPresentation(bundle) !== void 0,
+    "eu-ai-act-compliance/v1": (bundle) => readCompliancePresentation2(bundle) !== void 0
+  };
+  function describeContext2(context) {
+    const bundle = isPlainObject2(context.bundle) ? context.bundle : {};
+    const verified = bundleVerified2(context.verification);
+    const bundleKind = typeof bundle.bundle_kind === "string" ? bundle.bundle_kind : void 0;
+    if (!verified)
+      return {
+        verified,
+        bundle_kind: bundleKind,
+        profiles: /* @__PURE__ */ new Set(),
+        extensions: /* @__PURE__ */ new Set()
+      };
+    const profiles = /* @__PURE__ */ new Set();
+    if (context.root !== void 0 && context.recordIndex.has(context.root)) {
+      const input = verifiedPayload(context, context.root, "agent_input");
+      if (isPlainObject2(input) && typeof input.spec_version === "string")
+        profiles.add(`spec_version:${input.spec_version}`);
+    }
+    if (carriesResultDocument(context))
+      profiles.add(`result_version:${RESULT_VERSION}`);
+    const extensions2 = /* @__PURE__ */ new Set();
+    if (isPlainObject2(bundle.extensions))
+      for (const kind of Object.keys(bundle.extensions)) {
+        const reader = EXTENSION_READERS2[kind];
+        if (reader === void 0 || reader(context.bundle)) extensions2.add(kind);
+      }
+    return { verified, bundle_kind: bundleKind, profiles, extensions: extensions2 };
+  }
+  var requiredProfiles2 = (m) => m.requires.profiles ?? [];
+  var requiredExtensions2 = (m) => m.requires.extensions?.required ?? [];
+  var forbiddenProfiles2 = (m) => m.forbids?.profiles ?? [];
+  var forbiddenExtensions2 = (m) => m.forbids?.extensions ?? [];
+  var profileKey2 = (token) => token.split(":", 1)[0];
+  function onePerKey2(tokens) {
+    const keys = /* @__PURE__ */ new Set();
+    for (const token of tokens) {
+      const key = profileKey2(token);
+      if (keys.has(key)) return false;
+      keys.add(key);
+    }
+    return true;
+  }
+  function manifestMatches2(manifest, descriptor, audience, format) {
+    return manifest.requires.bundle_kind === descriptor.bundle_kind && requiredProfiles2(manifest).every((t) => descriptor.profiles.has(t)) && requiredExtensions2(manifest).every((k) => descriptor.extensions.has(k)) && !forbiddenProfiles2(manifest).some((t) => descriptor.profiles.has(t)) && !forbiddenExtensions2(manifest).some((k) => descriptor.extensions.has(k)) && (manifest.audiences.includes("*") || manifest.audiences.includes(audience)) && manifest.formats.includes(format);
+  }
+  function manifestsCoMatchable2(a, b) {
+    if (a.requires.bundle_kind !== b.requires.bundle_kind) return false;
+    if (!a.audiences.includes("*") && !b.audiences.includes("*") && !a.audiences.some((x) => b.audiences.includes(x)))
+      return false;
+    if (!a.formats.some((f) => b.formats.includes(f))) return false;
+    const reqP = /* @__PURE__ */ new Set([...requiredProfiles2(a), ...requiredProfiles2(b)]);
+    const reqE = /* @__PURE__ */ new Set([...requiredExtensions2(a), ...requiredExtensions2(b)]);
+    const forbP = [...forbiddenProfiles2(a), ...forbiddenProfiles2(b)];
+    const forbE = [...forbiddenExtensions2(a), ...forbiddenExtensions2(b)];
+    if (forbP.some((t) => reqP.has(t))) return false;
+    if (forbE.some((k) => reqE.has(k))) return false;
+    return onePerKey2(reqP);
+  }
+  var MANIFEST_MEMBERS2 = /* @__PURE__ */ new Set([
+    "spec_version",
+    "id",
+    "presentation_api",
+    "runtime_min",
+    "trust_class",
+    "requires",
+    "forbids",
+    "audiences",
+    "formats",
+    "fallback",
+    "priority",
+    "executable",
+    "declarative"
+  ]);
+  var MANIFEST_ID2 = /^[a-z0-9]+(\.[a-z0-9_-]+)+\/v[0-9]+$/u;
+  var PROFILE_TOKEN2 = /^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$/u;
+  var AUDIENCE2 = /^(\*|[a-z][a-z0-9_-]*)$/u;
+  function manifestProblems2(manifest) {
+    const problems = [];
+    const raw = manifest;
+    if (!isPlainObject2(raw)) return ["manifest is not an object"];
+    for (const member of Object.keys(raw))
+      if (!MANIFEST_MEMBERS2.has(member))
+        problems.push(`unknown member ${JSON.stringify(member)}`);
+    if (manifest.spec_version !== PRESENTATION_MANIFEST_VERSION2)
+      problems.push(`spec_version is not ${PRESENTATION_MANIFEST_VERSION2}`);
+    if (typeof manifest.id !== "string" || !MANIFEST_ID2.test(manifest.id))
+      problems.push("id is not <dotted name>/v<major>");
+    if (typeof manifest.presentation_api !== "string" || !PRESENTATION_API2.test(manifest.presentation_api))
+      problems.push("presentation_api is not aac.presentation-api/v<major>");
+    if (typeof manifest.runtime_min !== "string" || !RUNTIME_VERSION2.test(manifest.runtime_min))
+      problems.push("runtime_min is not MAJOR.MINOR.PATCH");
+    if (manifest.trust_class !== "trusted-executable" && manifest.trust_class !== "declarative")
+      problems.push("trust_class is neither trusted-executable nor declarative");
+    if (!isPlainObject2(manifest.requires) || typeof manifest.requires.bundle_kind !== "string")
+      problems.push("requires.bundle_kind is missing");
+    for (const token of [
+      ...requiredProfiles2(manifest),
+      ...forbiddenProfiles2(manifest)
+    ])
+      if (!PROFILE_TOKEN2.test(token))
+        problems.push(`profile token ${JSON.stringify(token)} is malformed`);
+    if (!Array.isArray(manifest.audiences) || manifest.audiences.length === 0 || manifest.audiences.some((a) => typeof a !== "string" || !AUDIENCE2.test(a)))
+      problems.push("audiences is not a non-empty list of audience tokens");
+    if (!Array.isArray(manifest.formats) || manifest.formats.length === 0 || manifest.formats.some((f) => !PRESENTATION_FORMATS2.includes(f)))
+      problems.push("formats is not a non-empty list of html/fragment/embedded");
+    if (typeof manifest.fallback !== "boolean")
+      problems.push("fallback is not a boolean");
+    else if (manifest.fallback && manifest.priority !== void 0)
+      problems.push("a fallback carries no priority");
+    else if (!manifest.fallback && !(Number.isInteger(manifest.priority) && manifest.priority >= 1))
+      problems.push("a specific module needs an integer priority >= 1");
+    if (manifest.trust_class === "trusted-executable" !== (manifest.executable !== void 0 && manifest.declarative === void 0))
+      problems.push(
+        "trusted-executable carries executable, declarative carries declarative"
+      );
+    if (forbiddenProfiles2(manifest).some(
+      (t) => requiredProfiles2(manifest).includes(t)
+    ))
+      problems.push("requires and forbids share a profile");
+    if (forbiddenExtensions2(manifest).some(
+      (k) => requiredExtensions2(manifest).includes(k)
+    ))
+      problems.push("requires and forbids share an extension");
+    if (!onePerKey2(requiredProfiles2(manifest)))
+      problems.push("requires two tokens of one profile key");
+    return problems;
+  }
+  async function resolveModules2(modules, descriptor, audience, format, canRender, refuse = () => void 0) {
+    if (!descriptor.verified) return { kind: "refusal" };
+    const matched = modules.filter(
+      (m) => manifestMatches2(m.manifest, descriptor, audience, format)
+    );
+    const refused = [];
+    for (const fallback of [false, true]) {
+      const tier = matched.filter((m) => m.manifest.fallback === fallback);
+      if (tier.length > 1)
+        throw new PresentationAmbiguityError2(
+          tier.map((m) => m.manifest.id).sort()
+        );
+      const only = tier[0];
+      if (only === void 0) continue;
+      const refusal = refuse(only);
+      if (refusal !== void 0) {
+        refused.push(refusal);
+        continue;
+      }
+      if (await canRender(only))
+        return { kind: "module", module: only, refused: Object.freeze(refused) };
+    }
+    return { kind: "no-presentation", refused: Object.freeze(refused) };
+  }
+  var PresentationRegistry2 = class {
+    /** Every module, refused ones included: all of them count for ambiguity. */
+    #modules = [];
+    #refused = /* @__PURE__ */ new Map();
+    #runtime;
+    /** `runtime` is what this registry's runtime implements (section 3.2). */
+    constructor(runtime = REFERENCE_PRESENTATION_RUNTIME2) {
+      this.#runtime = runtime;
+    }
+    /** The runtime declaration this registry applies. */
+    get runtime() {
+      return this.#runtime;
+    }
+    /**
+     * Register a module. Throws on a malformed or dead manifest (a missing
+     * `presentation_api` included), a duplicate id, and any module whose
+     * manifest some descriptor could match together with an already
+     * registered module of the same tier (section 4.5), refused or not.
+     *
+     * A well-formed manifest whose `presentation_api` this runtime does not
+     * implement, or whose `runtime_min` it does not meet, is registered as
+     * refused (section 3.2): never selected, reported by every resolution it
+     * matches, and listed by {@link refused}.
+     */
+    register(module) {
+      const manifest = module.manifest;
+      const problems = manifestProblems2(manifest);
+      if (problems.length > 0)
+        throw new PresentationRegistrationError2(
+          `manifest ${JSON.stringify(manifest?.id)} refused: ${problems.join("; ")}`
+        );
+      for (const other of this.#modules) {
+        if (other.manifest.id === manifest.id)
+          throw new PresentationRegistrationError2(
+            `manifest ${manifest.id} is already registered`
+          );
+        if (other.manifest.fallback === manifest.fallback && manifestsCoMatchable2(other.manifest, manifest))
+          throw new PresentationAmbiguityError2(
+            [other.manifest.id, manifest.id].sort(),
+            `manifests ${other.manifest.id} and ${manifest.id} are both ${manifest.fallback ? "fallbacks" : "specific"} and one descriptor can match both; state precedence with forbids`
+          );
+      }
+      this.#modules.push(module);
+      const reason = presentationRefusalReason2(manifest, this.#runtime);
+      if (reason === void 0) return { status: "registered" };
+      const refusal = refusalOf2(manifest, reason, this.#runtime);
+      this.#refused.set(module, refusal);
+      return { status: "refused", refusal };
+    }
+    /**
+     * Every module this registry can select, in registration order (which
+     * decides nothing). Refused modules are not here; see {@link refused}.
+     */
+    list() {
+      return this.#modules.filter((module) => !this.#refused.has(module));
+    }
+    /** Every module this runtime refused, with the reason. */
+    refused() {
+      return [...this.#refused.values()];
+    }
+    /** Section 4.3: the one module for this context, audience and format. */
+    resolve(context, audience, format) {
+      return resolveModules2(
+        this.#modules,
+        describeContext2(context),
+        audience,
+        format,
+        (module) => module.canRender(context),
+        (module) => this.#refused.get(module)
+      );
+    }
+  };
+
   // capsule-viewer/ts/src/evidence-graph-view.ts
   function element6(tag, text2) {
     const value = document.createElement(tag);
@@ -16700,39 +17471,27 @@ ${pad.repeat(depth)}`;
     }
     parent2.append(cell);
   }
-  var recordsWord = (count2) => `${count2} ${count2 === 1 ? "record" : "records"}`;
+  var recordsWord2 = (count2) => `${count2} ${count2 === 1 ? "record" : "records"}`;
   var evaluationsWord = (count2) => `${count2} ${count2 === 1 ? "evaluation" : "evaluations"}`;
   var requirementsWord = (count2) => `${count2} ${count2 === 1 ? "requirement" : "requirements"}`;
-  var BANNER_LINES = {
-    verified: "Contents checked",
-    failed: "Check failed",
-    // The accessible name starts with the visible words (WCAG 2.5.3).
-    verifiedTitle: "Contents checked: bundle verification passed",
-    failedTitle: "Check failed: bundle verification failed"
-  };
-  function renderVerificationBanner(root, verified, coverage) {
+  function renderVerificationBanner(root, model, coverage) {
     const bar = element6("div");
-    bar.className = verified ? "cv-shell-bar" : "cv-shell-bar cv-failed";
-    const banner = element6(
-      "span",
-      verified ? BANNER_LINES.verified : BANNER_LINES.failed
-    );
+    bar.className = model.state === "failed" ? "cv-shell-bar cv-failed" : model.state === "incomplete" ? "cv-shell-bar cv-incomplete" : "cv-shell-bar";
+    const banner = element6("span", model.line);
     banner.className = "cv-pill";
-    banner.dataset.verify = verified ? "verified" : "failed";
-    banner.dataset.uncheckpointed = String(coverage.uncheckpointed);
-    const title = verified ? BANNER_LINES.verifiedTitle : BANNER_LINES.failedTitle;
-    banner.setAttribute("role", "img");
-    banner.setAttribute("aria-label", title);
-    banner.title = title;
+    banner.dataset.verify = model.state;
+    banner.dataset.verdict = model.verdict;
+    banner.dataset.checkpoint = model.checkpoint;
+    banner.dataset.uncheckpointed = String(model.uncheckpointed);
     bar.append(banner);
-    const detail = element6("span");
-    detail.className = "cv-shell-detail";
-    detail.dataset.verifySummary = "";
-    bar.append(detail);
-    if (verified && coverage.uncheckpointed > 0) {
+    const summary = element6("span");
+    summary.className = "cv-shell-detail";
+    summary.dataset.verifySummary = "";
+    bar.append(summary);
+    if (model.refusal === void 0 && coverage.uncheckpointed > 0) {
       const note = element6(
         "span",
-        `${coverage.uncheckpointed} of ${recordsWord(coverage.total)} not in the checkpoint`
+        `${coverage.uncheckpointed} of ${recordsWord2(coverage.total)} not in the checkpoint`
       );
       note.className = "cv-shell-note";
       note.dataset.uncheckpointedNote = "";
@@ -16748,17 +17507,30 @@ ${pad.repeat(depth)}`;
     });
     bar.append(link);
     root.append(bar);
-    if (verified) return banner;
-    const refusal = element6(
-      "p",
-      "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed."
-    );
+    if (model.detail !== "") {
+      const detail = element6("p", model.detail);
+      detail.className = "cv-banner-detail";
+      detail.dataset.bannerDetail = "";
+      root.append(detail);
+    }
+    if (model.refusal === void 0) return bar;
+    const refusal = element6("p", model.refusal);
     refusal.dataset.refusal = "unverified-bundle";
     root.append(refusal);
-    return banner;
+    return bar;
+  }
+  function renderChecking(root) {
+    const bar = element6("div");
+    bar.className = "cv-shell-bar";
+    const banner = element6("span", VERIFICATION_BANNER_LINES.checking);
+    banner.className = "cv-pill";
+    banner.dataset.verify = "checking";
+    bar.append(banner);
+    root.replaceChildren(bar);
+    return bar;
   }
   var UNABLE_TO_VERIFY_LINES = {
-    banner: "Unable to verify in this viewer",
+    banner: VERIFICATION_BANNER_LINES.unable,
     reason: "This viewer cannot compute the SHA-256 digests the checks need, so nothing was checked and no records are shown. This is not a failed check: the file may well be valid.",
     command: "To check this file, run:",
     noCommand: "To check this file, open it from a secure (https) page, or check it with a verifier outside this viewer."
@@ -16802,7 +17574,7 @@ ${pad.repeat(depth)}`;
       );
     if (failed2 === 0 && (pageFailed > 0 || !verified) && notRun > 0)
       leads.push(`${notRun} of ${total} checks not run`);
-    const parts = [...leads, recordsWord(model.records.length)];
+    const parts = [...leads, recordsWord2(model.records.length)];
     const signatures = model.checkLists.notChecked.filter(
       (id) => SIGNATURE_CHECKS.has(id)
     ).length;
@@ -16932,7 +17704,7 @@ ${pad.repeat(depth)}`;
     if (coverage.status === "established") {
       const count2 = element6(
         "p",
-        `${recordsWord(uncheckpointed)} uncheckpointed of ${recordsWord(records.length)} supplied`
+        `${recordsWord2(uncheckpointed)} uncheckpointed of ${recordsWord2(records.length)} supplied`
       );
       count2.dataset.coverage = "uncheckpointed";
       count2.dataset.count = String(uncheckpointed);
@@ -16957,7 +17729,7 @@ ${pad.repeat(depth)}`;
         ...listings.get(record.capsuleId) ?? [],
         record
       ]);
-    const count2 = listings.size === records.length ? recordsWord(listings.size) : `${recordsWord(listings.size)} (${records.length} listings)`;
+    const count2 = listings.size === records.length ? recordsWord2(listings.size) : `${recordsWord2(listings.size)} (${records.length} listings)`;
     const summary = element6(
       "summary",
       `Records in this bundle: ${count2}, by capsule id`
@@ -17100,7 +17872,7 @@ ${pad.repeat(depth)}`;
       if (count2 === 0) continue;
       const item = element6(
         "li",
-        `${recordsWord(count2)} ${COVERAGE_LABEL[status2]}`
+        `${recordsWord2(count2)} ${COVERAGE_LABEL[status2]}`
       );
       item.dataset.coverageStatus = status2;
       item.dataset.count = String(count2);
@@ -17166,6 +17938,7 @@ ${pad.repeat(depth)}`;
       tr.dataset.extensionId = row2.id;
       tr.dataset.integrity = row2.integrity;
       tr.dataset.semantics = row2.refusal !== void 0 ? "refused" : row2.interpreter === void 0 ? "uninterpreted" : "interpreted";
+      if (row2.interpreter !== void 0) tr.dataset.interpreter = row2.interpreter;
       if (row2.refusal !== void 0) {
         tr.dataset.refusedModule = row2.refusal.id;
         tr.dataset.refusal = row2.refusal.reason;
@@ -17219,8 +17992,8 @@ ${pad.repeat(depth)}`;
     scope.dataset.checks = "scope";
     host.append(scope);
   }
-  async function renderVerificationPage(root, context, styled, applied, refused, citedSigners, verifierHint, depth) {
-    const { bundle, verification: verified, countersigners } = context;
+  async function renderVerificationPage(root, context, styled, applied, refused, citedSigners, verifierHint, depth, stamps) {
+    const { bundle, verification: verified } = context;
     const section = element6("section");
     section.dataset.page = "verification";
     let page = section;
@@ -17231,15 +18004,10 @@ ${pad.repeat(depth)}`;
       section.append(page);
     }
     page.append(element6("h2", "Verification"));
-    const stamps = await classifyCountersignatures(
-      context.countersignatures.map((entry) => entry.value),
-      verified.bundleDigest,
-      declaredProducerKeys(bundle),
-      countersigners
-    );
     const model = buildVerificationPageModel(bundle, verified, applied, refused, {
       stamps,
-      citedSigners
+      citedSigners,
+      ...context.strict === void 0 ? {} : { strict: context.strict }
     });
     const summary = element6("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
@@ -17260,11 +18028,11 @@ ${pad.repeat(depth)}`;
     page.append(contentStyle);
     let result;
     try {
-      result = bundleVerified(verified) ? await resultRootOf(context) : void 0;
+      result = bundleVerified2(verified) ? await resultRootOf(context) : void 0;
     } catch {
       result = void 0;
     }
-    const read = bundleVerified(verified) ? await recordEntries(context, result) : /* @__PURE__ */ new Map();
+    const read = bundleVerified2(verified) ? await recordEntries(context, result) : /* @__PURE__ */ new Map();
     const rawRecords = /* @__PURE__ */ new Map();
     for (const raw of Array.isArray(object12(bundle).records) ? object12(bundle).records : [])
       if (typeof object12(raw).capsule_id === "string")
@@ -17275,7 +18043,7 @@ ${pad.repeat(depth)}`;
       model.uncheckpointedCount,
       model.coverage,
       {
-        verified: bundleVerified(verified),
+        verified: bundleVerified2(verified),
         read,
         kind: (id) => recordKind(rawRecords.get(id), read.get(id)),
         build: (id, record) => renderRecordEntry(id, record)
@@ -17292,8 +18060,8 @@ ${pad.repeat(depth)}`;
     folded.className = "cv-checked";
     folded.id = CHECKED_SECTION_ID;
     folded.dataset.checked = "";
-    folded.open = !bundleVerified(verified) || depth === "L2";
-    const line = checkedSummaryLine(bundleVerified(verified), model);
+    folded.open = !bundleVerified2(verified) || depth === "L2";
+    const line = checkedSummaryLine(bundleVerified2(verified), model);
     const heading = element6("summary");
     heading.append(
       element6("strong", CHECKED_SECTION_TITLE),
@@ -18080,22 +18848,22 @@ ${pad.repeat(depth)}`;
     return value;
   }
   var reportRowsModule = {
-    manifest: BUILTIN_MANIFEST_REPORT_ROWS,
+    manifest: BUILTIN_MANIFEST_REPORT_ROWS2,
     canRender: async (context) => await reportRowsOf(context) !== void 0,
-    buildModel: async (context) => defined(await reportRowsOf(context), BUILTIN_MANIFEST_REPORT_ROWS.id),
+    buildModel: async (context) => defined(await reportRowsOf(context), BUILTIN_MANIFEST_REPORT_ROWS2.id),
     render: (model, host) => renderReportRowsTable(model, host.L1)
   };
   var resultOutcomeReportModule = {
-    manifest: BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
+    manifest: BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2,
     canRender: async (context) => readOutcomeReportPresentation(context.bundle) !== void 0 && await isResultRoot(context),
     buildModel: async (context) => ({
       result: defined(
         await resultRootOf(context),
-        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id
       ),
       card: defined(
         readOutcomeReportPresentation(context.bundle),
-        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id
       ),
       bundle: context.bundle,
       verification: context.verification
@@ -18113,16 +18881,16 @@ ${pad.repeat(depth)}`;
     }
   };
   var resultComplianceModule = {
-    manifest: BUILTIN_MANIFEST_RESULT_COMPLIANCE,
+    manifest: BUILTIN_MANIFEST_RESULT_COMPLIANCE2,
     canRender: async (context) => readCompliancePresentation2(context.bundle) !== void 0 && await isResultRoot(context),
     buildModel: async (context) => ({
       result: defined(
         await resultRootOf(context),
-        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id
       ),
       card: defined(
         readCompliancePresentation2(context.bundle),
-        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id
       ),
       bundle: context.bundle,
       verification: context.verification
@@ -18140,7 +18908,7 @@ ${pad.repeat(depth)}`;
     }
   };
   var CONTRACT_REPORT_MANIFEST = Object.freeze({
-    ...BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT,
+    ...BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2,
     id: "capsuleviewer.contract-report/v0"
   });
   function contractReportGroupingOf(bundle) {
@@ -18221,20 +18989,20 @@ ${pad.repeat(depth)}`;
     }
   };
   var resultModule = {
-    manifest: BUILTIN_MANIFEST_RESULT,
+    manifest: BUILTIN_MANIFEST_RESULT2,
     canRender: (context) => isResultRoot(context),
-    buildModel: async (context) => defined(await resultRootOf(context), BUILTIN_MANIFEST_RESULT.id),
+    buildModel: async (context) => defined(await resultRootOf(context), BUILTIN_MANIFEST_RESULT2.id),
     render: (model, host) => renderResultPage(model, host.L1)
   };
   var evaluationSummaryGraphModule = {
-    manifest: BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
+    manifest: BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2,
     canRender: async (context) => await evidenceGraphOf(context) !== void 0,
     buildModel: async (context) => {
       const records = object12(context.bundle).records;
       return {
         graph: defined(
           await evidenceGraphOf(context),
-          BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH.id
+          BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2.id
         ),
         records: Array.isArray(records) ? records : []
       };
@@ -18242,7 +19010,7 @@ ${pad.repeat(depth)}`;
     render: (model, host) => renderGraph(model.graph, host.L1, model.records)
   };
   var noAggregateModule = {
-    manifest: BUILTIN_MANIFEST_NO_AGGREGATE,
+    manifest: BUILTIN_MANIFEST_NO_AGGREGATE2,
     canRender: () => true,
     buildModel: () => null,
     render: (_model, host) => {
@@ -18253,13 +19021,13 @@ ${pad.repeat(depth)}`;
     }
   };
   var BUILTIN_MODULE_INTERPRETERS = Object.freeze({
-    [BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id]: [
+    [BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id]: [
       "result-root",
       "outcome-report-card"
     ],
-    [BUILTIN_MANIFEST_RESULT_COMPLIANCE.id]: ["result-root", "compliance-card"],
-    [BUILTIN_MANIFEST_RESULT.id]: ["result-root"],
-    [BUILTIN_MANIFEST_COMPOSED.id]: ["aac.builtin.composed/v0"]
+    [BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id]: ["result-root", "compliance-card"],
+    [BUILTIN_MANIFEST_RESULT2.id]: ["result-root"],
+    [BUILTIN_MANIFEST_COMPOSED2.id]: ["aac.builtin.composed/v0"]
   });
   function moduleInterpreters(id, bundle) {
     if (id === CONTRACT_REPORT_MANIFEST.id) {
@@ -18283,7 +19051,7 @@ ${pad.repeat(depth)}`;
     noAggregateModule
   ]);
   function createPresentationRegistry() {
-    const registry = new PresentationRegistry();
+    const registry = new PresentationRegistry2();
     for (const module of BUILTIN_PRESENTATIONS) registry.register(module);
     return registry;
   }
@@ -18292,7 +19060,7 @@ ${pad.repeat(depth)}`;
     composedSectionModule
   ]);
   function createSectionRegistry(runtime) {
-    const registry = new PresentationRegistry(runtime);
+    const registry = new PresentationRegistry2(runtime);
     for (const module of BUILTIN_SECTIONS) registry.register(module);
     return registry;
   }
@@ -18345,11 +19113,79 @@ ${pad.repeat(depth)}`;
       );
       return;
     }
-    const context = isVerifiedBundleContext(input) ? countersigners === void 0 ? input : withCountersigners(input, countersigners) : await buildVerifiedBundleContext(input, {
-      ...countersigners === void 0 ? {} : { countersigners }
-    });
+    if (isVerifiedBundleContext(input))
+      return renderVerifiedContext(
+        countersigners === void 0 ? input : withCountersigners(input, countersigners),
+        root,
+        options
+      );
+    const group = checkingRenders.get(root) ?? {
+      before: [...root.childNodes],
+      active: /* @__PURE__ */ new Set()
+    };
+    checkingRenders.set(root, group);
+    const { active } = group;
+    const checking = renderChecking(root);
+    active.add(checking);
+    try {
+      await renderVerifiedContext(
+        await buildVerifiedBundleContext(input, {
+          ...countersigners === void 0 ? {} : { countersigners }
+        }),
+        root,
+        options
+      );
+    } catch (err) {
+      if (checking.parentNode === root) {
+        const other = [...active].find((node) => node !== checking);
+        if (other !== void 0) root.replaceChildren(other);
+        else root.replaceChildren(...group.before);
+      }
+      throw err;
+    } finally {
+      active.delete(checking);
+      if (active.size === 0) checkingRenders.delete(root);
+    }
+  }
+  var FRAME_LOOK = [
+    "display",
+    "visibility",
+    "opacity",
+    "color",
+    "background-color",
+    "background-image",
+    "font-size",
+    "text-indent",
+    "position",
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "transform",
+    "scale",
+    "translate",
+    "rotate",
+    "zoom",
+    "margin-top",
+    "margin-right",
+    "margin-bottom",
+    "margin-left",
+    "font-family",
+    "-webkit-text-fill-color",
+    "clip",
+    "clip-path",
+    "filter",
+    "mix-blend-mode",
+    "overflow",
+    "max-height",
+    "max-width",
+    "z-index",
+    "content-visibility"
+  ];
+  var checkingRenders = /* @__PURE__ */ new WeakMap();
+  async function renderVerifiedContext(context, root, options) {
     const { bundle, verification } = context;
-    const verified = bundleVerified(verification);
+    const verified = bundleVerified2(verification);
     const registry = options.registry ?? defaultRegistry;
     let refusal;
     let selected;
@@ -18361,7 +19197,7 @@ ${pad.repeat(depth)}`;
         options.format ?? DEFAULT_FORMAT
       );
     } catch (err) {
-      if (!(err instanceof PresentationAmbiguityError)) throw err;
+      if (!(err instanceof PresentationAmbiguityError2)) throw err;
       resolution = { kind: "no-presentation", refused: [] };
       refusal = "presentation-unresolved";
     }
@@ -18385,7 +19221,7 @@ ${pad.repeat(depth)}`;
           options.format ?? DEFAULT_FORMAT
         );
       } catch (err) {
-        if (!(err instanceof PresentationAmbiguityError)) throw err;
+        if (!(err instanceof PresentationAmbiguityError2)) throw err;
         sectionResolution = { kind: "no-presentation", refused: [] };
         selected = void 0;
         refusal = "presentation-unresolved";
@@ -18398,9 +19234,16 @@ ${pad.repeat(depth)}`;
           model: await sectionResolution.module.buildModel(context)
         };
     }
+    const stamps = await classifyCountersignatures(
+      context.countersignatures.map((entry) => entry.value),
+      verification.bundleDigest,
+      declaredProducerKeys(bundle),
+      context.countersigners
+    );
+    const bannerModel = verificationBanner(context, stamps);
     const records = object12(bundle).records;
     const coverage = {
-      uncheckpointed: unboundRecordIds(verification).length,
+      uncheckpointed: bannerModel.uncheckpointed,
       total: Array.isArray(records) ? records.length : 0
     };
     const depth = options.depth ?? "L0";
@@ -18415,11 +19258,12 @@ ${pad.repeat(depth)}`;
       L2: root,
       core: root
     };
+    let bar;
     const drawFrame = () => {
       root.replaceChildren();
       root.classList.remove("cv-shell-chrome");
-      renderVerificationBanner(root, verified, coverage);
       renderPresentationHeader(root, bundle);
+      bar = renderVerificationBanner(root, bannerModel, coverage);
       const L2 = region("L2");
       const core = region("L2-core");
       const L2module = region("L2-module");
@@ -18437,6 +19281,60 @@ ${pad.repeat(depth)}`;
       else root.insertBefore(note, regions.core.parentElement);
     };
     drawFrame();
+    const snapshot = (parts) => JSON.stringify(parts.map((part) => part.outerHTML));
+    const looks = (parts, chromed) => {
+      const view = root.ownerDocument.defaultView;
+      if (!root.isConnected || view === null) return "";
+      const had = root.classList.contains("cv-shell-chrome");
+      root.classList.toggle("cv-shell-chrome", chromed);
+      const elements = [
+        root,
+        ...parts.flatMap((part) => [part, ...part.querySelectorAll("*")])
+      ];
+      const pseudos = view.navigator.userAgent.includes("jsdom") ? [null] : [null, "::before", "::after"];
+      const seen = JSON.stringify(
+        elements.flatMap(
+          (element7) => pseudos.map((pseudo) => {
+            const style = view.getComputedStyle(element7, pseudo);
+            return [
+              ...FRAME_LOOK.map((name) => style.getPropertyValue(name)),
+              ...pseudo === null ? [] : [style.getPropertyValue("content")]
+            ];
+          })
+        )
+      );
+      root.classList.toggle("cv-shell-chrome", had);
+      return seen;
+    };
+    const frameOf = () => {
+      const detail = bar.nextElementSibling;
+      const parts = [
+        bar,
+        ...detail?.hasAttribute("data-banner-detail") ? [detail] : []
+      ];
+      return {
+        parts,
+        header: bar.previousElementSibling,
+        words: snapshot(parts),
+        looks: {
+          plain: looks(parts, false),
+          chrome: looks(parts, true)
+        }
+      };
+    };
+    let frame = frameOf();
+    const assertFrameIntact = () => {
+      const [top, detail] = frame.parts;
+      const pill = top.querySelector("[data-verify]");
+      const banners = root.querySelectorAll(
+        "[data-verify], [data-banner-detail]"
+      );
+      const expected = [pill, ...detail === void 0 ? [] : [detail]];
+      if (pill === null || banners.length !== expected.length || expected.some((part, i) => banners[i] !== part) || // Nodes, not elements: a bare text node before the banner is words
+      // too. The core draws no text node at the root.
+      root.firstChild !== (frame.header ?? top) || top.previousSibling !== frame.header || frame.header !== null && frame.header.parentNode !== root || detail !== void 0 && detail.previousElementSibling !== top || top.parentNode !== root || top.hidden || snapshot(frame.parts) !== frame.words || looks(frame.parts, root.classList.contains("cv-shell-chrome")) !== (root.classList.contains("cv-shell-chrome") ? frame.looks.chrome : frame.looks.plain))
+        throw new Error("a module altered the verification banner");
+    };
     if (refused.length > 0)
       root.dataset.presentationRefused = refused.map((r) => r.id).join(" ");
     else delete root.dataset.presentationRefused;
@@ -18461,9 +19359,11 @@ ${pad.repeat(depth)}`;
           host,
           presentationServices(context)
         );
+        assertFrameIntact();
       } catch {
         chrome = void 0;
         drawFrame();
+        frame = frameOf();
         refusal = "presentation-failed";
       }
     }
@@ -18490,6 +19390,7 @@ ${pad.repeat(depth)}`;
           },
           presentationServices(context)
         );
+        assertFrameIntact();
       } catch {
         chrome = void 0;
         drawFrame();
@@ -18522,7 +19423,8 @@ ${pad.repeat(depth)}`;
       refused,
       refusal === void 0 && citesCheckedSigners(selected),
       options.verifierHint,
-      depth
+      depth,
+      stamps
     );
     const summary = root.querySelector("[data-verify-summary]");
     if (summary !== null) summary.textContent = checkedLine;
@@ -18539,10 +19441,10 @@ ${pad.repeat(depth)}`;
       ...input.registry === void 0 ? {} : { registry: input.registry }
     });
   }
-  async function mountPresentationFragment(hash2, element7, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+  async function mountPresentationFragment(hash2, element7, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
     let payload;
     try {
-      payload = decodePresentationFragment(hash2, maxLength);
+      payload = decodePresentationFragment2(hash2, maxLength);
     } catch (err) {
       const note = document.createElement("p");
       note.dataset.refusal = "fragment-unreadable";

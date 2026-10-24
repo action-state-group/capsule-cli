@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	aacpresentation "github.com/action-state-group/agent-action-capsule/go/presentation"
+	aacpresentation "github.com/action-state-group/capsule-viewer/go/presentation"
 )
 
 // `presentation list` says which presentation module a bundle resolves to,
