@@ -1,5 +1,5 @@
 // build-report-runtime.mjs -- bundle the browser runtime `report build`,
-// `deal report` and `presentation build` embed (internal/cli/assets/
+// `deal report` and `presentation build` embed (cli/assets/
 // evidence-graph.iife.js) from two checkouts:
 //
 //   node scripts/build-report-runtime.mjs <capsule-viewer checkout> <agent-action-capsule checkout> <out file>

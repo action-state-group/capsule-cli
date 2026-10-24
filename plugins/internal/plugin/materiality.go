@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // materialityLabel names a predicate for the card: its name and version, or

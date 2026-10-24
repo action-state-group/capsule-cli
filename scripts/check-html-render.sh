@@ -107,7 +107,7 @@ fi
 
 
 # A page is written only for a bundle `verify --bundle` calls VALID whose
-# report shows every row (internal/cli/page_gate.go). Each variant of the
+# report shows every row (cli/page_gate.go). Each variant of the
 # README's example below runs as written up to its refused step.
 variant() { # name, then perl substitutions applied to the README's example
   local name="$1"; shift
@@ -152,7 +152,7 @@ fi
 
 # A deal receipt: its deal text (summary lines, step lines, amounts) is
 # sealed as a standalone signed report the copy carries in x-deal-report/v0
-# (internal/cli/deal_sealed_report.go). The page renders it and says it
+# (cli/deal_sealed_report.go). The page renders it and says it
 # checked it; a copy with one sealed line edited, or its report stripped to
 # inline text, is refused and shows none of it, and verify --bundle calls it
 # INVALID. The deal is the synthetic retail-checkout demo. The page's refusal

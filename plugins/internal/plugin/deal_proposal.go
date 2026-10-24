@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // The proposal an offer answers (capsule-cli#364, capsule-engine#193). A

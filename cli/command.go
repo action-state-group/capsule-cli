@@ -307,12 +307,21 @@ func ExitCode(err error) int {
 
 // CLIVersion and CLICommit are reported by both --version and `doctor`, so the
 // two can never silently drift apart. Release builds set them with
-// -ldflags "-X github.com/action-state-group/capsule-cli/internal/cli.CLIVersion=<tag>
-// -X github.com/action-state-group/capsule-cli/internal/cli.CLICommit=<sha>"
+// -ldflags "-X github.com/action-state-group/capsule-cli/cli.CLIVersion=<tag>
+// -X github.com/action-state-group/capsule-cli/cli.CLICommit=<sha>"
 // (.github/workflows/release.yml); a plain `go build` reports the defaults.
 var (
 	CLIVersion = "0.1.0-dev"
 	CLICommit  = "unknown"
+)
+
+// PluginVersion and PluginCommit are a first-party plugin's own release tag
+// and commit, set with -X by the plugin's release build. In a plugin binary
+// CLIVersion and CLICommit stay the capsule-cli release it embeds. Both are
+// empty in capsulectl itself and in plugins built inside this repository.
+var (
+	PluginVersion string
+	PluginCommit  string
 )
 
 // NewCommand returns a fresh tree: no shared flag/config state across

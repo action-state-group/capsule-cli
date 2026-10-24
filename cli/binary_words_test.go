@@ -33,7 +33,7 @@ func TestDefaultBinaryCarriesNoCompanyOrLicenceWords(t *testing.T) {
 		t.Skip("go tool not on PATH")
 	}
 	out := filepath.Join(t.TempDir(), "capsulectl")
-	build := exec.Command(goTool, "build", "-trimpath", "-o", out, "../../cmd/capsulectl")
+	build := exec.Command(goTool, "build", "-trimpath", "-o", out, "../cmd/capsulectl")
 	build.Env = append(os.Environ(), "GOFLAGS=")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("default build failed: %v\n%s", err, output)

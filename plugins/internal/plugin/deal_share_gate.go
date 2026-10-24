@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // dealPageGate is the last check before a shared copy is written. It reads

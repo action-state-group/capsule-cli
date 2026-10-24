@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/capsule-cli/internal/settlement"
+	"github.com/action-state-group/capsule-cli/settlement"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +57,7 @@ func TestEveryWordingKeyTheCodeNamesIsInThePack(t *testing.T) {
 	w := BuiltinWording()
 	key := regexp.MustCompile(`"((?:say|card|report|action)\.[a-z_.]*[a-z_])"`)
 	var missing []string
-	for _, dir := range []string{".", "../../plugins/internal/plugin"} {
+	for _, dir := range []string{".", "../plugins/internal/plugin"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		require.NoError(t, err)
 		for _, f := range files {

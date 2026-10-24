@@ -15,7 +15,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +25,7 @@ const sealedResultFixture = "testdata/result/result-root-bundle.sealed.json"
 
 func TestIIFEIsPinned(t *testing.T) {
 	sum := sha256.Sum256(cli.EvidenceGraphIIFE)
-	assert.Equal(t, cli.EvidenceGraphIIFEDigest, hex.EncodeToString(sum[:]), "internal/cli/assets/evidence-graph.iife.js changed: pin the new digest in internal/cli/evidence_graph_assets.go and assets/README.md together")
+	assert.Equal(t, cli.EvidenceGraphIIFEDigest, hex.EncodeToString(sum[:]), "cli/assets/evidence-graph.iife.js changed: pin the new digest in cli/evidence_graph_assets.go and assets/README.md together")
 	readme, err := os.ReadFile(filepath.Join(coreAssetsDir, "README.md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(readme), cli.EvidenceGraphIIFEDigest, "assets/README.md records the same digest")
@@ -70,7 +70,7 @@ func TestReportBuildReadsABundle(t *testing.T) {
 
 // The card set is the contract schema's own profile set, nothing invented.
 func TestReportCardsAreTheContractProfiles(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("../../../internal/cli/testdata", "contract", "evidence-contract-v0.json"))
+	raw, err := os.ReadFile(filepath.Join("../../../cli/testdata", "contract", "evidence-contract-v0.json"))
 	require.NoError(t, err)
 	var schemaRaw any
 	require.NoError(t, json.Unmarshal(raw, &schemaRaw))

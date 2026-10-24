@@ -456,7 +456,7 @@ and no link is minted. The page embeds an AAC Evidence Bundle of the deal's
 own log (every step, its membership proof, the chain back to the opening
 step, the signed checkpoint) in capsule-viewer's emitter shell, with
 agent-action-capsule's own browser verifier, bundled with capsule-viewer's
-page code in `internal/cli/assets/` (rebuild and compare with
+page code in `cli/assets/` (rebuild and compare with
 `scripts/build-evidence-graph-iife.sh`). Each item expands to
 its steps, and a step's line is shown only if the verifier matched its record
 against the step's seal; the words shown come from this device's local
@@ -556,7 +556,7 @@ The tests:
   alone must refuse every rewriting, and the scrubber's output of it must
   pass the gate. `DEAL_LEAK_SEED` and `DEAL_LEAK_ROUNDS` widen it.
 - A Go fuzz target, `FuzzDealSharePageGate`, whose found inputs are kept in
-  `internal/cli/testdata/fuzz`.
+  `cli/testdata/fuzz`.
 
 Before the file is written, a last gate reads the **final page bytes** with
 its own detectors. It reads the deal's local steps itself and shares no
@@ -709,7 +709,7 @@ is not registered anywhere.
   equal the sealed record bytes.
 - `deal export --deal ID --output FILE` writes the sealed records as one JSON
   array; `python3 profile/check_profile.py FILE` checks them. The Go code
-  that builds the records is `internal/cli/deal_profile.go`.
+  that builds the records is `cli/deal_profile.go`.
 
 ## The merchant's own email
 

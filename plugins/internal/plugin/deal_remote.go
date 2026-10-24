@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // An optional remote checker adds a second reading of a deal step. It is off

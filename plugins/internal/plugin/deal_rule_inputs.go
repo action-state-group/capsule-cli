@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // A check carries, beside what is about to happen, the scalars a rules

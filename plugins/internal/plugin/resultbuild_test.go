@@ -15,7 +15,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -157,7 +157,7 @@ func decodeJSONNumber(t *testing.T, raw []byte) map[string]interface{} {
 
 func TestResultSchemaIsPinned(t *testing.T) {
 	sum := sha256.Sum256(cli.ResultSchemaBytes())
-	assert.Equal(t, cli.ResultSchemaDigest, hex.EncodeToString(sum[:]), "internal/cli/schemas/evidence-result-v0.json changed: update ResultSchemaDigest and ResultSchemaSource together")
+	assert.Equal(t, cli.ResultSchemaDigest, hex.EncodeToString(sum[:]), "cli/schemas/evidence-result-v0.json changed: update ResultSchemaDigest and ResultSchemaSource together")
 	// The schema and the vectors in testdata/result come from one aac
 	// commit, which testdata/result/UPSTREAM names.
 	upstream, err := os.ReadFile(filepath.Join("testdata", "result", "UPSTREAM"))

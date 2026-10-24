@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### The plugins' host package is public (#326)
+
+- **Changed:** `internal/cli` is now `github.com/action-state-group/capsule-cli/cli`
+  and `internal/settlement` is `.../settlement`, so the first-party plugins
+  can build outside this repository (docs/design/326-plugins-leave-the-core.md).
+  Before v1 they carry no compatibility promise. Release builds set
+  `-X github.com/action-state-group/capsule-cli/cli.CLIVersion` and `.CLICommit`;
+  the old `internal/cli` path no longer exists, and `-X` silently ignores it.
+- **Added:** the `cli-plugin/v1` handshake carries an optional `core_version`,
+  the capsulectl release a first-party plugin embeds. The first-party version
+  check (install, the dispatch warning, `doctor --install-check`) compares it,
+  and falls back to `version` for plugins without it, which is every plugin
+  released so far. A plugin built on its own reports its own tag as `version`.
+- **Changed:** CI checks that every action-state-group module in the core's
+  build graph is on a neutral list (`scripts/check-neutral-deps.sh`), and warns
+  about paths that leave with the plugins (`scripts/check-moved-paths.sh`).
+- **Removed:** an unused SCITT statement-receipt check with no callers.
+
 ### verify --bundle: producer signatures and the checkpoint from AAC's strict verifier (#438)
 
 - **Changed:** `verify --bundle` reads each record's producer signature

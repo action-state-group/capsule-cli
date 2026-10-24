@@ -50,7 +50,7 @@ var firstPartyLaunchers = regexp.MustCompile(`^capsulectl-(book|deal|\$VERSION-p
 // be read as a plugin.
 func TestNoBuildOutputIsNamedLikeAPluginLauncher(t *testing.T) {
 	var files []string
-	for _, pattern := range []string{"../../Makefile", "../../action.yml", "../../scripts/*.sh", "../../.github/workflows/*.yml"} {
+	for _, pattern := range []string{"../Makefile", "../action.yml", "../scripts/*.sh", "../.github/workflows/*.yml"} {
 		matches, err := filepath.Glob(pattern)
 		require.NoError(t, err)
 		files = append(files, matches...)
@@ -75,7 +75,7 @@ func TestNoBuildOutputIsNamedLikeAPluginLauncher(t *testing.T) {
 
 // The release build spans several lines; the guard must see it, and exempt it.
 func TestBuildOutputsFindsTheReleaseBuild(t *testing.T) {
-	body, err := os.ReadFile("../../scripts/release-build.sh")
+	body, err := os.ReadFile("../scripts/release-build.sh")
 	require.NoError(t, err)
 	outs := buildOutputs(string(body))
 	require.Contains(t, outs, "capsulectl-$VERSION-$os-$arch")

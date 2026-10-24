@@ -2259,7 +2259,7 @@ def regen():
     dump(FIX / "fingerprint-vectors.json", vec)
 
     # commercial-bounds/v0: the private document holding a floor, and the bounds_commitment a
-    # record seals to it. Go recomputes the same values (internal/cli/deal_bounds_test.go).
+    # record seals to it. Go recomputes the same values (cli/deal_bounds_test.go).
     bounds = {"description": "bounds_commitment = SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\", \"text\"}, "
                              "with text the JCS bytes of the commercial-bounds/v0 document (commit_alg sha256-jcs-nonce256).",
               "vectors": []}

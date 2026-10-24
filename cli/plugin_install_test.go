@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -848,7 +849,7 @@ func TestReleaseTagPolicy(t *testing.T) {
 // release.yml enforces the same tag policy the core uses to decide it is a
 // release build.
 func TestReleaseWorkflowEnforcesTheTagPolicy(t *testing.T) {
-	workflow, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "release.yml"))
+	workflow, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "release.yml"))
 	require.NoError(t, err)
 	policy := strings.TrimSuffix(strings.TrimPrefix(releaseTagPolicy.String(), "^"), "$")
 	assert.Contains(t, string(workflow), "grep -Eqx '"+policy+"'")
@@ -1457,4 +1458,58 @@ func TestThePrintedFixRunsAsPastedWithASpaceInHome(t *testing.T) {
 	for _, s := range []string{"/a$b", "/a*b", "/~a", "/a`b`", "/a\"b"} {
 		assert.Equal(t, "'"+s+"'", shellQuote(s), "a shell would expand or split %s", s)
 	}
+}
+
+// A plugin released on its own carries its own tag as version and the
+// capsulectl release it embeds as core_version; the first-party check
+// compares core_version (docs/design/326-plugins-leave-the-core.md, 4.2).
+func TestPluginInstallFirstPartyCoreVersion(t *testing.T) {
+	installHome(t)
+	old := CLIVersion
+	t.Cleanup(func() { CLIVersion = old })
+	CLIVersion = "v0.2.0"
+	launcher := func(core string) string {
+		path := filepath.Join(t.TempDir(), "capsulectl-deal")
+		meta := fmt.Sprintf(`{"name":"deal","vendor":"t","version":"v1.4.0","core_version":%q,"plugin_api":"cli-plugin/v1"}`, core)
+		require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then echo '"+meta+"'; exit 0; fi\n"), 0o755))
+		return path
+	}
+
+	out, err := invoke(t, "", "plugin", "install", launcher("v0.2.0"))
+	require.NoError(t, err, out)
+	r := installOut(t, out)
+	assert.Equal(t, "matches capsulectl v0.2.0", r.VersionCheck)
+	assert.Equal(t, "v1.4.0", r.Version, "the result reports the plugin's own version")
+
+	_, err = invoke(t, "", "plugin", "install", launcher("v0.1.9"))
+	require.ErrorIs(t, err, ErrConflict)
+	assert.Contains(t, SafeError(err), "built for capsulectl v0.1.9")
+}
+
+func TestPluginHandshakeReportsCoreVersion(t *testing.T) {
+	oldVersion, oldPlugin, oldCommit := CLIVersion, PluginVersion, PluginCommit
+	t.Cleanup(func() { CLIVersion, PluginVersion, PluginCommit = oldVersion, oldPlugin, oldCommit })
+	handshake := func() pluginInfo {
+		root := NewPluginCommand(PluginMetadata{Name: "deal", Vendor: "t"})
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetArgs([]string{"cli-plugin-metadata"})
+		require.NoError(t, root.Execute())
+		var info pluginInfo
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &info), buf.String())
+		return info
+	}
+
+	// Built inside capsule-cli: no plugin version, so both fields are the core's.
+	CLIVersion, PluginVersion, PluginCommit = "v0.2.0", "", ""
+	info := handshake()
+	assert.Equal(t, "v0.2.0", info.Version)
+	assert.Equal(t, "v0.2.0", info.CoreVersion)
+
+	// Released on its own: its own tag, and the core it embeds.
+	PluginVersion, PluginCommit = "v1.4.0", "abc1234"
+	info = handshake()
+	assert.Equal(t, "v1.4.0", info.Version)
+	assert.Equal(t, "v0.2.0", info.CoreVersion)
+	assert.Equal(t, "v0.2.0", info.coreVersion())
 }

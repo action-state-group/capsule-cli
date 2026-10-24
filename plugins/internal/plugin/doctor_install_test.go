@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -225,7 +225,7 @@ func TestInstallCheckNeedsTheProfilesPlugin(t *testing.T) {
 	dealPluginAt(t, "v0.1.0-rc2")
 	check, _, err = installCheckRun(t, dir)
 	require.ErrorIs(t, err, cli.ErrPartial)
-	assert.Contains(t, check["issues"], "capsulectl-deal is v0.1.0-rc2, this capsulectl is v0.1.0-rc3: run capsulectl plugin install deal")
+	assert.Contains(t, check["issues"], "capsulectl-deal is built for capsulectl v0.1.0-rc2, this capsulectl is v0.1.0-rc3: run capsulectl plugin install deal")
 
 	dealPluginAt(t, "")
 	check, _, err = installCheckRun(t, dir)

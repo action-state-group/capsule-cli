@@ -12,7 +12,7 @@ import (
 
 // coreAssetsDir holds the core's assets the deal view is built from
 // (deal-view.js, its stylesheet and manifest, the evidence-graph verifier).
-const coreAssetsDir = "../../../internal/cli/assets"
+const coreAssetsDir = "../../../cli/assets"
 
 // installed is capsulectl with both plugins installed, as an operator has
 // them: the core binary in dir, and capsulectl-book and capsulectl-deal in

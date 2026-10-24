@@ -106,7 +106,8 @@ and expects exactly one line of JSON on stdout:
 |---------------|----------|---------------------------------------------------------------------|
 | `name`        | yes      | Must equal the launcher's filename with the `capsulectl-` prefix stripped. A mismatch is a handshake failure. |
 | `vendor`      | no       | Free text, shown in `capsulectl plugin ls` and in the command's `--help`. |
-| `version`     | no       | Free text, shown in `capsulectl plugin ls`. For the first-party plugins it is the release tag, and see "Versions" below. |
+| `version`     | no       | Free text, shown in `capsulectl plugin ls`. For the first-party plugins it is their release tag; see "Versions" below. |
+| `core_version` | no      | Free text. A first-party plugin's embedded capsulectl release, which the version check below compares. |
 | `plugin_api`  | yes      | Must be exactly `"cli-plugin/v1"`. Any other value (including a newer or older version string) is a handshake failure -- there is no negotiation. |
 | `subcommands` | no       | Free text list, shown in the command's `--help` as a hint; `capsulectl` does not parse or validate it. |
 
@@ -288,8 +289,10 @@ another root.
 ### Versions
 
 - The handshake's `version` stays free text on the wire.
-- **First-party plugins.** `book` and `deal` share core code, so their
-  version is expected to equal the core's:
+- **First-party plugins.** `book` and `deal` embed the core's code, so the
+  core release they embed, their `core_version`, is expected to equal the
+  core's. A plugin without `core_version` is compared by its `version`,
+  which every plugin built in this repository sets to the core's:
   - `plugin install` refuses a mismatch on a release core unless
     `--allow-version-mismatch` is given.
   - A development core does not check it.

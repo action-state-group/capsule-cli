@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # build-fixtures.sh -- (re)build the presentation goldens' fixtures: the
 # synthetic bundles and the pages capsulectl emits for them, written to
-# internal/cli/testdata/presentation/. Run it once, when a fixture is added
+# cli/testdata/presentation/. Run it once, when a fixture is added
 # or changed on purpose; TestPresentationGoldens then holds every later
 # version of the viewer to what these pages show.
 #
 #   scripts/presentation-goldens/build-fixtures.sh
 #
 # Each page is emitted by the real CLI, so the page gate
-# (internal/cli/page_gate.go) applies, and every fixture's page must pass it.
+# (cli/page_gate.go) applies, and every fixture's page must pass it.
 # Keys and capsule ids are fresh on every run, so a rebuild rewrites every
 # fixture.
 #
@@ -18,7 +18,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 here="$root/scripts/presentation-goldens"
-out="$root/internal/cli/testdata/presentation"
+out="$root/cli/testdata/presentation"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

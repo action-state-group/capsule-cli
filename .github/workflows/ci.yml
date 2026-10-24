@@ -49,18 +49,20 @@ jobs:
           go mod tidy
           (cd plugins && go mod tidy)
           git diff --exit-code -- go.mod go.sum plugins/go.mod plugins/go.sum
-      - name: The core builds without evidencebook
-        # The donatable core (capsule-cli#236): no package of it, its tests
-        # included, imports evidencebook, and its go.mod does not require it.
+      - name: The core depends only on neutral modules
+        # The donatable core (capsule-cli#236, #326): every action-state-group
+        # module in its build graph, tests included, is on the neutral list,
+        # and its go.mod requires no company-OSS module.
         run: |
-          if go list -deps -test ./... | grep evidencebook; then
-            echo "::error::the core module imports evidencebook; it belongs in the plugins module"
-            exit 1
-          fi
+          bash scripts/check-neutral-deps.sh
           if grep -n evidencebook go.mod; then
             echo "::error::the core go.mod requires evidencebook"
             exit 1
           fi
+      - name: Paths that leave with the plugins
+        # Warns while plugins/ and skills/deal/ are still here; the removal
+        # (capsule-cli#326, step 6) turns it to --fail.
+        run: bash scripts/check-moved-paths.sh
       - name: Vet
         run: |
           go vet ./...
@@ -153,11 +155,11 @@ jobs:
         env:
           CHROME: google-chrome
         run: bash scripts/check-html-render.sh
-      # Six synthetic bundles' pages (internal/cli/testdata/presentation),
+      # Six synthetic bundles' pages (cli/testdata/presentation),
       # re-emitted and opened at 390px, 1280px and in print: each must show
       # a reader what its snapshot.json says, and be no wider than
       # known-overflow.json records (see
-      # internal/cli/presentation_golden_test.go). Widths depend on the
+      # cli/presentation_golden_test.go). Widths depend on the
       # browser and the fonts, so both are pinned: Chrome for Testing at the
       # version known-overflow.json names, and DejaVu as the only fonts.
       - name: Set up the pinned Chrome
@@ -170,13 +172,13 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core fontconfig
-          FONTCONFIG_FILE="$GITHUB_WORKSPACE/internal/cli/testdata/presentation/fonts.conf" fc-list : family | sort -u
+          FONTCONFIG_FILE="$GITHUB_WORKSPACE/cli/testdata/presentation/fonts.conf" fc-list : family | sort -u
       - name: Presentation goldens
         env:
           CAPSULECTL_CHROME: ${{ steps.chrome.outputs.chrome-path }}
           CAPSULECTL_PRESENTATION_PINNED: "1"
           CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
-          FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
+          FONTCONFIG_FILE: ${{ github.workspace }}/cli/testdata/presentation/fonts.conf
         # The presentation pass has a job of its own (presentation-pass).
         # The goldens are deal and book bundles' pages: the plugins module's tests.
         working-directory: plugins
@@ -250,7 +252,7 @@ jobs:
           # The pass fails, rather than skips its browser checks, without this
           # Chrome (presentation_pass_test.go passChrome).
           CAPSULECTL_PRESENTATION_PINNED: "1"
-          FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
+          FONTCONFIG_FILE: ${{ github.workspace }}/cli/testdata/presentation/fonts.conf
         working-directory: plugins
         run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/plugin
 
@@ -312,7 +314,7 @@ jobs:
         run: bash ../scripts/interop-resolved.sh ../.interop/evidencebook
 
   iife:
-    # The vendored evidence-graph IIFE (internal/cli/assets) must equal a
+    # The vendored evidence-graph IIFE (cli/assets) must equal a
     # fresh build from the capsule-viewer and agent-action-capsule commits
     # evidence_graph_assets.go pins.
     runs-on: ubuntu-latest
@@ -323,7 +325,7 @@ jobs:
       - name: Read the pinned capsule-viewer and agent-action-capsule commits
         id: pin
         run: |
-          src=internal/cli/evidence_graph_assets.go
+          src=cli/evidence_graph_assets.go
           cv=$(sed -n 's/.*evidenceGraphIIFESource = "capsule-viewer [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$src")
           aac=$(sed -n 's/.*evidenceGraphIIFESource = ".* agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$src")
           test -n "$cv" && test -n "$aac"
@@ -355,11 +357,11 @@ jobs:
           AAC: ${{ steps.pin.outputs.aac }}
         run: |
           if ! git -C cv-main-check merge-base --is-ancestor "$CV" HEAD; then
-            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins capsule-viewer $CV, which is not on capsule-viewer's main. Pin a merged commit."
+            echo "::error file=cli/evidence_graph_assets.go::evidenceGraphIIFESource pins capsule-viewer $CV, which is not on capsule-viewer's main. Pin a merged commit."
             exit 1
           fi
           if ! git -C aac-main-check merge-base --is-ancestor "$AAC" HEAD; then
-            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins agent-action-capsule $AAC, which is not on agent-action-capsule's main. Pin a merged commit."
+            echo "::error file=cli/evidence_graph_assets.go::evidenceGraphIIFESource pins agent-action-capsule $AAC, which is not on agent-action-capsule's main. Pin a merged commit."
             exit 1
           fi
       - name: Check out capsule-viewer at the pinned commit

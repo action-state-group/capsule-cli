@@ -35,7 +35,7 @@ func TestConfusablesAreTheVendoredUnicodeData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, confusablesVersion, version)
 	assert.Equal(t, "18.0.0", version)
-	assert.Equal(t, confusablesTable, table, "regenerate with go generate ./internal/cli")
+	assert.Equal(t, confusablesTable, table, "regenerate with go generate ./cli")
 }
 
 // The leaks a byte match, NFKC and a hand table missed. Each one reads as the

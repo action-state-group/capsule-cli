@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // A seller's representations (Seller PRD §3.1, §3.5; capsule-cli#269). What

@@ -11,7 +11,7 @@ set -euo pipefail
 VERSION="${1:?version, e.g. v0.1.0}"
 COMMIT="${2:?full commit sha}"
 OUT="${3:?output directory}"
-PKG=github.com/action-state-group/capsule-cli/internal/cli
+PKG=github.com/action-state-group/capsule-cli/cli
 TARGETS=(linux/amd64 linux/arm64 darwin/arm64)
 
 # The first-party plugins (capsule-cli#236) are two more binaries per

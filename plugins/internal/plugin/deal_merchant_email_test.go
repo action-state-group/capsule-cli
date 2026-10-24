@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,7 +111,7 @@ func simpleMessage(from, date, id, subject, body string) string {
 // TestRegenerateMerchantEmailFixtures rewrites the signed fixtures with a new
 // throwaway key. It runs only when asked:
 //
-//	CAPSULECTL_REGEN_MERCHANT_EMAIL=1 go test ./internal/cli -run TestRegenerateMerchantEmailFixtures
+//	CAPSULECTL_REGEN_MERCHANT_EMAIL=1 go test ./cli -run TestRegenerateMerchantEmailFixtures
 func TestRegenerateMerchantEmailFixtures(t *testing.T) {
 	if os.Getenv("CAPSULECTL_REGEN_MERCHANT_EMAIL") == "" {
 		t.Skip("set CAPSULECTL_REGEN_MERCHANT_EMAIL=1 to regenerate the signed fixtures")

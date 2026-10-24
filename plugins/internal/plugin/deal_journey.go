@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // One deal per errand (capsule-cli#340): the deal opens at the user's first

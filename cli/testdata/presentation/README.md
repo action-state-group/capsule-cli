@@ -2,8 +2,8 @@
 
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`; the pages and snapshots
-are now those of the viewer `internal/cli/assets/README.md` pins. `TestPresentationGoldens`
-(`internal/cli/presentation_golden_test.go`) holds every later viewer to them:
+are now those of the viewer `cli/assets/README.md` pins. `TestPresentationGoldens`
+(`cli/presentation_golden_test.go`) holds every later viewer to them:
 
 - **Without Chrome:** it re-emits each page from its `bundle.json` the way capsulectl
   does and checks the page gate's decision. While the vendored viewer is unchanged,
@@ -82,7 +82,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 
 ## The presentation pass
 
-`TestPresentationPass` and its siblings (`internal/cli/presentation_pass_test.go`, CI job
+`TestPresentationPass` and its siblings (`cli/presentation_pass_test.go`, CI job
 `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
 the one registry, shell and builder capsulectl has, with no plugin installed:
 

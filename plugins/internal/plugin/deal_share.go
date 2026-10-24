@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // dealWithheldFields is, per shared audience, what the copy leaves out, in

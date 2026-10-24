@@ -5,15 +5,15 @@
 //
 //	go run ./scripts/gradestrings > grade-strings.tsv
 //
-// It reads the non-test Go files under internal/cli and cmd (git ls-files)
-// and the page script internal/cli/assets/deal-view.js, and writes one
+// It reads the non-test Go files under cli and cmd (git ls-files)
+// and the page script cli/assets/deal-view.js, and writes one
 // tab-separated row per matching literal: file:line, class, the literal
 // (newlines, carriage returns and tabs escaped). On stderr it prints the
 // counts, the SHA-256 of the rows, and a cross-check: a second, independent
 // tokenizer over the same source text must find the same number of
 // literals and of matches, or it exits non-zero.
 //
-// Classes, by the literal and its source line: ladder (internal/cli/
+// Classes, by the literal and its source line: ladder (cli/
 // grade_ladder.go); rung-value (the value of a rung, time_rung or grade
 // field); identifier (no space: JSON keys, states, codes); receipt-copy
 // (words the receipt, email or page shows); operator (help and errors).
@@ -52,7 +52,7 @@ var (
 )
 
 func main() {
-	out, err := exec.Command("git", "ls-files", "internal/cli/*.go", "cmd/*.go", "plugins/internal/plugin/*.go", "plugins/cmd/*.go").Output()
+	out, err := exec.Command("git", "ls-files", "cli/*.go", "cmd/*.go", "plugins/internal/plugin/*.go", "plugins/cmd/*.go").Output()
 	if err != nil {
 		fail(err)
 	}
@@ -106,7 +106,7 @@ func main() {
 		}
 	}
 	goRows := len(rows)
-	const page = "internal/cli/assets/deal-view.js"
+	const page = "cli/assets/deal-view.js"
 	js, err := os.ReadFile(page)
 	if err != nil {
 		fail(err)
@@ -146,7 +146,7 @@ func main() {
 // goClass classifies one Go literal by its value and source line.
 func goClass(path, line, v string) string {
 	switch {
-	case path == "internal/cli/grade_ladder.go":
+	case path == "cli/grade_ladder.go":
 		return "ladder"
 	case !strings.Contains(v, " ") && rungLine.MatchString(line) &&
 		(regexp.MustCompile(`(?:rung"\]?\s*[:=]\s*|Rung\s*[:=]\s*)"`+regexp.QuoteMeta(v)+`"`).MatchString(line) ||
@@ -155,7 +155,7 @@ func goClass(path, line, v string) string {
 	case !strings.Contains(strings.TrimSpace(v), " "):
 		return "identifier"
 	case receiptFile[path] && !helpLine.MatchString(line),
-		path == "internal/cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
+		path == "cli/deal.go" && strings.HasPrefix(v, "tamper-evident against ourselves"):
 		return "receipt-copy"
 	}
 	return "operator"

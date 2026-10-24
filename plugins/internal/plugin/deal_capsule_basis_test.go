@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

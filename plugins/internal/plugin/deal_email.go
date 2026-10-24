@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // A deal receipt reaches the user by email: the one channel that reads the

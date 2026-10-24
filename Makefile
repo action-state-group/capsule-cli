@@ -19,7 +19,7 @@ test:
 
 # Rebuild the vendored evidence-graph IIFE from a capsule-viewer checkout
 # (CV=path) and an agent-action-capsule checkout (AAC=path), each at the
-# commit internal/cli/assets/README.md names, and diff it against
-# internal/cli/assets/evidence-graph.iife.js.
+# commit cli/assets/README.md names, and diff it against
+# cli/assets/evidence-graph.iife.js.
 iife-check:
 	bash scripts/iife-sync.sh "$(CV)" "$(AAC)" --check

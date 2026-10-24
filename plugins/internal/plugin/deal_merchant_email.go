@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/publicsuffix"

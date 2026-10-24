@@ -45,7 +45,7 @@ type Spec struct {
 	Verbs          []Verb    `yaml:"verbs" json:"verbs"`
 }
 
-// compileSchema mirrors the read pattern internal/cli/contract.go uses for
+// compileSchema mirrors the read pattern cli/contract.go uses for
 // --schema: the compiler resolves a plain filesystem path directly, no
 // custom loader needed for a local, non-URL schema.
 func compileSchema(path string) (*jsonschema.Schema, error) {
@@ -54,7 +54,7 @@ func compileSchema(path string) (*jsonschema.Schema, error) {
 }
 
 // loadSpec reads path twice by design, same as loadSchema in
-// internal/cli/contract.go: once into a generic document so the compiled
+// cli/contract.go: once into a generic document so the compiled
 // schema's additionalProperties:false actually catches a stray or misspelled
 // field, and once into the typed Spec the renderer walks. A YAML mapping
 // decodes into map[string]interface{} when the target is `any`, so no

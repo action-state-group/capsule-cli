@@ -185,7 +185,7 @@ runs:
         CAPSULECTL: ${{ runner.temp }}/capsulectl
       run: |
         # Log ids are capsulectl's --log-id: ^[a-z0-9][a-z0-9._:/-]{0,190}$
-        # (internal/cli/profile.go), i.e. lowercase, that charset, <= 191
+        # (cli/profile.go), i.e. lowercase, that charset, <= 191
         # bytes. repo/pr/sha inputs may carry uppercase or exceed that length
         # (a long owner/repo plus a full 40-char sha can), so use the short
         # sha (matching the request's own action_id convention) and

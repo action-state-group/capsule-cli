@@ -32,7 +32,7 @@ it is a released artefact yet**:
   [agent-action-capsule PR #160](https://github.com/action-state-group/agent-action-capsule/pull/160)
   (open). You do **not** need to clone or build it:
   PR #30 already vendors the card's compiled bundle into
-  `internal/cli/assets/evidence-graph.iife.js`. It is named here only for
+  `cli/assets/evidence-graph.iife.js`. It is named here only for
   readers who want the card's source.
 
 "[What a release must contain](#what-a-release-must-contain)" at the end of
