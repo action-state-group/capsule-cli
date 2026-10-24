@@ -15,6 +15,9 @@
   check (install, the dispatch warning, `doctor --install-check`) compares it,
   and falls back to `version` for plugins without it, which is every plugin
   released so far. A plugin built on its own reports its own tag as `version`.
+- **Changed:** the version-mismatch messages (install, the dispatch warning,
+  doctor) now name the release the plugin is built for: "capsulectl-deal is
+  built for capsulectl X, this capsulectl is Y".
 - **Changed:** CI checks that every action-state-group module in the core's
   build graph is on a neutral list (`scripts/check-neutral-deps.sh`), and warns
   about paths that leave with the plugins (`scripts/check-moved-paths.sh`).

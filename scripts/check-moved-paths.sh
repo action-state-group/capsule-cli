@@ -16,14 +16,19 @@ for dir in plugins skills/deal; do
     found=1
   fi
 done
-# Only paths inside the moved trees count (a URL path such as /api/plugins/...
-# does not), and vendored files and history, which name other repositories'
-# paths, are skipped.
+# Only repository paths into the moved trees count. A URL (a word holding
+# "://", such as https://host/api/plugins/cmd/x) and an absolute path (a word
+# starting with "/", such as an agent host's /path/to/skills/deal/SKILL.md)
+# are not; vendored files and history, which name other repositories' paths,
+# are skipped.
+moved='(skills/deal/|plugins/(cmd|internal|scripts)/)'
 while IFS= read -r hit; do
   echo "::$level::${hit%%:*} references a moved path: ${hit#*:}"
   found=1
-done < <(git grep -nE '(skills/deal/|plugins/(cmd|internal|scripts)/)' -- \
+done < <(git grep -nE "$moved" -- \
   ':!plugins/' ':!skills/deal/' ':!CHANGELOG.md' ':!docs/design/' \
   ':!cli/assets/evidence-graph.iife.js' ':!cli/testdata/presentation/*/page.html' \
-  ':!scripts/check-moved-paths.sh' | cut -c1-200 || true)
+  ':!scripts/check-moved-paths.sh' |
+  MOVED="$moved" perl -ne 'my ($f, $n, $text) = split /:/, $_, 3; for my $w (split /[\s"\x27`<>]+/, $text) { if ($w =~ /$ENV{MOVED}/ && $w !~ m{://} && $w !~ m{^/}) { print; last } }' |
+  cut -c1-200 || true)
 if [ "$level" = error ]; then exit "$found"; fi

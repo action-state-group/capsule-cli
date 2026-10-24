@@ -1513,3 +1513,31 @@ func TestPluginHandshakeReportsCoreVersion(t *testing.T) {
 	assert.Equal(t, "v0.2.0", info.CoreVersion)
 	assert.Equal(t, "v0.2.0", info.coreVersion())
 }
+
+// The dispatch warning and doctor's plugin check compare core_version too,
+// never a plugin's own release tag.
+func TestDriftWarningAndDoctorCompareCoreVersion(t *testing.T) {
+	old := CLIVersion
+	t.Cleanup(func() { CLIVersion = old })
+	CLIVersion = "v0.2.0"
+
+	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.2.0", path: "/x/capsulectl-deal"}))
+	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v0.2.0", path: "/x/capsulectl-deal"}), "no core_version: version is the core's")
+	assert.Contains(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.1.9", path: "/x/capsulectl-deal"}), "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
+
+	root := pluginRoot(t)
+	launcher := func(core string) {
+		meta := fmt.Sprintf(`{"name":"deal","vendor":"t","version":"v1.4.0","core_version":%q,"plugin_api":"cli-plugin/v1"}`, core)
+		writeLauncher(t, root, "capsulectl-deal", "#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then echo '"+meta+"'; exit 0; fi\n", 0o755)
+	}
+	launcher("v0.2.0")
+	check, issue := pluginInstallCheck("deal")
+	assert.Empty(t, issue)
+	assert.Equal(t, "matches", check["version_check"])
+	assert.Equal(t, "v1.4.0", check["version"], "doctor reports the plugin's own version")
+
+	launcher("v0.1.9")
+	check, issue = pluginInstallCheck("deal")
+	assert.Equal(t, "mismatch", check["version_check"])
+	assert.Contains(t, issue, "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
+}

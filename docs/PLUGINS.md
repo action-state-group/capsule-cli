@@ -107,7 +107,7 @@ and expects exactly one line of JSON on stdout:
 | `name`        | yes      | Must equal the launcher's filename with the `capsulectl-` prefix stripped. A mismatch is a handshake failure. |
 | `vendor`      | no       | Free text, shown in `capsulectl plugin ls` and in the command's `--help`. |
 | `version`     | no       | Free text, shown in `capsulectl plugin ls`. For the first-party plugins it is their release tag; see "Versions" below. |
-| `core_version` | no      | Free text. A first-party plugin's embedded capsulectl release, which the version check below compares. |
+| `core_version` | no      | Free text. A first-party plugin's embedded capsulectl release, which the version check below compares. Absent on plugins released before it; the check then uses `version`. |
 | `plugin_api`  | yes      | Must be exactly `"cli-plugin/v1"`. Any other value (including a newer or older version string) is a handshake failure -- there is no negotiation. |
 | `subcommands` | no       | Free text list, shown in the command's `--help` as a hint; `capsulectl` does not parse or validate it. |
 

@@ -15,11 +15,17 @@ neutral=(
   github.com/action-state-group/checkpointed-local-log/go
 )
 
+# Listed first, and on its own: a failed go list must fail the check, never
+# leave it with nothing to compare.
+if ! mods=$(go list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./...); then
+  echo "::error::go list failed; the core's build graph could not be read"
+  exit 1
+fi
 bad=0
 while read -r mod; do
   case " ${neutral[*]} " in
     *" $mod "*) ;;
     *) echo "::error::the core's build graph includes $mod, which is not on the neutral list in scripts/check-neutral-deps.sh"; bad=1 ;;
   esac
-done < <(go list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./... | grep '^github.com/action-state-group/' | sort -u)
+done < <(printf '%s\n' "$mods" | grep '^github.com/action-state-group/' | sort -u)
 exit "$bad"

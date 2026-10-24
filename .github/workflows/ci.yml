@@ -60,7 +60,7 @@ jobs:
             exit 1
           fi
       - name: Paths that leave with the plugins
-        # Warns while plugins/ and skills/deal/ are still here; the removal
+        # Warns while the plugin and deal-skill trees are still here; the removal
         # (capsule-cli#326, step 6) turns it to --fail.
         run: bash scripts/check-moved-paths.sh
       - name: Vet
