@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/text/cases"

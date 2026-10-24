@@ -3,7 +3,7 @@ package plugin
 import (
 	"fmt"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // dealTaxonomyVersion is the action-class taxonomy a new deal record's

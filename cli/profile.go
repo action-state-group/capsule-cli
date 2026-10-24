@@ -1,4 +1,10 @@
 // Package cli implements the profile-first Capsule command boundary.
+//
+// It is also the host package the first-party plugins (capsulectl-book and
+// capsulectl-deal) build against: each plugin binary is this command tree
+// plus its own commands (NewPluginCommand). Before v1 it carries no
+// compatibility promise; a plugin pins an exact capsule-cli release
+// (docs/design/326-plugins-leave-the-core.md, section 4.2).
 package cli
 
 import (

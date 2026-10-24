@@ -6,10 +6,10 @@
 #   scripts/iife-sync.sh <capsule-viewer checkout> <agent-action-capsule checkout> [--check]
 #
 # The two checkouts should sit at the commits evidenceGraphIIFESource in
-# internal/cli/evidence_graph_assets.go names (scripts/build-evidence-graph-iife.sh
+# cli/evidence_graph_assets.go names (scripts/build-evidence-graph-iife.sh
 # fetches them itself). scripts/build-report-runtime.mjs does the bundling.
-# Without --check the rebuilt file replaces internal/cli/assets/evidence-graph.iife.js
-# and its digest is printed, to be pinned in internal/cli/evidence_graph_assets.go
+# Without --check the rebuilt file replaces cli/assets/evidence-graph.iife.js
+# and its digest is printed, to be pinned in cli/evidence_graph_assets.go
 # (EvidenceGraphIIFEDigest / evidenceGraphIIFESource), evidence-graph.iife.js.sha256
 # and assets/README.md together. With --check the vendored copy must already
 # equal the rebuild (exit 1 otherwise) -- the drift guard for a vendored
@@ -27,7 +27,7 @@ if [[ -z "$cv" || ! -d "$cv/ts" || -z "$aac" || ! -d "$aac/ts" ]]; then
   exit 2
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-vendored="$repo_root/internal/cli/assets/evidence-graph.iife.js"
+vendored="$repo_root/cli/assets/evidence-graph.iife.js"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -51,4 +51,4 @@ fi
 cp "$built" "$vendored"
 echo "$digest" >"$vendored.sha256"
 echo "vendored $vendored from $commits"
-echo "sha256: $digest -- pin it in internal/cli/evidence_graph_assets.go and internal/cli/assets/README.md"
+echo "sha256: $digest -- pin it in cli/evidence_graph_assets.go and cli/assets/README.md"

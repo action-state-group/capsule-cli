@@ -401,12 +401,12 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 		switch {
 		case !isReleaseCore():
 			result.VersionCheck = "not checked: this capsulectl is a development build (" + CLIVersion + ")"
-		case info.Version == CLIVersion:
+		case info.coreVersion() == CLIVersion:
 			result.VersionCheck = "matches capsulectl " + CLIVersion
 		case allowMismatch:
-			result.VersionCheck = "mismatch allowed: plugin " + info.Version + ", capsulectl " + CLIVersion
+			result.VersionCheck = "mismatch allowed: plugin built for " + FirstNonEmpty(info.coreVersion(), "unversioned") + ", capsulectl " + CLIVersion
 		default:
-			return pluginInstallResult{}, Hint(ErrConflict, fmt.Sprintf("not installed: capsulectl-%s is %s but this capsulectl is %s; install the matching release, or pass --allow-version-mismatch", name, FirstNonEmpty(info.Version, "unversioned"), CLIVersion))
+			return pluginInstallResult{}, Hint(ErrConflict, fmt.Sprintf("not installed: capsulectl-%s is built for capsulectl %s but this capsulectl is %s; install the matching release, or pass --allow-version-mismatch", name, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion))
 		}
 	}
 	before, _ := otherRoots(root)
@@ -821,7 +821,7 @@ func isPluginManagement(root *cobra.Command, args []string) bool {
 // driftWarning is the stderr line for a first-party plugin whose version
 // differs from a release core's, or "".
 func driftWarning(info pluginInfo) string {
-	if !isFirstParty(info.Name) || !isReleaseCore() || info.Version == CLIVersion {
+	if !isFirstParty(info.Name) || !isReleaseCore() || info.coreVersion() == CLIVersion {
 		return ""
 	}
 	advice := "its owner must update it"
@@ -831,7 +831,7 @@ func driftWarning(info pluginInfo) string {
 			advice = "run: capsulectl plugin install " + info.Name
 		}
 	}
-	return fmt.Sprintf("capsulectl: warning: %s is %s, this capsulectl is %s; %s", info.path, FirstNonEmpty(info.Version, "unversioned"), CLIVersion, advice)
+	return fmt.Sprintf("capsulectl: warning: %s is built for capsulectl %s, this capsulectl is %s; %s", info.path, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion, advice)
 }
 
 // leftoverInstalls lists temporary files a killed install left on the

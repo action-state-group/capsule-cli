@@ -14,7 +14,7 @@ import (
 	"unicode"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record

@@ -406,11 +406,19 @@ func checkTrustedComponent(p string, uid int, allowSticky bool) error {
 	return nil
 }
 
+// coreVersion is the capsulectl release a first-party plugin embeds, which
+// the first-party version check compares with this core's.
+func (i pluginInfo) coreVersion() string { return FirstNonEmpty(i.CoreVersion, i.Version) }
+
 type pluginInfo struct {
-	Name        string   `json:"name"`
-	Vendor      string   `json:"vendor"`
-	Version     string   `json:"version"`
-	PluginAPI   string   `json:"plugin_api"`
+	Name      string `json:"name"`
+	Vendor    string `json:"vendor"`
+	Version   string `json:"version"`
+	PluginAPI string `json:"plugin_api"`
+	// CoreVersion is the capsulectl release a first-party plugin embeds
+	// (its CLIVersion). Plugins built before it existed carry the same value
+	// in Version; coreVersion falls back to that.
+	CoreVersion string   `json:"core_version,omitempty"`
 	Subcommands []string `json:"subcommands,omitempty"`
 	// Presentations are the modules the plugin offers a page builder
 	// (plugin_presentations.go). An older capsulectl ignores the member.

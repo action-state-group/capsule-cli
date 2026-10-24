@@ -4,7 +4,7 @@
 `schemas/presentation-manifest-v0.json` (the presentation contract,
 `spec/presentation-contract-v0.md`), copied unmodified. capsulectl checks a
 plugin's presentation manifests and wording packs against it
-(`internal/cli/plugin_presentations.go`). It is vendored because the pinned
+(`cli/plugin_presentations.go`). It is vendored because the pinned
 aac Go module does not carry the repository's `schemas/` directory.
 
 | | |
@@ -31,5 +31,5 @@ that the vendored runtime carries each id and declares the runtime
 (`aac.presentation-api/v0`, version `0.1.0`) capsulectl checks modules
 against. Refresh them with the runtime, from the release `go.mod` pins.
 
-`internal/cli/testdata/presentation-manifests/` holds the same directory's
+`cli/testdata/presentation-manifests/` holds the same directory's
 example and negative manifests, as test vectors only.

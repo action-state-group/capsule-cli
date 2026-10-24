@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/spf13/cobra"
 )

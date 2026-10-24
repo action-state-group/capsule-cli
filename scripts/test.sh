@@ -60,7 +60,7 @@ fi
 
 # Arguments are passed to go test. Two passes: the race detector, under which the
 # slowest single-goroutine case loops run a fixed sample (see
-# internal/cli/race_sample_test.go; CAPSULE_TEST_RACE_FULL=1 runs them all),
+# cli/race_sample_test.go; CAPSULE_TEST_RACE_FULL=1 runs them all),
 # then every case without it.
 #
 # CI runs the passes as separate jobs and splits the race pass across several:

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
-	"github.com/action-state-group/capsule-cli/internal/settlement"
+	"github.com/action-state-group/capsule-cli/cli"
+	"github.com/action-state-group/capsule-cli/settlement"
 	"github.com/spf13/cobra"
 )
 

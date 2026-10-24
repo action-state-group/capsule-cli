@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // A Statement over a period (capsule-cli#342): `deal list --since/--until`

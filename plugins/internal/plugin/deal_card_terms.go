@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // An approval binds only to what its card showed (capsule-cli#380). A check

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // A claim's words, and the free-form note of where it was read, are sealed

@@ -22,7 +22,7 @@ func repoRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	return filepath.Join(filepath.Dir(file), "..", "..")
+	return filepath.Join(filepath.Dir(file), "..")
 }
 
 // gitRepoWithTwoCommits creates a throwaway repo with a base and a head

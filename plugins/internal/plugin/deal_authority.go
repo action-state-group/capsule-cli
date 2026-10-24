@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // dealAuthorityOrder says how an AUTHORITY block is ordered, wherever it is

@@ -6,6 +6,10 @@
 // (go/settlement.Verify). This package maps capsule-cli's leg files onto that
 // verifier's input and its capsule-ID-keyed result back onto the labels the
 // caller gave, and adds which sources back each delivery state.
+//
+// It is public only so the capsulectl-deal plugin can build against it, with
+// no compatibility promise before v1, until settlement verification moves to
+// agent-action-capsule.
 package settlement
 
 import (

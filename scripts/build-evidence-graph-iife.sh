@@ -12,8 +12,8 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-asset="$root/internal/cli/assets/evidence-graph.iife.js"
-src="$root/internal/cli/evidence_graph_assets.go"
+asset="$root/cli/assets/evidence-graph.iife.js"
+src="$root/cli/evidence_graph_assets.go"
 # The commits the vendored IIFE was built from, as evidenceGraphIIFESource
 # records them. They are pinned apart from go.mod, so a Go module can move
 # without the browser runtime moving.

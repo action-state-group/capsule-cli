@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
@@ -169,7 +169,7 @@ func embeddedBundle(t *testing.T, html string) map[string]interface{} {
 func TestDealRecordsFollowTheProfile(t *testing.T) {
 	shipped, err := os.ReadFile(dealProfileDir + "/x-deal-v0.schema.json")
 	require.NoError(t, err)
-	assert.Equal(t, string(shipped), string(dealProfileSchema), "internal/cli/assets copy must equal the skill's schema")
+	assert.Equal(t, string(shipped), string(dealProfileSchema), "cli/assets copy must equal the skill's schema")
 	schema, err := compiledDealSchema()
 	require.NoError(t, err)
 

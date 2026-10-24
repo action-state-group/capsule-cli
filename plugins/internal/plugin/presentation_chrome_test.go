@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This is internal/cli's test of the same recorder, which this package
+// This is cli's test of the same recorder, which this package
 // copies (corehelpers_test.go): CI runs Chrome for this package's goldens.
 
 // A page that asks for anything outside itself is caught, from the page, a

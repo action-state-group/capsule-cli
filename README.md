@@ -351,7 +351,7 @@ validation, and it stands in for the `capsule-viewer` build. `result build`
 needs no plugin: it seals a caller-supplied Result v0 into the profile's log
 as one Capsule whose payload is the document and whose `references` cite,
 `acted_on`, every record the claims cite. It validates against the vendored
-`evidence-result-v0` schema (`internal/cli/schemas/`, digest pinned in code),
+`evidence-result-v0` schema (`cli/schemas/`, digest pinned in code),
 refuses headline values that do not recompute from the claims and a citation
 the profile's log and artifact store do not hold, and sealing the same
 document again appends nothing. Then `cll checkpoint create`,
@@ -372,7 +372,7 @@ Result (either carrier: the document itself, or the book record header
 whose statement is the document), records `--card` and the optional
 `presentation/v1` header in the embedded copy, and renders an offline
 `report.html` through capsule-viewer's Go emitter with the vendored
-browser runtime (`internal/cli/assets/`: capsule-viewer's page code with
+browser runtime (`cli/assets/`: capsule-viewer's page code with
 agent-action-capsule's verifier, digest pinned; refresh with
 `scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
 same bytes and `--dry-run` writes the page marked draft.
@@ -386,7 +386,7 @@ never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
 
 `--html PAGE.html` on `bundle` and `disclose` also writes the bundle as one
 self-contained page: the bundle embedded and agent-action-capsule's own
-evidence-graph verifier (vendored, `internal/cli/assets/`), which checks it
+evidence-graph verifier (vendored, `cli/assets/`), which checks it
 with no network when the page is opened. The file must be new. A permalink
 carries its bundle in the link and takes no `--html`; a deal's page is its
 receipt, `deal report --html`.
@@ -471,9 +471,9 @@ override is enabled.
 |---|---|
 | `cmd/capsulectl/` | the CLI's entry point |
 | `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
-| `internal/cli/` | every core command; not importable (Go `internal/`), except by this repository's plugins module |
-| `internal/cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
-| `internal/cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
+| `cli/` | every core command, and the host package the first-party plugins build against (no compatibility promise before v1) |
+| `cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
+| `cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
 | `plugins/` | the second Go module: `cmd/capsulectl-book` and `cmd/capsulectl-deal`, the first-party plugins, and `internal/plugin`, their evidence book and deal commands; the only module that requires evidencebook |
 | `plugins/internal/plugin/assets/` | the deal profile schema, the typed record schemas and the external-check result schema |
 | `plugins/internal/plugin/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `plugins/scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |

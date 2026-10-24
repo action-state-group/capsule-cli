@@ -1,12 +1,12 @@
 package plugin
 
 import (
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // The Evidence Result v0 document gate -- the vendored schema, the
 // cross-checks of its headline values and its canonical form -- is the
-// core's (internal/cli/result.go, capsule-cli#324), so `book result build`,
+// core's (cli/result.go, capsule-cli#324), so `book result build`,
 // `deal terms-result` and the core's `result build` check and canonicalize a
 // Result the same way and write the same bytes for it. These are the
 // plugin's names for it; the book adds the checks that need the book

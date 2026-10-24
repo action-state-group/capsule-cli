@@ -3,7 +3,7 @@ package plugin
 import (
 	"strings"
 
-	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/cli"
 )
 
 // Who ended a deal, and why, from closed sets: sealed in the clear on the

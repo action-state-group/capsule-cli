@@ -2,7 +2,7 @@
 
 package plugin
 
-import "github.com/action-state-group/capsule-cli/internal/cli"
+import "github.com/action-state-group/capsule-cli/cli"
 
 // lockDealStore fails closed where no advisory file lock is implemented: deal
 // steps must never be sealed without serializing writers.

@@ -333,7 +333,7 @@ func TestEmbeddedContractSchemaMatchesTestdata(t *testing.T) {
 	testdata, e := os.ReadFile(testSchema)
 	require.NoError(t, e)
 	assert.Equal(t, string(testdata), string(embeddedContractSchema),
-		"internal/cli/schemas/evidence-contract-v0.json and the testdata copy must stay byte-identical")
+		"cli/schemas/evidence-contract-v0.json and the testdata copy must stay byte-identical")
 	_, _, e = loadEmbeddedContractSchema()
 	require.NoError(t, e)
 }

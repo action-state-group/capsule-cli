@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/action-state-group/capsule-cli/internal/settlement"
+	"github.com/action-state-group/capsule-cli/settlement"
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/spf13/cobra"
 )

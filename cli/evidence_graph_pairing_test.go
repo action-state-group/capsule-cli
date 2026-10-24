@@ -69,5 +69,5 @@ func TestPluginsPinTheSameViewerModule(t *testing.T) {
 		require.NotNil(t, m, "%s requires capsule-viewer/go", path)
 		return string(m[1])
 	}
-	require.Equal(t, read(filepath.Join("..", "..", "go.mod")), read(filepath.Join("..", "..", "plugins", "go.mod")))
+	require.Equal(t, read(filepath.Join("..", "go.mod")), read(filepath.Join("..", "plugins", "go.mod")))
 }

@@ -16,7 +16,7 @@ Under the race detector the slowest single-goroutine case loops (random
 rewritings through the share gate, end-to-end runs over fixed case lists) run a
 fixed sample: the detector makes them about ten times slower and finds nothing
 in them. The second pass runs every case. `CAPSULE_TEST_RACE_FULL=1` runs every
-case under the race detector too; see `internal/cli/race_sample_test.go`.
+case under the race detector too; see `cli/race_sample_test.go`.
 
 If you call `go test -race` yourself, pass `-timeout=15m` as the script does.
 Without it, `go test` stops a package after 10 minutes and reports a failure.
