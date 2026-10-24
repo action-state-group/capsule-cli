@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc23
+
 ### Upgrade note: the book and deal plugins and the deal skill ship from their own releases (#326)
 
 - **Changed:** `capsulectl-book` now builds and releases from evidencebook
@@ -13,8 +15,10 @@
   assets. Published releases are unchanged.
 - **Removed:** `capsulectl plugin install book|deal` (install by name). It
   refuses and gives the file form: download the plugin file built for your
-  capsulectl release from the plugin's own release, check it, then
-  `capsulectl plugin install ./capsulectl-<name>`. The hidden `--release-url`
+  capsulectl release from the plugin's own release, check it, then install
+  the downloaded file (`capsulectl plugin install
+  ./capsulectl-deal-<version>-<os>-<arch>`); install names the plugin by its
+  handshake. The hidden `--release-url`
   flag is gone. The missing-plugin, version-mismatch and `doctor
   --install-check` messages give the file form.
 - **Changed:** the `capsulectl` skill lists the core verbs only; the book
@@ -30,6 +34,18 @@
 - **Changed:** CI fails on any path into the trees that moved out
   (`scripts/check-moved-paths.sh --fail`, which now also fails when its
   `git grep` cannot run), and drops the plugin jobs.
+
+### The deal page compares builds by name (#448)
+
+- **Changed:** the deal page's version note compares a step's build with the
+  build that made the page only when both have the same name. A page from a
+  `capsulectl-deal` release (evidencebook-deal#3) names that build; a step
+  `capsulectl` sealed before the move, with or without a recorded version, is
+  said apart: "Some steps were sealed by capsulectl vX, the build that sealed
+  deals before capsulectl-deal did; capsulectl-deal vY made this page." The
+  note links the page's own `release_notes` when it is an https URL, else
+  capsule-cli's releases. A page without the new `page_producer` and
+  `release_notes` data reads exactly as before.
 
 ### The book and deal plugins are separate packages (#326)
 
@@ -157,7 +173,7 @@
 - **Changed:** the vendored runtime (`evidence-graph.iife.js`) is rebuilt
   from capsule-viewer `4b08aad` and agent-action-capsule `1d655a1`
   (`ts/v0.6.1`). `go.mod`'s `capsule-viewer/go` moves to the same viewer
-  commit; `agent-action-capsule/go` stays at v0.12.0. The presentation
+  commit (`agent-action-capsule/go` moves to v0.13.1 with #438 above). The presentation
   goldens' pages and snapshots, and the presentation pass's build
   snapshots, are re-emitted from their unchanged bundles.
 
