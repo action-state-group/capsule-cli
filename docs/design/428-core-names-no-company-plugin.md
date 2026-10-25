@@ -40,13 +40,17 @@ owner; commands that need an owner stop with
 runs. A plugin's own verb also adopts such a profile: when the user runs a
 plugin command on a profile with no owner, the plugin writes `log: <itself>`
 (the user chose the plugin, so it is still explicit). `profile update --log X`
-refuses an X that disagrees with a `plugin_owned` marker, so the fix cannot
-disguise a store; once a store carries the marker the error names the owner
-the marker records. Rollout: every existing jsonl profile with a `log_id`
-reads as a book today, so each existing book user (Muse's VM included) hits
-the error once after the upgrade; the first plugin verb adopts the profile, and
-the release notes of the plugin PRs name the one command. The coordinator
-decides who runs it on Muse and when. Plain profiles without a `log_id` stay core-owned. `profile create` and the
+refuses an X that disagrees with a `plugin_owned` marker, and so does adoption
+(one shared check, run before the profile is saved or any work starts; a test
+shows the profile file unchanged), so neither can disguise a store; once a store
+carries the marker the error names the owner the marker records. Rollout: only a
+profile saved with no `log:` is affected. `profile create` and `update` have
+stored `log: book` for a jsonl profile with a `log_id` (profile.go:637), and
+`log: cll` is explicit, so those need nothing. Which existing profiles lack
+`log:` (Muse's VM included) is checked on the real profile files, not inferred
+from the profile type; each such profile hits the error once, the first plugin
+verb adopts it, and the plugin PRs' release notes name the one command. The
+coordinator decides who runs anything on Muse, and when. Plain profiles without a `log_id` stay core-owned. `profile create` and the
 plugins' `init` write `log:`. The `cli-plugin/v1` handshake does not change.
 
 ## 3. Dispatch
@@ -89,9 +93,10 @@ The old `deal_shelf` table records no plugin name, so nothing can be derived
 from it. Migration: the plugin writes `plugin_owned` only on its writable
 initialization and migration paths, under the writer lock (`deal init`,
 `open`, `tick`, `check`, `report`, `history`: every verb that holds the lock).
-Read paths never write it (`openDealStoreRead` stays write-free). Until PR B
-the core keeps the old `deal_shelf` guard too. Tests, before and after
-migration: a store with only the old table plus a profile declaring `log: cll`
+Read paths never write it (`openDealStoreRead` stays write-free). The core keeps the old `deal_shelf`
+guard permanently, beside `plugin_owned`, as the one compatibility exception of
+section 7. Tests, before and after
+migration (PR B keeps the old-table case): a store with only the old table plus a profile declaring `log: cll`
 is refused; a marked store with a disguised profile is refused; the plugin
 with the lock writes; reads work with the plugin installed and absent.
 
@@ -131,7 +136,7 @@ stay until step 5 decides.
 PR A (capsule-cli): the generic API and dispatch, old names kept as thin
 wrappers, no behavior change. Plugin PRs (evidencebook, evidencebook-deal):
 switch to the generic API and write the marker. PR B (capsule-cli): delete the
-old names, aliases, the `canary` verb and `isFirstParty`; the core builds
+old names, aliases, the `canary` verb and `isFirstParty` (the legacy-table probe stays); the core builds
 against neither plugin.
 
 Open (needs a ruling): PR B cannot drop the old `deal_shelf` guard on release
