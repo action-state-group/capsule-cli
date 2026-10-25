@@ -1,8 +1,8 @@
 # Design note: the core names no company plugin
 
-capsule-cli#428 (donation blocker, follow-up of #326). Status: converged for
-the cross-review CLIs (Codex, Kimi; four rounds), open for Sherlock2 and for
-one point in section 7. Checked against `main` at `ad10fe46`, evidencebook
+capsule-cli#428 (donation blocker, follow-up of #326). Status: Kimi and Sherlock2
+converged (section 7 point accepted); Codex's last finding is the section 7
+point, resolved by Sherlock2's ruling on it, pending Codex's check. Checked against `main` at `ad10fe46`, evidencebook
 `capsulectl` and evidencebook-deal `main` (read-only).
 
 Scope: steps 1 and 2 of the How ack (generic plugin hand-over; `canary` and the
@@ -37,7 +37,16 @@ no `log:` but a `log_id` (or the sqlite `deal` namespace) has no declared
 owner; commands that need an owner stop with
 `profile X has no declared log owner: capsulectl profile update --profile X --log <plugin>`.
 `profile update` reads such a profile without resolving an owner, so the fix
-runs. Plain profiles without a `log_id` stay core-owned. `profile create` and the
+runs. A plugin's own verb also adopts such a profile: when the user runs a
+plugin command on a profile with no owner, the plugin writes `log: <itself>`
+(the user chose the plugin, so it is still explicit). `profile update --log X`
+refuses an X that disagrees with a `plugin_owned` marker, so the fix cannot
+disguise a store; once a store carries the marker the error names the owner
+the marker records. Rollout: every existing jsonl profile with a `log_id`
+reads as a book today, so each existing book user (Muse's VM included) hits
+the error once after the upgrade; the first plugin verb adopts the profile, and
+the release notes of the plugin PRs name the one command. The coordinator
+decides who runs it on Muse and when. Plain profiles without a `log_id` stay core-owned. `profile create` and the
 plugins' `init` write `log:`. The `cli-plugin/v1` handshake does not change.
 
 ## 3. Dispatch
@@ -101,8 +110,10 @@ stay until step 5 decides.
 - **Aliases.** The transitional aliases (`close`, `reconcile`, `request`,
   `respond`, `compose`, `result open`, `report`, `backfill`, `migrate`) are
   deleted in PR B. Due in v0.2.0 (`AliasRemovedIn`); PLUGINS.md says once the
-  skills, the Muse integration and the docs use the new names. The PR greps
-  skills, docs and examples first and updates PLUGINS.md. No install-time alias
+  skills, the Muse integration and the docs use the new names. README.md,
+  docs/OUTCOME-REPORT-QUICKSTART.md and docs/PR-CAPSULE-PROFILE.md still use
+  old verbs. The PR greps skills, docs, examples and actionstate-muse first,
+  moves them to the new names and updates PLUGINS.md. No install-time alias
   table.
 - **`isFirstParty`** goes. Install keeps its path and `plugin_api` checks. A
   `core_version` is compared only when the plugin declares it (install, dispatch
@@ -130,4 +141,11 @@ stored-data compatibility check, the one remaining deal word, a data
 identifier and not a plugin name; (b) a plugin migration verb writes the
 marker everywhere and the core refuses unmigrated legacy stores until run;
 (c) the core refuses writes on any store whose schema it does not recognise.
-Recommendation: (a), documented as the compatibility exception.
+Sherlock2 (Buzz, 2026-10-25) accepted (a) and rejected (b) (breaks unmigrated
+stores, Muse's included) and (c) (refuses any unrecognised shared or older
+store, mysql included), on four conditions that this note adopts: the probe
+stays unexported and its message names no plugin ("this store is owned by a
+plugin (legacy marker); use its owner's verbs"); this note and PLUGINS.md list
+it as the one compatibility exception, with its test; it only refuses writes,
+never forwards and never picks an owner; and it is not precedent for a second
+exception.
