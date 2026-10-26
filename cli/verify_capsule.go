@@ -103,7 +103,7 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 	}
 	out["capsule_identity"] = "passed"
 
-	sig, hasSig := capsule["signature"].(string)
+	_, hasSig := capsule["signature"].(string)
 	_, hasKey := capsule["key_id"].(string)
 	switch {
 	case !hasSig && !hasKey:
@@ -115,12 +115,12 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 	case hasSig != hasKey:
 		return fail("producer_signature", "the capsule carries one of signature and key_id without the other")
 	}
-	envelopeBytes, sigErr := hex.DecodeString(sig)
-	keyBytes, keyErr := hex.DecodeString(key)
-	signed := envelope.Verify(id, envelopeBytes)
-	if sigErr != nil || keyErr != nil || !signed.OK || !bytes.Equal(signed.PublicKey, keyBytes) {
+	// The signature itself is AAC's record check, which recomputes the
+	// Capsule ID from the record's own content; only trust is the CLI's.
+	if verdict, _ := envelope.VerifyRecordSignature(capsule); verdict != envelope.Authored {
 		return fail("producer_signature", "the signature does not verify under the capsule's key_id")
 	}
+	keyBytes, _ := hex.DecodeString(key)
 
 	keys, err := ParseKeys(p.TrustedKeys)
 	if err != nil {

@@ -179,3 +179,36 @@ func TestVerifyCapsuleListsAtMost64NumberFindings(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 64, strings.Count(result["capsule_identity"].(string), "float_in_digest_field"))
 }
+
+// A bare capsule without its signature and key_id is partial, not failed; one
+// with only one of them fails.
+func TestVerifyCapsuleGradesAMissingSignatureOrKeyID(t *testing.T) {
+	key := bareCapsuleProfile(t)
+	p, err := LoadProfile("test")
+	require.NoError(t, err)
+	p.TrustedKeys = []string{key}
+	require.NoError(t, SaveProfile(p, true))
+	raw, err := os.ReadFile(bareCapsuleFixture)
+	require.NoError(t, err)
+
+	for name, drop := range map[string][]string{
+		"neither": {"signature", "key_id"}, "no key_id": {"key_id"}, "no signature": {"signature"},
+	} {
+		var capsule map[string]any
+		require.NoError(t, json.Unmarshal(raw, &capsule))
+		for _, member := range drop {
+			delete(capsule, member)
+		}
+		edited, err := json.Marshal(capsule)
+		require.NoError(t, err)
+		path := filepath.Join(t.TempDir(), "partial.json")
+		require.NoError(t, os.WriteFile(path, edited, 0o600))
+		result, err := verifyCapsuleOutput(t, path)
+		require.Error(t, err, name)
+		if name == "neither" {
+			assert.Contains(t, result["producer_signature"], "absent: the capsule carries no signature and key_id", name)
+		} else {
+			assert.Contains(t, result["producer_signature"], "failed: the capsule carries one of signature and key_id without the other", name)
+		}
+	}
+}
