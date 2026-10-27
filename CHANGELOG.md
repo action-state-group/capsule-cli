@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **Added:** `presentation build --format fragment` writes the page as a
+  fragment permalink. The file holds the `aac.presentation-fragment/v0` token,
+  or the whole URL with `--viewer-url`, plus a newline. The token is packaged
+  within a budget of 65,536 characters by default (`--max-fragment-length`,
+  at most 1,046,528). The whole URL is at most 1 MiB. A page over either
+  limit is refused with `unavailable.code` `fragment-too-large`, naming the
+  length and the limit, and nothing is written. A monthly report is over the
+  default budget. The fragment carries the page's settings and bundle and
+  pins its code: capsule-viewer's `OfflineHTMLFromFragment` hands back
+  exactly the page `--format html` writes (capsule-cli#254).
+- **Added:** `presentation build --format embedded` writes a snippet a host
+  page inlines where the presentation goes. It holds the runtime, the
+  modules, the bundle as a JSON data element and a bootstrap. The result
+  lists `script_sources` and `style_sources`, the CSP hash sources the host's
+  `script-src` and `style-src` must allow; no `'unsafe-inline'` is needed. The
+  snippet takes the host page's title, so `--title` does not change it
+  (capsule-cli#254).
+- **Added:** `presentation list` reports `packagings`: for the bundle,
+  `--audience` and build's settings (`--depth`, `--title`, `--module`,
+  `--max-fragment-length`, `--viewer-url`), each target in the order html,
+  fragment, embedded, static. Each is either available or unavailable with
+  a `reason` (`fragment-too-large`, or `no-document` for static). A target is
+  available exactly when `presentation build` writes it with the same
+  settings. A bundle no page may be written for lists none and says why in
+  `packagings_refused` (capsule-cli#254).
+- **Changed:** `go.mod` pins capsule-viewer `go/v0.2.0`, and the vendored
+  browser runtime moves with it, to capsule-viewer `cdc83dc` with the
+  agent-action-capsule `ts/v0.8.0` verifier.
 - **Changed:** a profile's `log:` can name any plugin that keeps its log, not
   only `book` (capsule-cli#428): `profile create --log <plugin>`, then the
   core runs the log commands in that plugin. A plugin serves its own profiles

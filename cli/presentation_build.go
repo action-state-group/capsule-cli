@@ -320,9 +320,18 @@ type presentationRefusedPlugin struct {
 }
 
 type presentationBuildResult struct {
-	Page           string                      `json:"page"`
-	Out            string                      `json:"out,omitempty"`
-	Format         string                      `json:"format"`
+	Page   string `json:"page"`
+	Out    string `json:"out,omitempty"`
+	Format string `json:"format"`
+	// Fragment is the token's length and the budget it was packaged within
+	// (--format fragment); Unavailable is why the packaging was not written.
+	FragmentLength int              `json:"fragment_length,omitempty"`
+	FragmentLimit  int              `json:"fragment_limit,omitempty"`
+	Unavailable    *packagingReason `json:"unavailable,omitempty"`
+	// ScriptSources and StyleSources are the CSP hash sources a host page's
+	// script-src and style-src must allow for an embedded snippet.
+	ScriptSources  []string                    `json:"script_sources,omitempty"`
+	StyleSources   []string                    `json:"style_sources,omitempty"`
 	Audience       string                      `json:"audience"`
 	Depth          string                      `json:"depth,omitempty"`
 	BundleDigest   string                      `json:"bundle_digest,omitempty"`
@@ -400,114 +409,237 @@ func presentationSelection(only []string, audience string) ([]presentationModule
 	return modules, result, nil
 }
 
+// packagingTargets are the presentation builder's packaging targets, in the
+// order the builder's availability lists them (presentation builder section 1.1).
+var packagingTargets = []string{"html", "fragment", "embedded", "static"}
+
+// packagingReason is why a packaging is unavailable, in the builder's terms
+// (section 1.1): fragment-too-large, with what was too long, its length and
+// the limit; or no-document for static, which this tool cannot render.
+type packagingReason struct {
+	Code    string `json:"code"`
+	Subject string `json:"subject,omitempty"`
+	Length  int    `json:"length,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+	Message string `json:"message"`
+}
+
+func (r *packagingReason) Error() string { return r.Message }
+
+const noDocumentMessage = "format static is unavailable (no-document): this tool has no document to render the page with at build time; build --format html"
+
+// presentationSettings are the flags every packaging of a page is built
+// with; `presentation build` and `presentation list` read the same ones, so
+// list's availability is build's.
+type presentationSettings struct {
+	audience, depth, title string
+	only                   []string
+	maxFragmentLength      int
+	viewerURL              string
+}
+
+func addPresentationSettingsFlags(c *cobra.Command) {
+	c.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
+	c.Flags().String("title", "", "Page title (wins over the wording pack's page.title; html and fragment only: an embedded snippet takes its host page's title)")
+	c.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
+	c.Flags().Int("max-fragment-length", 0, fmt.Sprintf("fragment only: the token budget in characters (default %d, at most %d)", emitter.FragmentTokenDefaultBudget, emitter.FragmentTokenMaxLength))
+	c.Flags().String("viewer-url", "", "fragment only: the viewer address the token is appended to; the page is then the whole URL, at most 1 MiB")
+}
+
+func readPresentationSettings(c *cobra.Command) (presentationSettings, error) {
+	var s presentationSettings
+	s.audience, _ = c.Flags().GetString("audience")
+	s.depth, _ = c.Flags().GetString("depth")
+	s.title, _ = c.Flags().GetString("title")
+	s.only, _ = c.Flags().GetStringSlice("module")
+	s.maxFragmentLength, _ = c.Flags().GetInt("max-fragment-length")
+	s.viewerURL, _ = c.Flags().GetString("viewer-url")
+	if s.audience == "" {
+		return s, Hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
+	}
+	switch s.depth {
+	case "", "L0", "L1", "L2":
+	default:
+		return s, Hint(ErrInput, "--depth must be L0, L1 or L2")
+	}
+	if s.maxFragmentLength < 0 || s.maxFragmentLength > emitter.FragmentTokenMaxLength {
+		return s, Hint(ErrInput, fmt.Sprintf("--max-fragment-length must be from 1 to %d", emitter.FragmentTokenMaxLength))
+	}
+	if strings.Contains(s.viewerURL, "#") {
+		return s, Hint(ErrInput, "--viewer-url must not already carry a fragment")
+	}
+	return s, nil
+}
+
+// pageGateRefusal is the page gate's error: the bundle is not one any page
+// may be written for.
+type pageGateRefusal struct{ err error }
+
+func (e *pageGateRefusal) Error() string { return e.err.Error() }
+func (e *pageGateRefusal) Unwrap() error { return e.err }
+
+// preparePresentationPage runs everything a page of any packaging waits on,
+// in order: the module selection; the runtime's refusals and the registry
+// checks, which need only the manifests and so run before the bundle is read;
+// the page gate; and the wording rule. It fills result as it goes. Its error
+// is a *presentationBuildRefusal, a *pageGateRefusal or the command's own.
+func preparePresentationPage(s presentationSettings, readBundle func() (map[string]interface{}, error), result *presentationBuildResult) (map[string]interface{}, emitter.OfflineOptions, error) {
+	var options emitter.OfflineOptions
+	modules, selection, err := presentationSelection(s.only, s.audience)
+	result.NotIncluded, result.PluginsRefused = selection.NotIncluded, selection.PluginsRefused
+	if err != nil {
+		return nil, options, err
+	}
+	manifests, err := BuiltinPresentationManifests()
+	if err != nil {
+		return nil, options, err
+	}
+	for _, m := range modules {
+		if r := RuntimeRefusal(m.Manifest); r != nil {
+			return nil, options, r
+		}
+		manifests = append(manifests, m.Manifest)
+	}
+	if err := StaticPresentationCheck(manifests); err != nil {
+		return nil, options, err
+	}
+	value, err := readBundle()
+	if err != nil {
+		return nil, options, err
+	}
+	if result.BundleDigest, err = aacbundle.BundleDigest(value); err != nil {
+		return nil, options, err
+	}
+	// The page checks itself; it is written only when `verify --bundle`
+	// calls the bundle VALID, as for every page this tool writes.
+	if err := PageGate(value); err != nil {
+		return nil, options, &pageGateRefusal{err}
+	}
+	// One wording pack per page: with one module, its own; with several
+	// none, as the page cannot know before resolving which one renders.
+	var wording *emitter.Wording
+	slots := make([]emitter.Module, 0, len(modules))
+	for _, m := range modules {
+		row := presentationBuildModule{ID: m.ID, Plugin: m.plugin, ScriptSHA256: m.Script.SHA256, StyleSHA256: []string{}, Wording: "none"}
+		for _, st := range m.Styles {
+			row.StyleSHA256 = append(row.StyleSHA256, st.SHA256)
+		}
+		if m.Wording != nil {
+			row.Wording = "not passed: the page carries one wording pack, and it holds more than one module"
+			if len(modules) == 1 {
+				wording = &emitter.Wording{Pack: string(m.Wording.Bytes), SHA256: m.Wording.SHA256}
+				row.Wording = "passed"
+			}
+		}
+		result.Modules = append(result.Modules, row)
+		slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: row.StyleSHA256})
+	}
+	return value, emitter.OfflineOptions{
+		Audience: s.audience, Depth: s.depth, Title: s.title, Wording: wording,
+		CoreRuntimeSHA256: EvidenceGraphIIFEDigest, Modules: slots,
+	}, nil
+}
+
+// packagePresentation packages a prepared page as one target, the Go
+// builder's (capsule-viewer go/emitter). Its error is a *packagingReason
+// when the target is unavailable, or the builder's refusal of the request.
+func packagePresentation(value map[string]interface{}, options emitter.OfflineOptions, s presentationSettings, format string, result *presentationBuildResult) ([]byte, error) {
+	switch format {
+	case "html":
+		html, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, options)
+		return []byte(html), err
+	case "fragment":
+		// The fragment's presentation member is informational; the page's
+		// runtime resolves when it opens, so this tool names none.
+		built, err := emitter.BuildPresentationFragment(value, EvidenceGraphIIFE, emitter.FragmentOptions{
+			OfflineOptions: options, MaxLength: s.maxFragmentLength, ViewerURL: s.viewerURL,
+		})
+		var tooLarge *emitter.FragmentTooLargeError
+		if errors.As(err, &tooLarge) {
+			return nil, &packagingReason{Code: "fragment-too-large", Subject: tooLarge.Subject, Length: tooLarge.Length, Limit: tooLarge.MaxLength, Message: tooLarge.Error()}
+		} else if err != nil {
+			return nil, err
+		}
+		result.FragmentLength = len(built.Fragment)
+		result.FragmentLimit = s.maxFragmentLength
+		if result.FragmentLimit == 0 {
+			result.FragmentLimit = emitter.FragmentTokenDefaultBudget
+		}
+		if built.URL != "" {
+			return []byte(built.URL + "\n"), nil
+		}
+		return []byte(built.Fragment + "\n"), nil
+	case "embedded":
+		built, err := emitter.BuildEmbeddedHTML(value, EvidenceGraphIIFE, options)
+		if err != nil {
+			return nil, err
+		}
+		result.ScriptSources, result.StyleSources = built.ScriptSources, built.StyleSources
+		return []byte(built.HTML), nil
+	case "static":
+		return nil, &packagingReason{Code: "no-document", Message: noDocumentMessage}
+	}
+	return nil, fmt.Errorf("unknown packaging target %s", format)
+}
+
 func presentationCommands() *cobra.Command {
-	group := &cobra.Command{Use: "presentation", Short: "Build offline pages with the installed plugins' presentation modules, and say which module a bundle resolves to"}
-	build := &cobra.Command{Use: "build", Short: "Write the offline page for a bundle, with the plugins' presentation modules in its module slots", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	group := &cobra.Command{Use: "presentation", Short: "Build pages with the installed plugins' presentation modules, and say which module a bundle resolves to and which packagings are available"}
+	build := &cobra.Command{Use: "build", Short: "Write a bundle's page as an offline file, a fragment permalink or an embedded snippet, with the plugins' presentation modules in its module slots", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
 		out, _ := c.Flags().GetString("out")
-		audience, _ := c.Flags().GetString("audience")
 		format, _ := c.Flags().GetString("format")
-		depth, _ := c.Flags().GetString("depth")
-		title, _ := c.Flags().GetString("title")
-		only, _ := c.Flags().GetStringSlice("module")
 		if bundlePath == "" || out == "" {
 			return Hint(ErrInput, "--bundle and --out are required")
 		}
-		if audience == "" {
-			return Hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
+		s, err := readPresentationSettings(c)
+		if err != nil {
+			return err
 		}
 		switch format {
-		case "html":
+		case "html", "fragment", "embedded":
 		case "static":
-			return Hint(ErrInput, "--format static is unavailable (no-document): this tool has no document to render the page with at build time; build --format html")
-		case "fragment", "embedded":
-			return Hint(ErrInput, fmt.Sprintf("--format %s is not built by this tool yet; build --format html", format))
+			return Hint(ErrInput, "--"+noDocumentMessage)
 		default:
 			return Hint(ErrInput, fmt.Sprintf("--format %s is not a packaging target (html, fragment, embedded, static)", format))
 		}
-		switch depth {
-		case "", "L0", "L1", "L2":
-		default:
-			return Hint(ErrInput, "--depth must be L0, L1 or L2")
-		}
-		modules, result, err := presentationSelection(only, audience)
-		if err != nil {
-			return err
-		}
-		result.Format, result.Audience, result.Depth, result.Runtime = format, audience, depth, presentationRuntime
-		result.Page, result.Modules = "not written", []presentationBuildModule{}
-		refuse := func(r *presentationBuildRefusal) error {
-			result.Refusal = r
+		result := presentationBuildResult{Format: format, Audience: s.audience, Depth: s.depth, Runtime: presentationRuntime,
+			Page: "not written", Modules: []presentationBuildModule{}}
+		value, options, err := preparePresentationPage(s, func() (map[string]interface{}, error) {
+			raw, err := ReadBundleInput(bundlePath)
+			if err != nil {
+				return nil, err
+			}
+			return DecodeBundleJSON(raw)
+		}, &result)
+		var refusal *presentationBuildRefusal
+		var gate *pageGateRefusal
+		switch {
+		case errors.As(err, &refusal):
+			result.Refusal = refusal
 			if err := Output(c, result); err != nil {
 				return err
 			}
-			return Hint(ErrInput, r.Error())
-		}
-		// The two checks need only the manifests, so they run before the
-		// bundle is read.
-		manifests, err := BuiltinPresentationManifests()
-		if err != nil {
-			return err
-		}
-		for _, m := range modules {
-			if r := RuntimeRefusal(m.Manifest); r != nil {
-				return refuse(r)
-			}
-			manifests = append(manifests, m.Manifest)
-		}
-		if err := StaticPresentationCheck(manifests); err != nil {
-			var r *presentationBuildRefusal
-			if errors.As(err, &r) {
-				return refuse(r)
-			}
-			return err
-		}
-		raw, err := ReadBundleInput(bundlePath)
-		if err != nil {
-			return err
-		}
-		value, err := DecodeBundleJSON(raw)
-		if err != nil {
-			return err
-		}
-		if result.BundleDigest, err = aacbundle.BundleDigest(value); err != nil {
-			return err
-		}
-		// The page checks itself; it is written only when `verify --bundle`
-		// calls the bundle VALID, as for every page this tool writes.
-		if err := PageGate(value); err != nil {
+			return Hint(ErrInput, refusal.Error())
+		case errors.As(err, &gate):
 			if outErr := Output(c, result); outErr != nil {
 				return outErr
 			}
+			return gate.err
+		case err != nil:
 			return err
 		}
-		// One wording pack per page: with one module, its own; with several
-		// none, as the page cannot know before resolving which one renders.
-		var wording *emitter.Wording
-		slots := make([]emitter.Module, 0, len(modules))
-		for _, m := range modules {
-			row := presentationBuildModule{ID: m.ID, Plugin: m.plugin, ScriptSHA256: m.Script.SHA256, StyleSHA256: []string{}, Wording: "none"}
-			for _, s := range m.Styles {
-				row.StyleSHA256 = append(row.StyleSHA256, s.SHA256)
+		page, err := packagePresentation(value, options, s, format, &result)
+		var unavailable *packagingReason
+		if errors.As(err, &unavailable) {
+			result.Unavailable = unavailable
+			if err := Output(c, result); err != nil {
+				return err
 			}
-			if m.Wording != nil {
-				row.Wording = "not passed: the page carries one wording pack, and it holds more than one module"
-				if len(modules) == 1 {
-					wording = &emitter.Wording{Pack: string(m.Wording.Bytes), SHA256: m.Wording.SHA256}
-					row.Wording = "passed"
-				}
-			}
-			result.Modules = append(result.Modules, row)
-			slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: row.StyleSHA256})
-		}
-		html, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{
-			Audience: audience, Depth: depth, Title: title, Wording: wording,
-			CoreRuntimeSHA256: EvidenceGraphIIFEDigest, Modules: slots,
-		})
-		if err != nil {
+			return Hint(ErrInput, fmt.Sprintf("--format %s is unavailable (%s): %s; nothing written", format, unavailable.Code, unavailable.Message))
+		} else if err != nil {
 			return Hint(ErrInput, "no page written: "+err.Error())
 		}
-		if err = AtomicFile(out, []byte(html), false); errors.Is(err, os.ErrExist) {
+		if err = AtomicFile(out, page, false); errors.Is(err, os.ErrExist) {
 			return Hint(ErrInput, fmt.Sprintf("--out %s already exists (or was created by another process while this one ran); nothing was overwritten; pass another path", out))
 		} else if err != nil {
 			return err
@@ -516,12 +648,10 @@ func presentationCommands() *cobra.Command {
 		return Output(c, result)
 	}}
 	build.Flags().String("bundle", "", "A held, disclosed Evidence Bundle (the page is written only when `verify --bundle` calls it VALID)")
-	build.Flags().String("out", "", "Write the offline page here (new file)")
+	build.Flags().String("out", "", "Write the page here (new file): the offline .html, the fragment token (or URL) with a newline, or the embedded snippet")
 	build.Flags().String("audience", "*", "Audience token the page resolves for; \"*\" is no particular audience")
-	build.Flags().String("format", "html", "Packaging target: html (fragment and embedded are not built yet; static is unavailable)")
-	build.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
-	build.Flags().String("title", "", "Page title (wins over the wording pack's page.title)")
-	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
+	build.Flags().String("format", "html", "Packaging target: html (offline file), fragment (permalink), embedded (host-page snippet); static is unavailable")
+	addPresentationSettingsFlags(build)
 	group.AddCommand(build, presentationListCommand())
 	return group
 }
