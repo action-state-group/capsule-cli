@@ -399,8 +399,16 @@ func (t *Target) MarkOwned(ctx context.Context, owner string, w PluginStoreWrite
 	if !validLogOwner(owner) || owner == LogCLL {
 		return InputError("the owner of a store is the name of a plugin")
 	}
-	if _, err := t.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
+	// Already marked for this owner: nothing is written, so a plugin's
+	// read-only checks of a marked store leave its files as they are.
+	var tables int
+	if err := t.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'plugin_owned'`).Scan(&tables); err != nil {
 		return err
+	}
+	if tables == 0 {
+		if _, err := t.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
+			return err
+		}
 	}
 	var current string
 	switch err := t.db.QueryRowContext(ctx, `SELECT owner FROM plugin_owned LIMIT 1`).Scan(&current); {

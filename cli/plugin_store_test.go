@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,7 +136,13 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	before, err := LoadProfile(p.Name)
 	require.NoError(t, err)
 
-	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--log", LogCLL)
+	// Pointing a core-owned profile at the marked store is refused.
+	marked := p.Connection.Database
+	other := p
+	other.Name = "elsewhere"
+	other.Connection.Database = filepath.Join(t.TempDir(), "other.db")
+	require.NoError(t, SaveProfile(other, false))
+	_, err = invoke(t, "", "profile", "update", "--profile", other.Name, "--sqlite-path", marked)
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "records its owner as the ledger plugin")
 	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--log", "other")
@@ -149,10 +156,19 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--log", "ledger")
 	require.NoError(t, err, "the recorded owner is accepted")
 
+	// A profile that would sit over an owner-less legacy marker as the core's
+	// is refused when it is created or its owner or file changes.
 	legacy := sqliteStoreProfile(t)
 	execSQL(t, legacy, `CREATE TABLE deal_shelf (id INTEGER PRIMARY KEY)`)
-	_, err = invoke(t, "", "profile", "update", "--profile", legacy.Name, "--log", LogCLL)
+	err = checkOwnerAgainstStore(t.Context(), legacy)
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "owned by a plugin (legacy marker)")
 	assert.NotContains(t, SafeError(err), "deal", "the message names no plugin")
+	legacy.Log = "ledger"
+	require.NoError(t, checkOwnerAgainstStore(t.Context(), legacy), "a plugin-owned profile is fine over it")
+	// An update that changes neither reads no database.
+	plain := sqliteStoreProfile(t)
+	execSQL(t, plain, `CREATE TABLE plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL); INSERT INTO plugin_owned VALUES ('ledger', 1)`)
+	_, err = invoke(t, "", "profile", "update", "--profile", plain.Name, "--checkpoint-endpoint", "https://witness.example/v1", "--checkpoint-public-key", strings.Repeat("ab", 32))
+	require.NoError(t, err, "no owner or file change: the store is not read")
 }
