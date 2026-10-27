@@ -273,7 +273,7 @@ func (p Profile) validate() error {
 	}
 	switch {
 	case p.Log != "" && !validLogOwner(p.Log):
-		return InputError("log must be cll (the core keeps the log) or the name of the plugin that keeps it, such as book (capsulectl-book); a core command name is not a plugin")
+		return InputError("log must be cll (the core keeps the log) or the name of the plugin that keeps it (capsulectl-<name>); a core command name is not a plugin")
 	case p.Log != "" && p.Log != LogCLL && (p.Type != "jsonl" || p.LogID == ""):
 		return InputError("only a jsonl profile with a log_id can name a plugin as its log owner (log: " + p.Log + ")")
 	}
@@ -508,7 +508,7 @@ func profileCommands() *cobra.Command {
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
-		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or the name of a plugin that keeps it, such as book (an evidence book, kept by the capsulectl-book plugin; jsonl only). A jsonl profile with a log_id is a book unless it says cll. Fixed once set"
+		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or the name of the plugin that keeps it (capsulectl-<name>; jsonl profiles with a log_id only). A jsonl profile with a log_id and no log reads as book until that default is removed. Fixed once set"
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")
