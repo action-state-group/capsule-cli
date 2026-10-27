@@ -191,9 +191,14 @@ func TestDoctorListsPluginDoctors(t *testing.T) {
 	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 	writeLauncher(t, root, "capsulectl-audit", strings.ReplaceAll(strings.ReplaceAll(fakePlugin, `"guard"`, `"audit"`), `["decide"]`, `["close","doctor"]`), 0o755)
 
+	// A plugin named like a core command is never dispatched to, so its
+	// doctor is not listed: `capsulectl verify doctor` reaches the core.
+	writeLauncher(t, root, "capsulectl-verify", strings.ReplaceAll(strings.ReplaceAll(fakePlugin, `"guard"`, `"verify"`), `["decide"]`, `["doctor"]`), 0o755)
+
 	report := doctorReport(t)
 	plugins, _ := report["plugins"].(map[string]any)
 	assert.Equal(t, []any{"capsulectl audit doctor"}, plugins["doctors"])
+	require.NoError(t, os.Remove(filepath.Join(root, "capsulectl-verify")))
 
 	// With no such plugin the list is empty, not missing.
 	require.NoError(t, os.Remove(filepath.Join(root, "capsulectl-audit")))
