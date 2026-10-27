@@ -828,9 +828,11 @@ func TestDecodeBundleJSONReadsOneObject(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, json.Number("8"), value["checkpoint"].(map[string]interface{})["mmr_size"])
 	for name, raw := range map[string]string{
-		"not JSON":      `{"root":`,
-		"trailing data": `{"root":"a"} {}`,
-		"an array":      `[{"root":"a"}]`,
+		"not JSON":       `{"root":`,
+		"trailing data":  `{"root":"a"} {}`,
+		"an array":       `[{"root":"a"}]`,
+		"invalid UTF-8":  "{\"a\":\"\xff\"}",
+		"lone surrogate": `{"a":"\ud800"}`,
 	} {
 		_, err := DecodeBundleJSON([]byte(raw))
 		require.ErrorIs(t, err, ErrInput, name)
