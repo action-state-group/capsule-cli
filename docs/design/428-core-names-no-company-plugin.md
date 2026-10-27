@@ -54,7 +54,10 @@ needs no change. Its `deal` profile is created by `deal init` (plugin PR writes
 `log:`; a Muse profile saved before that hits the error once and gets the fix
 line). Muse's install and test scripts call no removed alias (grep of
 actionstate-muse `main`, including `scripts/`); the Muse PR adds `log:` where a
-script creates a deal or book profile, if any does. Plain profiles without a
+script creates a deal or book profile, if any does. PR B removes the profile.go:637 default (the `log: book` that `profile create`
+and `update` write from the type when there is no `log:`): it is a core-written
+owner naming a company plugin. After PR B a `log_id` on a jsonl profile with no
+`--log` is an input error that names the fix (Sherlock2's review). Plain profiles without a
 `log_id` stay core-owned. `profile create` and the plugins' `init` write
 `log:`. The `cli-plugin/v1` handshake does not change.
 
