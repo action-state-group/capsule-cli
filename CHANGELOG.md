@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Changed:** a profile's `log:` can name any plugin that keeps its log, not
+  only `book` (capsule-cli#428): `profile create --log <plugin>`, then the
+  core runs the log commands in that plugin. A plugin serves its own profiles
+  by registering a backend with `cli.RegisterLogBackend` (`SetBookBackend` and
+  `BookBackend` stay as deprecated names). No behavior change for `book`.
 - **Added:** `verify --bundle` and cadence verify report, for each witness
   receipt, the checked `registration_time` (the `iat` the witness signed),
   the verifying `key_id`, and `registration_time_reason` when there is no

@@ -197,10 +197,29 @@ const (
 	LogBook = "book"
 )
 
-// IsBook reports whether the profile is an evidence book: a jsonl profile
-// with a log_id that is not declared a plain CLL. Every record a book seals
-// carries the profile's operator.
-func (p Profile) IsBook() bool { return p.Type == "jsonl" && p.LogID != "" && p.Log != LogCLL }
+// LogOwner is the plugin that keeps the profile's log, or "" when the core
+// does (capsule-cli#428): a jsonl profile with a log_id whose log is not
+// declared a plain CLL. One saved before the log field existed has no declared
+// owner and reads as LogBook until that default goes.
+func (p Profile) LogOwner() string {
+	if p.Type != "jsonl" || p.LogID == "" || p.Log == LogCLL {
+		return ""
+	}
+	if p.Log == "" {
+		return LogBook
+	}
+	return p.Log
+}
+
+// IsBook reports whether a plugin keeps the profile's log. Every record such a
+// log seals carries the profile's operator.
+func (p Profile) IsBook() bool { return p.LogOwner() != "" }
+
+// validLogOwner reports whether name can own a profile's log: LogCLL, or a
+// plugin name that is not a core command.
+func validLogOwner(name string) bool {
+	return name == LogCLL || (pluginNameGrammar.MatchString(name) && !coreCommandNames()[name])
+}
 
 // IsShelf reports whether the profile is a deal profile (`deal init`): its
 // logs, each deal's and the cadence log, are written by capsulectl deal
@@ -249,10 +268,10 @@ func (p Profile) validate() error {
 		return InputError("configure an artifact namespace, a log_id, or both")
 	}
 	switch {
-	case p.Log != "" && p.Log != LogCLL && p.Log != LogBook:
-		return InputError("log must be cll (the core keeps the log) or book (an evidence book, kept by the capsulectl-book plugin)")
-	case p.Log == LogBook && (p.Type != "jsonl" || p.LogID == ""):
-		return InputError("only a jsonl profile with a log_id can be a book profile (log: book)")
+	case p.Log != "" && !validLogOwner(p.Log):
+		return InputError("log must be cll (the core keeps the log) or the name of the plugin that keeps it, such as book (capsulectl-book); a core command name is not a plugin")
+	case p.Log != "" && p.Log != LogCLL && (p.Type != "jsonl" || p.LogID == ""):
+		return InputError("only a jsonl profile with a log_id can name a plugin as its log owner (log: " + p.Log + ")")
 	}
 	if p.Type == RemoteProfileType {
 		if e := validateRemoteConnection(p); e != nil {
@@ -485,7 +504,7 @@ func profileCommands() *cobra.Command {
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
-		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or book (an evidence book, kept by the capsulectl-book plugin; jsonl only). A jsonl profile with a log_id is a book unless it says cll. Fixed once set"
+		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or the name of a plugin that keeps it, such as book (an evidence book, kept by the capsulectl-book plugin; jsonl only). A jsonl profile with a log_id is a book unless it says cll. Fixed once set"
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")
@@ -637,8 +656,8 @@ func profileCommands() *cobra.Command {
 			if p.Type == "jsonl" && p.LogID != "" && p.Log == "" {
 				p.Log = LogBook
 			}
-			if update && before.LogID != "" && before.IsBook() != p.IsBook() {
-				return InputError("a profile's log stays with the owner it was made with (log: " + map[bool]string{true: LogBook, false: LogCLL}[before.IsBook()] + "); make a new profile for the other")
+			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() {
+				return InputError("a profile's log stays with the owner it was made with (log: " + FirstNonEmpty(before.LogOwner(), LogCLL) + "); make a new profile for the other")
 			}
 			p.Operator = normalizeOperator(p.Operator)
 			if p.OperatorMissing() {

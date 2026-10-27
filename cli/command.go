@@ -357,7 +357,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		t, e := OpenTarget(c.Context(), p, UseInitialization)
@@ -510,7 +510,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if p.ReadOnly {
 			return ErrReadOnlyCLL
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		path, _ := c.Flags().GetString("request")
@@ -573,7 +573,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			}
 			p.LogID = logID
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		t, e := OpenTarget(c.Context(), p, UseCLLRead)
@@ -583,7 +583,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		defer func() { err = errors.Join(err, t.Close()) }()
 		if p.IsBook() {
 			all, _ := c.Flags().GetBool("all")
-			items, next, e := bookBackend.List(c.Context(), p, after, through, limit, all)
+			items, next, e := backendFor(p).List(c.Context(), p, after, through, limit, all)
 			if e != nil {
 				return e
 			}
@@ -615,7 +615,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		path, _ := c.Flags().GetString("capsule")

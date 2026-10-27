@@ -387,7 +387,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		key, e := PrivateKey(p.Checkpoint.Signing)
@@ -434,7 +434,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			if e != nil {
 				return e
 			}
-			if done, e := delegateBook(c, p, nil); done {
+			if done, e := delegateLog(c, p, nil); done {
 				return e
 			}
 			size, _ := c.Flags().GetUint64("checkpoint")
@@ -459,7 +459,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			defer func() { err = errors.Join(err, t.Close()) }()
 			var store cll.WitnessStateStore = t.Log
 			if p.IsBook() {
-				store = bookBackend.WitnessStore(p)
+				store = backendFor(p).WitnessStore(p)
 			}
 			state, e := store.GetWitness(c.Context(), service, size)
 			if e != nil {

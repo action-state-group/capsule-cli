@@ -363,8 +363,8 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 			return nil, err
 		}
 	}
-	if needsCLL && p.IsBook() && bookBackend == nil {
-		return nil, errBookNeedsPlugin(p)
+	if needsCLL && p.IsBook() && backendFor(p) == nil {
+		return nil, errLogNeedsPlugin(p)
 	}
 	if needsCLL && p.IsBook() && (use == UseCLLRead || use == UseRead) {
 		// Reads (cll list, checkpoint status) never open the book: that
@@ -372,11 +372,11 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 	} else if needsCLL && p.IsBook() && use == UseInitialization {
 		// store init signs nothing, so it creates the book's files without
 		// opening the book: no signing or checkpoint key, no trust check.
-		if err = bookBackend.Init(ctx, p); err != nil {
+		if err = backendFor(p).Init(ctx, p); err != nil {
 			return nil, err
 		}
 	} else if needsCLL && p.IsBook() {
-		book, err := bookBackend.Open(ctx, p, t.Artifacts)
+		book, err := backendFor(p).Open(ctx, p, t.Artifacts)
 		if err != nil {
 			return nil, err
 		}

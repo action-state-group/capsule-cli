@@ -546,10 +546,10 @@ func resultBuildCommand() *cobra.Command {
 		}
 		// A book profile's log is its evidence book: there this is still the
 		// old alias of `book result build`, which seals book form.
-		if p.IsBook() && bookBackend == nil {
+		if p.IsBook() && backendFor(p) == nil {
 			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: on a book profile this runs `capsulectl book result build`, which needs --out; run that directly (this forward will be removed in %s)\n", AliasRemovedIn)
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		if p.ReadOnly {

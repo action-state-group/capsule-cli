@@ -41,9 +41,11 @@ const AliasRemovedIn = "v0.2.0"
 // command line wins over it.
 const ProfileEnv = "CAPSULECTL_PROFILE"
 
-// BookBackend opens the evidence books of book profiles. Only the
-// capsulectl-book plugin installs one (SetBookBackend).
-type BookBackend interface {
+// LogBackend opens the logs a plugin keeps for the profiles that name it as
+// their log owner (Profile.LogOwner). A plugin registers one for its own
+// name (RegisterLogBackend); a core process has none and runs the command in
+// the owner instead.
+type LogBackend interface {
 	// Init creates the profile's book files for `store init`. It signs
 	// nothing and opens no book.
 	Init(ctx context.Context, p Profile) error
@@ -57,8 +59,13 @@ type BookBackend interface {
 	WitnessStore(p Profile) cll.WitnessStateStore
 }
 
-// BookLog is one open book.
-type BookLog interface {
+// BookBackend is the backend of the book plugin's logs.
+//
+// Deprecated: the name goes with the plugin names in capsule-cli#428; use LogBackend.
+type BookBackend = LogBackend
+
+// OwnedLog is one open log of a plugin-kept profile.
+type OwnedLog interface {
 	// Publish seals the request as a capsule of the book, carrying its
 	// record header, and commits that capsule as the record itself.
 	Publish(ctx context.Context, r Request, key ed25519.PrivateKey) (Publication, error)
@@ -73,7 +80,13 @@ type BookLog interface {
 	Release() error
 }
 
-// BookBundleRequest is `bundle`, `disclose` or `permalink` on a book profile.
+// BookLog is one open book.
+//
+// Deprecated: use OwnedLog.
+type BookLog = OwnedLog
+
+// BookBundleRequest is `bundle`, `disclose` or `permalink` on a plugin-kept
+// profile.
 type BookBundleRequest struct {
 	Root            string
 	ClosureDepth    int
@@ -84,11 +97,29 @@ type BookBundleRequest struct {
 	ProducerKey     ed25519.PublicKey
 }
 
-var bookBackend BookBackend
+// logBackends are the backends this process serves, by plugin name. A plugin
+// registers its own before building its tree; the core registers none.
+var logBackends = map[string]LogBackend{}
+
+// RegisterLogBackend installs the backend that serves the profiles whose log
+// the plugin name keeps, in this binary.
+func RegisterLogBackend(name string, b LogBackend) { logBackends[name] = b }
 
 // SetBookBackend installs the backend that serves book profiles in this
 // binary. The capsulectl-book plugin calls it before building its tree.
-func SetBookBackend(b BookBackend) { bookBackend = b }
+//
+// Deprecated: use RegisterLogBackend(BookPluginName, b).
+func SetBookBackend(b BookBackend) { RegisterLogBackend(BookPluginName, b) }
+
+// backendFor is the backend serving p's log in this process, or nil when p's
+// log is the core's or its owner's plugin runs elsewhere.
+func backendFor(p Profile) LogBackend {
+	owner := p.LogOwner()
+	if owner == "" {
+		return nil
+	}
+	return logBackends[owner]
+}
 
 // DealBundleRun builds `bundle`, `disclose` or `permalink` with --deal. The
 // capsulectl-deal plugin sets it; while it is unset the command runs there.
@@ -104,21 +135,21 @@ var DealCommandGroup func() *cobra.Command
 // command that runs `tick` there.
 var DealTickCommand func() *cobra.Command
 
-// errBookNeedsPlugin is reached only when a book profile gets past the
+// errLogNeedsPlugin is reached only when a plugin-kept profile gets past the
 // delegation below without a backend, which a command must never allow.
-func errBookNeedsPlugin(p Profile) error {
-	return InputError(fmt.Sprintf("profile %s is a book profile: its log is an evidence book, kept by the capsulectl-%s plugin; run this command through capsulectl with that plugin installed", p.Name, BookPluginName))
+func errLogNeedsPlugin(p Profile) error {
+	return InputError(fmt.Sprintf("profile %s keeps its log in the capsulectl-%s plugin; run this command through capsulectl with that plugin installed", p.Name, p.LogOwner()))
 }
 
-// delegateBook runs c's command line in the capsulectl-book plugin when p is
-// a book profile and this binary has no book backend, and reports whether it
-// did. Commands that write, list or bundle a profile's log call it first,
-// before they read any input or open anything.
-func delegateBook(c *cobra.Command, p Profile, args []string) (bool, error) {
-	if !p.IsBook() || bookBackend != nil {
+// delegateLog runs c's command line in the plugin that keeps p's log when this
+// binary has no backend for it, and reports whether it did. Commands that
+// write, list or bundle a profile's log call it first, before they read any
+// input or open anything.
+func delegateLog(c *cobra.Command, p Profile, args []string) (bool, error) {
+	if !p.IsBook() || backendFor(p) != nil {
 		return false, nil
 	}
-	return true, ForwardToPlugin(c, BookPluginName, CommandLine(c, args))
+	return true, ForwardToPlugin(c, p.LogOwner(), CommandLine(c, args))
 }
 
 // CommandLine rebuilds the invocation c parsed: its path below the root,

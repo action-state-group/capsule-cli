@@ -590,7 +590,7 @@ func bundleCommands() []*cobra.Command {
 			if err != nil {
 				return err
 			}
-			if done, err := delegateBook(c, profile, nil); done {
+			if done, err := delegateLog(c, profile, nil); done {
 				return err
 			}
 			if htmlPath != "" && profile.IsBook() && use == "disclose" {
