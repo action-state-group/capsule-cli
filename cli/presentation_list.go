@@ -179,6 +179,57 @@ type presentationListResult struct {
 	Modules        []presentationListModule      `json:"modules"`
 	PluginsRefused []presentationRefusedPlugin   `json:"plugins_refused,omitempty"`
 	Detail         string                        `json:"detail"`
+	// Packagings is, for this (bundle, audience) and build's settings, each
+	// packaging target and whether `presentation build` writes it; or, when
+	// no page of this bundle can be written at all, PackagingsRefused says why.
+	Packagings        []packagingAvailability `json:"packagings,omitempty"`
+	PackagingsRefused string                  `json:"packagings_refused,omitempty"`
+}
+
+// packagingAvailability is one packaging target and whether it is available
+// (presentation builder section 1.1).
+type packagingAvailability struct {
+	Target    string           `json:"target"`
+	Available bool             `json:"available"`
+	Reason    *packagingReason `json:"reason,omitempty"`
+}
+
+// presentationPackagings is, in the builder's order, whether `presentation
+// build` writes each target for value with settings s: it prepares the page
+// and packages every target as build does, then discards the packaging, so
+// a target is available exactly when build writes it. When the page itself
+// is refused (the page gate, a module the runtime would refuse, the
+// registry checks) no target is, and the second value says why; any other
+// error is the command's.
+func presentationPackagings(s presentationSettings, value map[string]interface{}) ([]packagingAvailability, string, error) {
+	var scratch presentationBuildResult
+	page, options, err := preparePresentationPage(s, func() (map[string]interface{}, error) { return value, nil }, &scratch)
+	var refusal *presentationBuildRefusal
+	var gate *pageGateRefusal
+	switch {
+	case errors.As(err, &refusal):
+		return nil, refusal.Error(), nil
+	case errors.As(err, &gate):
+		return nil, gate.Error(), nil
+	case err != nil:
+		return nil, "", err
+	}
+	out := make([]packagingAvailability, 0, len(packagingTargets))
+	for _, target := range packagingTargets {
+		_, err := packagePresentation(page, options, s, target, &presentationBuildResult{})
+		var reason *packagingReason
+		switch {
+		case err == nil:
+			out = append(out, packagingAvailability{Target: target, Available: true})
+		case errors.As(err, &reason):
+			out = append(out, packagingAvailability{Target: target, Reason: reason})
+		default:
+			// The builder refused the request itself, as it would for
+			// every target alike.
+			return nil, "no page written: " + err.Error(), nil
+		}
+	}
+	return out, "", nil
 }
 
 // listPresentations resolves value for audience and format. The error is
@@ -294,6 +345,16 @@ func printPresentationList(w io.Writer, r presentationListResult) {
 	for _, p := range r.PluginsRefused {
 		fmt.Fprintf(w, "plugin %s: presentations refused (%s): %s\n", p.Plugin, p.Reason, p.Detail)
 	}
+	for _, p := range r.Packagings {
+		if p.Available {
+			fmt.Fprintf(w, "packaging %s: available\n", p.Target)
+		} else {
+			fmt.Fprintf(w, "packaging %s: unavailable (%s): %s\n", p.Target, p.Reason.Code, p.Reason.Message)
+		}
+	}
+	if r.PackagingsRefused != "" {
+		fmt.Fprintf(w, "packagings: none (%s)\n", r.PackagingsRefused)
+	}
 }
 
 func moduleLine(m presentationListModule) string {
@@ -309,17 +370,21 @@ func moduleLine(m presentationListModule) string {
 }
 
 func presentationListCommand() *cobra.Command {
-	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins, the deal view and the plugins' modules", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins, the deal view and the plugins' modules, and which packagings `presentation build` writes for it", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
-		audience, _ := c.Flags().GetString("audience")
 		format, _ := c.Flags().GetString("format")
 		text, _ := c.Flags().GetBool("text")
 		if bundlePath == "" {
 			return Hint(ErrInput, "--bundle is required")
 		}
-		if audience == "" {
-			return Hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
+		s, err := readPresentationSettings(c)
+		if err != nil {
+			return err
 		}
+		if err := checkFragmentSettings(s); err != nil {
+			return err
+		}
+		audience := s.audience
 		known := false
 		for _, f := range aacpresentation.Formats {
 			known = known || string(f) == format
@@ -339,6 +404,9 @@ func presentationListCommand() *cobra.Command {
 		if result.Resolution == "" && listErr != nil {
 			return listErr
 		}
+		if result.Packagings, result.PackagingsRefused, err = presentationPackagings(s, value); err != nil {
+			return err
+		}
 		if text {
 			printPresentationList(c.OutOrStdout(), result)
 		} else if err := Output(c, result); err != nil {
@@ -348,7 +416,8 @@ func presentationListCommand() *cobra.Command {
 	}}
 	list.Flags().String("bundle", "", "An Evidence Bundle to resolve")
 	list.Flags().String("audience", "*", "Audience token to resolve for; \"*\" is no particular audience")
-	list.Flags().String("format", "html", "Presentation format: html, fragment or embedded")
+	list.Flags().String("format", "html", "Presentation format the module is resolved for: html, fragment or embedded")
+	addPresentationSettingsFlags(list)
 	list.Flags().Bool("text", false, "Print a short readable summary instead of the capsule-cli-result/v1 report")
 	return list
 }

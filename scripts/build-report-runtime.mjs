@@ -10,8 +10,8 @@
 // agent-action-capsule's ts/src at the commit evidenceGraphIIFESource pins:
 // bundle and result-root verification, the producer and disclosure envelopes,
 // countersignatures, fragments. capsule-viewer's own build resolves that
-// package to a released npm copy (its scripts/aac-browser.mjs); here the
-// package resolves to the pinned aac source instead, so the views and the
+// package to a released npm copy (its browser export); here the package
+// resolves to the pinned aac source instead, so the views and the
 // deal page (assets/deal-view.js, which calls EvidenceGraph.verifyProducerEnvelope,
 // verifyDisclosureEnvelope, verifiedPayload, disclosureOf and ed25519Available)
 // share one verifier, and capsulectl's pages never verify with an older one
@@ -63,13 +63,12 @@ const aacModules = [...readFileSync(join(aacTs, "src", "browser.ts"), "utf8").ma
 if (aacModules.length === 0) throw new Error("no modules read from aac's ts/src/browser.ts");
 const star = (mods) => mods.map((m) => `export * from ${JSON.stringify(join(aacTs, "src", `${m}.ts`))};`).join("\n");
 const aacStar = star(aacModules);
-// What capsule-viewer's views import from the package: the modules its own
-// bundling plugin (ts/scripts/aac-browser.mjs) names, read from it, plus
-// aac's browser entry. A view importing from a module neither lists fails
-// the build with "No matching export".
-const cvModules = [...(readFileSync(join(cvTs, "scripts", "aac-browser.mjs"), "utf8").match(/const modules = \[([^\]]*)\]/)?.[1] ?? "").matchAll(/"([a-z0-9-]+)\.js"/g)].map((m) => m[1]);
-if (cvModules.length === 0) throw new Error("no module list read from capsule-viewer's ts/scripts/aac-browser.mjs");
-const pkgStar = star([...new Set([...aacModules, ...cvModules])]);
+// What capsule-viewer's views import from the package is its browser entry
+// (capsule-viewer#95: agent-action-capsule 0.8.0 resolves for the browser
+// through the package's own "browser" export, ts/src/browser.ts). A view
+// importing a name that entry does not export fails the build with
+// "No matching export".
+const pkgStar = aacStar;
 
 const pkg = "@action-state-group/agent-action-capsule";
 const aacSource = {

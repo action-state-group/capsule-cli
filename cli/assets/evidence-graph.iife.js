@@ -193,18 +193,18 @@ var EvidenceGraph = (() => {
     }
     return 0;
   }
-  function utf8ToBytes(str3) {
+  function utf8ToBytes(str2) {
     const out = [];
     let p = 0;
-    for (let i = 0; i < str3.length; i++) {
-      let c = str3.charCodeAt(i);
+    for (let i = 0; i < str2.length; i++) {
+      let c = str2.charCodeAt(i);
       if (c < 128) {
         out[p++] = c;
       } else if (c < 2048) {
         out[p++] = c >> 6 | 192;
         out[p++] = c & 63 | 128;
-      } else if ((c & 64512) === 55296 && i + 1 < str3.length && (str3.charCodeAt(i + 1) & 64512) === 56320) {
-        c = 65536 + ((c & 1023) << 10) + (str3.charCodeAt(++i) & 1023);
+      } else if ((c & 64512) === 55296 && i + 1 < str2.length && (str2.charCodeAt(i + 1) & 64512) === 56320) {
+        c = 65536 + ((c & 1023) << 10) + (str2.charCodeAt(++i) & 1023);
         out[p++] = c >> 18 | 240;
         out[p++] = c >> 12 & 63 | 128;
         out[p++] = c >> 6 & 63 | 128;
@@ -749,15 +749,15 @@ var EvidenceGraph = (() => {
   function toStr(bytes, start, end) {
     const len = end - start;
     if (len < ASCII_THRESHOLD) {
-      let str3 = "";
+      let str2 = "";
       for (let i = start; i < end; i++) {
         const c = bytes[i];
         if (c & 128) {
           return textDecoder.decode(bytes.subarray(start, end));
         }
-        str3 += String.fromCharCode(c);
+        str2 += String.fromCharCode(c);
       }
-      return str3;
+      return str2;
     }
     return textDecoder.decode(bytes.subarray(start, end));
   }
@@ -2523,18 +2523,8 @@ var EvidenceGraph = (() => {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
     AGENT_INPUT_ORIGINALS_EXTENSION: () => AGENT_INPUT_ORIGINALS_EXTENSION,
     BOOK_PAYLOADS_EXTENSION: () => BOOK_PAYLOADS_EXTENSION,
-    BUILTIN_MANIFESTS: () => BUILTIN_MANIFESTS,
-    BUILTIN_MANIFEST_COMPOSED: () => BUILTIN_MANIFEST_COMPOSED,
-    BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH: () => BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
-    BUILTIN_MANIFEST_NO_AGGREGATE: () => BUILTIN_MANIFEST_NO_AGGREGATE,
-    BUILTIN_MANIFEST_REPORT_ROWS: () => BUILTIN_MANIFEST_REPORT_ROWS,
-    BUILTIN_MANIFEST_RESULT: () => BUILTIN_MANIFEST_RESULT,
-    BUILTIN_MANIFEST_RESULT_COMPLIANCE: () => BUILTIN_MANIFEST_RESULT_COMPLIANCE,
-    BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT: () => BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT,
-    BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT: () => BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
     BUILTIN_PRESENTATIONS: () => BUILTIN_PRESENTATIONS,
     BUILTIN_SECTIONS: () => BUILTIN_SECTIONS,
-    BUILTIN_SECTION_MANIFESTS: () => BUILTIN_SECTION_MANIFESTS,
     BundleBuildError: () => BundleBuildError,
     CARD_UNFIT_NOTE: () => CARD_UNFIT_NOTE,
     CHECKED_ON_THIS_PAGE: () => CHECKED_ON_THIS_PAGE,
@@ -2546,6 +2536,7 @@ var EvidenceGraph = (() => {
     CLOSE_LINK_TYPES: () => CLOSE_LINK_TYPES,
     CLOSE_STATES: () => CLOSE_STATES,
     COMPOSED_KIND: () => COMPOSED_KIND,
+    CONTRACT_REPORT_KIND: () => CONTRACT_REPORT_KIND,
     CONTRACT_REPORT_MANIFEST: () => CONTRACT_REPORT_MANIFEST,
     COUNTERSIGN_RESULTS: () => COUNTERSIGN_RESULTS,
     COUNTERSIGN_V1: () => COUNTERSIGN_V1,
@@ -2565,37 +2556,25 @@ var EvidenceGraph = (() => {
     EXTENSION_READ_BY_PAGE: () => EXTENSION_READ_BY_PAGE,
     EXTENSION_SHOWN: () => EXTENSION_SHOWN,
     Ed25519UnavailableError: () => Ed25519UnavailableError,
+    EvidenceGraphError: () => EvidenceGraphError,
     FAILED_ON_THIS_PAGE: () => FAILED_ON_THIS_PAGE,
-    FRAGMENT_ADDRESS_ALLOWANCE: () => FRAGMENT_ADDRESS_ALLOWANCE,
-    FRAGMENT_TOKEN_DEFAULT_BUDGET: () => FRAGMENT_TOKEN_DEFAULT_BUDGET,
-    FRAGMENT_TOKEN_MAX_LENGTH: () => FRAGMENT_TOKEN_MAX_LENGTH,
-    FRAGMENT_URL_MAX_LENGTH: () => FRAGMENT_URL_MAX_LENGTH,
     FULL_VERIFIER_LINE: () => FULL_VERIFIER_LINE,
-    FragmentDecodeError: () => FragmentDecodeError,
-    FragmentTooLargeError: () => FragmentTooLargeError,
     GRADES: () => GRADES2,
     JcsFloatError: () => JcsFloatError,
     JcsUnsafeIntegerError: () => JcsUnsafeIntegerError,
     JsonNumber: () => JsonNumber,
     LOCKED_ENTRIES: () => LOCKED_ENTRIES,
     NOT_CHECKED_ON_THIS_PAGE: () => NOT_CHECKED_ON_THIS_PAGE,
-    PRESENTATION_API_V0: () => PRESENTATION_API_V0,
-    PRESENTATION_DEPTHS: () => PRESENTATION_DEPTHS,
-    PRESENTATION_FORMATS: () => PRESENTATION_FORMATS,
-    PRESENTATION_FRAGMENT_VERSION: () => PRESENTATION_FRAGMENT_VERSION,
-    PRESENTATION_MANIFEST_VERSION: () => PRESENTATION_MANIFEST_VERSION,
+    NOT_STATED: () => NOT_STATED,
     PRODUCER_KEY_V1: () => PRODUCER_KEY_V1,
     PROOF_KINDS: () => PROOF_KINDS,
     PUBLISHED_CAPSULE_RECORD_TYPE: () => PUBLISHED_CAPSULE_RECORD_TYPE,
-    PresentationAmbiguityError: () => PresentationAmbiguityError,
-    PresentationRegistrationError: () => PresentationRegistrationError,
-    PresentationRegistry: () => PresentationRegistry,
     RECEIPT_GRADE_DISPLAY: () => RECEIPT_GRADE_DISPLAY,
     RECONCILE_CLAIM: () => RECONCILE_CLAIM,
     RECONCILE_TALLY_KEYS: () => RECONCILE_TALLY_KEYS,
-    REFERENCE_PRESENTATION_RUNTIME: () => REFERENCE_PRESENTATION_RUNTIME,
     REQUIRED_BUCKETS: () => REQUIRED_BUCKETS,
     REQUIREMENT_CLAIM: () => REQUIREMENT_CLAIM,
+    RESOLUTION_RULE: () => RESOLUTION_RULE,
     RESULT_MEMBERS: () => RESULT_MEMBERS,
     RESULT_RECORD_TYPE: () => RESULT_RECORD_TYPE,
     RESULT_VERSION: () => RESULT_VERSION,
@@ -2608,7 +2587,7 @@ var EvidenceGraph = (() => {
     SUMMARY_NOT_VERIFIED: () => SUMMARY_NOT_VERIFIED,
     Sha256UnavailableError: () => Sha256UnavailableError,
     TIERS: () => TIERS,
-    UNABLE_TO_VERIFY_LINES: () => UNABLE_TO_VERIFY_LINES,
+    UNABLE_TO_VERIFY_LINES: () => UNABLE_TO_VERIFY_LINES2,
     UNVERIFIED_BUNDLE_REFUSAL: () => UNVERIFIED_BUNDLE_REFUSAL,
     UNVERIFIED_KEY_LABEL: () => UNVERIFIED_KEY_LABEL,
     VERDICTS: () => VERDICTS,
@@ -2620,21 +2599,27 @@ var EvidenceGraph = (() => {
     WORDING_PACK_VERSION: () => WORDING_PACK_VERSION,
     WordingPackError: () => WordingPackError,
     asJsonObject: () => asJsonObject,
+    asString: () => asString,
     buildDisclosureEnvelope: () => buildDisclosureEnvelope,
     buildEvidenceBundle: () => buildEvidenceBundle,
+    buildEvidenceGraph: () => buildEvidenceGraph,
+    buildOutcomeReportModel: () => buildOutcomeReportModel,
+    buildReportRows: () => buildReportRows,
     buildResultRoot: () => buildResultRoot,
     buildUnprovenBundle: () => buildUnprovenBundle,
     buildVerificationPageModel: () => buildVerificationPageModel,
     buildVerifiedBundleContext: () => buildVerifiedBundleContext,
     bundleDigest: () => bundleDigest,
     bundleVerified: () => bundleVerified,
+    calibrationCount: () => calibrationCount,
     carriedCapsuleCommitment: () => carriedCapsuleCommitment,
     carriesResultDocument: () => carriesResultDocument,
-    checkPresentationFragment: () => checkPresentationFragment,
     checkWordingPackInput: () => checkWordingPackInput,
     checkedSummaryLine: () => checkedSummaryLine,
     citesOneContract: () => citesOneContract,
+    claimsCitedCase: () => claimsCitedCase,
     classifyCountersignatures: () => classifyCountersignatures,
+    committedDigest: () => committedDigest,
     composedBlockProblem: () => composedBlockProblem,
     composedDigest: () => composedDigest,
     composedDigestPreimage: () => composedDigestPreimage,
@@ -2647,26 +2632,24 @@ var EvidenceGraph = (() => {
     coverageStatement: () => coverageStatement,
     createPresentationRegistry: () => createPresentationRegistry,
     createSectionRegistry: () => createSectionRegistry,
+    criterionWordings: () => criterionWordings,
     declaredProducerKeys: () => declaredProducerKeys,
     decodeCapsuleJson: () => decodeCapsuleJson,
     decodeFragment: () => decodeFragment,
-    decodeFragmentToken: () => decodeFragmentToken,
-    decodePresentationFragment: () => decodePresentationFragment,
     decodeStrictJson: () => decodeStrictJson,
     deriveCloseState: () => deriveCloseState,
-    describeContext: () => describeContext,
     digestCapability: () => digestCapability,
     disclosureEligibleFields: () => disclosureEligibleFields,
     disclosureOf: () => disclosureOf,
     disclosurePayload: () => disclosurePayload,
     ed25519Available: () => ed25519Available,
     encodeFragment: () => encodeFragment,
-    encodeFragmentToken: () => encodeFragmentToken,
-    encodePresentationFragment: () => encodePresentationFragment,
     extensionRows: () => extensionRows,
+    findTranscript: () => findTranscript,
     indexCountersigners: () => indexCountersigners,
     isCalendarDate: () => isCalendarDate,
     isHex64: () => isHex64,
+    isObject: () => isObject,
     isProducerSelection: () => isProducerSelection,
     isResultRoot: () => isResultRoot,
     isV4IrreversibilityClass: () => isV4IrreversibilityClass,
@@ -2674,24 +2657,23 @@ var EvidenceGraph = (() => {
     jcs: () => jcs,
     jsonDigest: () => jsonDigest,
     laterClaimIds: () => laterClaimIds,
-    manifestMatches: () => manifestMatches,
-    manifestProblems: () => manifestProblems,
-    manifestsCoMatchable: () => manifestsCoMatchable,
+    logCoordinates: () => logCoordinates,
     mountPresentation: () => mountPresentation,
     mountPresentationFragment: () => mountPresentationFragment,
     obligationStatus: () => obligationStatus,
     parseCapsule: () => parseCapsule,
+    parseJudgeProbabilities: () => parseJudgeProbabilities,
     pinnedCountersignerSource: () => pinnedCountersignerSource,
     placeholders: () => placeholders,
-    presentationRefusalLine: () => presentationRefusalLine,
-    presentationRefusalNotices: () => presentationRefusalNotices,
-    presentationRefusalReason: () => presentationRefusalReason,
-    presentationRefusalRow: () => presentationRefusalRow,
     probeEd25519: () => probeEd25519,
     proofSourceFromCll: () => proofSourceFromCll,
+    readContractReport: () => readContractReport,
+    readOutcomeReportTerms: () => readOutcomeReportTerms,
     readPresentationBlock: () => readPresentationBlock,
     readWordingPack: () => readWordingPack,
+    readableId: () => readableId,
     recomputeCounts: () => recomputeCounts,
+    recordTimes: () => recordTimes,
     registerPresentation: () => registerPresentation,
     registries: () => registries,
     renderChecking: () => renderChecking,
@@ -2700,12 +2682,12 @@ var EvidenceGraph = (() => {
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     renderUnableToVerify: () => renderUnableToVerify,
+    reportSealedDay: () => reportSealedDay,
+    reportState: () => reportState,
     resolveCarriedInput: () => resolveCarriedInput,
     resolveDisclosure: () => resolveDisclosure,
-    resolveModules: () => resolveModules,
     resolvePresentation: () => resolvePresentation,
     rowStatus: () => rowStatus,
-    scopeDisclosures: () => scopeDisclosures,
     sealCapsule: () => sealCapsule,
     setMember: () => setMember,
     setSha256FallbackForTesting: () => setSha256FallbackForTesting,
@@ -2723,12 +2705,15 @@ var EvidenceGraph = (() => {
     verifyComposed: () => verifyComposed,
     verifyCountersignV1Signature: () => verifyCountersignV1Signature,
     verifyDisclosureEnvelope: () => verifyDisclosureEnvelope,
+    verifyJudgePin: () => verifyJudgePin,
     verifyProducerEnvelope: () => verifyProducerEnvelope,
     verifyRecordSignature: () => verifyRecordSignature,
     verifyStore: () => verifyStore,
     withCountersigners: () => withCountersigners,
+    withheldReports: () => withheldReports,
     wordingProblems: () => wordingProblems,
-    wordsOf: () => wordsOf
+    wordsOf: () => wordsOf,
+    zoneStatement: () => zoneStatement
   });
 
   // agent-action-capsule/ts/src/producer-envelope-wire.ts
@@ -4298,109 +4283,9 @@ var EvidenceGraph = (() => {
   // agent-action-capsule/ts/src/bundle.ts
   init_browser();
 
-  // agent-action-capsule/ts/src/compliance-presentation.ts
-  function object3(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  function str(value) {
-    return typeof value === "string" ? value : void 0;
-  }
-  function strArray(value) {
-    return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
-  }
-  function readFinding(value) {
-    const obj = object3(value);
-    const id = str(obj?.id);
-    const severity = str(obj?.severity);
-    const recommendation = str(obj?.recommendation);
-    const ownerDue = str(obj?.owner_due);
-    if (id === void 0 || severity === void 0 || recommendation === void 0 || ownerDue === void 0)
-      return void 0;
-    return { id, severity, recommendation, ownerDue };
-  }
-  function readRow(value) {
-    const obj = object3(value);
-    const criterionId = str(obj?.criterion_id);
-    const name = str(obj?.name);
-    if (criterionId === void 0 || name === void 0) return void 0;
-    const notEvaluableNote = str(obj?.not_evaluable_note);
-    const finding = obj?.finding === void 0 ? void 0 : readFinding(obj.finding);
-    return {
-      criterionId,
-      name,
-      ...notEvaluableNote === void 0 ? {} : { notEvaluableNote },
-      ...finding === void 0 ? {} : { finding }
-    };
-  }
-  function readApplicability(value) {
-    const obj = object3(value);
-    const status2 = obj?.status === "in_force" || obj?.status === "future" ? obj.status : void 0;
-    const note = str(obj?.note);
-    if (status2 === void 0 || note === void 0) return void 0;
-    return { status: status2, note };
-  }
-  function readObligation(value) {
-    const obj = object3(value);
-    const key = str(obj?.key);
-    const article = str(obj?.article);
-    const title = str(obj?.title);
-    const plain2 = str(obj?.plain);
-    const method = str(obj?.method);
-    const applicability = readApplicability(obj?.applicability);
-    if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
-      return void 0;
-    const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
-      const row2 = readRow(r);
-      return row2 === void 0 ? [] : [row2];
-    }) : [];
-    return {
-      key,
-      article,
-      title,
-      plain: plain2,
-      judgedTerms: strArray(obj?.judged_terms),
-      applicability,
-      method,
-      rows
-    };
-  }
-  function readQualityProtocol(value) {
-    const obj = object3(value);
-    if (obj === void 0) return void 0;
-    const protocol = str(obj.protocol);
-    const cadence = str(obj.cadence);
-    const note = str(obj.note);
-    if (protocol === void 0 && cadence === void 0 && note === void 0)
-      return void 0;
-    return {
-      ...protocol === void 0 ? {} : { protocol },
-      ...cadence === void 0 ? {} : { cadence },
-      ...note === void 0 ? {} : { note }
-    };
-  }
-  function readCompliancePresentation(bundle) {
-    const top = object3(bundle);
-    const extensions2 = object3(top?.extensions);
-    const block = object3(extensions2?.["eu-ai-act-compliance/v1"]);
-    if (block === void 0 || block.enabled !== true) return void 0;
-    const regulation = str(block.regulation) ?? "Regulation (EU) 2024/1689";
-    const obligations = Array.isArray(block.obligations) ? block.obligations.flatMap((o) => {
-      const obligation = readObligation(o);
-      return obligation === void 0 ? [] : [obligation];
-    }) : [];
-    if (obligations.length === 0) return void 0;
-    const qualityProtocol = readQualityProtocol(block.quality_protocol);
-    return {
-      enabled: true,
-      regulation,
-      obligations,
-      ...qualityProtocol === void 0 ? {} : { qualityProtocol }
-    };
-  }
-
   // agent-action-capsule/ts/src/composed.ts
   var COMPOSED_KIND = "composed/v1";
-  var object4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var object3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   var isString = (value) => typeof value === "string";
   var LABEL = /^[A-Za-z0-9._:-]{1,128}$/u;
   var isLabel = (value) => isString(value) && LABEL.test(value);
@@ -4437,7 +4322,7 @@ var EvidenceGraph = (() => {
         const index = Number(token);
         if (index >= current.length) return { ok: false };
         current = current[index];
-      } else if (object4(current)) {
+      } else if (object3(current)) {
         if (!Object.hasOwn(current, token)) return { ok: false };
         current = current[token];
       } else return { ok: false };
@@ -4460,7 +4345,7 @@ var EvidenceGraph = (() => {
     return ok2(labels);
   }
   function parseMember(raw, observers) {
-    if (!object4(raw)) return bad("not_an_object");
+    if (!object3(raw)) return bad("not_an_object");
     const { id, observer, request_digest: requestDigest, outcome, digest } = raw;
     if (!isLabel(id)) return bad("id");
     if (!isLabel(observer)) return bad("observer");
@@ -4476,7 +4361,7 @@ var EvidenceGraph = (() => {
     let response;
     if (Object.hasOwn(raw, "response")) {
       const value = raw.response;
-      if (outcome !== "artifact" || !object4(value) || !isHex64(value.request_digest) || !isHex64(value.artifact_digest))
+      if (outcome !== "artifact" || !object3(value) || !isHex64(value.request_digest) || !isHex64(value.artifact_digest))
         return bad("response");
       response = value;
     }
@@ -4490,13 +4375,13 @@ var EvidenceGraph = (() => {
     };
     if (!Object.hasOwn(raw, bodyKey)) return ok2(member);
     const body = raw[bodyKey];
-    if (!object4(body)) return bad("body");
+    if (!object3(body)) return bad("body");
     if (outcome === "refusal") {
       if (!isHex64(body.request_digest) || !isString(body.reason) || !isString(body.issued_at))
         return bad("refusal_body");
     } else if (outcome === "absence") {
       const window = body.window;
-      if (!isHex64(body.request_digest) || !object4(window) || !isString(window.from) || !isString(window.to))
+      if (!isHex64(body.request_digest) || !object3(window) || !isString(window.from) || !isString(window.to))
         return bad("absence_body");
       if (Object.hasOwn(body, "route") && !isString(body.route))
         return bad("absence_body");
@@ -4506,7 +4391,7 @@ var EvidenceGraph = (() => {
     return ok2({ ...member, body });
   }
   function parseJoin(raw, members) {
-    if (!object4(raw)) return bad("not_an_object");
+    if (!object3(raw)) return bad("not_an_object");
     const pair = raw.members;
     if (!Array.isArray(pair) || pair.length !== 2) return bad("members");
     for (const id of pair)
@@ -4550,7 +4435,7 @@ var EvidenceGraph = (() => {
   }
   var joinKey = (j) => `${j.members[0]}\0${j.members[1]}\0${j.basis}\0${j.pointer ?? ""}`;
   function parseComposed(raw) {
-    if (!object4(raw)) return bad("not_an_object");
+    if (!object3(raw)) return bad("not_an_object");
     const digest = raw.composed_digest;
     if (!isHex64(digest)) return bad("composed_digest");
     const observerList = raw.observers;
@@ -4559,7 +4444,7 @@ var EvidenceGraph = (() => {
     const observerIds = /* @__PURE__ */ new Set();
     const observers = [];
     for (const [i, o] of observerList.entries()) {
-      if (!object4(o) || !isLabel(o.id) || !isString(o.role) || !isString(o.custody_domain))
+      if (!object3(o) || !isLabel(o.id) || !isString(o.role) || !isString(o.custody_domain))
         return bad(`observer:${i}`);
       if (observerIds.has(o.id)) return bad(`observer_id_duplicate:${o.id}`);
       observerIds.add(o.id);
@@ -4659,7 +4544,7 @@ var EvidenceGraph = (() => {
     const records = m.body.records;
     if (!Array.isArray(records)) return void 0;
     for (const record of records)
-      if (object4(record) && record.capsule_id === root) return record;
+      if (object3(record) && record.capsule_id === root) return record;
     return void 0;
   }
   function sameJcs(a, b) {
@@ -4942,66 +4827,15 @@ var EvidenceGraph = (() => {
     return block !== null && typeof block === "object" && !Array.isArray(block) && Object.keys(block).length === 0;
   }
 
-  // agent-action-capsule/ts/src/outcome-report-presentation.ts
-  function object5(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  var CRITERION_REF = /^[a-z0-9_]+\.[a-z0-9_]+$/u;
-  var MAX_NOTE_LINES = 12;
-  var MAX_NOTE_LINE = 600;
-  var MAX_NOTE_TITLE = 120;
-  var MAX_BADGE = 40;
-  function text(value, max) {
-    return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : void 0;
-  }
-  function readProducerNote(value) {
-    const note = object5(value);
-    if (note === void 0 || !Array.isArray(note.lines)) return void 0;
-    const raw = note.lines;
-    if (raw.length === 0 || raw.length > MAX_NOTE_LINES) return void 0;
-    const lines = raw.map((line) => text(line, MAX_NOTE_LINE));
-    if (lines.some((line) => line === void 0)) return void 0;
-    return {
-      title: text(note.title, MAX_NOTE_TITLE) ?? "Producer's note",
-      lines
-    };
-  }
-  function readEditedCriteria(value) {
-    if (!Array.isArray(value)) return void 0;
-    const entries = value;
-    const edited = entries.flatMap((entry) => {
-      const item = object5(entry);
-      const criterion = typeof item?.criterion === "string" && CRITERION_REF.test(item.criterion) ? item.criterion : void 0;
-      const badge = text(item?.badge, MAX_BADGE);
-      return criterion === void 0 || badge === void 0 ? [] : [{ criterion, badge }];
-    });
-    return edited.length === 0 ? void 0 : edited;
-  }
-  function readOutcomeReportPresentation(bundle) {
-    const top = object5(bundle);
-    const extensions2 = object5(top?.extensions);
-    const block = object5(extensions2?.["outcome-report/v1"]);
-    if (block === void 0 || block.enabled !== true) return void 0;
-    const percentages = block.percentages === true;
-    const producerNote = readProducerNote(block.producer_note);
-    const editedCriteria = readEditedCriteria(block.edited_criteria);
-    return {
-      enabled: true,
-      percentages,
-      ...producerNote === void 0 ? {} : { producerNote },
-      ...editedCriteria === void 0 ? {} : { editedCriteria }
-    };
-  }
-
   // agent-action-capsule/ts/src/presentation.ts
-  function object6(value) {
+  function object4(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
   }
   var dataImageUrl = /^data:image\//u;
   function readPresentationBlock(bundle) {
-    const top = object6(bundle);
-    const extensions2 = object6(top?.extensions);
-    const block = object6(extensions2?.["presentation/v1"]);
+    const top = object4(bundle);
+    const extensions2 = object4(top?.extensions);
+    const block = object4(extensions2?.["presentation/v1"]);
     if (block === void 0) return void 0;
     const name = typeof block.producer_display_name === "string" ? block.producer_display_name : void 0;
     const logo = typeof block.logo_data_url === "string" && dataImageUrl.test(block.logo_data_url) ? block.logo_data_url : void 0;
@@ -5018,49 +4852,39 @@ var EvidenceGraph = (() => {
   // agent-action-capsule/ts/src/extension-interpreters.ts
   var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
   var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
-  var object7 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var object5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   var INTERPRETERS = Object.freeze({
-    // evidence-graph-view.ts renderPresentationHeader -> presentation.ts readPresentationBlock
+    // the page header (capsule-viewer draws it) -> presentation.ts readPresentationBlock
     "presentation/v1": {
       id: "presentation-header",
       accepts: (bundle) => readPresentationBlock(bundle) !== void 0
     },
-    // evidence-graph-view.ts renderVerificationPage -> countersignature-stamp.ts declaredProducerKeys
+    // the verification page's stamps (capsule-viewer draws them) -> countersignature-stamp.ts declaredProducerKeys
     [PRODUCER_KEY_V1]: {
       id: "countersignature-stamp",
       accepts: (bundle) => declaredProducerKeys(bundle).length > 0
     },
-    // outcome-report-presentation.ts readOutcomeReportPresentation (the outcome-report card)
-    "outcome-report/v1": {
-      id: "outcome-report-card",
-      accepts: (bundle) => readOutcomeReportPresentation(bundle) !== void 0
-    },
-    // compliance-presentation.ts readCompliancePresentation (the compliance card)
-    "eu-ai-act-compliance/v1": {
-      id: "compliance-card",
-      accepts: (bundle) => readCompliancePresentation(bundle) !== void 0
-    },
     // contract-report.ts readContractReport, the descriptor's reader (a closed
-    // empty object only, as go/presentation/descriptor.go contractReportEngaged).
+    // empty object only, spec/contract-report-v1.md section 1).
     // Only a runtime that registers a contract-report module applies it.
     [CONTRACT_REPORT_KIND]: {
       id: "contract-report",
       accepts: readContractReport
     },
-    // evidence-graph-view.ts composition section -> composed.ts verifyComposed;
+    // the composition section (capsule-viewer draws it) -> composed.ts verifyComposed;
     // a malformed block yields no composition result, so it is not interpreted.
     [COMPOSED_KIND]: {
       id: "aac.builtin.composed/v0",
-      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && composedBlockProblem(bundle.extensions[COMPOSED_KIND]) === void 0
+      accepts: (bundle) => object5(bundle) && object5(bundle.extensions) && composedBlockProblem(bundle.extensions[COMPOSED_KIND]) === void 0
     },
     // result-root.ts buildResultRoot reads both blocks when it is an object
     [BOOK_PAYLOADS_EXTENSION]: {
       id: "result-root",
-      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && object7(bundle.extensions[BOOK_PAYLOADS_EXTENSION])
+      accepts: (bundle) => object5(bundle) && object5(bundle.extensions) && object5(bundle.extensions[BOOK_PAYLOADS_EXTENSION])
     },
     [AGENT_INPUT_ORIGINALS_EXTENSION]: {
       id: "result-root",
-      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && object7(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION])
+      accepts: (bundle) => object5(bundle) && object5(bundle.extensions) && object5(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION])
     }
   });
   function extensionInterpreter(kind, bundle) {
@@ -5839,6 +5663,8 @@ var EvidenceGraph = (() => {
     ["countersigned-observed", GRADE_OBSERVED_ONLY],
     [GRADE_MMR_VERIFIED, GRADE_MMR_VERIFIED]
   ]);
+  var CWT_IAT = 6n;
+  var MAX_IAT = 2n ** 53n - 1n;
   var RECORD_FIELDS = [
     "ts_url",
     "entry_hash",
@@ -5846,7 +5672,7 @@ var EvidenceGraph = (() => {
     "leaf_index",
     "tree_size"
   ];
-  var object8 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var object6 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   function bindingOf(url) {
     const separator = url.indexOf("://");
     const scheme = separator < 0 ? "" : url.slice(0, separator).toLowerCase();
@@ -5859,11 +5685,11 @@ var EvidenceGraph = (() => {
     return base.replace(/\/+$/u, "");
   }
   function witnessRowFor(directory, tsUrl) {
-    const rows = object8(directory) ? directory.witnesses : directory;
+    const rows = object6(directory) ? directory.witnesses : directory;
     if (!Array.isArray(rows)) return void 0;
     const binding = bindingOf(tsUrl), endpoint = endpointOf(tsUrl);
     return rows.find(
-      (row2) => object8(row2) && (Object.hasOwn(row2, "binding") ? row2.binding : BINDING_CLL) === binding && endpointMatches(
+      (row2) => object6(row2) && (Object.hasOwn(row2, "binding") ? row2.binding : BINDING_CLL) === binding && endpointMatches(
         Object.hasOwn(row2, "endpoint") ? row2.endpoint : "",
         endpoint
       )
@@ -5891,7 +5717,7 @@ var EvidenceGraph = (() => {
   function pyIterate(value) {
     if (Array.isArray(value)) return value;
     if (typeof value === "string") return [...value];
-    if (object8(value)) return Object.keys(value);
+    if (object6(value)) return Object.keys(value);
     if (value === null || value === void 0 || value === false || value === 0)
       return [];
     throw new TypeError("not iterable");
@@ -5954,6 +5780,20 @@ var EvidenceGraph = (() => {
   function gradeOf(label) {
     return typeof label === "string" ? GRADES.get(label) ?? null : null;
   }
+  function registrationTimeOf(headers) {
+    const none = (reason) => ({
+      registrationTime: null,
+      registrationTimeReason: reason
+    });
+    if (!headers.has(HDR_CWT_CLAIMS)) return none("iat_absent");
+    const claims = headers.get(HDR_CWT_CLAIMS);
+    if (!(claims instanceof CborMap)) return none("iat_invalid");
+    if (!claims.has(CWT_IAT)) return none("iat_absent");
+    const iat = claims.get(CWT_IAT);
+    if (typeof iat !== "bigint" || iat < 0n || iat > MAX_IAT)
+      return none("iat_invalid");
+    return { registrationTime: Number(iat), registrationTimeReason: null };
+  }
   async function verifyCll(signed, record, key) {
     const expected = await sha256Hex(hexToBytes(await checkpointDigest(signed)));
     if (record.entry_hash !== expected)
@@ -5967,7 +5807,12 @@ var EvidenceGraph = (() => {
     const result = await verifyCoseReceipt(receipt, hexToBytes(expected), key);
     if (!result.ok) return fromCoseResult(result);
     const label = result.protectedHeaders.get(HDR_GRADE);
-    return { ok: true, reason: "ok", grade: gradeOf(label) };
+    return {
+      ok: true,
+      reason: "ok",
+      grade: gradeOf(label),
+      ...registrationTimeOf(result.protectedHeaders)
+    };
   }
   async function verifyScrapiReceipt(receipt, options) {
     if (options.servicePublicKeySpki === void 0)
@@ -5984,7 +5829,8 @@ var EvidenceGraph = (() => {
       return {
         ok: true,
         reason: "ok",
-        grade: gradeOf(label) ?? GRADE_OBSERVED_ONLY
+        grade: gradeOf(label) ?? GRADE_OBSERVED_ONLY,
+        ...registrationTimeOf(result.protectedHeaders)
       };
     } catch (error) {
       return failed(`unreadable receipt: ${String(error)}`);
@@ -6050,11 +5896,11 @@ ${body}
       return fail2("the Rekor key is not an ECDSA P-256 key");
     }
     try {
-      if (!object8(receipt)) return fail2("receipt is not an object");
+      if (!object6(receipt)) return fail2("receipt is not an object");
       if (receipt.logID !== await sha256Hex(key))
         return fail2("logID is not the pinned Rekor key");
       const verification = receipt.verification;
-      const timestamp = object8(verification) ? verification.signedEntryTimestamp : void 0;
+      const timestamp = object6(verification) ? verification.signedEntryTimestamp : void 0;
       if (!timestamp) return fail2("no signedEntryTimestamp");
       const integratedTime = jsonInteger(receipt.integratedTime), logIndex = jsonInteger(receipt.logIndex);
       if (integratedTime === void 0 || logIndex === void 0)
@@ -6075,16 +5921,16 @@ ${body}
           base64Canonical(receipt.body)
         )
       );
-      if (!object8(entry) || entry.kind !== "dsse")
+      if (!object6(entry) || entry.kind !== "dsse")
         return fail2("entry kind is not dsse");
       const spec = entry.spec || {};
-      if (!object8(spec)) return fail2("entry spec is not an object");
+      if (!object6(spec)) return fail2("entry spec is not an object");
       const payloadHash = spec.payloadHash || {};
-      if (!object8(payloadHash) || payloadHash.algorithm !== "sha256" || payloadHash.value !== await sha256Hex(cose))
+      if (!object6(payloadHash) || payloadHash.algorithm !== "sha256" || payloadHash.value !== await sha256Hex(cose))
         return fail2("entry payloadHash is not this checkpoint's bytes");
       const verifiers = /* @__PURE__ */ new Set();
       for (const signature of pyIterate(spec.signatures)) {
-        if (!object8(signature)) return fail2("entry signature is not an object");
+        if (!object6(signature)) return fail2("entry signature is not an object");
         const verifier = Object.hasOwn(signature, "verifier") ? signature.verifier : "";
         verifiers.add(
           pyStrip(latin1(base64Canonical(verifier)).replaceAll("\r", ""))
@@ -6095,7 +5941,13 @@ ${body}
       const expected = ed25519Pem(raw);
       if (verifiers.size !== 1 || !verifiers.has(expected))
         return fail2("entry is not signed by the checkpoint's key");
-      return { ok: true, reason: "ok", grade: GRADE_OBSERVED_ONLY };
+      return {
+        ok: true,
+        reason: "ok",
+        grade: GRADE_OBSERVED_ONLY,
+        registrationTime: null,
+        registrationTimeReason: "binding_without_iat"
+      };
     } catch (error) {
       return fail2(`unreadable receipt: ${String(error)}`);
     }
@@ -6131,7 +5983,7 @@ ${body}
     });
   }
   var isRecord = (entry) => {
-    if (!object8(entry) || !RECORD_FIELDS.every((name) => Object.hasOwn(entry, name)))
+    if (!object6(entry) || !RECORD_FIELDS.every((name) => Object.hasOwn(entry, name)))
       return false;
     if (!["ts_url", "entry_hash", "receipt_b64"].every(
       (name) => typeof entry[name] === "string" && entry[name] !== ""
@@ -6166,7 +6018,7 @@ ${body}
       if (!isRecord(record)) continue;
       const tsUrl = record.ts_url;
       const row2 = witnessRowFor(directory, tsUrl);
-      let outcome, withheld;
+      let outcome, withheld, keyId = null;
       if (record.is_stub === true)
         withheld = "stub receipt (never reached a witness)";
       else if (row2 === void 0)
@@ -6178,9 +6030,12 @@ ${body}
         } catch (error) {
           withheld = `not checked: unusable key in directory row (${String(error)})`;
         }
-        for (const key of keys) {
+        for (const [index, key] of keys.entries()) {
           outcome = await verifyReceipt(signed, record, key, cose);
-          if (outcome.ok) break;
+          if (outcome.ok) {
+            keyId = row2.key_ids[index];
+            break;
+          }
         }
         if (outcome !== void 0 && !outcome.ok && outcome.notChecked) {
           withheld = outcome.reason;
@@ -6196,7 +6051,10 @@ ${body}
           binding,
           status: "pass",
           reason: outcome.reason,
-          grade: outcome.grade
+          grade: outcome.grade,
+          keyId,
+          registrationTime: outcome.registrationTime,
+          registrationTimeReason: outcome.registrationTimeReason
         });
       } else if (outcome === void 0) {
         findings.push(`witness_unverified:${tsUrl}`);
@@ -6205,7 +6063,10 @@ ${body}
           binding,
           status: "withheld",
           reason: withheld ?? "not checked",
-          grade: null
+          grade: null,
+          keyId: null,
+          registrationTime: null,
+          registrationTimeReason: "receipt_not_passed"
         });
       } else {
         findings.push(`witness_receipt_invalid:${tsUrl}`);
@@ -6214,7 +6075,10 @@ ${body}
           binding,
           status: "fail",
           reason: outcome.reason,
-          grade: null
+          grade: null,
+          keyId: null,
+          registrationTime: null,
+          registrationTimeReason: "receipt_not_passed"
         });
       }
     }
@@ -6238,7 +6102,7 @@ ${body}
     status: "fail",
     findings
   });
-  var object9 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof JsonNumber);
+  var object7 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof JsonNumber);
   var integer = (value) => typeof value === "number" && Number.isSafeInteger(value);
   var hex4 = (value) => Uint8Array.from(value.match(/../gu), (byte) => Number.parseInt(byte, 16));
   function encodeFragment(bundle) {
@@ -6300,7 +6164,7 @@ ${body}
         plain: plain2,
         strict: await strict(
           plain2,
-          object9(bundle) ? bundle : void 0,
+          object7(bundle) ? bundle : void 0,
           options
         )
       } : { plain: plain2 };
@@ -6337,7 +6201,7 @@ ${body}
     };
   }
   async function verifyPlain(bundle) {
-    if (!object9(bundle)) return malformedBundle();
+    if (!object7(bundle)) return malformedBundle();
     let digest;
     try {
       digest = await bundleDigest(bundle);
@@ -6400,7 +6264,7 @@ ${body}
     const records = [];
     const seen = /* @__PURE__ */ new Set();
     for (const record of Array.isArray(bundle.records) ? bundle.records : []) {
-      if (!object9(record)) continue;
+      if (!object7(record)) continue;
       const id = capsuleIdOf(record);
       const { verdict: verdict2, messages } = await verifyRecordSignature(record);
       const result = !seen.has(id) && Object.hasOwn(plain2.capsuleResults, id) ? plain2.capsuleResults[id] : void 0;
@@ -6427,14 +6291,14 @@ ${body}
       status: unclaimed.length ? "withheld" : "pass",
       findings: signatureFindings
     };
-    const stated = object9(bundle.checkpoint) ? bundle.checkpoint : {};
+    const stated = object7(bundle.checkpoint) ? bundle.checkpoint : {};
     const checkpoint = await strictCheckpoint(
       stated,
-      object9(bundle.completeness_certificate) ? bundle.completeness_certificate : {}
+      object7(bundle.completeness_certificate) ? bundle.completeness_certificate : {}
     );
     const authenticated = checkpoint.signed !== void 0;
     let intervalCoverage = plain2.intervalCoverage, perRecordMembership = plain2.perRecordMembership;
-    if (object9(bundle.completeness) && bundle.completeness.selection === SELECTION_PRODUCER_SELECTED) {
+    if (object7(bundle.completeness) && bundle.completeness.selection === SELECTION_PRODUCER_SELECTED) {
       intervalCoverage = {
         status: "withheld",
         findings: [SELECTION_NOT_CHECKABLE]
@@ -6562,16 +6426,16 @@ ${body}
     if (signed === void 0)
       return { status: "withheld", findings: ["checkpoint_unverified"] };
     const certificate = bundle.completeness_certificate;
-    const members = object9(certificate) ? certificate.memberships : void 0;
-    if (!object9(certificate) || !object9(members) || certificate.range_root !== signed.root)
+    const members = object7(certificate) ? certificate.memberships : void 0;
+    if (!object7(certificate) || !object7(members) || certificate.range_root !== signed.root)
       return fail("completeness_certificate_invalid");
     const root = hex4(signed.root);
-    const ids = (Array.isArray(bundle.records) ? bundle.records : []).filter(object9).map(capsuleIdOf);
+    const ids = (Array.isArray(bundle.records) ? bundle.records : []).filter(object7).map(capsuleIdOf);
     const findings = [], seen = /* @__PURE__ */ new Set();
     for (const id of ids) {
       const member = Object.hasOwn(members, id) ? members[id] : void 0;
-      const coordinates = object9(member) ? member.log_coordinates : void 0;
-      if (!object9(coordinates)) {
+      const coordinates = object7(member) ? member.log_coordinates : void 0;
+      if (!object7(coordinates)) {
         findings.push(`membership_record_unbound:${id}`);
         continue;
       }
@@ -6581,7 +6445,7 @@ ${body}
         continue;
       }
       seen.add(seq);
-      const proof = object9(member) ? parseProof(member.inclusion_proof) : void 0;
+      const proof = object7(member) ? parseProof(member.inclusion_proof) : void 0;
       if (!proof || !isHex64(id) || proof.size !== signed.mmr_size || proof.leaf_index !== index || !await verifyProof(root, id, proof, index))
         findings.push(`membership_proof_invalid:${id}`);
     }
@@ -6591,12 +6455,12 @@ ${body}
   }
   function membershipSeqs(bundle) {
     const certificate = bundle.completeness_certificate;
-    const members = object9(certificate) ? certificate.memberships : void 0;
+    const members = object7(certificate) ? certificate.memberships : void 0;
     const out = /* @__PURE__ */ new Map();
-    if (object9(members))
+    if (object7(members))
       for (const [id, member] of Object.entries(members)) {
-        const coordinates = object9(member) ? member.log_coordinates : void 0;
-        const seq = object9(coordinates) ? coordinates.seq : void 0;
+        const coordinates = object7(member) ? member.log_coordinates : void 0;
+        const seq = object7(coordinates) ? coordinates.seq : void 0;
         if (integer(seq)) out.set(id, seq);
       }
     return out;
@@ -6606,7 +6470,7 @@ ${body}
     if (!Array.isArray(raw))
       return { records, results, findings: ["records_malformed"] };
     for (const [index, record] of raw.entries()) {
-      if (!object9(record)) {
+      if (!object7(record)) {
         findings.push(`record_malformed:${index}`);
         continue;
       }
@@ -6637,7 +6501,7 @@ ${body}
     if (!isHex64(root) || !records.has(root))
       return fail(...findings, "root_not_supplied_with_matching_identity");
     const complete = bundle.completeness;
-    if (!object9(complete)) return fail(...findings, "completeness_malformed");
+    if (!object7(complete)) return fail(...findings, "completeness_malformed");
     const depth = complete.closure_depth ?? 2;
     if (!integer(depth) || depth < 0)
       return fail(...findings, "closure_depth_invalid");
@@ -6669,17 +6533,17 @@ ${body}
   }
   function citations(record) {
     const targets = [], chain = record.chain;
-    if (object9(chain) && typeof chain.parent_capsule_id === "string")
+    if (object7(chain) && typeof chain.parent_capsule_id === "string")
       targets.push(chain.parent_capsule_id);
     if (Array.isArray(record.references)) {
       for (const reference of record.references)
-        if (object9(reference) && reference.type === "agent-action-capsule" && reference.digest_alg === "SHA-256" && typeof reference.digest === "string")
+        if (object7(reference) && reference.type === "agent-action-capsule" && reference.digest_alg === "SHA-256" && typeof reference.digest === "string")
           targets.push(reference.digest);
     }
     return targets;
   }
   async function completeness(bundle, records) {
-    if (!object9(bundle.completeness_certificate) || !object9(bundle.checkpoint)) {
+    if (!object7(bundle.completeness_certificate) || !object7(bundle.checkpoint)) {
       const absent = {
         status: "withheld",
         findings: ["completeness_evidence_absent"]
@@ -6777,7 +6641,7 @@ ${body}
     };
   }
   function parseRangeProof(raw) {
-    const range = object9(raw) ? raw : void 0, fromSeq = range?.from_seq, toSeq = range?.to_seq, size = range?.size, fromIndex = range?.from_index, toIndex = range?.to_index, witness = range?.witness;
+    const range = object7(raw) ? raw : void 0, fromSeq = range?.from_seq, toSeq = range?.to_seq, size = range?.size, fromIndex = range?.from_index, toIndex = range?.to_index, witness = range?.witness;
     if (!integer(fromSeq) || !integer(toSeq) || !integer(size) || !integer(fromIndex) || !integer(toIndex) || fromSeq < 1 || toSeq < fromSeq || size < 0 || fromIndex < 0 || toIndex < fromIndex || !Array.isArray(witness) || !witness.every(isHex64))
       return void 0;
     return { fromSeq, toSeq, size, fromIndex, toIndex, witness };
@@ -6797,14 +6661,14 @@ ${body}
     );
   }
   async function memberships(root, logId, first, last, raw, records, completeness2, checkpointSize) {
-    if (!object9(raw)) return ["memberships_absent"];
+    if (!object7(raw)) return ["memberships_absent"];
     const bySequence = /* @__PURE__ */ new Set(), boundRecords = /* @__PURE__ */ new Set(), findings = [];
     for (const [id, member] of Object.entries(raw)) {
-      if (!isHex64(id) || !records.has(id) || !object9(member)) {
+      if (!isHex64(id) || !records.has(id) || !object7(member)) {
         findings.push(`membership_record_unknown:${id}`);
         continue;
       }
-      const coordinates = object9(member.log_coordinates) ? member.log_coordinates : void 0;
+      const coordinates = object7(member.log_coordinates) ? member.log_coordinates : void 0;
       if (!coordinates) {
         findings.push(`membership_coordinates_missing:${id}`);
         continue;
@@ -6826,14 +6690,14 @@ ${body}
     }
     for (let seq = first; seq <= last; seq += 1)
       if (!bySequence.has(seq)) findings.push(`membership_record_missing:${seq}`);
-    const declaredMissing = object9(completeness2) && Array.isArray(completeness2.missing) ? new Set(completeness2.missing.filter(isHex64)) : /* @__PURE__ */ new Set();
+    const declaredMissing = object7(completeness2) && Array.isArray(completeness2.missing) ? new Set(completeness2.missing.filter(isHex64)) : /* @__PURE__ */ new Set();
     for (const id of records.keys())
       if (!boundRecords.has(id) && !declaredMissing.has(id))
         findings.push(`membership_record_unbound:${id}`);
     return findings;
   }
   function parseProof(raw) {
-    if (!object9(raw) || raw.v !== 1 || raw.kind !== "inclusion" || !integer(raw.size) || !integer(raw.leaf_index) || raw.size < 0 || raw.leaf_index < 0)
+    if (!object7(raw) || raw.v !== 1 || raw.kind !== "inclusion" || !integer(raw.size) || !integer(raw.leaf_index) || raw.size < 0 || raw.leaf_index < 0)
       return void 0;
     const hashes = (value) => Array.isArray(value) && value.every(isHex64) ? value : void 0;
     const witness = hashes(raw.witness), left = hashes(raw.peaks_left), right = hashes(raw.peaks_right);
@@ -6862,21 +6726,21 @@ ${body}
   }
   async function disclosures(raw, records) {
     if (raw === void 0) raw = {};
-    if (!object9(raw))
+    if (!object7(raw))
       return [{ capsuleId: "", member: "", status: DISCLOSURE_MISMATCH }];
     const findings = [];
     for (const [id, record] of [...records.entries()].sort(
       ([a], [b]) => a.localeCompare(b)
     )) {
-      if (Object.hasOwn(raw, id) && !object9(raw[id])) continue;
-      const supplied = object9(raw[id]) ? raw[id] : {};
+      if (Object.hasOwn(raw, id) && !object7(raw[id])) continue;
+      const supplied = object7(raw[id]) ? raw[id] : {};
       for (const [member, path2] of Object.entries(disclosureEligibleFields))
         if (!Object.hasOwn(supplied, member) && typeof resolveDisclosurePath(record, path2) === "string")
           findings.push({ capsuleId: id, member, status: "withheld" });
     }
     for (const id of Object.keys(raw).sort()) {
       const members = raw[id], record = records.get(id);
-      if (!object9(members) || !record) {
+      if (!object7(members) || !record) {
         findings.push({ capsuleId: id, member: "", status: DISCLOSURE_MISMATCH });
         continue;
       }
@@ -6912,7 +6776,7 @@ ${body}
   }
   async function extensions(bundle, covered) {
     const raw = bundle.extensions;
-    if (!object9(raw)) return [];
+    if (!object7(raw)) return [];
     const results = [];
     for (const kind of Object.keys(raw).sort()) {
       const interpreter = extensionInterpreter(kind, bundle);
@@ -7052,7 +6916,7 @@ ${body}
     return result.intervalCoverage.status === "withheld" && result.intervalCoverage.findings.includes(SELECTION_NOT_CHECKABLE);
   }
   function isVerifiedBundleContext(value) {
-    return object9(value) && contexts.has(value);
+    return object7(value) && contexts.has(value);
   }
   var WITHHELD = Object.freeze({ state: "withheld" });
   var MISMATCHED = Object.freeze({
@@ -7090,9 +6954,9 @@ ${body}
       ({ records, recordIndex, resolvedDisclosures } = reuse);
     } else {
       const index = /* @__PURE__ */ new Map();
-      if (object9(bundle) && Array.isArray(bundle.records)) {
+      if (object7(bundle) && Array.isArray(bundle.records)) {
         for (const record of bundle.records)
-          if (object9(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
+          if (object7(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
             index.set(record.capsule_id, record);
       }
       records = Object.freeze([...index.values()]);
@@ -7103,11 +6967,11 @@ ${body}
         index
       );
     }
-    const certificate = object9(bundle) ? bundle.completeness_certificate : void 0;
+    const certificate = object7(bundle) ? bundle.completeness_certificate : void 0;
     deepFreeze(verification);
     const context = deepFreeze({
       bundle,
-      root: object9(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
+      root: object7(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
       verification,
       strict: strict2,
       resolvedDisclosures,
@@ -7120,7 +6984,7 @@ ${body}
         graphClosure: verification.graphClosure,
         intervalCoverage: verification.intervalCoverage,
         perRecordMembership: verification.perRecordMembership,
-        memberships: object9(certificate) && object9(certificate.memberships) ? certificate.memberships : {}
+        memberships: object7(certificate) && object7(certificate.memberships) ? certificate.memberships : {}
       }
     });
     contexts.add(context);
@@ -7130,13 +6994,13 @@ ${body}
     const status2 = /* @__PURE__ */ new Map();
     for (const result of results)
       status2.set(`${result.capsuleId}\0${result.member}`, result.status);
-    const overlay = object9(bundle) && object9(bundle.disclosures) ? bundle.disclosures : {};
+    const overlay = object7(bundle) && object7(bundle.disclosures) ? bundle.disclosures : {};
     const resolved = /* @__PURE__ */ new Map();
     const one = (id, field) => {
       switch (status2.get(`${id}\0${field}`)) {
         case DISCLOSURE_MATCH: {
           const entry = overlay[id];
-          return object9(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
+          return object7(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
         }
         case DISCLOSURE_MISMATCH:
         case DISCLOSURE_NO_COMMITTED_DIGEST:
@@ -7163,7 +7027,7 @@ ${body}
   }
   var resolveDisclosure = async (record, disclosures2, field) => {
     const entry = disclosures2[record.capsule_id];
-    if (!object9(entry) || !Object.hasOwn(entry, field))
+    if (!object7(entry) || !Object.hasOwn(entry, field))
       return { state: "withheld" };
     const committed = resolveDisclosurePath(
       record,
@@ -7273,11 +7137,11 @@ ${body}
   }
   function copyDisclosures(raw) {
     if (raw === void 0 || raw === null) return {};
-    if (!object9(raw)) throw new BundleBuildError("disclosures is not an object");
+    if (!object7(raw)) throw new BundleBuildError("disclosures is not an object");
     return Object.fromEntries(
       Object.entries(raw).map(([id, members]) => [
         id,
-        object9(members) ? { ...members } : members
+        object7(members) ? { ...members } : members
       ])
     );
   }
@@ -7296,7 +7160,7 @@ ${body}
         `suppressedFields names members that are not disclosure-eligible: ${sortedText(ineligible)}`
       );
     for (const [id, members] of Object.entries(disclosures2)) {
-      if (!object9(members))
+      if (!object7(members))
         throw new BundleBuildError(`disclosures[${id}] is not an object`);
       const bad2 = Object.keys(members).filter((member) => !eligible(member));
       if (bad2.length)
@@ -7347,7 +7211,7 @@ ${body}
     for (const record of records) {
       const id = capsuleIdOf(record), revealed = disclosures2[id];
       for (const member of committedMembers(record))
-        if (!suppressed.includes(member) && !(object9(revealed) && Object.hasOwn(revealed, member)))
+        if (!suppressed.includes(member) && !(object7(revealed) && Object.hasOwn(revealed, member)))
           unrevealed.push([id, member]);
     }
     const overlay = Object.keys(disclosures2).length > 0;
@@ -7446,7 +7310,7 @@ ${body}
         `record ${capsuleId}: the stored capsule is not a JSON object (${String(error)})`
       );
     }
-    if (!object9(capsule))
+    if (!object7(capsule))
       throw new BundleBuildError(
         `record ${capsuleId}: the stored capsule is not a JSON object`
       );
@@ -7489,7 +7353,7 @@ ${body}
         "producerKey must be a raw 32-byte Ed25519 public key"
       );
     for (const name of ["extensions", "verification"])
-      if (options[name] !== void 0 && !object9(options[name]))
+      if (options[name] !== void 0 && !object7(options[name]))
         throw new BundleBuildError(`${name} must be a JSON object`);
     const copied = canonicalInput({
       disclosures: options.disclosures,
@@ -7661,7 +7525,7 @@ ${body}
     const closureDepth = options.closureDepth ?? 2, suppressedFields = options.suppressedFields ?? [], disclosures2 = copyDisclosures(copied.disclosures);
     checkOptions(closureDepth, disclosures2, suppressedFields, void 0, {});
     const ids = records.map(
-      (record) => object9(record) ? record.capsule_id : void 0
+      (record) => object7(record) ? record.capsule_id : void 0
     );
     if (!ids.every((id) => typeof id === "string"))
       throw new BundleBuildError("every record needs a capsule_id");
@@ -7697,44 +7561,6 @@ ${body}
     };
     if (Object.keys(disclosures2).length) bundle.disclosures = disclosures2;
     return selfChecked(bundle);
-  }
-
-  // agent-action-capsule/ts/src/model.ts
-  var CURRENT_SPEC_VERSION = "draft-mih-scitt-agent-action-capsule-05";
-  var ACCEPTED_SPEC_VERSIONS = Object.freeze([
-    "draft-mih-scitt-agent-action-capsule-04",
-    CURRENT_SPEC_VERSION
-  ]);
-  async function sealCapsule(body) {
-    if (body.format_version !== "4" || body.canonicalization_id !== "jcs")
-      throw new TypeError(
-        "format_version '4' requires canonicalization_id='jcs'"
-      );
-    const record = body;
-    for (const member of [
-      "spec_version",
-      "action_id",
-      "action_type",
-      "operator",
-      "developer",
-      "timestamp"
-    ]) {
-      if (typeof record[member] !== "string" || record[member] === "")
-        throw new TypeError(`${member} must be a non-empty string`);
-    }
-    const value = { ...body };
-    delete value.capsule_id;
-    const capsule_id = await computeCapsuleId(value);
-    return Object.freeze({ ...body, capsule_id });
-  }
-  async function parseCapsule(input) {
-    const value = decodeCapsuleJson(input);
-    const result = await verifyClass1(value);
-    if (!result.ok)
-      throw new TypeError(
-        `non-conforming Capsule: ${result.findings.map((item) => item.code).join(", ")}`
-      );
-    return Object.freeze(value);
   }
 
   // agent-action-capsule/ts/src/evidence-graph.ts
@@ -8010,6 +7836,44 @@ ${body}
       reports,
       ...calibration === void 0 ? {} : { calibration }
     };
+  }
+
+  // agent-action-capsule/ts/src/model.ts
+  var CURRENT_SPEC_VERSION = "draft-mih-scitt-agent-action-capsule-05";
+  var ACCEPTED_SPEC_VERSIONS = Object.freeze([
+    "draft-mih-scitt-agent-action-capsule-04",
+    CURRENT_SPEC_VERSION
+  ]);
+  async function sealCapsule(body) {
+    if (body.format_version !== "4" || body.canonicalization_id !== "jcs")
+      throw new TypeError(
+        "format_version '4' requires canonicalization_id='jcs'"
+      );
+    const record = body;
+    for (const member of [
+      "spec_version",
+      "action_id",
+      "action_type",
+      "operator",
+      "developer",
+      "timestamp"
+    ]) {
+      if (typeof record[member] !== "string" || record[member] === "")
+        throw new TypeError(`${member} must be a non-empty string`);
+    }
+    const value = { ...body };
+    delete value.capsule_id;
+    const capsule_id = await computeCapsuleId(value);
+    return Object.freeze({ ...body, capsule_id });
+  }
+  async function parseCapsule(input) {
+    const value = decodeCapsuleJson(input);
+    const result = await verifyClass1(value);
+    if (!result.ok)
+      throw new TypeError(
+        `non-conforming Capsule: ${result.findings.map((item) => item.code).join(", ")}`
+      );
+    return Object.freeze(value);
   }
 
   // agent-action-capsule/ts/src/result-root.ts
@@ -8295,6 +8159,12 @@ ${body}
       findings.push(
         "aggregate.coverage.not_yet_in_force: not a non-negative integer"
       );
+    if (coverage !== void 0 && Object.hasOwn(coverage, "requirements_covered") && (!Array.isArray(coverage.requirements_covered) || !coverage.requirements_covered.every(
+      (entry) => isObject(entry) && typeof entry.contract_ref === "string" && CONTRACT_REF.test(entry.contract_ref) && nonEmptyString3(entry.requirement_ref)
+    )))
+      findings.push(
+        "aggregate.coverage.requirements_covered: not an array of (contract_ref, requirement_ref) pairs"
+      );
     const buckets = isObject(aggregate?.buckets) ? aggregate.buckets : void 0;
     if (buckets === void 0) findings.push("aggregate.buckets: not an object");
     else {
@@ -8339,6 +8209,27 @@ ${body}
       for (const member of ["out_of_scope_allowed", "applies_from"])
         if (new Set(members.map((claim) => String(claim[member]))).size > 1)
           findings.push(`claims: the claims of ${key} disagree on ${member}`);
+    if (Array.isArray(coverage.requirements_covered)) {
+      const listed = /* @__PURE__ */ new Set();
+      for (const entry of coverage.requirements_covered) {
+        const key = JSON.stringify([entry.contract_ref, entry.requirement_ref]);
+        if (listed.has(key))
+          findings.push(
+            `aggregate.coverage.requirements_covered: ${key} is listed twice`
+          );
+        listed.add(key);
+      }
+      for (const key of rows.keys())
+        if (!listed.has(key))
+          findings.push(
+            `aggregate.coverage.requirements_covered: a claim cites ${key}, which it does not list`
+          );
+      const unclaimed = [...listed].filter((key) => !rows.has(key)).length;
+      if (unclaimed > coverage.excluded_not_applicable)
+        findings.push(
+          `aggregate.coverage.requirements_covered: ${unclaimed} listed requirement(s) no claim cites, but excluded_not_applicable is ${String(coverage.excluded_not_applicable)}`
+        );
+    }
     if (findings.length > 0) return findings;
     const later = laterClaimIds(value);
     if (later.size === 0 && Object.hasOwn(coverage, "not_yet_in_force"))
@@ -8937,6 +8828,12 @@ ${body}
         unknownCount: coverage.unknown_count,
         ...nonNegativeInteger(coverage.not_yet_in_force) ? { notYetInForce: coverage.not_yet_in_force } : {}
       },
+      ...Array.isArray(coverage.requirements_covered) ? {
+        requirementsCovered: coverage.requirements_covered.map((entry) => ({
+          contractRef: entry.contract_ref,
+          requirementRef: entry.requirement_ref
+        }))
+      } : {},
       bucketCounts: counts.bucketCounts,
       countMismatches: counts.mismatches,
       buckets: {
@@ -8948,6 +8845,915 @@ ${body}
       claims,
       records: cited,
       ...rootCoordinates === void 0 ? {} : { logCoordinates: rootCoordinates },
+      ...recordTimes(rootRecord2)
+    };
+  }
+
+  // agent-action-capsule/ts/src/outcome-report.ts
+  var NOT_STATED = "not stated";
+  var RESOLUTION_RULE = "A conversation resolves only when every criterion judged for it is met or does not apply, and at least one is met.";
+  function readableId(id) {
+    const words = id.replaceAll("_", " ").replaceAll("-", " ").trim();
+    return words.length === 0 ? id : words[0].toUpperCase() + words.slice(1);
+  }
+  var CLAIM_ID_SEPARATOR = "::";
+  function parseJudgeProbabilities(rationale) {
+    if (rationale === void 0) return {};
+    const out = {};
+    const block = /probabilities=\{([^}]*)\}/u.exec(rationale);
+    if (block !== null) {
+      const probabilities = {};
+      let readable = true;
+      const entries = block[1].split(",").map((e) => e.trim());
+      for (const entry of entries) {
+        if (entry === "" && entries.length === 1) {
+          readable = false;
+          break;
+        }
+        const match = new RegExp(`^'([a-z_]+)':\\s*(${NUMBER_TOKEN})$`, "u").exec(
+          entry
+        );
+        const value = match === null ? Number.NaN : Number(match[2]);
+        if (match === null || !isProbability(value)) {
+          readable = false;
+          break;
+        }
+        probabilities[match[1]] = value;
+      }
+      if (readable && Object.keys(probabilities).length > 0)
+        out.probabilities = probabilities;
+    }
+    const confidence = new RegExp(
+      `confidence=(${NUMBER_TOKEN})(?=[\\s,.;)]*$|[\\s,;)])`,
+      "u"
+    ).exec(rationale);
+    if (confidence !== null) {
+      const value = Number(confidence[1]);
+      if (isProbability(value)) out.confidence = value;
+    }
+    return out;
+  }
+  var NUMBER_TOKEN = "[+-]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?";
+  function isProbability(value) {
+    return Number.isFinite(value) && value >= 0 && value <= 1;
+  }
+  function criterionRef(requirementRef) {
+    const dot = requirementRef.indexOf(".");
+    if (dot === -1) return void 0;
+    return {
+      checkId: requirementRef.slice(0, dot),
+      criterionId: requirementRef.slice(dot + 1)
+    };
+  }
+  function parseClaimGrouping(claim) {
+    const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR);
+    if (sep === -1) return void 0;
+    const split = criterionRef(claim.requirementRef);
+    if (split === void 0) return void 0;
+    return { conversationId: claim.id.slice(0, sep), ...split };
+  }
+  function drawnVerdict(claim) {
+    if (claim.failed) return "failed";
+    if (claim.support === "unsupported") return "unsupported";
+    return claim.verdict;
+  }
+  function reportPayload(records, claim) {
+    const digest = claim.evidence[0]?.digest;
+    if (digest === void 0) return void 0;
+    const record = records.get(digest);
+    if (record === void 0) return void 0;
+    const input = record.carriedInput ?? record.agentInput;
+    if (input.state !== "disclosed") return void 0;
+    return isObject(input.payload) ? input.payload : void 0;
+  }
+  function dayOf(payload) {
+    const period = asString(payload?.period);
+    if (period === void 0) return "unknown";
+    const colon = period.indexOf(":");
+    return colon === -1 ? period : period.slice(colon + 1);
+  }
+  var STATED_DAY = /^(\d{4}-\d{2}-\d{2})/u;
+  function reportSealedDay(records, claim) {
+    const period = asString(reportPayload(records, claim)?.period);
+    if (period !== void 0) {
+      const colon = period.indexOf(":");
+      return colon === -1 ? period : period.slice(colon + 1);
+    }
+    if (reportState(records, claim) !== "withheld") return void 0;
+    const digest = claim.evidence[0]?.digest;
+    const timestamp = digest === void 0 ? void 0 : records.get(digest)?.stated?.timestamp;
+    return timestamp === void 0 ? void 0 : STATED_DAY.exec(timestamp)?.[1];
+  }
+  function reportState(records, claim) {
+    const digest = claim.evidence[0]?.digest;
+    const record = digest === void 0 ? void 0 : records.get(digest);
+    if (record === void 0) return "not_carried";
+    const input = record.carriedInput ?? record.agentInput;
+    switch (input.state) {
+      case "disclosed":
+        return isObject(input.payload) ? "disclosed" : "unreadable";
+      case "withheld":
+        return record.carriedInput !== void 0 && record.carriedCapsuleId === void 0 ? "invalid" : "withheld";
+      case "disclosure_mismatch":
+        return "mismatch";
+      default:
+        return "unreadable";
+    }
+  }
+  function caseActionIds(conversationId) {
+    const ids = [`urn:${conversationId}`];
+    const named = /^([^:]+):([^:]+):.+:(task-[^:]+:trial-[^:]+)$/u.exec(
+      conversationId
+    );
+    if (named !== null) ids.push(`urn:${named[1]}:${named[2]}:${named[3]}`);
+    return ids;
+  }
+  function isCaseRecordFor(record, conversationId) {
+    return record?.carriedCapsuleId !== void 0 && record.carriedActionId !== void 0 && caseActionIds(conversationId).includes(record.carriedActionId);
+  }
+  function claimsCitedCase(records, conversationId, claims, allClaims = claims) {
+    if (claims.length === 0 || !claims.every((claim) => reportState(records, claim) === "withheld"))
+      return void 0;
+    let found;
+    for (const claim of claims) {
+      const cases = /* @__PURE__ */ new Set();
+      for (const ref of claim.evidence.slice(1)) {
+        const record = records.get(ref.digest);
+        if (isCaseRecordFor(record, conversationId))
+          cases.add(record.carriedCapsuleId);
+      }
+      if (cases.size !== 1) return void 0;
+      const only = [...cases][0];
+      if (found !== void 0 && found !== only) return void 0;
+      found = only;
+    }
+    if (found === void 0) return void 0;
+    for (const claim of allClaims) {
+      const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR);
+      if (sep === -1 || claim.id.slice(0, sep) === conversationId) continue;
+      for (const ref of claim.evidence)
+        if (ref.digest === found || records.get(ref.digest)?.carriedCapsuleId === found)
+          return void 0;
+    }
+    return found;
+  }
+  function withheldReports(records, claims) {
+    let withheld = 0;
+    let mismatched = 0;
+    let unreadable = 0;
+    let invalid = 0;
+    let total = 0;
+    for (const claim of claims) {
+      const state = reportState(records, claim);
+      if (state === "not_carried") continue;
+      total += 1;
+      if (state === "withheld") withheld += 1;
+      else if (state === "mismatch") mismatched += 1;
+      else if (state === "unreadable") unreadable += 1;
+      else if (state === "invalid") invalid += 1;
+    }
+    return { withheld, mismatched, unreadable, invalid, total };
+  }
+  function caseRecord(result, claims, sourceCapsuleId) {
+    if (sourceCapsuleId === void 0) return void 0;
+    for (const claim of claims)
+      for (const ref of claim.evidence) {
+        const record = result.records.get(ref.digest);
+        if (record === void 0 || record.stated === void 0) continue;
+        if (record.carriedCapsuleId === sourceCapsuleId || record.carriedCapsuleId === void 0 && record.bookRecordId === void 0 && record.capsuleId === sourceCapsuleId)
+          return record;
+      }
+    return void 0;
+  }
+  function conversationDate(record, judgedDay) {
+    const judged = { basis: "judged", date: judgedDay };
+    const stated = record?.stated;
+    if (stated === void 0) return judged;
+    const mode = stated.provenanceMode;
+    if (asString(mode?.mode) === "backfilled") {
+      const source = asString(mode?.source_asserted_at);
+      const day2 = source === void 0 ? void 0 : STATED_DAY.exec(source)?.[1];
+      if (source === void 0 || day2 === void 0) return judged;
+      const importedAt = asString(mode?.imported_at);
+      return {
+        basis: "source",
+        date: day2,
+        stated: source,
+        zone: zoneStatement(source),
+        ...importedAt === void 0 ? {} : { importedAt }
+      };
+    }
+    const timestamp = stated.timestamp;
+    const day = timestamp === void 0 ? void 0 : STATED_DAY.exec(timestamp)?.[1];
+    if (timestamp === void 0 || day === void 0) return judged;
+    return {
+      basis: "record",
+      date: day,
+      stated: timestamp,
+      zone: zoneStatement(timestamp)
+    };
+  }
+  function checksById(terms) {
+    return new Map(terms.checks.map((check) => [check.id, check]));
+  }
+  function rollUp(verdicts) {
+    if (verdicts.length === 0) return "not_evaluable";
+    if (verdicts.some(
+      (v) => v === "not_met" || v === "failed" || v === "unsupported"
+    ))
+      return "not_met";
+    if (verdicts.some((v) => v === "not_evaluable" || v === "no_claim"))
+      return "not_evaluable";
+    if (!verdicts.some((v) => v === "met")) return "not_evaluable";
+    return "met";
+  }
+  function sealedCaseIds(payload) {
+    const c = isObject(payload.case) ? payload.case : void 0;
+    if (c === void 0) return [];
+    const parts = [c.benchmark, c.domain, c.task_id, c.trial].map(
+      (v) => typeof v === "string" || typeof v === "number" ? String(v) : void 0
+    );
+    if (parts.some((v) => v === void 0)) return [];
+    const ids = [`${parts[0]}:${parts[1]}:task-${parts[2]}:trial-${parts[3]}`];
+    const model = asString(c.agent_model);
+    if (model !== void 0 && model.length > 0)
+      ids.unshift(
+        `${parts[0]}:${parts[1]}:${model}:task-${parts[2]}:trial-${parts[3]}`
+      );
+    return ids;
+  }
+  function transcriptTurns(payload) {
+    const interaction = isObject(payload.agent_interaction) ? payload.agent_interaction : void 0;
+    if (interaction === void 0 || !Array.isArray(interaction.messages))
+      return void 0;
+    return interaction.messages.flatMap((m) => {
+      if (!isObject(m)) return [];
+      const role = asString(m.role) ?? "unknown";
+      const content = asString(m.content);
+      const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+      return [
+        {
+          role,
+          ...content === void 0 ? {} : { content },
+          toolCalls: calls.flatMap(
+            (call) => isObject(call) ? [
+              {
+                name: asString(call.name) ?? "unnamed",
+                arguments: JSON.stringify(call.arguments ?? null)
+              }
+            ] : []
+          )
+        }
+      ];
+    });
+  }
+  function findTranscript(result, conversationId, claims, sourceCapsuleId, caseFrom = "reports") {
+    const records = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const claim of claims)
+      for (const ref of claim.evidence.slice(1)) {
+        if (seen.has(ref.digest)) continue;
+        seen.add(ref.digest);
+        const record = result.records.get(ref.digest);
+        if (record !== void 0) records.push(record);
+      }
+    const carriers = records.filter(
+      (r) => r.carriedInput?.state === "disclosed" && isObject(r.carriedInput.payload) && transcriptTurns(r.carriedInput.payload) !== void 0
+    );
+    if (carriers.length === 0) return { state: "absent" };
+    if (sourceCapsuleId === void 0)
+      return {
+        state: "mismatch",
+        reason: "the reports do not agree on one case record"
+      };
+    const caseRecord3 = records.find(
+      (r) => r.carriedCapsuleId === sourceCapsuleId
+    );
+    if (caseRecord3?.carriedInputDigest === void 0)
+      return {
+        state: "mismatch",
+        reason: `the case record the reports name (${sourceCapsuleId}) is not cited, so the transcript cannot be tied to it`
+      };
+    if (caseFrom === "claims") {
+      const ordered = [
+        ...carriers.filter((c) => c === caseRecord3),
+        ...carriers.filter((c) => c !== caseRecord3)
+      ];
+      for (const carrier of ordered) {
+        const payload = carrier.carriedInput.payload;
+        if ((carrier === caseRecord3 || carrier.carriedInputDigest === caseRecord3.carriedInputDigest) && sealedCaseIds(payload).includes(conversationId))
+          return {
+            state: "cited",
+            turns: transcriptTurns(payload),
+            transcriptRecordId: carrier.capsuleId,
+            caseRecordId: caseRecord3.capsuleId,
+            inputDigest: caseRecord3.carriedInputDigest,
+            reason: "the claims cite this case; the judge's reports are withheld, so which conversation the judge read is not shown"
+          };
+      }
+      return {
+        state: "mismatch",
+        reason: "a cited transcript does not commit to the same input as the case record the claims cite"
+      };
+    }
+    for (const carrier of carriers) {
+      const payload = carrier.carriedInput.state === "disclosed" ? carrier.carriedInput.payload : void 0;
+      if (payload === void 0) continue;
+      if (carrier.carriedInputDigest === caseRecord3.carriedInputDigest && sealedCaseIds(payload).includes(conversationId))
+        return {
+          state: "verified",
+          turns: transcriptTurns(payload),
+          transcriptRecordId: carrier.capsuleId,
+          caseRecordId: caseRecord3.capsuleId,
+          inputDigest: caseRecord3.carriedInputDigest
+        };
+    }
+    return {
+      state: "mismatch",
+      reason: "a cited transcript does not commit to the same input as the case record the judge read"
+    };
+  }
+  function groupClaims(result, terms) {
+    const order = checksById(terms);
+    const byConversation = /* @__PURE__ */ new Map();
+    for (const claim of result.claims) {
+      if (claim.type !== REQUIREMENT_CLAIM) continue;
+      const grouping = parseClaimGrouping(claim);
+      if (grouping === void 0 || !order.has(grouping.checkId)) continue;
+      const list = byConversation.get(grouping.conversationId) ?? [];
+      list.push(claim);
+      byConversation.set(grouping.conversationId, list);
+    }
+    const contractRef = packRef(terms);
+    const cited = new Set(
+      result.claims.map(
+        (claim) => JSON.stringify([claim.contractRef, claim.requirementRef])
+      )
+    );
+    const reserved = (result.requirementsCovered ?? []).filter(
+      (ref) => !cited.has(JSON.stringify([ref.contractRef, ref.requirementRef])) && (ref.contractRef !== contractRef || criterionRef(ref.requirementRef) === void 0)
+    ).length;
+    const allLater2 = /* @__PURE__ */ new Set();
+    for (const [conversationId, claims] of byConversation) {
+      const drawn = terms.checks.flatMap(
+        (check) => check.criteria.flatMap((criterion) => {
+          const claim = claims.find(
+            (candidate) => candidate.requirementRef === `${check.id}.${criterion.id}`
+          );
+          return claim === void 0 ? [] : [claim];
+        })
+      );
+      if (drawn.length > 0 && drawn.every((c) => c.later && !c.failed))
+        allLater2.add(conversationId);
+    }
+    let missing = 0;
+    for (const [conversationId, claims] of byConversation)
+      if (!allLater2.has(conversationId)) {
+        for (const check of terms.checks)
+          for (const criterion of check.criteria)
+            if (!claims.some(
+              (candidate) => candidate.requirementRef === `${check.id}.${criterion.id}`
+            ))
+              missing += 1;
+      }
+    const missingVerdict = missing <= result.coverage.excludedNotApplicable - reserved ? "not_applicable" : "no_claim";
+    const conversations = [];
+    const notYetInForce = [];
+    const byDay = /* @__PURE__ */ new Map();
+    for (const [conversationId, claims] of byConversation) {
+      const criteria = [];
+      const laterCriteria = [];
+      const isAllLater = allLater2.has(conversationId);
+      for (const check of terms.checks) {
+        for (const criterion of check.criteria) {
+          const claim = claims.find(
+            (candidate) => candidate.requirementRef === `${check.id}.${criterion.id}`
+          );
+          if (claim === void 0) {
+            if (!isAllLater)
+              criteria.push({
+                checkId: check.id,
+                criterionId: criterion.id,
+                verdict: missingVerdict
+              });
+            continue;
+          }
+          const target = claim.later && !claim.failed ? laterCriteria : criteria;
+          const judgment = reportPayload(result.records, claim);
+          const rationale = judgment ? asString(judgment.rationale) : void 0;
+          const reasonCode = judgment ? asString(judgment.reason_code) : void 0;
+          const sourceCapsuleId = judgment ? asString(judgment.source_capsule_id) : void 0;
+          const judgePinDigest = judgment ? asString(judgment.judge_pin_digest) : void 0;
+          const clauseClaim = judgment !== void 0 && asString(judgment.clause_id) === `${check.id}.${criterion.id}` ? asString(judgment.clause_claim) : void 0;
+          const { probabilities, confidence } = parseJudgeProbabilities(rationale);
+          const cited2 = claim.evidence[0]?.digest;
+          const record = cited2 === void 0 ? void 0 : result.records.get(cited2);
+          target.push({
+            checkId: check.id,
+            criterionId: criterion.id,
+            claim,
+            verdict: drawnVerdict(claim),
+            ...rationale === void 0 ? {} : { rationale },
+            ...reasonCode === void 0 ? {} : { reasonCode },
+            ...probabilities === void 0 ? {} : { probabilities },
+            ...confidence === void 0 ? {} : { confidence },
+            ...cited2 === void 0 ? {} : { reportCapsuleId: cited2 },
+            ...record?.bookRecordId === void 0 ? {} : { reportRecordId: record.bookRecordId },
+            ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId },
+            ...judgePinDigest === void 0 ? {} : { judgePinDigest },
+            reportState: reportState(result.records, claim),
+            ...clauseClaim === void 0 || clauseClaim.trim() === "" ? {} : { clauseClaim }
+          });
+        }
+      }
+      const firstClaim = [...criteria, ...laterCriteria].find(
+        (c) => c.claim !== void 0
+      )?.claim;
+      const judgedDay = (firstClaim === void 0 ? void 0 : reportSealedDay(result.records, firstClaim)) ?? dayOf(void 0);
+      const checkVerdicts = /* @__PURE__ */ new Map();
+      for (const check of terms.checks) {
+        const forCheck = criteria.filter((c) => c.checkId === check.id);
+        checkVerdicts.set(check.id, rollUp(forCheck.map((c) => c.verdict)));
+      }
+      const sources = new Set(
+        [...criteria, ...laterCriteria].flatMap(
+          (c) => c.sourceCapsuleId === void 0 ? [] : [c.sourceCapsuleId]
+        )
+      );
+      let caseFrom = "reports";
+      if (sources.size === 0) {
+        const cited2 = claimsCitedCase(
+          result.records,
+          conversationId,
+          claims,
+          result.claims
+        );
+        if (cited2 !== void 0) {
+          sources.add(cited2);
+          caseFrom = "claims";
+        }
+      }
+      const dated = conversationDate(
+        caseRecord(
+          result,
+          claims,
+          sources.size === 1 ? [...sources][0] : void 0
+        ),
+        judgedDay
+      );
+      const date = dated.date;
+      const conversation = {
+        conversationId,
+        transcript: findTranscript(
+          result,
+          conversationId,
+          claims,
+          sources.size === 1 ? [...sources][0] : void 0,
+          caseFrom
+        ),
+        ...sources.size === 1 ? { sourceCapsuleId: [...sources][0], caseFrom } : {},
+        day: date,
+        dated,
+        judgedDay,
+        criteria,
+        notYetInForce: laterCriteria,
+        checkVerdicts,
+        verdict: rollUp(criteria.map((c) => c.verdict))
+      };
+      if (isAllLater) {
+        notYetInForce.push(conversation);
+        continue;
+      }
+      conversations.push(conversation);
+      const dayList = byDay.get(date) ?? [];
+      dayList.push(conversation);
+      byDay.set(date, dayList);
+    }
+    const byId = (a, b) => a.day === b.day ? a.conversationId.localeCompare(b.conversationId) : a.day.localeCompare(b.day);
+    conversations.sort(byId);
+    notYetInForce.sort(byId);
+    return { conversations, days: byDay, notYetInForce };
+  }
+  function criterionTiers(terms, conversations) {
+    const tiers = /* @__PURE__ */ new Map();
+    for (const check of terms.checks) {
+      for (const criterion of check.criteria) {
+        const ref = `${check.id}.${criterion.id}`;
+        const seen = /* @__PURE__ */ new Set();
+        for (const conversation of conversations)
+          for (const c of conversation.criteria)
+            if (c.checkId === check.id && c.criterionId === criterion.id && c.claim !== void 0)
+              seen.add(c.claim.tier);
+        tiers.set(
+          ref,
+          seen.size === 0 ? "unknown" : seen.size === 1 ? [...seen][0] : "mixed"
+        );
+      }
+    }
+    return tiers;
+  }
+  function pinComponents(value) {
+    if (!isObject(value)) return void 0;
+    const modelId = asString(value.model_id);
+    const promptDigest = asString(value.prompt_digest);
+    const axesDigest = asString(value.axes_digest);
+    if (modelId === void 0 || promptDigest === void 0 || axesDigest === void 0)
+      return void 0;
+    const modelVersion = asString(value.model_version);
+    return {
+      modelId,
+      ...modelVersion === void 0 ? {} : { modelVersion },
+      promptDigest,
+      axesDigest,
+      ...isObject(value.sampling_params) ? { samplingParams: value.sampling_params } : {}
+    };
+  }
+  function pinPreimage(pin) {
+    return {
+      model_id: pin.modelId,
+      model_version: pin.modelVersion ?? null,
+      sampling_params: pin.samplingParams ?? null,
+      prompt_digest: pin.promptDigest,
+      axes_digest: pin.axesDigest
+    };
+  }
+  function buildRunInfo(result, conversations) {
+    const claimContracts = /* @__PURE__ */ new Set();
+    const reportContracts = /* @__PURE__ */ new Set();
+    const pins = /* @__PURE__ */ new Set();
+    const components = /* @__PURE__ */ new Map();
+    for (const conversation of conversations) {
+      for (const criterion of conversation.criteria) {
+        const claim = criterion.claim;
+        if (claim === void 0) continue;
+        claimContracts.add(claim.contractRef);
+        const payload = reportPayload(result.records, claim);
+        const contract = asString(payload?.contract_ref) ?? asString(payload?.contract);
+        if (contract !== void 0) reportContracts.add(contract);
+        const pin = asString(payload?.judge_pin_digest);
+        if (pin !== void 0) pins.add(pin);
+        const parts = pinComponents(payload?.judge_pin);
+        if (parts !== void 0)
+          components.set(JSON.stringify(pinPreimage(parts)), parts);
+      }
+    }
+    const contracts = claimContracts.size > 0 ? claimContracts : reportContracts;
+    const pinned = contracts.size <= 1 && pins.size <= 1 && components.size <= 1;
+    const counted = withheldReports(
+      result.records,
+      conversations.flatMap(
+        (c) => c.criteria.flatMap((cr) => cr.claim === void 0 ? [] : [cr.claim])
+      )
+    );
+    return {
+      ...counted.withheld > 0 ? { reportsWithheld: counted.withheld } : {},
+      ...counted.mismatched > 0 ? { reportsMismatched: counted.mismatched } : {},
+      ...counted.unreadable > 0 ? { reportsUnreadable: counted.unreadable } : {},
+      ...counted.invalid > 0 ? { reportsInvalid: counted.invalid } : {},
+      ...counted.withheld + counted.mismatched + counted.unreadable + counted.invalid > 0 ? { reportsCited: counted.total } : {},
+      ...contracts.size === 1 ? { contract: [...contracts][0] } : {},
+      ...pins.size === 1 ? { judgePinDigest: [...pins][0] } : {},
+      ...pins.size === 1 && components.size === 1 ? { judgePin: [...components.values()][0] } : {},
+      pinned
+    };
+  }
+  async function verifyJudgePin(runInfo) {
+    if (runInfo.judgePin === void 0 || runInfo.judgePinDigest === void 0)
+      return runInfo;
+    let recomputes = false;
+    try {
+      recomputes = await jsonDigest(pinPreimage(runInfo.judgePin)) === runInfo.judgePinDigest;
+    } catch {
+      recomputes = false;
+    }
+    return { ...runInfo, judgePinRecomputes: recomputes };
+  }
+  function buildCalibration(result) {
+    const weeks = [];
+    for (const claim of result.claims) {
+      if (claim.type !== "calibration") continue;
+      const payload = reportPayload(result.records, claim);
+      if (payload === void 0) continue;
+      const weekId = asString(payload.week);
+      if (weekId === void 0) continue;
+      const sample = (Array.isArray(payload.sample) ? payload.sample : []).flatMap((entry) => {
+        if (!isObject(entry)) return [];
+        const conversationId = asString(entry.conversation_id);
+        const aiVerdict = asString(entry.ai_verdict);
+        const humanVerdict = asString(entry.human_verdict);
+        if (conversationId === void 0 || aiVerdict === void 0 || humanVerdict === void 0)
+          return [];
+        const note = asString(entry.note);
+        return [
+          {
+            conversationId,
+            aiVerdict,
+            humanVerdict,
+            ...note === void 0 ? {} : { note },
+            agrees: aiVerdict === humanVerdict
+          }
+        ];
+      });
+      const k = sample.filter((entry) => entry.agrees).length;
+      const n = sample.length;
+      const from = asString(payload.from);
+      const to = asString(payload.to);
+      weeks.push({
+        weekId,
+        ...from === void 0 ? {} : { from },
+        ...to === void 0 ? {} : { to },
+        k,
+        n,
+        sample,
+        claim
+      });
+    }
+    weeks.sort((a, b) => a.weekId.localeCompare(b.weekId));
+    return weeks;
+  }
+  function heldAndAdded(weeks) {
+    let held = 0, added = 0;
+    for (const week of weeks)
+      for (const sample of week.sample) {
+        if (sample.aiVerdict === "met" && sample.humanVerdict !== "met")
+          held += 1;
+        else if (sample.aiVerdict !== "met" && sample.humanVerdict === "met")
+          added += 1;
+      }
+    return { held, added };
+  }
+  function missedReasonGroups(terms, conversations) {
+    const labelOf = (checkId, criterionId) => {
+      const check = terms.checks.find((c) => c.id === checkId);
+      const criterion = check?.criteria.find((c) => c.id === criterionId);
+      return criterion === void 0 ? `${checkId}.${criterionId}` : `${criterion.label} (${check.question})`;
+    };
+    const labelledReasonCode = (code) => code === void 0 ? void 0 : terms.reasonCodes[code];
+    const groups = /* @__PURE__ */ new Map();
+    const structured = /* @__PURE__ */ new Map();
+    const labels = /* @__PURE__ */ new Map();
+    for (const conversation of conversations) {
+      if (conversation.verdict === "met") continue;
+      const failing = conversation.criteria.filter(
+        (c) => c.verdict === "not_met" || c.verdict === "failed" || c.verdict === "unsupported"
+      );
+      const notEvaluable = conversation.criteria.filter(
+        (c) => c.verdict === "not_evaluable" || c.verdict === "no_claim"
+      );
+      const first = failing[0] ?? notEvaluable[0];
+      if (first === void 0) continue;
+      const label = labelledReasonCode(first.reasonCode);
+      const key = label !== void 0 ? first.reasonCode : `${first.checkId}.${first.criterionId}`;
+      const list = groups.get(key) ?? [];
+      list.push(conversation);
+      groups.set(key, list);
+      structured.set(key, label !== void 0);
+      labels.set(key, label ?? labelOf(first.checkId, first.criterionId));
+    }
+    return [...groups.entries()].map(([key, convos]) => ({
+      key,
+      label: labels.get(key),
+      structured: structured.get(key),
+      conversations: convos
+    })).sort((a, b) => b.conversations.length - a.conversations.length);
+  }
+  function criterionWordings(terms, conversations) {
+    const out = /* @__PURE__ */ new Map();
+    for (const check of terms.checks) {
+      for (const criterion of check.criteria) {
+        const sealed = /* @__PURE__ */ new Set();
+        for (const conversation of conversations)
+          for (const c of conversation.criteria)
+            if (c.checkId === check.id && c.criterionId === criterion.id && c.clauseClaim !== void 0)
+              sealed.add(c.clauseClaim);
+        const ref = `${check.id}.${criterion.id}`;
+        if (sealed.size === 1)
+          out.set(ref, { text: [...sealed][0], source: "sealed" });
+        else
+          out.set(ref, {
+            text: NOT_STATED,
+            source: sealed.size === 0 ? "unstated" : "mixed"
+          });
+      }
+    }
+    return out;
+  }
+  function citedContract(result, contractRef) {
+    for (const record of result.records.values()) {
+      const input = record.carriedInput ?? record.agentInput;
+      if (input.state !== "disclosed" || !isObject(input.payload)) continue;
+      const doc = input.payload;
+      const id = asString(doc.id);
+      const version = asString(doc.version);
+      if (id !== void 0 && version !== void 0 && Array.isArray(doc.requirements) && `${id}@${version}` === contractRef)
+        return doc;
+    }
+    return void 0;
+  }
+  function readOutcomeReportTerms(result) {
+    const checks = /* @__PURE__ */ new Map();
+    const contracts = /* @__PURE__ */ new Set();
+    for (const claim of result.claims) {
+      if (claim.type !== REQUIREMENT_CLAIM) continue;
+      const grouping = parseClaimGrouping(claim);
+      if (grouping === void 0) continue;
+      contracts.add(claim.contractRef);
+      const criteria = checks.get(grouping.checkId) ?? [];
+      if (!criteria.includes(grouping.criterionId))
+        criteria.push(grouping.criterionId);
+      checks.set(grouping.checkId, criteria);
+    }
+    const contractRef = contracts.size === 1 ? [...contracts][0] : void 0;
+    const contract = contractRef === void 0 ? void 0 : citedContract(result, contractRef);
+    const coveredRefs = result.requirementsCovered === void 0 ? contractCriteria(contract) : result.requirementsCovered.filter((covered) => covered.contractRef === contractRef).map((covered) => covered.requirementRef);
+    for (const ref of coveredRefs) {
+      const split = criterionRef(ref);
+      if (split === void 0) continue;
+      const criteria = checks.get(split.checkId) ?? [];
+      if (!criteria.includes(split.criterionId)) criteria.push(split.criterionId);
+      checks.set(split.checkId, criteria);
+    }
+    const at = contractRef?.lastIndexOf("@") ?? -1;
+    const outcome = Array.isArray(contract?.requirements) ? contract.requirements.find(
+      (r) => isObject(r) && r.profile === "outcome" && asString(r.statement) !== void 0
+    ) : void 0;
+    return {
+      pack: {
+        id: contractRef === void 0 || at <= 0 ? NOT_STATED : contractRef.slice(0, at),
+        version: contractRef === void 0 || at <= 0 || at === contractRef.length - 1 ? NOT_STATED : contractRef.slice(at + 1),
+        outcomeStatement: asString(outcome?.statement) ?? NOT_STATED,
+        locked: NOT_STATED,
+        agreement: NOT_STATED,
+        resolutionRule: RESOLUTION_RULE
+      },
+      checks: [...checks.entries()].map(([id, criteria]) => ({
+        id,
+        question: readableId(id),
+        description: NOT_STATED,
+        icon: "check",
+        criteria: criteria.map((criterionId) => ({
+          id: criterionId,
+          label: readableId(criterionId),
+          text: NOT_STATED
+        }))
+      })),
+      reasonCodes: {}
+    };
+  }
+  function notRunCriteria(result, terms) {
+    const covered = result.requirementsCovered;
+    const contractRef = packRef(terms);
+    if (covered === void 0 || contractRef === void 0) return [];
+    const listed = new Set(
+      covered.filter((ref) => ref.contractRef === contractRef).map((ref) => ref.requirementRef)
+    );
+    return contractCriteria(citedContract(result, contractRef)).filter(
+      (id) => !listed.has(id)
+    );
+  }
+  function contractCriteria(contract) {
+    const ids = [];
+    for (const requirement of contract?.requirements ?? []) {
+      const id = isObject(requirement) ? asString(requirement.id) : void 0;
+      if (id !== void 0 && criterionRef(id) !== void 0 && !ids.includes(id))
+        ids.push(id);
+    }
+    return ids;
+  }
+  function packRef(terms) {
+    return terms.pack.id === NOT_STATED || terms.pack.version === NOT_STATED ? void 0 : `${terms.pack.id}@${terms.pack.version}`;
+  }
+  function buildDating(conversations) {
+    const counts = { source: 0, record: 0, judged: 0 };
+    for (const c of conversations) counts[c.dated.basis] += 1;
+    const used = Object.keys(counts).filter(
+      (basis) => counts[basis] > 0
+    );
+    return {
+      basis: used.length === 1 ? used[0] : used.length === 0 ? "judged" : "mixed",
+      counts,
+      judgedDays: [...new Set(conversations.map((c) => c.judgedDay))].sort(),
+      zoneNotStated: conversations.filter((c) => c.dated.zone === "not-stated").length
+    };
+  }
+  function buildOutcomeReportModel(result, options) {
+    const terms = readOutcomeReportTerms(result);
+    const { conversations, days, notYetInForce } = groupClaims(result, terms);
+    const dayList = [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, convos]) => ({
+      date,
+      // No evaluation-report/v1 record carries a day-level policy-change
+      // flag (that was a property of v1's invented day wrapper, which this
+      // real data shape has no analogue for) -- absent is never pass, so
+      // this reads null until a real day-summary record exists to cite.
+      policyChanged: null,
+      conversations: convos,
+      resolvedCount: convos.filter((c) => c.verdict === "met").length,
+      judgedDays: [...new Set(convos.map((c) => c.judgedDay))].sort()
+    }));
+    const calibration = buildCalibration(result);
+    const { held, added } = heldAndAdded(calibration);
+    const checkPassCounts = /* @__PURE__ */ new Map();
+    for (const check of terms.checks)
+      checkPassCounts.set(
+        check.id,
+        conversations.filter((c) => c.checkVerdicts.get(check.id) === "met").length
+      );
+    const resolvedCount = conversations.filter((c) => c.verdict === "met").length;
+    const countOf2 = (verdict2) => conversations.reduce(
+      (sum, c) => sum + c.criteria.filter((cr) => cr.verdict === verdict2).length,
+      0
+    );
+    const notApplicableCount = countOf2("not_applicable");
+    const outOfScopeCount = countOf2("out_of_scope");
+    const noClaimCount = countOf2("no_claim");
+    return {
+      terms,
+      options,
+      days: dayList,
+      dating: buildDating(conversations),
+      conversations,
+      notYetInForce,
+      runInfo: buildRunInfo(result, conversations),
+      calibration,
+      checkPassCounts,
+      missedReasons: missedReasonGroups(terms, conversations),
+      criterionTiers: criterionTiers(terms, conversations),
+      criterionWording: criterionWordings(terms, conversations),
+      resolvedCount,
+      missedCount: conversations.length - resolvedCount,
+      totalCount: conversations.length,
+      heldCount: held,
+      addedCount: added,
+      notApplicableCount,
+      outOfScopeCount,
+      noClaimCount,
+      notRun: notRunCriteria(result, terms),
+      capsuleId: result.capsuleId
+    };
+  }
+
+  // agent-action-capsule/ts/src/report-rows.ts
+  var rowCitationDigests = (row2) => Array.isArray(row2.references) ? row2.references.flatMap(
+    (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
+  ) : [];
+  async function buildReportRows(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
+    if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
+      return void 0;
+    }
+    const rootRecord2 = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    if (rootRecord2 === void 0) return void 0;
+    const rootPayload = verifiedPayload(
+      context,
+      rootRecord2.capsule_id,
+      "agent_input"
+    );
+    if (!isObject(rootPayload) || rootPayload.spec_version !== "report/v1")
+      return void 0;
+    const memberships2 = context.completeness.memberships;
+    const recordsById = context.recordIndex;
+    const rows = [];
+    for (const raw of Array.isArray(rootPayload.rows) ? rootPayload.rows : []) {
+      if (!isObject(raw)) continue;
+      const rowId = asString(raw.row_id);
+      const label = asString(raw.label);
+      const rowStatus2 = asString(raw.status);
+      if (rowId === void 0 || label === void 0 || rowStatus2 === void 0)
+        continue;
+      const reason = asString(raw.reason);
+      const citations2 = [];
+      for (const digest of rowCitationDigests(raw)) {
+        const record = recordsById.get(digest);
+        if (record === void 0) continue;
+        const resolved = disclosureOf(context, record.capsule_id, "agent_input");
+        const coordinates = logCoordinates(memberships2, record.capsule_id);
+        citations2.push({
+          capsuleId: record.capsule_id,
+          ...resolved.state === "disclosed" ? { disclosedPayload: resolved.payload } : {},
+          disclosure: resolved.state,
+          ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
+          ...recordTimes(record)
+        });
+      }
+      rows.push({
+        rowId,
+        label,
+        status: rowStatus2,
+        ...reason === void 0 ? {} : { reason },
+        citations: citations2
+      });
+    }
+    const title = asString(rootPayload.title);
+    const rootResolvedLogCoordinates = logCoordinates(
+      memberships2,
+      rootRecord2.capsule_id
+    );
+    return {
+      capsuleId: rootRecord2.capsule_id,
+      ...title === void 0 ? {} : { title },
+      rows,
+      ...rootResolvedLogCoordinates === void 0 ? {} : { logCoordinates: rootResolvedLogCoordinates },
       ...recordTimes(rootRecord2)
     };
   }
@@ -8971,17 +9777,9 @@ ${body}
     "presentation-header",
     "countersignature-stamp"
   ]);
-  function extensionRows(extensions2, applied, refused = []) {
+  function extensionRows(extensions2, applied) {
     return extensions2.map((extension) => {
       const integrity = extension.integrityCovered ? "covered" : "not covered";
-      const refusal = refused.find((r) => r.extensions.includes(extension.kind));
-      if (refusal !== void 0)
-        return {
-          id: extension.kind,
-          integrity,
-          refusal,
-          semantics: presentationRefusalRow(refusal, extension.integrityCovered)
-        };
       if (extension.status === "interpreted" && (applied === void 0 || applied.has(extension.interpreter)))
         return {
           id: extension.kind,
@@ -8995,13 +9793,6 @@ ${body}
         semantics: extension.integrityCovered ? EXTENSION_NOT_INTERPRETED : EXTENSION_NOT_INTERPRETED_NOT_COVERED
       };
     });
-  }
-  function presentationRefusalNotices(refused) {
-    return refused.filter((refusal) => refusal.extensions.length === 0).map((refusal) => ({
-      id: refusal.id,
-      reason: refusal.reason,
-      line: presentationRefusalLine(refusal)
-    }));
   }
   var UNBOUND = "membership_record_unbound:";
   var INVALID = /^membership_(?:proof_invalid|coordinates_missing|coordinates_invalid|record_unknown):(.+)$/u;
@@ -9020,6 +9811,15 @@ ${body}
       const id = finding.slice(UNBOUND.length);
       return invalid.has(id) ? [] : [id];
     });
+  }
+  function membershipProvenOrUnbound(result) {
+    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
+  }
+  function bundleVerified(result) {
+    const selected = isProducerSelection(result);
+    return result.graphClosure.status === "pass" && (selected || result.intervalCoverage.status === "pass") && membershipProvenOrUnbound(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
+      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
+    );
   }
   function nonUnboundFindings(verified) {
     const names2 = [];
@@ -9043,7 +9843,7 @@ ${body}
     const invalid = invalidRecordIds(verified);
     return (Array.isArray(bundle.records) ? bundle.records : []).flatMap(
       (record) => {
-        const capsuleId = object10(record)?.capsule_id;
+        const capsuleId = object8(record)?.capsule_id;
         if (typeof capsuleId !== "string") return [];
         return [
           {
@@ -9079,9 +9879,15 @@ ${body}
     refused: "\u2717 This bundle did not verify: do not rely on it",
     unable: "Couldn't check this page here: check it with a full verifier"
   });
+  var UNABLE_TO_VERIFY_LINES = {
+    banner: VERIFICATION_BANNER_LINES.unable,
+    reason: "This viewer cannot compute the SHA-256 digests the checks need, so nothing was checked and no records are shown. This is not a failed check: the file may well be valid.",
+    command: "To check this file, run:",
+    noCommand: "To check this file, open it from a secure (https) page, or check it with a verifier outside this viewer."
+  };
   var UNVERIFIED_BUNDLE_REFUSAL = "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed.";
   var recordsWord = (count2) => `${count2} ${count2 === 1 ? "record" : "records"}`;
-  var fields = (value) => object10(value) ?? {};
+  var fields = (value) => object8(value) ?? {};
   var CLAIM_WORDS = {
     records: "each record's identity",
     signatures: "the records' producer signatures",
@@ -9288,7 +10094,7 @@ ${body}
     "range_proof_invalid"
   ]);
   function verificationCheckLists(bundle, verified, inputs = {}) {
-    const top = object10(bundle) ?? {};
+    const top = object8(bundle) ?? {};
     const outcome = /* @__PURE__ */ new Map();
     const ran = (id, passed) => {
       outcome.set(id, passed ? "page" : "failed");
@@ -9305,7 +10111,7 @@ ${body}
     }
     ran("closure", verified.graphClosure.status !== "fail");
     const range = verified.intervalCoverage;
-    const signed = typeof object10(top.checkpoint)?.cose === "string" && object10(top.checkpoint).cose !== "";
+    const signed = typeof object8(top.checkpoint)?.cose === "string" && object8(top.checkpoint).cose !== "";
     let passedWithoutCheckpoint = false;
     if (range.status !== "withheld") {
       const stopped = range.findings.some(
@@ -9363,7 +10169,7 @@ ${body}
     else if (composed.length > 0) ran("composed", true);
     if (inputs.citedSigners === true) ran("cited-signers", true);
     if (Array.isArray(top.records) && top.records.some(
-      (record) => typeof object10(record)?.signature === "string" && object10(record).signature !== ""
+      (record) => typeof object8(record)?.signature === "string" && object8(record).signature !== ""
     ))
       outcome.set("producer-signatures", "notChecked");
     if (Array.isArray(top.receipts) && top.receipts.length > 0)
@@ -9416,7 +10222,7 @@ ${body}
     fail: "failed at least one check",
     not_checked: "not checked no evidence supplied"
   });
-  function object10(value) {
+  function object8(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
   }
   function capsuleGroupStatus(capsuleResults, checks) {
@@ -9435,14 +10241,14 @@ ${body}
   function receipts(raw) {
     if (!Array.isArray(raw)) return [];
     return raw.flatMap((entry) => {
-      const record = object10(entry);
+      const record = object8(entry);
       if (record === void 0) return [];
       const witness = record.witness, time = record.time, grade = receiptGradeWord(record.grade);
       return typeof witness === "string" && typeof time === "string" && grade !== void 0 ? [{ witness, grade, time }] : [];
     });
   }
   function completenessStatement(raw) {
-    const record = object10(raw);
+    const record = object8(raw);
     if (record === void 0) return void 0;
     return {
       ...typeof record.closure_depth === "number" ? { closureDepth: record.closure_depth } : {},
@@ -9456,9 +10262,9 @@ ${body}
   function summarize(name, status2) {
     return { name, status: status2, result: FIVE_WORD_RESULT[status2] };
   }
-  function buildVerificationPageModel(bundle, verified, appliedInterpreters, refused = [], checkInputs = {}) {
-    const top = object10(bundle) ?? {};
-    const checkpoint = object10(top.checkpoint);
+  function buildVerificationPageModel(bundle, verified, appliedInterpreters, checkInputs = {}) {
+    const top = object8(bundle) ?? {};
+    const checkpoint = object8(top.checkpoint);
     const checks = [
       summarize(
         "Required fields",
@@ -9501,321 +10307,13 @@ ${body}
       coverage,
       ...completenessStatement(top.completeness) === void 0 ? {} : { completeness: completenessStatement(top.completeness) },
       checks,
-      extensions: extensionRows(
-        verified.extensions,
-        appliedInterpreters,
-        refused
-      ),
-      presentationRefusals: presentationRefusalNotices(refused),
+      extensions: extensionRows(verified.extensions, appliedInterpreters),
       checkLists: verificationCheckLists(bundle, verified, checkInputs),
       verifyIndependentlyLine: VERIFY_INDEPENDENTLY_LINE
     };
   }
 
-  // agent-action-capsule/ts/src/presentation-registry.ts
-  var PRESENTATION_MANIFEST_VERSION = "aac.presentation-manifest/v0";
-  var PRESENTATION_API_V0 = "aac.presentation-api/v0";
-  var REFERENCE_PRESENTATION_RUNTIME = Object.freeze({
-    presentationApis: Object.freeze([PRESENTATION_API_V0]),
-    runtimeVersion: "0.1.0"
-  });
-  var PRESENTATION_FORMATS = [
-    "html",
-    "fragment",
-    "embedded"
-  ];
-  function need(refusal) {
-    return refusal.reason === "presentation_api_unsupported" ? `needs presentation API ${refusal.presentation_api}, which this viewer does not implement` : `needs runtime ${refusal.runtime_min} or later; this viewer is ${refusal.runtimeVersion}`;
-  }
-  function presentationRefusalRow(refusal, covered) {
-    return `${covered ? "Integrity verified" : "Integrity not verified"}; meaning not interpreted: presentation module ${refusal.id} ${need(refusal)}`;
-  }
-  function presentationRefusalLine(refusal) {
-    return `Presentation module ${refusal.id} was not used: it ${need(refusal)}`;
-  }
-  var RUNTIME_VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
-  var PRESENTATION_API = /^aac\.presentation-api\/v(0|[1-9][0-9]*)$/u;
-  function compareVersions(a, b) {
-    const left = a.split(".").map(Number);
-    const right = b.split(".").map(Number);
-    for (let i = 0; i < 3; i += 1)
-      if (left[i] !== right[i]) return left[i] - right[i];
-    return 0;
-  }
-  function presentationRefusalReason(manifest, runtime = REFERENCE_PRESENTATION_RUNTIME) {
-    if (!runtime.presentationApis.includes(manifest.presentation_api))
-      return "presentation_api_unsupported";
-    if (compareVersions(runtime.runtimeVersion, manifest.runtime_min) < 0)
-      return "runtime_too_old";
-    return void 0;
-  }
-  function refusalOf(manifest, reason, runtime) {
-    return Object.freeze({
-      id: manifest.id,
-      presentation_api: manifest.presentation_api,
-      runtime_min: manifest.runtime_min,
-      reason,
-      extensions: Object.freeze([
-        ...manifest.requires.extensions?.required ?? []
-      ]),
-      runtimeVersion: runtime.runtimeVersion
-    });
-  }
-  var PresentationAmbiguityError = class extends Error {
-    ids;
-    constructor(ids, message) {
-      super(
-        message ?? `presentation is ambiguous: ${ids.join(", ")} all match; a tie is an error, never first-wins`
-      );
-      this.name = "PresentationAmbiguityError";
-      this.ids = ids;
-    }
-  };
-  var PresentationRegistrationError = class extends Error {
-    constructor(message) {
-      super(message);
-      this.name = "PresentationRegistrationError";
-    }
-  };
-  function membershipProvenOrUnbound(result) {
-    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
-  }
-  function bundleVerified(result) {
-    const selected = isProducerSelection(result);
-    return result.graphClosure.status === "pass" && (selected || result.intervalCoverage.status === "pass") && membershipProvenOrUnbound(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
-      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
-    );
-  }
-  var isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-  var EXTENSION_READERS = {
-    [CONTRACT_REPORT_KIND]: readContractReport,
-    "outcome-report/v1": (bundle) => readOutcomeReportPresentation(bundle) !== void 0,
-    "eu-ai-act-compliance/v1": (bundle) => readCompliancePresentation(bundle) !== void 0
-  };
-  function describeContext(context) {
-    const bundle = isPlainObject(context.bundle) ? context.bundle : {};
-    const verified = bundleVerified(context.verification);
-    const bundleKind = typeof bundle.bundle_kind === "string" ? bundle.bundle_kind : void 0;
-    if (!verified)
-      return {
-        verified,
-        bundle_kind: bundleKind,
-        profiles: /* @__PURE__ */ new Set(),
-        extensions: /* @__PURE__ */ new Set()
-      };
-    const profiles = /* @__PURE__ */ new Set();
-    if (context.root !== void 0 && context.recordIndex.has(context.root)) {
-      const input = verifiedPayload(context, context.root, "agent_input");
-      if (isPlainObject(input) && typeof input.spec_version === "string")
-        profiles.add(`spec_version:${input.spec_version}`);
-    }
-    if (carriesResultDocument(context))
-      profiles.add(`result_version:${RESULT_VERSION}`);
-    const extensions2 = /* @__PURE__ */ new Set();
-    if (isPlainObject(bundle.extensions))
-      for (const kind of Object.keys(bundle.extensions)) {
-        const reader = EXTENSION_READERS[kind];
-        if (reader === void 0 || reader(context.bundle)) extensions2.add(kind);
-      }
-    return { verified, bundle_kind: bundleKind, profiles, extensions: extensions2 };
-  }
-  var requiredProfiles = (m) => m.requires.profiles ?? [];
-  var requiredExtensions = (m) => m.requires.extensions?.required ?? [];
-  var forbiddenProfiles = (m) => m.forbids?.profiles ?? [];
-  var forbiddenExtensions = (m) => m.forbids?.extensions ?? [];
-  var profileKey = (token) => token.split(":", 1)[0];
-  function onePerKey(tokens) {
-    const keys = /* @__PURE__ */ new Set();
-    for (const token of tokens) {
-      const key = profileKey(token);
-      if (keys.has(key)) return false;
-      keys.add(key);
-    }
-    return true;
-  }
-  function manifestMatches(manifest, descriptor, audience, format) {
-    return manifest.requires.bundle_kind === descriptor.bundle_kind && requiredProfiles(manifest).every((t) => descriptor.profiles.has(t)) && requiredExtensions(manifest).every((k) => descriptor.extensions.has(k)) && !forbiddenProfiles(manifest).some((t) => descriptor.profiles.has(t)) && !forbiddenExtensions(manifest).some((k) => descriptor.extensions.has(k)) && (manifest.audiences.includes("*") || manifest.audiences.includes(audience)) && manifest.formats.includes(format);
-  }
-  function manifestsCoMatchable(a, b) {
-    if (a.requires.bundle_kind !== b.requires.bundle_kind) return false;
-    if (!a.audiences.includes("*") && !b.audiences.includes("*") && !a.audiences.some((x) => b.audiences.includes(x)))
-      return false;
-    if (!a.formats.some((f) => b.formats.includes(f))) return false;
-    const reqP = /* @__PURE__ */ new Set([...requiredProfiles(a), ...requiredProfiles(b)]);
-    const reqE = /* @__PURE__ */ new Set([...requiredExtensions(a), ...requiredExtensions(b)]);
-    const forbP = [...forbiddenProfiles(a), ...forbiddenProfiles(b)];
-    const forbE = [...forbiddenExtensions(a), ...forbiddenExtensions(b)];
-    if (forbP.some((t) => reqP.has(t))) return false;
-    if (forbE.some((k) => reqE.has(k))) return false;
-    return onePerKey(reqP);
-  }
-  var MANIFEST_MEMBERS = /* @__PURE__ */ new Set([
-    "spec_version",
-    "id",
-    "presentation_api",
-    "runtime_min",
-    "trust_class",
-    "requires",
-    "forbids",
-    "audiences",
-    "formats",
-    "fallback",
-    "priority",
-    "executable",
-    "declarative"
-  ]);
-  var MANIFEST_ID = /^[a-z0-9]+(\.[a-z0-9_-]+)+\/v[0-9]+$/u;
-  var PROFILE_TOKEN = /^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$/u;
-  var AUDIENCE = /^(\*|[a-z][a-z0-9_-]*)$/u;
-  function manifestProblems(manifest) {
-    const problems = [];
-    const raw = manifest;
-    if (!isPlainObject(raw)) return ["manifest is not an object"];
-    for (const member of Object.keys(raw))
-      if (!MANIFEST_MEMBERS.has(member))
-        problems.push(`unknown member ${JSON.stringify(member)}`);
-    if (manifest.spec_version !== PRESENTATION_MANIFEST_VERSION)
-      problems.push(`spec_version is not ${PRESENTATION_MANIFEST_VERSION}`);
-    if (typeof manifest.id !== "string" || !MANIFEST_ID.test(manifest.id))
-      problems.push("id is not <dotted name>/v<major>");
-    if (typeof manifest.presentation_api !== "string" || !PRESENTATION_API.test(manifest.presentation_api))
-      problems.push("presentation_api is not aac.presentation-api/v<major>");
-    if (typeof manifest.runtime_min !== "string" || !RUNTIME_VERSION.test(manifest.runtime_min))
-      problems.push("runtime_min is not MAJOR.MINOR.PATCH");
-    if (manifest.trust_class !== "trusted-executable" && manifest.trust_class !== "declarative")
-      problems.push("trust_class is neither trusted-executable nor declarative");
-    if (!isPlainObject(manifest.requires) || typeof manifest.requires.bundle_kind !== "string")
-      problems.push("requires.bundle_kind is missing");
-    for (const token of [
-      ...requiredProfiles(manifest),
-      ...forbiddenProfiles(manifest)
-    ])
-      if (!PROFILE_TOKEN.test(token))
-        problems.push(`profile token ${JSON.stringify(token)} is malformed`);
-    if (!Array.isArray(manifest.audiences) || manifest.audiences.length === 0 || manifest.audiences.some((a) => typeof a !== "string" || !AUDIENCE.test(a)))
-      problems.push("audiences is not a non-empty list of audience tokens");
-    if (!Array.isArray(manifest.formats) || manifest.formats.length === 0 || manifest.formats.some((f) => !PRESENTATION_FORMATS.includes(f)))
-      problems.push("formats is not a non-empty list of html/fragment/embedded");
-    if (typeof manifest.fallback !== "boolean")
-      problems.push("fallback is not a boolean");
-    else if (manifest.fallback && manifest.priority !== void 0)
-      problems.push("a fallback carries no priority");
-    else if (!manifest.fallback && !(Number.isInteger(manifest.priority) && manifest.priority >= 1))
-      problems.push("a specific module needs an integer priority >= 1");
-    if (manifest.trust_class === "trusted-executable" !== (manifest.executable !== void 0 && manifest.declarative === void 0))
-      problems.push(
-        "trusted-executable carries executable, declarative carries declarative"
-      );
-    if (forbiddenProfiles(manifest).some(
-      (t) => requiredProfiles(manifest).includes(t)
-    ))
-      problems.push("requires and forbids share a profile");
-    if (forbiddenExtensions(manifest).some(
-      (k) => requiredExtensions(manifest).includes(k)
-    ))
-      problems.push("requires and forbids share an extension");
-    if (!onePerKey(requiredProfiles(manifest)))
-      problems.push("requires two tokens of one profile key");
-    return problems;
-  }
-  async function resolveModules(modules, descriptor, audience, format, canRender, refuse = () => void 0) {
-    if (!descriptor.verified) return { kind: "refusal" };
-    const matched = modules.filter(
-      (m) => manifestMatches(m.manifest, descriptor, audience, format)
-    );
-    const refused = [];
-    for (const fallback of [false, true]) {
-      const tier = matched.filter((m) => m.manifest.fallback === fallback);
-      if (tier.length > 1)
-        throw new PresentationAmbiguityError(
-          tier.map((m) => m.manifest.id).sort()
-        );
-      const only = tier[0];
-      if (only === void 0) continue;
-      const refusal = refuse(only);
-      if (refusal !== void 0) {
-        refused.push(refusal);
-        continue;
-      }
-      if (await canRender(only))
-        return { kind: "module", module: only, refused: Object.freeze(refused) };
-    }
-    return { kind: "no-presentation", refused: Object.freeze(refused) };
-  }
-  var PresentationRegistry = class {
-    /** Every module, refused ones included: all of them count for ambiguity. */
-    #modules = [];
-    #refused = /* @__PURE__ */ new Map();
-    #runtime;
-    /** `runtime` is what this registry's runtime implements (section 3.2). */
-    constructor(runtime = REFERENCE_PRESENTATION_RUNTIME) {
-      this.#runtime = runtime;
-    }
-    /** The runtime declaration this registry applies. */
-    get runtime() {
-      return this.#runtime;
-    }
-    /**
-     * Register a module. Throws on a malformed or dead manifest (a missing
-     * `presentation_api` included), a duplicate id, and any module whose
-     * manifest some descriptor could match together with an already
-     * registered module of the same tier (section 4.5), refused or not.
-     *
-     * A well-formed manifest whose `presentation_api` this runtime does not
-     * implement, or whose `runtime_min` it does not meet, is registered as
-     * refused (section 3.2): never selected, reported by every resolution it
-     * matches, and listed by {@link refused}.
-     */
-    register(module) {
-      const manifest = module.manifest;
-      const problems = manifestProblems(manifest);
-      if (problems.length > 0)
-        throw new PresentationRegistrationError(
-          `manifest ${JSON.stringify(manifest?.id)} refused: ${problems.join("; ")}`
-        );
-      for (const other of this.#modules) {
-        if (other.manifest.id === manifest.id)
-          throw new PresentationRegistrationError(
-            `manifest ${manifest.id} is already registered`
-          );
-        if (other.manifest.fallback === manifest.fallback && manifestsCoMatchable(other.manifest, manifest))
-          throw new PresentationAmbiguityError(
-            [other.manifest.id, manifest.id].sort(),
-            `manifests ${other.manifest.id} and ${manifest.id} are both ${manifest.fallback ? "fallbacks" : "specific"} and one descriptor can match both; state precedence with forbids`
-          );
-      }
-      this.#modules.push(module);
-      const reason = presentationRefusalReason(manifest, this.#runtime);
-      if (reason === void 0) return { status: "registered" };
-      const refusal = refusalOf(manifest, reason, this.#runtime);
-      this.#refused.set(module, refusal);
-      return { status: "refused", refusal };
-    }
-    /**
-     * Every module this registry can select, in registration order (which
-     * decides nothing). Refused modules are not here; see {@link refused}.
-     */
-    list() {
-      return this.#modules.filter((module) => !this.#refused.has(module));
-    }
-    /** Every module this runtime refused, with the reason. */
-    refused() {
-      return [...this.#refused.values()];
-    }
-    /** Section 4.3: the one module for this context, audience and format. */
-    resolve(context, audience, format) {
-      return resolveModules(
-        this.#modules,
-        describeContext(context),
-        audience,
-        format,
-        (module) => module.canRender(context),
-        (module) => this.#refused.get(module)
-      );
-    }
-  };
-
-  // agent-action-capsule/ts/src/builtin-manifests.ts
+  // capsule-viewer/ts/src/builtin-manifests.ts
   var BUILTIN_MANIFEST_REPORT_ROWS = Object.freeze(
     {
       spec_version: "aac.presentation-manifest/v0",
@@ -9975,1128 +10473,6 @@ ${body}
     executable: { carrier: "core-runtime" }
   });
   var BUILTIN_SECTION_MANIFESTS = Object.freeze([BUILTIN_MANIFEST_COMPOSED]);
-
-  // agent-action-capsule/ts/src/presentation-fragment.ts
-  var PRESENTATION_FRAGMENT_VERSION = "aac.presentation-fragment/v0";
-  var FRAGMENT_URL_MAX_LENGTH = 1048576;
-  var FRAGMENT_ADDRESS_ALLOWANCE = 2048;
-  var FRAGMENT_TOKEN_MAX_LENGTH = FRAGMENT_URL_MAX_LENGTH - FRAGMENT_ADDRESS_ALLOWANCE;
-  var FRAGMENT_TOKEN_DEFAULT_BUDGET = 65536;
-  var FragmentTooLargeError = class extends Error {
-    length;
-    maxLength;
-    /** What was too long: `"fragment token"` or `"permalink URL"`. */
-    subject;
-    constructor(length, maxLength, what = "fragment token") {
-      super(
-        `${what} is ${length} characters, over the ${maxLength}-character maximum; it is refused, never truncated. Share the offline .html instead.`
-      );
-      this.name = "FragmentTooLargeError";
-      this.length = length;
-      this.maxLength = maxLength;
-      this.subject = what;
-    }
-  };
-  var FragmentDecodeError = class extends Error {
-    constructor(message) {
-      super(message);
-      this.name = "FragmentDecodeError";
-    }
-  };
-  function encodeFragmentToken(value) {
-    return encodeFragment(value);
-  }
-  function decodeFragmentToken(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
-    const body = token.replace(/^#+/u, "");
-    if (body.length > maxLength)
-      throw new FragmentTooLargeError(body.length, maxLength);
-    try {
-      return decodeFragment(body);
-    } catch (err) {
-      throw new FragmentDecodeError(
-        err instanceof Error && err.message === "fragment base64url" ? "fragment token has a character outside the base64url alphabet" : "fragment token is not UTF-8 JSON"
-      );
-    }
-  }
-  var PRESENTATION_DEPTHS = [
-    "L0",
-    "L1",
-    "L2"
-  ];
-  var FRAGMENT_MEMBERS = /* @__PURE__ */ new Set([
-    "fragment_version",
-    "audience",
-    "presentation",
-    "depth",
-    "title",
-    "theme_css",
-    "wording",
-    "core_runtime_sha256",
-    "module_sha256",
-    "bundle"
-  ]);
-  var isObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-  function checkPresentationFragment(value) {
-    const fail2 = (why) => {
-      throw new FragmentDecodeError(`presentation fragment: ${why}`);
-    };
-    if (!isObject2(value)) fail2("not a JSON object");
-    const v = value;
-    for (const key of Object.keys(v))
-      if (!FRAGMENT_MEMBERS.has(key))
-        fail2(`unknown member ${JSON.stringify(key)}`);
-    if (v.fragment_version !== PRESENTATION_FRAGMENT_VERSION)
-      fail2(`fragment_version is not ${PRESENTATION_FRAGMENT_VERSION}`);
-    if (typeof v.audience !== "string" || v.audience === "")
-      fail2("audience is not a non-empty string");
-    if (typeof v.presentation !== "string" || v.presentation === "")
-      fail2("presentation is not a non-empty string");
-    if (v.depth !== void 0 && !PRESENTATION_DEPTHS.includes(v.depth))
-      fail2("depth is not L0, L1 or L2");
-    if (v.title !== void 0 && typeof v.title !== "string")
-      fail2("title is not a string");
-    if (v.theme_css !== void 0 && typeof v.theme_css !== "string")
-      fail2("theme_css is not a string");
-    if (v.wording !== void 0) {
-      const w = v.wording;
-      if (!isObject2(w) || Object.keys(w).some((k) => k !== "pack" && k !== "sha256") || typeof w.pack !== "string" || !isHex64(w.sha256))
-        fail2("wording is not {pack, sha256}");
-    }
-    if (!isHex64(v.core_runtime_sha256))
-      fail2("core_runtime_sha256 is not a lowercase hex SHA-256");
-    if (!Array.isArray(v.module_sha256) || !v.module_sha256.every((pin) => isHex64(pin)))
-      fail2("module_sha256 is not a list of lowercase hex SHA-256 pins");
-    if (!("bundle" in v)) fail2("bundle is missing");
-  }
-  function encodePresentationFragment(payload, options = {}) {
-    checkPresentationFragment(payload);
-    const maxLength = options.maxLength ?? FRAGMENT_TOKEN_MAX_LENGTH;
-    if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > FRAGMENT_TOKEN_MAX_LENGTH)
-      throw new RangeError(
-        `maxLength must be an integer from 1 to ${FRAGMENT_TOKEN_MAX_LENGTH}`
-      );
-    const fragment = encodeFragmentToken(payload);
-    if (fragment.length > maxLength)
-      throw new FragmentTooLargeError(fragment.length, maxLength);
-    if (options.viewerUrl === void 0) return { fragment };
-    if (options.viewerUrl.includes("#"))
-      throw new Error("viewerUrl must not already carry a fragment");
-    const url = `${options.viewerUrl}#${fragment}`;
-    if (url.length > FRAGMENT_URL_MAX_LENGTH)
-      throw new FragmentTooLargeError(
-        url.length,
-        FRAGMENT_URL_MAX_LENGTH,
-        "permalink URL"
-      );
-    return { fragment, url };
-  }
-  function decodePresentationFragment(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
-    const value = decodeFragmentToken(token, maxLength);
-    checkPresentationFragment(value);
-    return value;
-  }
-  function scopeDisclosures(bundle, scope) {
-    if (!isObject2(bundle)) return bundle;
-    const supplied = bundle.disclosures;
-    if (!isObject2(supplied)) return { ...bundle };
-    const kept = {};
-    for (const [id, members] of Object.entries(supplied)) {
-      const allowed = Object.hasOwn(scope, id) ? scope[id] : [];
-      if (!isObject2(members) || allowed.length === 0) continue;
-      const entry = {};
-      for (const [member, value] of Object.entries(members))
-        if (allowed.includes(member)) entry[member] = value;
-      if (Object.keys(entry).length > 0) kept[id] = entry;
-    }
-    return { ...bundle, disclosures: kept };
-  }
-
-  // agent-action-capsule/ts/src/outcome-report.ts
-  var NOT_STATED = "not stated";
-  var RESOLUTION_RULE = "A conversation resolves only when every criterion judged for it is met or does not apply, and at least one is met.";
-  function readableId(id) {
-    const words = id.replaceAll("_", " ").replaceAll("-", " ").trim();
-    return words.length === 0 ? id : words[0].toUpperCase() + words.slice(1);
-  }
-  var CLAIM_ID_SEPARATOR = "::";
-  function parseJudgeProbabilities(rationale) {
-    if (rationale === void 0) return {};
-    const out = {};
-    const block = /probabilities=\{([^}]*)\}/u.exec(rationale);
-    if (block !== null) {
-      const probabilities = {};
-      let readable = true;
-      const entries = block[1].split(",").map((e) => e.trim());
-      for (const entry of entries) {
-        if (entry === "" && entries.length === 1) {
-          readable = false;
-          break;
-        }
-        const match = new RegExp(`^'([a-z_]+)':\\s*(${NUMBER_TOKEN})$`, "u").exec(
-          entry
-        );
-        const value = match === null ? Number.NaN : Number(match[2]);
-        if (match === null || !isProbability(value)) {
-          readable = false;
-          break;
-        }
-        probabilities[match[1]] = value;
-      }
-      if (readable && Object.keys(probabilities).length > 0)
-        out.probabilities = probabilities;
-    }
-    const confidence = new RegExp(
-      `confidence=(${NUMBER_TOKEN})(?=[\\s,.;)]*$|[\\s,;)])`,
-      "u"
-    ).exec(rationale);
-    if (confidence !== null) {
-      const value = Number(confidence[1]);
-      if (isProbability(value)) out.confidence = value;
-    }
-    return out;
-  }
-  var NUMBER_TOKEN = "[+-]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?";
-  function isProbability(value) {
-    return Number.isFinite(value) && value >= 0 && value <= 1;
-  }
-  function parseClaimGrouping(claim) {
-    const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR);
-    if (sep === -1) return void 0;
-    const conversationId = claim.id.slice(0, sep);
-    const dot = claim.requirementRef.indexOf(".");
-    if (dot === -1) return void 0;
-    return {
-      conversationId,
-      checkId: claim.requirementRef.slice(0, dot),
-      criterionId: claim.requirementRef.slice(dot + 1)
-    };
-  }
-  function drawnVerdict(claim) {
-    if (claim.failed) return "failed";
-    if (claim.support === "unsupported") return "unsupported";
-    return claim.verdict;
-  }
-  function reportPayload(records, claim) {
-    const digest = claim.evidence[0]?.digest;
-    if (digest === void 0) return void 0;
-    const record = records.get(digest);
-    if (record === void 0) return void 0;
-    const input = record.carriedInput ?? record.agentInput;
-    if (input.state !== "disclosed") return void 0;
-    return isObject(input.payload) ? input.payload : void 0;
-  }
-  function dayOf(payload) {
-    const period = asString(payload?.period);
-    if (period === void 0) return "unknown";
-    const colon = period.indexOf(":");
-    return colon === -1 ? period : period.slice(colon + 1);
-  }
-  var STATED_DAY = /^(\d{4}-\d{2}-\d{2})/u;
-  function reportSealedDay(records, claim) {
-    const period = asString(reportPayload(records, claim)?.period);
-    if (period !== void 0) {
-      const colon = period.indexOf(":");
-      return colon === -1 ? period : period.slice(colon + 1);
-    }
-    if (reportState(records, claim) !== "withheld") return void 0;
-    const digest = claim.evidence[0]?.digest;
-    const timestamp = digest === void 0 ? void 0 : records.get(digest)?.stated?.timestamp;
-    return timestamp === void 0 ? void 0 : STATED_DAY.exec(timestamp)?.[1];
-  }
-  function reportState(records, claim) {
-    const digest = claim.evidence[0]?.digest;
-    const record = digest === void 0 ? void 0 : records.get(digest);
-    if (record === void 0) return "not_carried";
-    const input = record.carriedInput ?? record.agentInput;
-    switch (input.state) {
-      case "disclosed":
-        return isObject(input.payload) ? "disclosed" : "unreadable";
-      case "withheld":
-        return record.carriedInput !== void 0 && record.carriedCapsuleId === void 0 ? "invalid" : "withheld";
-      case "disclosure_mismatch":
-        return "mismatch";
-      default:
-        return "unreadable";
-    }
-  }
-  function caseActionIds(conversationId) {
-    const ids = [`urn:${conversationId}`];
-    const named = /^([^:]+):([^:]+):.+:(task-[^:]+:trial-[^:]+)$/u.exec(
-      conversationId
-    );
-    if (named !== null) ids.push(`urn:${named[1]}:${named[2]}:${named[3]}`);
-    return ids;
-  }
-  function isCaseRecordFor(record, conversationId) {
-    return record?.carriedCapsuleId !== void 0 && record.carriedActionId !== void 0 && caseActionIds(conversationId).includes(record.carriedActionId);
-  }
-  function claimsCitedCase(records, conversationId, claims, allClaims = claims) {
-    if (claims.length === 0 || !claims.every((claim) => reportState(records, claim) === "withheld"))
-      return void 0;
-    let found;
-    for (const claim of claims) {
-      const cases = /* @__PURE__ */ new Set();
-      for (const ref of claim.evidence.slice(1)) {
-        const record = records.get(ref.digest);
-        if (isCaseRecordFor(record, conversationId))
-          cases.add(record.carriedCapsuleId);
-      }
-      if (cases.size !== 1) return void 0;
-      const only = [...cases][0];
-      if (found !== void 0 && found !== only) return void 0;
-      found = only;
-    }
-    if (found === void 0) return void 0;
-    for (const claim of allClaims) {
-      const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR);
-      if (sep === -1 || claim.id.slice(0, sep) === conversationId) continue;
-      for (const ref of claim.evidence)
-        if (ref.digest === found || records.get(ref.digest)?.carriedCapsuleId === found)
-          return void 0;
-    }
-    return found;
-  }
-  function withheldReports(records, claims) {
-    let withheld = 0;
-    let mismatched = 0;
-    let unreadable = 0;
-    let invalid = 0;
-    let total = 0;
-    for (const claim of claims) {
-      const state = reportState(records, claim);
-      if (state === "not_carried") continue;
-      total += 1;
-      if (state === "withheld") withheld += 1;
-      else if (state === "mismatch") mismatched += 1;
-      else if (state === "unreadable") unreadable += 1;
-      else if (state === "invalid") invalid += 1;
-    }
-    return { withheld, mismatched, unreadable, invalid, total };
-  }
-  function caseRecord(result, claims, sourceCapsuleId) {
-    if (sourceCapsuleId === void 0) return void 0;
-    for (const claim of claims)
-      for (const ref of claim.evidence) {
-        const record = result.records.get(ref.digest);
-        if (record === void 0 || record.stated === void 0) continue;
-        if (record.carriedCapsuleId === sourceCapsuleId || record.carriedCapsuleId === void 0 && record.bookRecordId === void 0 && record.capsuleId === sourceCapsuleId)
-          return record;
-      }
-    return void 0;
-  }
-  function conversationDate(record, judgedDay) {
-    const judged = { basis: "judged", date: judgedDay };
-    const stated = record?.stated;
-    if (stated === void 0) return judged;
-    const mode = stated.provenanceMode;
-    if (asString(mode?.mode) === "backfilled") {
-      const source = asString(mode?.source_asserted_at);
-      const day2 = source === void 0 ? void 0 : STATED_DAY.exec(source)?.[1];
-      if (source === void 0 || day2 === void 0) return judged;
-      const importedAt = asString(mode?.imported_at);
-      return {
-        basis: "source",
-        date: day2,
-        stated: source,
-        zone: zoneStatement(source),
-        ...importedAt === void 0 ? {} : { importedAt }
-      };
-    }
-    const timestamp = stated.timestamp;
-    const day = timestamp === void 0 ? void 0 : STATED_DAY.exec(timestamp)?.[1];
-    if (timestamp === void 0 || day === void 0) return judged;
-    return {
-      basis: "record",
-      date: day,
-      stated: timestamp,
-      zone: zoneStatement(timestamp)
-    };
-  }
-  function checksById(terms) {
-    return new Map(terms.checks.map((check) => [check.id, check]));
-  }
-  function rollUp(verdicts) {
-    if (verdicts.length === 0) return "not_evaluable";
-    if (verdicts.some(
-      (v) => v === "not_met" || v === "failed" || v === "unsupported"
-    ))
-      return "not_met";
-    if (verdicts.some((v) => v === "not_evaluable")) return "not_evaluable";
-    if (!verdicts.some((v) => v === "met")) return "not_evaluable";
-    return "met";
-  }
-  function sealedCaseIds(payload) {
-    const c = isObject(payload.case) ? payload.case : void 0;
-    if (c === void 0) return [];
-    const parts = [c.benchmark, c.domain, c.task_id, c.trial].map(
-      (v) => typeof v === "string" || typeof v === "number" ? String(v) : void 0
-    );
-    if (parts.some((v) => v === void 0)) return [];
-    const ids = [`${parts[0]}:${parts[1]}:task-${parts[2]}:trial-${parts[3]}`];
-    const model = asString(c.agent_model);
-    if (model !== void 0 && model.length > 0)
-      ids.unshift(
-        `${parts[0]}:${parts[1]}:${model}:task-${parts[2]}:trial-${parts[3]}`
-      );
-    return ids;
-  }
-  function transcriptTurns(payload) {
-    const interaction = isObject(payload.agent_interaction) ? payload.agent_interaction : void 0;
-    if (interaction === void 0 || !Array.isArray(interaction.messages))
-      return void 0;
-    return interaction.messages.flatMap((m) => {
-      if (!isObject(m)) return [];
-      const role = asString(m.role) ?? "unknown";
-      const content = asString(m.content);
-      const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
-      return [
-        {
-          role,
-          ...content === void 0 ? {} : { content },
-          toolCalls: calls.flatMap(
-            (call) => isObject(call) ? [
-              {
-                name: asString(call.name) ?? "unnamed",
-                arguments: JSON.stringify(call.arguments ?? null)
-              }
-            ] : []
-          )
-        }
-      ];
-    });
-  }
-  function findTranscript(result, conversationId, claims, sourceCapsuleId, caseFrom = "reports") {
-    const records = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const claim of claims)
-      for (const ref of claim.evidence.slice(1)) {
-        if (seen.has(ref.digest)) continue;
-        seen.add(ref.digest);
-        const record = result.records.get(ref.digest);
-        if (record !== void 0) records.push(record);
-      }
-    const carriers = records.filter(
-      (r) => r.carriedInput?.state === "disclosed" && isObject(r.carriedInput.payload) && transcriptTurns(r.carriedInput.payload) !== void 0
-    );
-    if (carriers.length === 0) return { state: "absent" };
-    if (sourceCapsuleId === void 0)
-      return {
-        state: "mismatch",
-        reason: "the reports do not agree on one case record"
-      };
-    const caseRecord3 = records.find(
-      (r) => r.carriedCapsuleId === sourceCapsuleId
-    );
-    if (caseRecord3?.carriedInputDigest === void 0)
-      return {
-        state: "mismatch",
-        reason: `the case record the reports name (${sourceCapsuleId}) is not cited, so the transcript cannot be tied to it`
-      };
-    if (caseFrom === "claims") {
-      const ordered = [
-        ...carriers.filter((c) => c === caseRecord3),
-        ...carriers.filter((c) => c !== caseRecord3)
-      ];
-      for (const carrier of ordered) {
-        const payload = carrier.carriedInput.payload;
-        if ((carrier === caseRecord3 || carrier.carriedInputDigest === caseRecord3.carriedInputDigest) && sealedCaseIds(payload).includes(conversationId))
-          return {
-            state: "cited",
-            turns: transcriptTurns(payload),
-            transcriptRecordId: carrier.capsuleId,
-            caseRecordId: caseRecord3.capsuleId,
-            inputDigest: caseRecord3.carriedInputDigest,
-            reason: "the claims cite this case; the judge's reports are withheld, so which conversation the judge read is not shown"
-          };
-      }
-      return {
-        state: "mismatch",
-        reason: "a cited transcript does not commit to the same input as the case record the claims cite"
-      };
-    }
-    for (const carrier of carriers) {
-      const payload = carrier.carriedInput.state === "disclosed" ? carrier.carriedInput.payload : void 0;
-      if (payload === void 0) continue;
-      if (carrier.carriedInputDigest === caseRecord3.carriedInputDigest && sealedCaseIds(payload).includes(conversationId))
-        return {
-          state: "verified",
-          turns: transcriptTurns(payload),
-          transcriptRecordId: carrier.capsuleId,
-          caseRecordId: caseRecord3.capsuleId,
-          inputDigest: caseRecord3.carriedInputDigest
-        };
-    }
-    return {
-      state: "mismatch",
-      reason: "a cited transcript does not commit to the same input as the case record the judge read"
-    };
-  }
-  function groupClaims(result, terms) {
-    const order = checksById(terms);
-    const byConversation = /* @__PURE__ */ new Map();
-    for (const claim of result.claims) {
-      if (claim.type !== REQUIREMENT_CLAIM) continue;
-      const grouping = parseClaimGrouping(claim);
-      if (grouping === void 0 || !order.has(grouping.checkId)) continue;
-      const list = byConversation.get(grouping.conversationId) ?? [];
-      list.push(claim);
-      byConversation.set(grouping.conversationId, list);
-    }
-    const conversations = [];
-    const byDay = /* @__PURE__ */ new Map();
-    for (const [conversationId, claims] of byConversation) {
-      const criteria = [];
-      for (const check of terms.checks) {
-        for (const criterion of check.criteria) {
-          const claim = claims.find(
-            (candidate) => candidate.requirementRef === `${check.id}.${criterion.id}`
-          );
-          if (claim === void 0) {
-            criteria.push({
-              checkId: check.id,
-              criterionId: criterion.id,
-              verdict: "not_applicable"
-            });
-            continue;
-          }
-          if (claim.later && !claim.failed) continue;
-          const judgment = reportPayload(result.records, claim);
-          const rationale = judgment ? asString(judgment.rationale) : void 0;
-          const reasonCode = judgment ? asString(judgment.reason_code) : void 0;
-          const sourceCapsuleId = judgment ? asString(judgment.source_capsule_id) : void 0;
-          const judgePinDigest = judgment ? asString(judgment.judge_pin_digest) : void 0;
-          const clauseClaim = judgment !== void 0 && asString(judgment.clause_id) === `${check.id}.${criterion.id}` ? asString(judgment.clause_claim) : void 0;
-          const { probabilities, confidence } = parseJudgeProbabilities(rationale);
-          const cited = claim.evidence[0]?.digest;
-          const record = cited === void 0 ? void 0 : result.records.get(cited);
-          criteria.push({
-            checkId: check.id,
-            criterionId: criterion.id,
-            claim,
-            verdict: drawnVerdict(claim),
-            ...rationale === void 0 ? {} : { rationale },
-            ...reasonCode === void 0 ? {} : { reasonCode },
-            ...probabilities === void 0 ? {} : { probabilities },
-            ...confidence === void 0 ? {} : { confidence },
-            ...cited === void 0 ? {} : { reportCapsuleId: cited },
-            ...record?.bookRecordId === void 0 ? {} : { reportRecordId: record.bookRecordId },
-            ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId },
-            ...judgePinDigest === void 0 ? {} : { judgePinDigest },
-            reportState: reportState(result.records, claim),
-            ...clauseClaim === void 0 || clauseClaim.trim() === "" ? {} : { clauseClaim }
-          });
-        }
-      }
-      const firstClaim = criteria.find((c) => c.claim !== void 0)?.claim;
-      const judgedDay = (firstClaim === void 0 ? void 0 : reportSealedDay(result.records, firstClaim)) ?? dayOf(void 0);
-      const checkVerdicts = /* @__PURE__ */ new Map();
-      for (const check of terms.checks) {
-        const forCheck = criteria.filter((c) => c.checkId === check.id);
-        checkVerdicts.set(check.id, rollUp(forCheck.map((c) => c.verdict)));
-      }
-      const sources = new Set(
-        criteria.flatMap(
-          (c) => c.sourceCapsuleId === void 0 ? [] : [c.sourceCapsuleId]
-        )
-      );
-      let caseFrom = "reports";
-      if (sources.size === 0) {
-        const cited = claimsCitedCase(
-          result.records,
-          conversationId,
-          claims,
-          result.claims
-        );
-        if (cited !== void 0) {
-          sources.add(cited);
-          caseFrom = "claims";
-        }
-      }
-      const dated = conversationDate(
-        caseRecord(
-          result,
-          claims,
-          sources.size === 1 ? [...sources][0] : void 0
-        ),
-        judgedDay
-      );
-      const date = dated.date;
-      const conversation = {
-        conversationId,
-        transcript: findTranscript(
-          result,
-          conversationId,
-          claims,
-          sources.size === 1 ? [...sources][0] : void 0,
-          caseFrom
-        ),
-        ...sources.size === 1 ? { sourceCapsuleId: [...sources][0], caseFrom } : {},
-        day: date,
-        dated,
-        judgedDay,
-        criteria,
-        checkVerdicts,
-        verdict: rollUp(criteria.map((c) => c.verdict))
-      };
-      conversations.push(conversation);
-      const dayList = byDay.get(date) ?? [];
-      dayList.push(conversation);
-      byDay.set(date, dayList);
-    }
-    conversations.sort(
-      (a, b) => a.day === b.day ? a.conversationId.localeCompare(b.conversationId) : a.day.localeCompare(b.day)
-    );
-    return { conversations, days: byDay };
-  }
-  function criterionTiers(terms, conversations) {
-    const tiers = /* @__PURE__ */ new Map();
-    for (const check of terms.checks) {
-      for (const criterion of check.criteria) {
-        const ref = `${check.id}.${criterion.id}`;
-        const seen = /* @__PURE__ */ new Set();
-        for (const conversation of conversations)
-          for (const c of conversation.criteria)
-            if (c.checkId === check.id && c.criterionId === criterion.id && c.claim !== void 0)
-              seen.add(c.claim.tier);
-        tiers.set(
-          ref,
-          seen.size === 0 ? "unknown" : seen.size === 1 ? [...seen][0] : "mixed"
-        );
-      }
-    }
-    return tiers;
-  }
-  function pinComponents(value) {
-    if (!isObject(value)) return void 0;
-    const modelId = asString(value.model_id);
-    const promptDigest = asString(value.prompt_digest);
-    const axesDigest = asString(value.axes_digest);
-    if (modelId === void 0 || promptDigest === void 0 || axesDigest === void 0)
-      return void 0;
-    const modelVersion = asString(value.model_version);
-    return {
-      modelId,
-      ...modelVersion === void 0 ? {} : { modelVersion },
-      promptDigest,
-      axesDigest,
-      ...isObject(value.sampling_params) ? { samplingParams: value.sampling_params } : {}
-    };
-  }
-  function pinPreimage(pin) {
-    return {
-      model_id: pin.modelId,
-      model_version: pin.modelVersion ?? null,
-      sampling_params: pin.samplingParams ?? null,
-      prompt_digest: pin.promptDigest,
-      axes_digest: pin.axesDigest
-    };
-  }
-  function buildRunInfo(result, conversations) {
-    const claimContracts = /* @__PURE__ */ new Set();
-    const reportContracts = /* @__PURE__ */ new Set();
-    const pins = /* @__PURE__ */ new Set();
-    const components = /* @__PURE__ */ new Map();
-    for (const conversation of conversations) {
-      for (const criterion of conversation.criteria) {
-        const claim = criterion.claim;
-        if (claim === void 0) continue;
-        claimContracts.add(claim.contractRef);
-        const payload = reportPayload(result.records, claim);
-        const contract = asString(payload?.contract_ref) ?? asString(payload?.contract);
-        if (contract !== void 0) reportContracts.add(contract);
-        const pin = asString(payload?.judge_pin_digest);
-        if (pin !== void 0) pins.add(pin);
-        const parts = pinComponents(payload?.judge_pin);
-        if (parts !== void 0)
-          components.set(JSON.stringify(pinPreimage(parts)), parts);
-      }
-    }
-    const contracts = claimContracts.size > 0 ? claimContracts : reportContracts;
-    const pinned = contracts.size <= 1 && pins.size <= 1 && components.size <= 1;
-    const counted = withheldReports(
-      result.records,
-      conversations.flatMap(
-        (c) => c.criteria.flatMap((cr) => cr.claim === void 0 ? [] : [cr.claim])
-      )
-    );
-    return {
-      ...counted.withheld > 0 ? { reportsWithheld: counted.withheld } : {},
-      ...counted.mismatched > 0 ? { reportsMismatched: counted.mismatched } : {},
-      ...counted.unreadable > 0 ? { reportsUnreadable: counted.unreadable } : {},
-      ...counted.invalid > 0 ? { reportsInvalid: counted.invalid } : {},
-      ...counted.withheld + counted.mismatched + counted.unreadable + counted.invalid > 0 ? { reportsCited: counted.total } : {},
-      ...contracts.size === 1 ? { contract: [...contracts][0] } : {},
-      ...pins.size === 1 ? { judgePinDigest: [...pins][0] } : {},
-      ...pins.size === 1 && components.size === 1 ? { judgePin: [...components.values()][0] } : {},
-      pinned
-    };
-  }
-  async function verifyJudgePin(runInfo) {
-    if (runInfo.judgePin === void 0 || runInfo.judgePinDigest === void 0)
-      return runInfo;
-    let recomputes = false;
-    try {
-      recomputes = await jsonDigest(pinPreimage(runInfo.judgePin)) === runInfo.judgePinDigest;
-    } catch {
-      recomputes = false;
-    }
-    return { ...runInfo, judgePinRecomputes: recomputes };
-  }
-  function buildCalibration(result) {
-    const weeks = [];
-    for (const claim of result.claims) {
-      if (claim.type !== "calibration") continue;
-      const payload = reportPayload(result.records, claim);
-      if (payload === void 0) continue;
-      const weekId = asString(payload.week);
-      if (weekId === void 0) continue;
-      const sample = (Array.isArray(payload.sample) ? payload.sample : []).flatMap((entry) => {
-        if (!isObject(entry)) return [];
-        const conversationId = asString(entry.conversation_id);
-        const aiVerdict = asString(entry.ai_verdict);
-        const humanVerdict = asString(entry.human_verdict);
-        if (conversationId === void 0 || aiVerdict === void 0 || humanVerdict === void 0)
-          return [];
-        const note = asString(entry.note);
-        return [
-          {
-            conversationId,
-            aiVerdict,
-            humanVerdict,
-            ...note === void 0 ? {} : { note },
-            agrees: aiVerdict === humanVerdict
-          }
-        ];
-      });
-      const k = sample.filter((entry) => entry.agrees).length;
-      const n = sample.length;
-      const from = asString(payload.from);
-      const to = asString(payload.to);
-      weeks.push({
-        weekId,
-        ...from === void 0 ? {} : { from },
-        ...to === void 0 ? {} : { to },
-        k,
-        n,
-        sample,
-        claim
-      });
-    }
-    weeks.sort((a, b) => a.weekId.localeCompare(b.weekId));
-    return weeks;
-  }
-  function heldAndAdded(weeks) {
-    let held = 0, added = 0;
-    for (const week of weeks)
-      for (const sample of week.sample) {
-        if (sample.aiVerdict === "met" && sample.humanVerdict !== "met")
-          held += 1;
-        else if (sample.aiVerdict !== "met" && sample.humanVerdict === "met")
-          added += 1;
-      }
-    return { held, added };
-  }
-  function missedReasonGroups(terms, conversations) {
-    const labelOf = (checkId, criterionId) => {
-      const check = terms.checks.find((c) => c.id === checkId);
-      const criterion = check?.criteria.find((c) => c.id === criterionId);
-      return criterion === void 0 ? `${checkId}.${criterionId}` : `${criterion.label} (${check.question})`;
-    };
-    const labelledReasonCode = (code) => code === void 0 ? void 0 : terms.reasonCodes[code];
-    const groups = /* @__PURE__ */ new Map();
-    const structured = /* @__PURE__ */ new Map();
-    const labels = /* @__PURE__ */ new Map();
-    for (const conversation of conversations) {
-      if (conversation.verdict === "met") continue;
-      const failing = conversation.criteria.filter(
-        (c) => c.verdict === "not_met" || c.verdict === "failed" || c.verdict === "unsupported"
-      );
-      const notEvaluable = conversation.criteria.filter(
-        (c) => c.verdict === "not_evaluable"
-      );
-      const first = failing[0] ?? notEvaluable[0];
-      if (first === void 0) continue;
-      const label = labelledReasonCode(first.reasonCode);
-      const key = label !== void 0 ? first.reasonCode : `${first.checkId}.${first.criterionId}`;
-      const list = groups.get(key) ?? [];
-      list.push(conversation);
-      groups.set(key, list);
-      structured.set(key, label !== void 0);
-      labels.set(key, label ?? labelOf(first.checkId, first.criterionId));
-    }
-    return [...groups.entries()].map(([key, convos]) => ({
-      key,
-      label: labels.get(key),
-      structured: structured.get(key),
-      conversations: convos
-    })).sort((a, b) => b.conversations.length - a.conversations.length);
-  }
-  function criterionWordings(terms, conversations) {
-    const out = /* @__PURE__ */ new Map();
-    for (const check of terms.checks) {
-      for (const criterion of check.criteria) {
-        const sealed = /* @__PURE__ */ new Set();
-        for (const conversation of conversations)
-          for (const c of conversation.criteria)
-            if (c.checkId === check.id && c.criterionId === criterion.id && c.clauseClaim !== void 0)
-              sealed.add(c.clauseClaim);
-        const ref = `${check.id}.${criterion.id}`;
-        if (sealed.size === 1)
-          out.set(ref, { text: [...sealed][0], source: "sealed" });
-        else
-          out.set(ref, {
-            text: NOT_STATED,
-            source: sealed.size === 0 ? "unstated" : "mixed"
-          });
-      }
-    }
-    return out;
-  }
-  function citedContract(result, contractRef) {
-    for (const record of result.records.values()) {
-      const input = record.carriedInput ?? record.agentInput;
-      if (input.state !== "disclosed" || !isObject(input.payload)) continue;
-      const doc = input.payload;
-      const id = asString(doc.id);
-      const version = asString(doc.version);
-      if (id !== void 0 && version !== void 0 && Array.isArray(doc.requirements) && `${id}@${version}` === contractRef)
-        return doc;
-    }
-    return void 0;
-  }
-  function readOutcomeReportTerms(result) {
-    const checks = /* @__PURE__ */ new Map();
-    const contracts = /* @__PURE__ */ new Set();
-    for (const claim of result.claims) {
-      if (claim.type !== REQUIREMENT_CLAIM) continue;
-      const grouping = parseClaimGrouping(claim);
-      if (grouping === void 0) continue;
-      contracts.add(claim.contractRef);
-      const criteria = checks.get(grouping.checkId) ?? [];
-      if (!criteria.includes(grouping.criterionId))
-        criteria.push(grouping.criterionId);
-      checks.set(grouping.checkId, criteria);
-    }
-    const contractRef = contracts.size === 1 ? [...contracts][0] : void 0;
-    const at = contractRef?.lastIndexOf("@") ?? -1;
-    const contract = contractRef === void 0 ? void 0 : citedContract(result, contractRef);
-    const outcome = Array.isArray(contract?.requirements) ? contract.requirements.find(
-      (r) => isObject(r) && r.profile === "outcome" && asString(r.statement) !== void 0
-    ) : void 0;
-    return {
-      pack: {
-        id: contractRef === void 0 || at <= 0 ? NOT_STATED : contractRef.slice(0, at),
-        version: contractRef === void 0 || at <= 0 || at === contractRef.length - 1 ? NOT_STATED : contractRef.slice(at + 1),
-        outcomeStatement: asString(outcome?.statement) ?? NOT_STATED,
-        locked: NOT_STATED,
-        agreement: NOT_STATED,
-        resolutionRule: RESOLUTION_RULE
-      },
-      checks: [...checks.entries()].map(([id, criteria]) => ({
-        id,
-        question: readableId(id),
-        description: NOT_STATED,
-        icon: "check",
-        criteria: criteria.map((criterionId) => ({
-          id: criterionId,
-          label: readableId(criterionId),
-          text: NOT_STATED
-        }))
-      })),
-      reasonCodes: {}
-    };
-  }
-  function buildDating(conversations) {
-    const counts = { source: 0, record: 0, judged: 0 };
-    for (const c of conversations) counts[c.dated.basis] += 1;
-    const used = Object.keys(counts).filter(
-      (basis) => counts[basis] > 0
-    );
-    return {
-      basis: used.length === 1 ? used[0] : used.length === 0 ? "judged" : "mixed",
-      counts,
-      judgedDays: [...new Set(conversations.map((c) => c.judgedDay))].sort(),
-      zoneNotStated: conversations.filter((c) => c.dated.zone === "not-stated").length
-    };
-  }
-  function buildOutcomeReportModel(result, options) {
-    const terms = readOutcomeReportTerms(result);
-    const { conversations, days } = groupClaims(result, terms);
-    const dayList = [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, convos]) => ({
-      date,
-      // No evaluation-report/v1 record carries a day-level policy-change
-      // flag (that was a property of v1's invented day wrapper, which this
-      // real data shape has no analogue for) -- absent is never pass, so
-      // this reads null until a real day-summary record exists to cite.
-      policyChanged: null,
-      conversations: convos,
-      resolvedCount: convos.filter((c) => c.verdict === "met").length,
-      judgedDays: [...new Set(convos.map((c) => c.judgedDay))].sort()
-    }));
-    const calibration = buildCalibration(result);
-    const { held, added } = heldAndAdded(calibration);
-    const checkPassCounts = /* @__PURE__ */ new Map();
-    for (const check of terms.checks)
-      checkPassCounts.set(
-        check.id,
-        conversations.filter((c) => c.checkVerdicts.get(check.id) === "met").length
-      );
-    const resolvedCount = conversations.filter((c) => c.verdict === "met").length;
-    const countOf2 = (verdict2) => conversations.reduce(
-      (sum, c) => sum + c.criteria.filter((cr) => cr.verdict === verdict2).length,
-      0
-    );
-    const notApplicableCount = countOf2("not_applicable");
-    const outOfScopeCount = countOf2("out_of_scope");
-    return {
-      terms,
-      options,
-      days: dayList,
-      dating: buildDating(conversations),
-      conversations,
-      runInfo: buildRunInfo(result, conversations),
-      calibration,
-      checkPassCounts,
-      missedReasons: missedReasonGroups(terms, conversations),
-      criterionTiers: criterionTiers(terms, conversations),
-      criterionWording: criterionWordings(terms, conversations),
-      resolvedCount,
-      missedCount: conversations.length - resolvedCount,
-      totalCount: conversations.length,
-      heldCount: held,
-      addedCount: added,
-      notApplicableCount,
-      outOfScopeCount,
-      capsuleId: result.capsuleId
-    };
-  }
-
-  // agent-action-capsule/ts/src/report-rows.ts
-  var rowCitationDigests = (row2) => Array.isArray(row2.references) ? row2.references.flatMap(
-    (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
-  ) : [];
-  async function buildReportRows(input) {
-    const context = await verifiedBundleContext(input);
-    const bundle = context.bundle;
-    if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
-      return void 0;
-    }
-    const rootRecord2 = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
-    if (rootRecord2 === void 0) return void 0;
-    const rootPayload = verifiedPayload(
-      context,
-      rootRecord2.capsule_id,
-      "agent_input"
-    );
-    if (!isObject(rootPayload) || rootPayload.spec_version !== "report/v1")
-      return void 0;
-    const memberships2 = context.completeness.memberships;
-    const recordsById = context.recordIndex;
-    const rows = [];
-    for (const raw of Array.isArray(rootPayload.rows) ? rootPayload.rows : []) {
-      if (!isObject(raw)) continue;
-      const rowId = asString(raw.row_id);
-      const label = asString(raw.label);
-      const rowStatus2 = asString(raw.status);
-      if (rowId === void 0 || label === void 0 || rowStatus2 === void 0)
-        continue;
-      const reason = asString(raw.reason);
-      const citations2 = [];
-      for (const digest of rowCitationDigests(raw)) {
-        const record = recordsById.get(digest);
-        if (record === void 0) continue;
-        const resolved = disclosureOf(context, record.capsule_id, "agent_input");
-        const coordinates = logCoordinates(memberships2, record.capsule_id);
-        citations2.push({
-          capsuleId: record.capsule_id,
-          ...resolved.state === "disclosed" ? { disclosedPayload: resolved.payload } : {},
-          disclosure: resolved.state,
-          ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
-          ...recordTimes(record)
-        });
-      }
-      rows.push({
-        rowId,
-        label,
-        status: rowStatus2,
-        ...reason === void 0 ? {} : { reason },
-        citations: citations2
-      });
-    }
-    const title = asString(rootPayload.title);
-    const rootResolvedLogCoordinates = logCoordinates(
-      memberships2,
-      rootRecord2.capsule_id
-    );
-    return {
-      capsuleId: rootRecord2.capsule_id,
-      ...title === void 0 ? {} : { title },
-      rows,
-      ...rootResolvedLogCoordinates === void 0 ? {} : { logCoordinates: rootResolvedLogCoordinates },
-      ...recordTimes(rootRecord2)
-    };
-  }
-
-  // capsule-viewer/ts/src/builtin-manifests.ts
-  var BUILTIN_MANIFEST_REPORT_ROWS2 = Object.freeze(
-    {
-      spec_version: "aac.presentation-manifest/v0",
-      id: "aac.builtin.report-rows/v0",
-      presentation_api: "aac.presentation-api/v0",
-      runtime_min: "0.1.0",
-      trust_class: "trusted-executable",
-      requires: {
-        bundle_kind: "evidence-bundle/v2",
-        profiles: ["spec_version:report/v1"]
-      },
-      audiences: ["*"],
-      formats: ["html", "fragment", "embedded"],
-      fallback: false,
-      priority: 1,
-      executable: { carrier: "core-runtime" }
-    }
-  );
-  var BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.result-contract-report/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      profiles: ["result_version:evidence-result-v0"],
-      extensions: { required: ["contract-report/v1"] }
-    },
-    forbids: { profiles: ["spec_version:report/v1"] },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.result-outcome-report/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      profiles: ["result_version:evidence-result-v0"],
-      extensions: { required: ["outcome-report/v1"] }
-    },
-    forbids: {
-      profiles: ["spec_version:report/v1"],
-      extensions: ["contract-report/v1"]
-    },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFEST_RESULT_COMPLIANCE2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.result-compliance/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      profiles: ["result_version:evidence-result-v0"],
-      extensions: { required: ["eu-ai-act-compliance/v1"] }
-    },
-    forbids: {
-      profiles: ["spec_version:report/v1"],
-      extensions: ["contract-report/v1", "outcome-report/v1"]
-    },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFEST_RESULT2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.result/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      profiles: ["result_version:evidence-result-v0"]
-    },
-    forbids: {
-      profiles: ["spec_version:report/v1"],
-      extensions: [
-        "contract-report/v1",
-        "outcome-report/v1",
-        "eu-ai-act-compliance/v1"
-      ]
-    },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.evaluation-summary-graph/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      profiles: ["spec_version:evaluation-summary/v1"]
-    },
-    forbids: { profiles: ["result_version:evidence-result-v0"] },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFEST_NO_AGGREGATE2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.no-aggregate/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: { bundle_kind: "evidence-bundle/v2" },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: true,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_MANIFESTS2 = Object.freeze(
-    [
-      BUILTIN_MANIFEST_REPORT_ROWS2,
-      BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2,
-      BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2,
-      BUILTIN_MANIFEST_RESULT_COMPLIANCE2,
-      BUILTIN_MANIFEST_RESULT2,
-      BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2,
-      BUILTIN_MANIFEST_NO_AGGREGATE2
-    ]
-  );
-  var BUILTIN_MANIFEST_COMPOSED2 = Object.freeze({
-    spec_version: "aac.presentation-manifest/v0",
-    id: "aac.builtin.composed/v0",
-    presentation_api: "aac.presentation-api/v0",
-    runtime_min: "0.1.0",
-    trust_class: "trusted-executable",
-    requires: {
-      bundle_kind: "evidence-bundle/v2",
-      extensions: { required: ["composed/v1"] }
-    },
-    audiences: ["*"],
-    formats: ["html", "fragment", "embedded"],
-    fallback: false,
-    priority: 1,
-    executable: { carrier: "core-runtime" }
-  });
-  var BUILTIN_SECTION_MANIFESTS2 = Object.freeze([BUILTIN_MANIFEST_COMPOSED2]);
 
   // capsule-viewer/ts/src/record-dating.ts
   var STATED_DAY2 = /^(\d{4}-\d{2}-\d{2})/u;
@@ -11919,6 +11295,10 @@ ${s} dl.prov dd{margin:0;color:var(--ink);word-break:break-word}
 `;
   }
 
+  // capsule-viewer/ts/src/frame-tokens.generated.ts
+  var COMPLIANCE_FRAME_VARS = "--navy:#232F42;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;";
+  var OUTCOME_FRAME_VARS = "--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;";
+
   // capsule-viewer/ts/src/report-front-styles.ts
   function frontCss(scope) {
     const s = scope;
@@ -11968,7 +11348,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
 
   // capsule-viewer/ts/src/compliance-styles.ts
   var COMPLIANCE_CSS = `
-.cc{--navy:#232F42;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+.cc{${COMPLIANCE_FRAME_VARS}
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;display:block;max-width:1080px;margin:26px auto;padding:0 28px}
 .cc *{box-sizing:border-box}
 .cc h1,.cc h2,.cc h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
@@ -12059,7 +11439,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
 
   // capsule-viewer/ts/src/outcome-report-styles.ts
   var OUTCOME_REPORT_CSS = `
-.oi{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+.oi{${OUTCOME_FRAME_VARS}
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#EEF0F3;display:block}
 .oi *{box-sizing:border-box}
 .oi h1,.oi h2,.oi h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
@@ -12219,6 +11599,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
 .oi table.rules td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;width:110px}
 .oi table.rules td.n.ok{color:var(--ok);font-weight:600}
 .oi table.rules td.n.bad{color:var(--bad);font-weight:700}
+.oi table.rules td.nr{text-align:right;color:var(--slate);font-style:italic}
 .oi table.rules tr.grp td{font-family:Georgia,Cambria,serif;color:var(--navy);font-size:16px;padding-top:18px;border-bottom:1px solid var(--navy)}
 .oi table.rules td.cn b{display:block;color:var(--navy)}
 .oi table.rules td.cn small{display:block;color:var(--slate);font-size:12px;max-width:620px}
@@ -12270,24 +11651,24 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   }
   function builtCommit() {
     if (false) return void 0;
-    return commitPrefix("d100e320e4748b497a10b8219cf80bd5f4dc0a0b");
+    return commitPrefix("cdc83dca57930f642cd34a90c7d9264d11a35617");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
     viewer: "@action-state-group/capsule-viewer",
     viewerVersion: "0.1.0",
     verifier: "@action-state-group/agent-action-capsule",
-    verifierVersion: "0.7.0",
+    verifierVersion: "0.8.0",
     cllVersion: "0.2.1",
     ...commit === void 0 ? {} : { commit }
   };
 
   // capsule-viewer/ts/src/presentation-fragment.ts
-  var PRESENTATION_FRAGMENT_VERSION2 = "aac.presentation-fragment/v0";
-  var FRAGMENT_URL_MAX_LENGTH2 = 1048576;
-  var FRAGMENT_ADDRESS_ALLOWANCE2 = 2048;
-  var FRAGMENT_TOKEN_MAX_LENGTH2 = FRAGMENT_URL_MAX_LENGTH2 - FRAGMENT_ADDRESS_ALLOWANCE2;
-  var FragmentTooLargeError2 = class extends Error {
+  var PRESENTATION_FRAGMENT_VERSION = "aac.presentation-fragment/v0";
+  var FRAGMENT_URL_MAX_LENGTH = 1048576;
+  var FRAGMENT_ADDRESS_ALLOWANCE = 2048;
+  var FRAGMENT_TOKEN_MAX_LENGTH = FRAGMENT_URL_MAX_LENGTH - FRAGMENT_ADDRESS_ALLOWANCE;
+  var FragmentTooLargeError = class extends Error {
     length;
     maxLength;
     /** What was too long: `"fragment token"` or `"permalink URL"`. */
@@ -12302,30 +11683,30 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       this.subject = what;
     }
   };
-  var FragmentDecodeError2 = class extends Error {
+  var FragmentDecodeError = class extends Error {
     constructor(message) {
       super(message);
       this.name = "FragmentDecodeError";
     }
   };
-  function decodeFragmentToken2(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
+  function decodeFragmentToken(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
     const body = token.replace(/^#+/u, "");
     if (body.length > maxLength)
-      throw new FragmentTooLargeError2(body.length, maxLength);
+      throw new FragmentTooLargeError(body.length, maxLength);
     try {
       return decodeFragment(body);
     } catch (err) {
-      throw new FragmentDecodeError2(
+      throw new FragmentDecodeError(
         err instanceof Error && err.message === "fragment base64url" ? "fragment token has a character outside the base64url alphabet" : "fragment token is not UTF-8 JSON"
       );
     }
   }
-  var PRESENTATION_DEPTHS2 = [
+  var PRESENTATION_DEPTHS = [
     "L0",
     "L1",
     "L2"
   ];
-  var FRAGMENT_MEMBERS2 = /* @__PURE__ */ new Set([
+  var FRAGMENT_MEMBERS = /* @__PURE__ */ new Set([
     "fragment_version",
     "audience",
     "presentation",
@@ -12337,23 +11718,23 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     "module_sha256",
     "bundle"
   ]);
-  var isObject3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-  function checkPresentationFragment2(value) {
+  var isObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  function checkPresentationFragment(value) {
     const fail2 = (why) => {
-      throw new FragmentDecodeError2(`presentation fragment: ${why}`);
+      throw new FragmentDecodeError(`presentation fragment: ${why}`);
     };
-    if (!isObject3(value)) fail2("not a JSON object");
+    if (!isObject2(value)) fail2("not a JSON object");
     const v = value;
     for (const key of Object.keys(v))
-      if (!FRAGMENT_MEMBERS2.has(key))
+      if (!FRAGMENT_MEMBERS.has(key))
         fail2(`unknown member ${JSON.stringify(key)}`);
-    if (v.fragment_version !== PRESENTATION_FRAGMENT_VERSION2)
-      fail2(`fragment_version is not ${PRESENTATION_FRAGMENT_VERSION2}`);
+    if (v.fragment_version !== PRESENTATION_FRAGMENT_VERSION)
+      fail2(`fragment_version is not ${PRESENTATION_FRAGMENT_VERSION}`);
     if (typeof v.audience !== "string" || v.audience === "")
       fail2("audience is not a non-empty string");
     if (typeof v.presentation !== "string" || v.presentation === "")
       fail2("presentation is not a non-empty string");
-    if (v.depth !== void 0 && !PRESENTATION_DEPTHS2.includes(v.depth))
+    if (v.depth !== void 0 && !PRESENTATION_DEPTHS.includes(v.depth))
       fail2("depth is not L0, L1 or L2");
     if (v.title !== void 0 && typeof v.title !== "string")
       fail2("title is not a string");
@@ -12361,7 +11742,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       fail2("theme_css is not a string");
     if (v.wording !== void 0) {
       const w = v.wording;
-      if (!isObject3(w) || Object.keys(w).some((k) => k !== "pack" && k !== "sha256") || typeof w.pack !== "string" || !isHex64(w.sha256))
+      if (!isObject2(w) || Object.keys(w).some((k) => k !== "pack" && k !== "sha256") || typeof w.pack !== "string" || !isHex64(w.sha256))
         fail2("wording is not {pack, sha256}");
     }
     if (!isHex64(v.core_runtime_sha256))
@@ -12370,9 +11751,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       fail2("module_sha256 is not a list of lowercase hex SHA-256 pins");
     if (!("bundle" in v)) fail2("bundle is missing");
   }
-  function decodePresentationFragment2(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
-    const value = decodeFragmentToken2(token, maxLength);
-    checkPresentationFragment2(value);
+  function decodePresentationFragment(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+    const value = decodeFragmentToken(token, maxLength);
+    checkPresentationFragment(value);
     return value;
   }
 
@@ -12404,6 +11785,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.pf.verdict.failed": "failed verification",
       "lines.pf.verdict.unsupported": "unsupported",
       "lines.pf.verdict.not_applicable": "not applicable",
+      "lines.pf.verdict.no_claim": "no claim",
       "lines.no-note.withheld": "Not in this bundle: the judge's report is withheld.",
       "lines.no-note.mismatch": "Not shown: the report in this bundle does not match what was sealed.",
       "lines.no-note.unreadable": "Not shown: the report in this bundle cannot be read.",
@@ -12431,6 +11813,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.word.was.one": "was",
       "lines.word.was.other": "were",
       "lines.sentence.undecided.none": "Could not decide: this bundle holds no rule result for this conversation.",
+      "lines.sentence.undecided.gaps": 'Could not decide: no rule result was "not met", and this bundle holds no rule result for {names}.',
+      "lines.sentence.undecided.gap-note": " This bundle holds no rule result for {names}.",
       "lines.sentence.undecided": 'Could not decide: no rule result was "not met", but the judge could not decide {names}. The records do not show whether {thatRuleWas} met.',
       "lines.sentence.unverified": 'Could not verify: no rule result was "not met", but {clause}{undecidedNote}',
       "lines.sentence.unverified.undecided-note": " The judge could not decide {names}.",
@@ -12515,6 +11899,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.rules.col.unverified": "failed verification or evidence missing",
       "lines.rules.expand.na.one": "Did not apply to {n} conversation.",
       "lines.rules.expand.na.other": "Did not apply to {n} conversations.",
+      "lines.rules.not-run.h": "Not covered by this run",
+      "lines.rules.not-run": "not covered",
       "lines.cal.h": "Day by day",
       "lines.cal.lede": "Resolved conversations per day, cited by this bundle's claims.",
       "lines.cal.lede.dated": "Resolved conversations per day, by each conversation's own date, cited by this bundle's claims.",
@@ -12659,6 +12045,13 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "prov.judge.nothing": "not stated in this bundle",
       "prov.witness.label": "Witnessed by",
       "prov.witness.stated": "{witnesses}: stated by the bundle, not checked here.",
+      "prov.witness.verified": "{witnesses}: receipt checked here, and it verifies.",
+      "prov.witness.invalid": "not witnessed: the witness check failed.",
+      "prov.witness.failed": "{witnesses}: checked here, and does not verify.",
+      "prov.witness.invalid.findings": "The check states: {findings}.",
+      "prov.witness.failed-entry": "{witness} (reason: {reason})",
+      "prov.witness.invalid.unreadable.one": "{n} entry in its witness list cannot be read.",
+      "prov.witness.invalid.unreadable.other": "{n} entries in its witness list cannot be read.",
       "prov.witness.none": "not stated in this bundle: it carries no witness receipt for its checkpoint.",
       "prov.witness.entry": "{witness} (tree size {size})",
       "prov.witness.receipt-not-stated": "a receipt, witness not stated",
@@ -12681,6 +12074,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "prov.brief.judge.not-stated": "judge not stated",
       "prov.brief.judge.mock": "mock judge",
       "prov.brief.witness.stated": "witness receipt in this bundle",
+      "prov.brief.witness.verified": "witness receipt checked here",
+      "prov.brief.witness.partly-checked": "witness receipts partly checked here",
+      "prov.brief.witness.invalid": "witness check failed",
       "prov.brief.witness.mixed": "witness receipts partly unreadable",
       "prov.brief.witness.not-stated": "no witness receipt in this bundle",
       "prov.brief.verifier.stated": "checked by this page",
@@ -12942,6 +12338,13 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "prov.judge.nothing": "not stated in this bundle",
       "prov.witness.label": "Witnessed by",
       "prov.witness.stated": "{witnesses}: stated by the bundle, not checked here.",
+      "prov.witness.verified": "{witnesses}: receipt checked here, and it verifies.",
+      "prov.witness.invalid": "not witnessed: the witness check failed.",
+      "prov.witness.failed": "{witnesses}: checked here, and does not verify.",
+      "prov.witness.invalid.findings": "The check states: {findings}.",
+      "prov.witness.failed-entry": "{witness} (reason: {reason})",
+      "prov.witness.invalid.unreadable.one": "{n} entry in its witness list cannot be read.",
+      "prov.witness.invalid.unreadable.other": "{n} entries in its witness list cannot be read.",
       "prov.witness.none": "not stated in this bundle: it carries no witness receipt for its checkpoint.",
       "prov.witness.entry": "{witness} (tree size {size})",
       "prov.witness.receipt-not-stated": "a receipt, witness not stated",
@@ -12964,6 +12367,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "prov.brief.judge.not-stated": "judge not stated",
       "prov.brief.judge.mock": "mock judge",
       "prov.brief.witness.stated": "witness receipt in this bundle",
+      "prov.brief.witness.verified": "witness receipt checked here",
+      "prov.brief.witness.partly-checked": "witness receipts partly checked here",
+      "prov.brief.witness.invalid": "witness check failed",
       "prov.brief.witness.mixed": "witness receipts partly unreadable",
       "prov.brief.witness.not-stated": "no witness receipt in this bundle",
       "prov.brief.verifier.stated": "checked by this page",
@@ -13232,7 +12638,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
       "lines.pf.verdict.failed",
       "lines.pf.verdict.unsupported",
       "lines.pf.verdict.not_applicable",
-      "lines.pf.verdict.out_of_scope"
+      "lines.pf.verdict.out_of_scope",
+      "lines.pf.verdict.no_claim"
     ],
     // The assurance tier (judged vs. recomputed) must stay a non-swappable
     // set too: a judgement must never read as a check anyone can repeat.
@@ -13348,6 +12755,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     "groups.ob.unchecked-of": "unchecked",
     "groups.row.nothing": "unchecked",
     "groups.row.none-decided": "unchecked",
+    // Not covered: the run did not cover the rule (Result v0 section 3).
+    "lines.rules.not-run": "unchecked",
     // did-not-apply: no rule or test applied, so nothing was checked; never
     // a met or a missed result.
     "lines.verdict.not_applicable": "not-applicable",
@@ -13436,6 +12845,13 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     "prov.judge.unnamed",
     "prov.judge.nothing",
     "prov.witness.stated",
+    "prov.witness.verified",
+    "prov.witness.invalid",
+    "prov.witness.failed",
+    "prov.witness.invalid.findings",
+    "prov.witness.failed-entry",
+    "prov.witness.invalid.unreadable.one",
+    "prov.witness.invalid.unreadable.other",
     "prov.witness.none",
     "prov.witness.receipt-not-stated",
     "prov.witness.stubs.one",
@@ -13518,6 +12934,8 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     "lines.sentence.unverified",
     "lines.why.unverified",
     "lines.sentence.undecided",
+    "lines.sentence.undecided.gaps",
+    "lines.sentence.undecided.gap-note",
     "lines.why.nothing-applied",
     "lines.cal.lede",
     "lines.line.resolved.help",
@@ -13548,6 +12966,9 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
     "prov.brief.judge.not-stated",
     "prov.brief.judge.mock",
     "prov.brief.witness.stated",
+    "prov.brief.witness.verified",
+    "prov.brief.witness.partly-checked",
+    "prov.brief.witness.invalid",
     "prov.brief.witness.mixed",
     "prov.brief.witness.not-stated",
     "prov.brief.verifier.stated",
@@ -13841,8 +13262,8 @@ ${key}`);
     return problems.map((p) => `${pack.id}: ${p}`);
   }
   var DEFAULT_PACK_SHA256 = Object.freeze({
-    lines: "7afc10e1936ddd02e4e4bf8193aa652d12a69dbf35bb4b359bba3579201f77fa",
-    groups: "09224353431aadb2573218a0ea644ec31438b959028b7808ba41c36aaec1a2d7"
+    lines: "7065032ca2818ad967a35eaa1dd8c6da43a84861c3babc6446afd24db488dbc0",
+    groups: "37f9e5df13bfb85f3c44ecd13fe0b19265e661e9e4c4e5f6d471c7f27c9d93c1"
   });
   function fill(key, text2, vars) {
     return text2.replace(PLACEHOLDER, (whole, name) => {
@@ -14163,8 +13584,48 @@ ${key}`);
         { facts: facts.join(", ") }
       )
     ];
+    const label = w.t("prov.witness.label");
+    const aac = verified.strict?.witnesses ?? void 0;
     const all = witnessEntries(checkpoint);
-    const entries = all.filter((e) => !e.stub && !e.malformed);
+    if (aac?.status === "fail") {
+      const failed2 = aac.receipts.filter((r) => r.status === "fail").map(
+        (r) => w.t("prov.witness.failed-entry", {
+          witness: quoted(r.tsUrl),
+          reason: quoted(r.reason)
+        })
+      );
+      const unreadable = aac.findings.filter(
+        (f) => f.startsWith("witness_receipt_malformed:")
+      ).length;
+      const parts = [
+        w.t("prov.witness.invalid"),
+        ...failed2.length === 0 ? [] : [w.t("prov.witness.failed", { witnesses: failed2.join("; ") })],
+        ...unreadable === 0 ? [] : [
+          w.p("prov.witness.invalid.unreadable", unreadable, {
+            n: fmt(unreadable)
+          })
+        ],
+        // AAC fails only on a failed receipt or an unreadable entry; should
+        // it fail on anything else, its findings are named as it states them.
+        ...failed2.length === 0 && unreadable === 0 && aac.findings.length > 0 ? [
+          w.t("prov.witness.invalid.findings", {
+            findings: aac.findings.map(quoted).join("; ")
+          })
+        ] : []
+      ];
+      return {
+        key: "witness",
+        label,
+        text: [...parts, ...about].join(" "),
+        brief: w.t("prov.brief.witness.invalid"),
+        state: "mixed",
+        witness: "invalid"
+      };
+    }
+    const results = aac !== void 0 && aac.receipts.length === all.length ? aac.receipts : void 0;
+    const entries = all.flatMap(
+      (e, i) => e.stub || e.malformed ? [] : [{ ...e, passed: results?.[i]?.status === "pass" }]
+    );
     const stubs = all.filter((e) => e.stub).length;
     const malformed = all.filter((e) => e.malformed).length;
     const others = [
@@ -14176,31 +13637,35 @@ ${key}`);
         others: others.length === 1 ? others[0] : w.t("prov.witness.both", { a: others[0], b: others[1] })
       })
     ];
-    const label = w.t("prov.witness.label");
     if (entries.length === 0)
       return {
         key: "witness",
         label,
         text: [w.t("prov.witness.none"), ...besides, ...about].join(" "),
         brief: w.t("prov.brief.witness.not-stated"),
-        state: "not-stated"
+        state: "not-stated",
+        witness: "absent"
       };
-    const named = entries.map((e) => {
+    const name = (e) => {
       const url = e.url === void 0 ? w.t("prov.witness.receipt-not-stated") : quoted(e.url);
       return e.treeSize === void 0 ? url : w.t("prov.witness.entry", { witness: url, size: fmt(e.treeSize) });
-    });
+    };
+    const passed = entries.filter((e) => e.passed).map(name);
+    const stated = entries.filter((e) => !e.passed).map(name);
     return {
       key: "witness",
       label,
       text: [
-        w.t("prov.witness.stated", { witnesses: named.join("; ") }),
+        ...passed.length === 0 ? [] : [w.t("prov.witness.verified", { witnesses: passed.join("; ") })],
+        ...stated.length === 0 ? [] : [w.t("prov.witness.stated", { witnesses: stated.join("; ") })],
         ...besides,
         ...about
       ].join(" "),
       brief: w.t(
-        others.length === 0 ? "prov.brief.witness.stated" : "prov.brief.witness.mixed"
+        passed.length > 0 ? stated.length === 0 && others.length === 0 ? "prov.brief.witness.verified" : "prov.brief.witness.partly-checked" : others.length === 0 ? "prov.brief.witness.stated" : "prov.brief.witness.mixed"
       ),
-      state: others.length === 0 ? "stated" : "mixed"
+      state: others.length === 0 ? "stated" : "mixed",
+      witness: passed.length > 0 ? "verified" : "not-checked"
     };
   }
   function verifierLine(bundle, build = VIEWER_BUILD, w = DEFAULT_WORDS.lines) {
@@ -14256,6 +13721,7 @@ ${key}`);
           dd.textContent = line.text;
           dd.dataset.prov = line.key;
           dd.dataset.state = line.state;
+          if (line.witness !== void 0) dd.dataset.witness = line.witness;
           block.append(dt, dd);
         }
         return block;
@@ -14624,7 +14090,9 @@ ${key}`);
       return { word: w.t("lines.status.unverified"), tone: "ne" };
     if (status2 === "nothing-applied")
       return { word: w.t("lines.status.nothing-applied"), tone: "na" };
-    const judged = conversation.criteria.filter((c) => c.verdict === "not_evaluable").map((c) => judgedOf(c.reportState, c.judgePinDigest));
+    const judged = conversation.criteria.filter((c) => c.verdict === "not_evaluable" || c.verdict === "no_claim").map(
+      (c) => c.verdict === "no_claim" ? "no" : judgedOf(c.reportState, c.judgePinDigest)
+    );
     if (judged.includes("yes"))
       return { word: w.t("lines.status.undecided.judged"), tone: "ne" };
     if (judged.length > 0 && judged.every((j) => j === "no"))
@@ -14634,7 +14102,7 @@ ${key}`);
     return judged.every((j) => j === "withheld" || j === "no") ? { word: w.t("lines.status.undecided.withheld"), tone: "ne" } : { word: w.t("lines.status.undecided.unavailable"), tone: "ne" };
   }
   function criterionWord(c, w) {
-    return ruleWord(c.verdict, judgedOf(c.reportState, c.judgePinDigest), w);
+    return c.verdict === "no_claim" ? ruleWord("not_evaluable", "no", w) : ruleWord(c.verdict, judgedOf(c.reportState, c.judgePinDigest), w);
   }
   function noNoteText(c, w) {
     switch (c.reportState) {
@@ -14680,6 +14148,10 @@ ${key}`);
     const misses = all.filter((c) => isMiss(c.verdict));
     const unverified = all.filter((c) => isUnverified(c.verdict));
     const undecided = all.filter((c) => c.verdict === "not_evaluable");
+    const gaps = all.filter((c) => c.verdict === "no_claim");
+    const gapNote = gaps.length > 0 ? w.t("lines.sentence.undecided.gap-note", {
+      names: names(model, gaps, w)
+    }) : "";
     const naText = `${na > 0 ? ` ${w.t("lines.sentence.na", { n: String(na) })}` : ""}${outOfScope > 0 ? ` ${w.t("lines.sentence.out-of-scope", { n: String(outOfScope) })}` : ""}`;
     const unverifiedText = unverified.length > 0 ? ` ${unverifiedClause(model, unverified, w)}` : "";
     switch (conversationStatus(conversation)) {
@@ -14696,15 +14168,17 @@ ${key}`);
       case "unverified":
         return `${w.t("lines.sentence.unverified", {
           clause: unverifiedClause(model, unverified, w, true),
-          undecidedNote: undecided.length > 0 ? w.t("lines.sentence.unverified.undecided-note", {
+          undecidedNote: `${undecided.length > 0 ? w.t("lines.sentence.unverified.undecided-note", {
             names: names(model, undecided, w)
-          }) : ""
+          }) : ""}${gapNote}`
         })}${naText}`;
       case "undecided":
-        return undecided.length === 0 ? w.t("lines.sentence.undecided.none") : `${w.t("lines.sentence.undecided", {
+        return undecided.length > 0 ? `${w.t("lines.sentence.undecided", {
           names: names(model, undecided, w),
           thatRuleWas: w.p("lines.word.that-rule-was", undecided.length)
-        })}${naText}`;
+        })}${gapNote}${naText}` : gaps.length > 0 ? `${w.t("lines.sentence.undecided.gaps", {
+          names: names(model, gaps, w)
+        })}${naText}` : w.t("lines.sentence.undecided.none");
       case "nothing-applied":
         return w.t("lines.sentence.nothing-applied");
     }
@@ -14724,7 +14198,7 @@ ${key}`);
       (c) => isUnverified(c.verdict)
     );
     const undecided = conversation.criteria.filter(
-      (c) => c.verdict === "not_evaluable"
+      (c) => c.verdict === "not_evaluable" || c.verdict === "no_claim"
     );
     const outOfScope = conversation.criteria.filter(
       (c) => c.verdict === "out_of_scope"
@@ -15407,7 +14881,7 @@ ${key}`);
         const unverifiedHere = of(isUnverified);
         const na = of((v) => v === "not_applicable");
         const outOfScopeHere = of((v) => v === "out_of_scope");
-        const undecided = of((v) => v === "not_evaluable");
+        const undecided = of((v) => v === "not_evaluable" || v === "no_claim");
         const tr = el3("tr", "rule");
         tr.dataset.rule = ref;
         tr.dataset.tier = model.criterionTiers.get(ref) ?? "unknown";
@@ -15480,6 +14954,27 @@ ${key}`);
         );
         toggle.dataset.drill = `rule:${ref}`;
         tbody.append(drillRow);
+      }
+    }
+    if (model.notRun.length > 0) {
+      const group = el3("tr", "grp");
+      group.dataset.group = "not-run";
+      const heading = el3("td", "", w.t("lines.rules.not-run.h"));
+      heading.setAttribute("colspan", columns);
+      group.append(heading);
+      tbody.append(group);
+      for (const ref of model.notRun) {
+        const [checkId = "", ...rest] = ref.split(".");
+        const label = criterionLabel(model, checkId, rest.join("."), w);
+        const tr = el3("tr", "rule not-run");
+        tr.dataset.rule = ref;
+        tr.dataset.notRun = "true";
+        const nameCell = el3("td", "cn");
+        nameCell.append(el3("b", "", label.label));
+        const status2 = el3("td", "nr", w.t("lines.rules.not-run"));
+        status2.setAttribute("colspan", String(Number(columns) - 1));
+        tr.append(nameCell, status2);
+        tbody.append(tr);
       }
     }
     table2.append(tbody);
@@ -16722,6 +16217,66 @@ ${key}`);
     );
   }
 
+  // capsule-viewer/ts/src/outcome-report-presentation.ts
+  function object9(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  var CRITERION_REF = /^[a-z0-9_]+\.[a-z0-9_]+$/u;
+  var MAX_NOTE_LINES = 12;
+  var MAX_NOTE_LINE = 600;
+  var MAX_NOTE_TITLE = 120;
+  var MAX_BADGE = 40;
+  function text(value, max) {
+    return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : void 0;
+  }
+  function readProducerNote(value) {
+    const note = object9(value);
+    if (note === void 0 || !Array.isArray(note.lines)) return void 0;
+    const raw = note.lines;
+    if (raw.length === 0 || raw.length > MAX_NOTE_LINES) return void 0;
+    const lines = raw.map((line) => text(line, MAX_NOTE_LINE));
+    if (lines.some((line) => line === void 0)) return void 0;
+    return {
+      title: text(note.title, MAX_NOTE_TITLE) ?? "Producer's note",
+      lines
+    };
+  }
+  function readEditedCriteria(value) {
+    if (!Array.isArray(value)) return void 0;
+    const entries = value;
+    const edited = entries.flatMap((entry) => {
+      const item = object9(entry);
+      const criterion = typeof item?.criterion === "string" && CRITERION_REF.test(item.criterion) ? item.criterion : void 0;
+      const badge = text(item?.badge, MAX_BADGE);
+      return criterion === void 0 || badge === void 0 ? [] : [{ criterion, badge }];
+    });
+    return edited.length === 0 ? void 0 : edited;
+  }
+  function readOutcomeReportPresentation(bundle) {
+    const top = object9(bundle);
+    const extensions2 = object9(top?.extensions);
+    const block = object9(extensions2?.["outcome-report/v1"]);
+    if (block === void 0 || block.enabled !== true) return void 0;
+    const percentages = block.percentages === true;
+    const producerNote = readProducerNote(block.producer_note);
+    const editedCriteria = readEditedCriteria(block.edited_criteria);
+    return {
+      enabled: true,
+      percentages,
+      ...producerNote === void 0 ? {} : { producerNote },
+      ...editedCriteria === void 0 ? {} : { editedCriteria }
+    };
+  }
+
+  // capsule-viewer/ts/src/composed-styles.ts
+  var COMPOSED_CSS = `
+[data-section=composition] .cv-composed-table{max-width:100%}
+@media screen{[data-section=composition] .cv-composed-table{overflow-x:auto}}
+[data-section=composition] table{font-size:.875em}
+[data-section=composition] :is(th,td){text-align:left;vertical-align:top}
+[data-section=composition] :is(td,dd){overflow-wrap:anywhere}
+`;
+
   // capsule-viewer/ts/src/composed-view.ts
   function composedResult(context) {
     const entry = context.verification.extensions.find(
@@ -16748,7 +16303,10 @@ ${key}`);
     const body = element5("tbody");
     body.append(...rows);
     node.append(head2, body);
-    return node;
+    const frame = element5("div");
+    frame.className = "cv-composed-table";
+    frame.append(node);
+    return frame;
   }
   var NOT_APPLICABLE = "\u2014";
   var findingsText = (findings) => findings.length === 0 ? "none" : findings.join(", ");
@@ -16781,7 +16339,10 @@ ${key}`);
     const result = model.result;
     const section = element5("section");
     section.dataset.section = "composition";
-    section.dataset.module = BUILTIN_MANIFEST_COMPOSED2.id;
+    section.dataset.module = BUILTIN_MANIFEST_COMPOSED.id;
+    const style = element5("style");
+    style.textContent = COMPOSED_CSS;
+    section.append(style);
     section.append(element5("h2", "Composition"));
     const status2 = element5("p", `composed/v1 check: ${result.status}`);
     status2.dataset.compositionStatus = result.status;
@@ -16920,13 +16481,13 @@ ${key}`);
     host.L1.append(section);
   }
   var composedSectionModule = {
-    manifest: BUILTIN_MANIFEST_COMPOSED2,
+    manifest: BUILTIN_MANIFEST_COMPOSED,
     canRender: (context) => composedResult(context) !== void 0,
     buildModel: (context) => {
       const result = composedResult(context);
       if (result === void 0)
         throw new Error(
-          `${BUILTIN_MANIFEST_COMPOSED2.id}: buildModel called although canRender was false`
+          `${BUILTIN_MANIFEST_COMPOSED.id}: buildModel called although canRender was false`
         );
       return { result };
     },
@@ -16934,7 +16495,7 @@ ${key}`);
   };
 
   // capsule-viewer/ts/src/record-content.ts
-  var isObject4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var isObject3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   function canonicalJson(value, indent) {
     const pad = indent === void 0 ? "" : " ".repeat(indent);
     const write = (v, depth) => {
@@ -16945,7 +16506,7 @@ ${pad.repeat(depth)}`;
       const colon = pad === "" ? ":" : ": ";
       if (Array.isArray(v))
         return v.length === 0 ? "[]" : `[${v.map((item) => open + write(item, depth + 1)).join(",")}${close}]`;
-      if (isObject4(v)) {
+      if (isObject3(v)) {
         const keys = Object.keys(v).sort(byCodeUnits);
         return keys.length === 0 ? "{}" : `{${keys.map(
           (key) => `${open}${JSON.stringify(key)}${colon}${write(v[key], depth + 1)}`
@@ -16959,12 +16520,12 @@ ${pad.repeat(depth)}`;
     return a < b ? -1 : a > b ? 1 : 0;
   }
   function conversationTurns(content) {
-    if (!isObject4(content)) return void 0;
-    const interaction = isObject4(content.agent_interaction) ? content.agent_interaction : void 0;
+    if (!isObject3(content)) return void 0;
+    const interaction = isObject3(content.agent_interaction) ? content.agent_interaction : void 0;
     if (interaction === void 0 || !Array.isArray(interaction.messages))
       return void 0;
     return interaction.messages.flatMap((m) => {
-      if (!isObject4(m)) return [];
+      if (!isObject3(m)) return [];
       const role = typeof m.role === "string" ? m.role : "unknown";
       const text2 = typeof m.content === "string" ? m.content : void 0;
       const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
@@ -16973,7 +16534,7 @@ ${pad.repeat(depth)}`;
           role,
           ...text2 === void 0 ? {} : { content: text2 },
           toolCalls: calls.flatMap(
-            (call) => isObject4(call) ? [
+            (call) => isObject3(call) ? [
               {
                 name: typeof call.name === "string" ? call.name : "unnamed",
                 // Re-serialised as there, but in canonical member order,
@@ -17039,32 +16600,32 @@ ${pad.repeat(depth)}`;
 `;
 
   // capsule-viewer/ts/src/compliance-presentation.ts
-  function object11(value) {
+  function object10(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
   }
-  function str2(value) {
+  function str(value) {
     return typeof value === "string" ? value : void 0;
   }
-  function strArray2(value) {
+  function strArray(value) {
     return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
   }
-  function readFinding2(value) {
-    const obj = object11(value);
-    const id = str2(obj?.id);
-    const severity = str2(obj?.severity);
-    const recommendation = str2(obj?.recommendation);
-    const ownerDue = str2(obj?.owner_due);
+  function readFinding(value) {
+    const obj = object10(value);
+    const id = str(obj?.id);
+    const severity = str(obj?.severity);
+    const recommendation = str(obj?.recommendation);
+    const ownerDue = str(obj?.owner_due);
     if (id === void 0 || severity === void 0 || recommendation === void 0 || ownerDue === void 0)
       return void 0;
     return { id, severity, recommendation, ownerDue };
   }
-  function readRow2(value) {
-    const obj = object11(value);
-    const criterionId = str2(obj?.criterion_id);
-    const name = str2(obj?.name);
+  function readRow(value) {
+    const obj = object10(value);
+    const criterionId = str(obj?.criterion_id);
+    const name = str(obj?.name);
     if (criterionId === void 0 || name === void 0) return void 0;
-    const notEvaluableNote = str2(obj?.not_evaluable_note);
-    const finding = obj?.finding === void 0 ? void 0 : readFinding2(obj.finding);
+    const notEvaluableNote = str(obj?.not_evaluable_note);
+    const finding = obj?.finding === void 0 ? void 0 : readFinding(obj.finding);
     return {
       criterionId,
       name,
@@ -17072,25 +16633,25 @@ ${pad.repeat(depth)}`;
       ...finding === void 0 ? {} : { finding }
     };
   }
-  function readApplicability2(value) {
-    const obj = object11(value);
+  function readApplicability(value) {
+    const obj = object10(value);
     const status2 = obj?.status === "in_force" || obj?.status === "future" ? obj.status : void 0;
-    const note = str2(obj?.note);
+    const note = str(obj?.note);
     if (status2 === void 0 || note === void 0) return void 0;
     return { status: status2, note };
   }
-  function readObligation2(value) {
-    const obj = object11(value);
-    const key = str2(obj?.key);
-    const article = str2(obj?.article);
-    const title = str2(obj?.title);
-    const plain2 = str2(obj?.plain);
-    const method = str2(obj?.method);
-    const applicability = readApplicability2(obj?.applicability);
+  function readObligation(value) {
+    const obj = object10(value);
+    const key = str(obj?.key);
+    const article = str(obj?.article);
+    const title = str(obj?.title);
+    const plain2 = str(obj?.plain);
+    const method = str(obj?.method);
+    const applicability = readApplicability(obj?.applicability);
     if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
       return void 0;
     const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
-      const row2 = readRow2(r);
+      const row2 = readRow(r);
       return row2 === void 0 ? [] : [row2];
     }) : [];
     return {
@@ -17098,18 +16659,18 @@ ${pad.repeat(depth)}`;
       article,
       title,
       plain: plain2,
-      judgedTerms: strArray2(obj?.judged_terms),
+      judgedTerms: strArray(obj?.judged_terms),
       applicability,
       method,
       rows
     };
   }
-  function readQualityProtocol2(value) {
-    const obj = object11(value);
+  function readQualityProtocol(value) {
+    const obj = object10(value);
     if (obj === void 0) return void 0;
-    const protocol = str2(obj.protocol);
-    const cadence = str2(obj.cadence);
-    const note = str2(obj.note);
+    const protocol = str(obj.protocol);
+    const cadence = str(obj.cadence);
+    const note = str(obj.note);
     if (protocol === void 0 && cadence === void 0 && note === void 0)
       return void 0;
     return {
@@ -17118,18 +16679,18 @@ ${pad.repeat(depth)}`;
       ...note === void 0 ? {} : { note }
     };
   }
-  function readCompliancePresentation2(bundle) {
-    const top = object11(bundle);
-    const extensions2 = object11(top?.extensions);
-    const block = object11(extensions2?.["eu-ai-act-compliance/v1"]);
+  function readCompliancePresentation(bundle) {
+    const top = object10(bundle);
+    const extensions2 = object10(top?.extensions);
+    const block = object10(extensions2?.["eu-ai-act-compliance/v1"]);
     if (block === void 0 || block.enabled !== true) return void 0;
-    const regulation = str2(block.regulation) ?? "Regulation (EU) 2024/1689";
+    const regulation = str(block.regulation) ?? "Regulation (EU) 2024/1689";
     const obligations = Array.isArray(block.obligations) ? block.obligations.flatMap((o) => {
-      const obligation = readObligation2(o);
+      const obligation = readObligation(o);
       return obligation === void 0 ? [] : [obligation];
     }) : [];
     if (obligations.length === 0) return void 0;
-    const qualityProtocol = readQualityProtocol2(block.quality_protocol);
+    const qualityProtocol = readQualityProtocol(block.quality_protocol);
     return {
       enabled: true,
       regulation,
@@ -17139,34 +16700,64 @@ ${pad.repeat(depth)}`;
   }
 
   // capsule-viewer/ts/src/presentation-registry.ts
-  var PRESENTATION_MANIFEST_VERSION2 = "aac.presentation-manifest/v0";
-  var PRESENTATION_API_V02 = "aac.presentation-api/v0";
-  var REFERENCE_PRESENTATION_RUNTIME2 = Object.freeze({
-    presentationApis: Object.freeze([PRESENTATION_API_V02]),
+  var PRESENTATION_MANIFEST_VERSION = "aac.presentation-manifest/v0";
+  var PRESENTATION_API_V0 = "aac.presentation-api/v0";
+  var REFERENCE_PRESENTATION_RUNTIME = Object.freeze({
+    presentationApis: Object.freeze([PRESENTATION_API_V0]),
     runtimeVersion: "0.1.0"
   });
-  var PRESENTATION_FORMATS2 = [
+  var PRESENTATION_FORMATS = [
     "html",
     "fragment",
     "embedded"
   ];
-  var RUNTIME_VERSION2 = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
-  var PRESENTATION_API2 = /^aac\.presentation-api\/v(0|[1-9][0-9]*)$/u;
-  function compareVersions2(a, b) {
+  function need(refusal) {
+    return refusal.reason === "presentation_api_unsupported" ? `needs presentation API ${refusal.presentation_api}, which this viewer does not implement` : `needs runtime ${refusal.runtime_min} or later; this viewer is ${refusal.runtimeVersion}`;
+  }
+  function presentationRefusalRow(refusal, covered) {
+    return `${covered ? "Integrity verified" : "Integrity not verified"}; meaning not interpreted: presentation module ${refusal.id} ${need(refusal)}`;
+  }
+  function presentationRefusalLine(refusal) {
+    return `Presentation module ${refusal.id} was not used: it ${need(refusal)}`;
+  }
+  function presentationExtensionRows(rows, refused) {
+    return rows.map((row2) => {
+      const refusal = refused.find((r) => r.extensions.includes(row2.id));
+      return refusal === void 0 ? row2 : {
+        id: row2.id,
+        integrity: row2.integrity,
+        refusal,
+        semantics: presentationRefusalRow(
+          refusal,
+          row2.integrity === "covered"
+        )
+      };
+    });
+  }
+  function presentationRefusalNotices(refused) {
+    return refused.filter((refusal) => refusal.extensions.length === 0).map((refusal) => ({
+      id: refusal.id,
+      reason: refusal.reason,
+      line: presentationRefusalLine(refusal)
+    }));
+  }
+  var RUNTIME_VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
+  var PRESENTATION_API = /^aac\.presentation-api\/v(0|[1-9][0-9]*)$/u;
+  function compareVersions(a, b) {
     const left = a.split(".").map(Number);
     const right = b.split(".").map(Number);
     for (let i = 0; i < 3; i += 1)
       if (left[i] !== right[i]) return left[i] - right[i];
     return 0;
   }
-  function presentationRefusalReason2(manifest, runtime = REFERENCE_PRESENTATION_RUNTIME2) {
+  function presentationRefusalReason(manifest, runtime = REFERENCE_PRESENTATION_RUNTIME) {
     if (!runtime.presentationApis.includes(manifest.presentation_api))
       return "presentation_api_unsupported";
-    if (compareVersions2(runtime.runtimeVersion, manifest.runtime_min) < 0)
+    if (compareVersions(runtime.runtimeVersion, manifest.runtime_min) < 0)
       return "runtime_too_old";
     return void 0;
   }
-  function refusalOf2(manifest, reason, runtime) {
+  function refusalOf(manifest, reason, runtime) {
     return Object.freeze({
       id: manifest.id,
       presentation_api: manifest.presentation_api,
@@ -17178,7 +16769,7 @@ ${pad.repeat(depth)}`;
       runtimeVersion: runtime.runtimeVersion
     });
   }
-  var PresentationAmbiguityError2 = class extends Error {
+  var PresentationAmbiguityError = class extends Error {
     ids;
     constructor(ids, message) {
       super(
@@ -17188,30 +16779,21 @@ ${pad.repeat(depth)}`;
       this.ids = ids;
     }
   };
-  var PresentationRegistrationError2 = class extends Error {
+  var PresentationRegistrationError = class extends Error {
     constructor(message) {
       super(message);
       this.name = "PresentationRegistrationError";
     }
   };
-  function membershipProvenOrUnbound2(result) {
-    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
-  }
-  function bundleVerified2(result) {
-    const selected = isProducerSelection(result);
-    return result.graphClosure.status === "pass" && (selected || result.intervalCoverage.status === "pass") && membershipProvenOrUnbound2(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
-      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
-    );
-  }
-  var isPlainObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-  var EXTENSION_READERS2 = {
+  var isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var EXTENSION_READERS = {
     [CONTRACT_REPORT_KIND]: readContractReport,
     "outcome-report/v1": (bundle) => readOutcomeReportPresentation(bundle) !== void 0,
-    "eu-ai-act-compliance/v1": (bundle) => readCompliancePresentation2(bundle) !== void 0
+    "eu-ai-act-compliance/v1": (bundle) => readCompliancePresentation(bundle) !== void 0
   };
-  function describeContext2(context) {
-    const bundle = isPlainObject2(context.bundle) ? context.bundle : {};
-    const verified = bundleVerified2(context.verification);
+  function describeContext(context) {
+    const bundle = isPlainObject(context.bundle) ? context.bundle : {};
+    const verified = bundleVerified(context.verification);
     const bundleKind = typeof bundle.bundle_kind === "string" ? bundle.bundle_kind : void 0;
     if (!verified)
       return {
@@ -17223,50 +16805,50 @@ ${pad.repeat(depth)}`;
     const profiles = /* @__PURE__ */ new Set();
     if (context.root !== void 0 && context.recordIndex.has(context.root)) {
       const input = verifiedPayload(context, context.root, "agent_input");
-      if (isPlainObject2(input) && typeof input.spec_version === "string")
+      if (isPlainObject(input) && typeof input.spec_version === "string")
         profiles.add(`spec_version:${input.spec_version}`);
     }
     if (carriesResultDocument(context))
       profiles.add(`result_version:${RESULT_VERSION}`);
     const extensions2 = /* @__PURE__ */ new Set();
-    if (isPlainObject2(bundle.extensions))
+    if (isPlainObject(bundle.extensions))
       for (const kind of Object.keys(bundle.extensions)) {
-        const reader = EXTENSION_READERS2[kind];
+        const reader = EXTENSION_READERS[kind];
         if (reader === void 0 || reader(context.bundle)) extensions2.add(kind);
       }
     return { verified, bundle_kind: bundleKind, profiles, extensions: extensions2 };
   }
-  var requiredProfiles2 = (m) => m.requires.profiles ?? [];
-  var requiredExtensions2 = (m) => m.requires.extensions?.required ?? [];
-  var forbiddenProfiles2 = (m) => m.forbids?.profiles ?? [];
-  var forbiddenExtensions2 = (m) => m.forbids?.extensions ?? [];
-  var profileKey2 = (token) => token.split(":", 1)[0];
-  function onePerKey2(tokens) {
+  var requiredProfiles = (m) => m.requires.profiles ?? [];
+  var requiredExtensions = (m) => m.requires.extensions?.required ?? [];
+  var forbiddenProfiles = (m) => m.forbids?.profiles ?? [];
+  var forbiddenExtensions = (m) => m.forbids?.extensions ?? [];
+  var profileKey = (token) => token.split(":", 1)[0];
+  function onePerKey(tokens) {
     const keys = /* @__PURE__ */ new Set();
     for (const token of tokens) {
-      const key = profileKey2(token);
+      const key = profileKey(token);
       if (keys.has(key)) return false;
       keys.add(key);
     }
     return true;
   }
-  function manifestMatches2(manifest, descriptor, audience, format) {
-    return manifest.requires.bundle_kind === descriptor.bundle_kind && requiredProfiles2(manifest).every((t) => descriptor.profiles.has(t)) && requiredExtensions2(manifest).every((k) => descriptor.extensions.has(k)) && !forbiddenProfiles2(manifest).some((t) => descriptor.profiles.has(t)) && !forbiddenExtensions2(manifest).some((k) => descriptor.extensions.has(k)) && (manifest.audiences.includes("*") || manifest.audiences.includes(audience)) && manifest.formats.includes(format);
+  function manifestMatches(manifest, descriptor, audience, format) {
+    return manifest.requires.bundle_kind === descriptor.bundle_kind && requiredProfiles(manifest).every((t) => descriptor.profiles.has(t)) && requiredExtensions(manifest).every((k) => descriptor.extensions.has(k)) && !forbiddenProfiles(manifest).some((t) => descriptor.profiles.has(t)) && !forbiddenExtensions(manifest).some((k) => descriptor.extensions.has(k)) && (manifest.audiences.includes("*") || manifest.audiences.includes(audience)) && manifest.formats.includes(format);
   }
-  function manifestsCoMatchable2(a, b) {
+  function manifestsCoMatchable(a, b) {
     if (a.requires.bundle_kind !== b.requires.bundle_kind) return false;
     if (!a.audiences.includes("*") && !b.audiences.includes("*") && !a.audiences.some((x) => b.audiences.includes(x)))
       return false;
     if (!a.formats.some((f) => b.formats.includes(f))) return false;
-    const reqP = /* @__PURE__ */ new Set([...requiredProfiles2(a), ...requiredProfiles2(b)]);
-    const reqE = /* @__PURE__ */ new Set([...requiredExtensions2(a), ...requiredExtensions2(b)]);
-    const forbP = [...forbiddenProfiles2(a), ...forbiddenProfiles2(b)];
-    const forbE = [...forbiddenExtensions2(a), ...forbiddenExtensions2(b)];
+    const reqP = /* @__PURE__ */ new Set([...requiredProfiles(a), ...requiredProfiles(b)]);
+    const reqE = /* @__PURE__ */ new Set([...requiredExtensions(a), ...requiredExtensions(b)]);
+    const forbP = [...forbiddenProfiles(a), ...forbiddenProfiles(b)];
+    const forbE = [...forbiddenExtensions(a), ...forbiddenExtensions(b)];
     if (forbP.some((t) => reqP.has(t))) return false;
     if (forbE.some((k) => reqE.has(k))) return false;
-    return onePerKey2(reqP);
+    return onePerKey(reqP);
   }
-  var MANIFEST_MEMBERS2 = /* @__PURE__ */ new Set([
+  var MANIFEST_MEMBERS = /* @__PURE__ */ new Set([
     "spec_version",
     "id",
     "presentation_api",
@@ -17281,37 +16863,37 @@ ${pad.repeat(depth)}`;
     "executable",
     "declarative"
   ]);
-  var MANIFEST_ID2 = /^[a-z0-9]+(\.[a-z0-9_-]+)+\/v[0-9]+$/u;
-  var PROFILE_TOKEN2 = /^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$/u;
-  var AUDIENCE2 = /^(\*|[a-z][a-z0-9_-]*)$/u;
-  function manifestProblems2(manifest) {
+  var MANIFEST_ID = /^[a-z0-9]+(\.[a-z0-9_-]+)+\/v[0-9]+$/u;
+  var PROFILE_TOKEN = /^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$/u;
+  var AUDIENCE = /^(\*|[a-z][a-z0-9_-]*)$/u;
+  function manifestProblems(manifest) {
     const problems = [];
     const raw = manifest;
-    if (!isPlainObject2(raw)) return ["manifest is not an object"];
+    if (!isPlainObject(raw)) return ["manifest is not an object"];
     for (const member of Object.keys(raw))
-      if (!MANIFEST_MEMBERS2.has(member))
+      if (!MANIFEST_MEMBERS.has(member))
         problems.push(`unknown member ${JSON.stringify(member)}`);
-    if (manifest.spec_version !== PRESENTATION_MANIFEST_VERSION2)
-      problems.push(`spec_version is not ${PRESENTATION_MANIFEST_VERSION2}`);
-    if (typeof manifest.id !== "string" || !MANIFEST_ID2.test(manifest.id))
+    if (manifest.spec_version !== PRESENTATION_MANIFEST_VERSION)
+      problems.push(`spec_version is not ${PRESENTATION_MANIFEST_VERSION}`);
+    if (typeof manifest.id !== "string" || !MANIFEST_ID.test(manifest.id))
       problems.push("id is not <dotted name>/v<major>");
-    if (typeof manifest.presentation_api !== "string" || !PRESENTATION_API2.test(manifest.presentation_api))
+    if (typeof manifest.presentation_api !== "string" || !PRESENTATION_API.test(manifest.presentation_api))
       problems.push("presentation_api is not aac.presentation-api/v<major>");
-    if (typeof manifest.runtime_min !== "string" || !RUNTIME_VERSION2.test(manifest.runtime_min))
+    if (typeof manifest.runtime_min !== "string" || !RUNTIME_VERSION.test(manifest.runtime_min))
       problems.push("runtime_min is not MAJOR.MINOR.PATCH");
     if (manifest.trust_class !== "trusted-executable" && manifest.trust_class !== "declarative")
       problems.push("trust_class is neither trusted-executable nor declarative");
-    if (!isPlainObject2(manifest.requires) || typeof manifest.requires.bundle_kind !== "string")
+    if (!isPlainObject(manifest.requires) || typeof manifest.requires.bundle_kind !== "string")
       problems.push("requires.bundle_kind is missing");
     for (const token of [
-      ...requiredProfiles2(manifest),
-      ...forbiddenProfiles2(manifest)
+      ...requiredProfiles(manifest),
+      ...forbiddenProfiles(manifest)
     ])
-      if (!PROFILE_TOKEN2.test(token))
+      if (!PROFILE_TOKEN.test(token))
         problems.push(`profile token ${JSON.stringify(token)} is malformed`);
-    if (!Array.isArray(manifest.audiences) || manifest.audiences.length === 0 || manifest.audiences.some((a) => typeof a !== "string" || !AUDIENCE2.test(a)))
+    if (!Array.isArray(manifest.audiences) || manifest.audiences.length === 0 || manifest.audiences.some((a) => typeof a !== "string" || !AUDIENCE.test(a)))
       problems.push("audiences is not a non-empty list of audience tokens");
-    if (!Array.isArray(manifest.formats) || manifest.formats.length === 0 || manifest.formats.some((f) => !PRESENTATION_FORMATS2.includes(f)))
+    if (!Array.isArray(manifest.formats) || manifest.formats.length === 0 || manifest.formats.some((f) => !PRESENTATION_FORMATS.includes(f)))
       problems.push("formats is not a non-empty list of html/fragment/embedded");
     if (typeof manifest.fallback !== "boolean")
       problems.push("fallback is not a boolean");
@@ -17323,28 +16905,28 @@ ${pad.repeat(depth)}`;
       problems.push(
         "trusted-executable carries executable, declarative carries declarative"
       );
-    if (forbiddenProfiles2(manifest).some(
-      (t) => requiredProfiles2(manifest).includes(t)
+    if (forbiddenProfiles(manifest).some(
+      (t) => requiredProfiles(manifest).includes(t)
     ))
       problems.push("requires and forbids share a profile");
-    if (forbiddenExtensions2(manifest).some(
-      (k) => requiredExtensions2(manifest).includes(k)
+    if (forbiddenExtensions(manifest).some(
+      (k) => requiredExtensions(manifest).includes(k)
     ))
       problems.push("requires and forbids share an extension");
-    if (!onePerKey2(requiredProfiles2(manifest)))
+    if (!onePerKey(requiredProfiles(manifest)))
       problems.push("requires two tokens of one profile key");
     return problems;
   }
-  async function resolveModules2(modules, descriptor, audience, format, canRender, refuse = () => void 0) {
+  async function resolveModules(modules, descriptor, audience, format, canRender, refuse = () => void 0) {
     if (!descriptor.verified) return { kind: "refusal" };
     const matched = modules.filter(
-      (m) => manifestMatches2(m.manifest, descriptor, audience, format)
+      (m) => manifestMatches(m.manifest, descriptor, audience, format)
     );
     const refused = [];
     for (const fallback of [false, true]) {
       const tier = matched.filter((m) => m.manifest.fallback === fallback);
       if (tier.length > 1)
-        throw new PresentationAmbiguityError2(
+        throw new PresentationAmbiguityError(
           tier.map((m) => m.manifest.id).sort()
         );
       const only = tier[0];
@@ -17359,13 +16941,13 @@ ${pad.repeat(depth)}`;
     }
     return { kind: "no-presentation", refused: Object.freeze(refused) };
   }
-  var PresentationRegistry2 = class {
+  var PresentationRegistry = class {
     /** Every module, refused ones included: all of them count for ambiguity. */
     #modules = [];
     #refused = /* @__PURE__ */ new Map();
     #runtime;
     /** `runtime` is what this registry's runtime implements (section 3.2). */
-    constructor(runtime = REFERENCE_PRESENTATION_RUNTIME2) {
+    constructor(runtime = REFERENCE_PRESENTATION_RUNTIME) {
       this.#runtime = runtime;
     }
     /** The runtime declaration this registry applies. */
@@ -17385,26 +16967,26 @@ ${pad.repeat(depth)}`;
      */
     register(module) {
       const manifest = module.manifest;
-      const problems = manifestProblems2(manifest);
+      const problems = manifestProblems(manifest);
       if (problems.length > 0)
-        throw new PresentationRegistrationError2(
+        throw new PresentationRegistrationError(
           `manifest ${JSON.stringify(manifest?.id)} refused: ${problems.join("; ")}`
         );
       for (const other of this.#modules) {
         if (other.manifest.id === manifest.id)
-          throw new PresentationRegistrationError2(
+          throw new PresentationRegistrationError(
             `manifest ${manifest.id} is already registered`
           );
-        if (other.manifest.fallback === manifest.fallback && manifestsCoMatchable2(other.manifest, manifest))
-          throw new PresentationAmbiguityError2(
+        if (other.manifest.fallback === manifest.fallback && manifestsCoMatchable(other.manifest, manifest))
+          throw new PresentationAmbiguityError(
             [other.manifest.id, manifest.id].sort(),
             `manifests ${other.manifest.id} and ${manifest.id} are both ${manifest.fallback ? "fallbacks" : "specific"} and one descriptor can match both; state precedence with forbids`
           );
       }
       this.#modules.push(module);
-      const reason = presentationRefusalReason2(manifest, this.#runtime);
+      const reason = presentationRefusalReason(manifest, this.#runtime);
       if (reason === void 0) return { status: "registered" };
-      const refusal = refusalOf2(manifest, reason, this.#runtime);
+      const refusal = refusalOf(manifest, reason, this.#runtime);
       this.#refused.set(module, refusal);
       return { status: "refused", refusal };
     }
@@ -17421,9 +17003,9 @@ ${pad.repeat(depth)}`;
     }
     /** Section 4.3: the one module for this context, audience and format. */
     resolve(context, audience, format) {
-      return resolveModules2(
+      return resolveModules(
         this.#modules,
-        describeContext2(context),
+        describeContext(context),
         audience,
         format,
         (module) => module.canRender(context),
@@ -17431,6 +17013,39 @@ ${pad.repeat(depth)}`;
       );
     }
   };
+
+  // capsule-viewer/ts/src/alias-interpreters.ts
+  var ALIAS_INTERPRETERS = Object.freeze({
+    "outcome-report/v1": {
+      id: "outcome-report-card",
+      accepts: (bundle) => readOutcomeReportPresentation(bundle) !== void 0
+    },
+    "eu-ai-act-compliance/v1": {
+      id: "compliance-card",
+      accepts: (bundle) => readCompliancePresentation(bundle) !== void 0
+    }
+  });
+  function aliasExtensionRows(bundle, rows, applied) {
+    return rows.map((row2) => {
+      if (row2.interpreter !== void 0 || !Object.hasOwn(ALIAS_INTERPRETERS, row2.id))
+        return row2;
+      const interpreter = ALIAS_INTERPRETERS[row2.id];
+      if (!interpreter.accepts(bundle) || !applied.has(interpreter.id))
+        return row2;
+      return {
+        id: row2.id,
+        integrity: row2.integrity,
+        interpreter: interpreter.id,
+        semantics: EXTENSION_SHOWN[row2.integrity === "covered" ? "covered" : "notCovered"]
+      };
+    });
+  }
+  var isAlias = (id) => id === "outcome-report-card" || id === "compliance-card";
+  function aacInterpreters(applied) {
+    return new Set(
+      [...applied].filter((id) => !isAlias(id))
+    );
+  }
 
   // capsule-viewer/ts/src/evidence-graph-view.ts
   function element6(tag, text2) {
@@ -17529,7 +17144,7 @@ ${pad.repeat(depth)}`;
     root.replaceChildren(bar);
     return bar;
   }
-  var UNABLE_TO_VERIFY_LINES = {
+  var UNABLE_TO_VERIFY_LINES2 = {
     banner: VERIFICATION_BANNER_LINES.unable,
     reason: "This viewer cannot compute the SHA-256 digests the checks need, so nothing was checked and no records are shown. This is not a failed check: the file may well be valid.",
     command: "To check this file, run:",
@@ -17537,20 +17152,20 @@ ${pad.repeat(depth)}`;
   };
   function renderUnableToVerify(root, options = {}) {
     root.replaceChildren();
-    const banner = element6("p", UNABLE_TO_VERIFY_LINES.banner);
+    const banner = element6("p", UNABLE_TO_VERIFY_LINES2.banner);
     banner.dataset.verify = "unable";
-    const reason = element6("p", UNABLE_TO_VERIFY_LINES.reason);
+    const reason = element6("p", UNABLE_TO_VERIFY_LINES2.reason);
     reason.dataset.refusal = "unable-to-verify";
     root.append(banner, reason);
     if (options.verifyCommand === void 0) {
-      root.append(element6("p", UNABLE_TO_VERIFY_LINES.noCommand));
+      root.append(element6("p", UNABLE_TO_VERIFY_LINES2.noCommand));
       return;
     }
     const command = element6("code", options.verifyCommand);
     command.dataset.verifyCommand = "";
     const block = element6("pre");
     block.append(command);
-    root.append(element6("p", UNABLE_TO_VERIFY_LINES.command), block);
+    root.append(element6("p", UNABLE_TO_VERIFY_LINES2.command), block);
   }
   function checkedSummaryLine(verified, model) {
     const total = model.checks.length;
@@ -17801,7 +17416,7 @@ ${pad.repeat(depth)}`;
       fold.append(...anchors);
       deferBody(fold, () => entries.build(record.capsuleId, read));
       fold.addEventListener("toggle", () => {
-        const hash2 = fold.ownerDocument.defaultView?.location.hash;
+        const hash2 = fold.ownerDocument.defaultView?.location?.hash;
         const target = anchors.find((a) => hash2 === `#${a.id}`);
         if (fold.open && target !== void 0) target.scrollIntoView?.();
       });
@@ -17817,16 +17432,16 @@ ${pad.repeat(depth)}`;
       const id = record.bookRecordId ?? record.capsuleId;
       if (!read.has(id)) read.set(id, record);
     }
-    const bundle = object12(context.bundle);
+    const bundle = object11(context.bundle);
     const memberships2 = context.completeness.memberships;
-    const extensions2 = object12(bundle.extensions);
-    const payloads = object12(extensions2[BOOK_PAYLOADS_EXTENSION]);
-    const originals = object12(extensions2[AGENT_INPUT_ORIGINALS_EXTENSION]);
+    const extensions2 = object11(bundle.extensions);
+    const payloads = object11(extensions2[BOOK_PAYLOADS_EXTENSION]);
+    const originals = object11(extensions2[AGENT_INPUT_ORIGINALS_EXTENSION]);
     for (const raw of context.records) {
       const id = raw.capsule_id;
       if (read.has(id)) continue;
       const agentInput = disclosureOf(context, id, "agent_input");
-      const header = agentInput.state === "disclosed" && object12(agentInput.payload).record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? agentInput.payload : void 0;
+      const header = agentInput.state === "disclosed" && object11(agentInput.payload).record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? agentInput.payload : void 0;
       const carried = header === void 0 ? void 0 : await carriedCapsuleCommitment(header, payloads);
       const carriedInput = header === void 0 ? void 0 : await resolveCarriedInput(header, payloads, originals);
       const references = Array.isArray(raw.references) ? raw.references : [];
@@ -17847,7 +17462,7 @@ ${pad.repeat(depth)}`;
           carriedInputDigest: carried.inputDigest
         },
         cites: references.flatMap((ref) => {
-          const r = object12(ref);
+          const r = object11(ref);
           return r.citation_purpose === "acted_on" && typeof r.digest === "string" ? [r.digest] : [];
         })
       });
@@ -17855,9 +17470,9 @@ ${pad.repeat(depth)}`;
     return read;
   }
   function recordKind(raw, read) {
-    const header = read?.agentInput.state === "disclosed" ? object12(read.agentInput.payload).record_type : void 0;
+    const header = read?.agentInput.state === "disclosed" ? object11(read.agentInput.payload).record_type : void 0;
     if (typeof header === "string") return header;
-    const own = object12(raw).action_type;
+    const own = object11(raw).action_type;
     return typeof own === "string" ? own : void 0;
   }
   function renderCoverageStatusCounts(records) {
@@ -18004,11 +17619,20 @@ ${pad.repeat(depth)}`;
       section.append(page);
     }
     page.append(element6("h2", "Verification"));
-    const model = buildVerificationPageModel(bundle, verified, applied, refused, {
-      stamps,
-      citedSigners,
-      ...context.strict === void 0 ? {} : { strict: context.strict }
-    });
+    const model = buildVerificationPageModel(
+      bundle,
+      verified,
+      aacInterpreters(applied),
+      {
+        stamps,
+        citedSigners,
+        ...context.strict === void 0 ? {} : { strict: context.strict }
+      }
+    );
+    const extensions2 = presentationExtensionRows(
+      aliasExtensionRows(bundle, model.extensions, applied),
+      refused
+    );
     const summary = element6("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
     appendValue(summary, "checkpoint root", model.checkpointRoot ?? "absent");
@@ -18028,22 +17652,22 @@ ${pad.repeat(depth)}`;
     page.append(contentStyle);
     let result;
     try {
-      result = bundleVerified2(verified) ? await resultRootOf(context) : void 0;
+      result = bundleVerified(verified) ? await resultRootOf(context) : void 0;
     } catch {
       result = void 0;
     }
-    const read = bundleVerified2(verified) ? await recordEntries(context, result) : /* @__PURE__ */ new Map();
+    const read = bundleVerified(verified) ? await recordEntries(context, result) : /* @__PURE__ */ new Map();
     const rawRecords = /* @__PURE__ */ new Map();
-    for (const raw of Array.isArray(object12(bundle).records) ? object12(bundle).records : [])
-      if (typeof object12(raw).capsule_id === "string")
-        rawRecords.set(object12(raw).capsule_id, raw);
+    for (const raw of Array.isArray(object11(bundle).records) ? object11(bundle).records : [])
+      if (typeof object11(raw).capsule_id === "string")
+        rawRecords.set(object11(raw).capsule_id, raw);
     renderCheckpointCoverage(
       page,
       model.records,
       model.uncheckpointedCount,
       model.coverage,
       {
-        verified: bundleVerified2(verified),
+        verified: bundleVerified(verified),
         read,
         kind: (id) => recordKind(rawRecords.get(id), read.get(id)),
         build: (id, record) => renderRecordEntry(id, record)
@@ -18053,15 +17677,15 @@ ${pad.repeat(depth)}`;
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
     renderChecks(page, model.checks);
-    renderExtensions(page, model.extensions, model.presentationRefusals);
+    renderExtensions(page, extensions2, presentationRefusalNotices(refused));
     renderCheckLists(page, model.checkLists, verifierHint);
     page.append(element6("p", model.verifyIndependentlyLine));
     const folded = document.createElement("details");
     folded.className = "cv-checked";
     folded.id = CHECKED_SECTION_ID;
     folded.dataset.checked = "";
-    folded.open = !bundleVerified2(verified) || depth === "L2";
-    const line = checkedSummaryLine(bundleVerified2(verified), model);
+    folded.open = !bundleVerified(verified) || depth === "L2";
+    const line = checkedSummaryLine(bundleVerified(verified), model);
     const heading = element6("summary");
     heading.append(
       element6("strong", CHECKED_SECTION_TITLE),
@@ -18159,13 +17783,13 @@ ${pad.repeat(depth)}`;
     section.append(renderProvenance2(act.capsuleId, act.logCoordinates, act));
     return section;
   }
-  function object12(value) {
+  function object11(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
   function renderWithheldActs(acts, host) {
     for (const act of acts) {
       if (act.agentInput !== void 0 && act.agentOutput !== void 0) continue;
-      const committed = object12({
+      const committed = object11({
         agent_input_digest: act.agentInputDigest,
         agent_output_digest: act.agentOutputDigest
       });
@@ -18848,25 +18472,28 @@ ${pad.repeat(depth)}`;
     return value;
   }
   var reportRowsModule = {
-    manifest: BUILTIN_MANIFEST_REPORT_ROWS2,
+    manifest: BUILTIN_MANIFEST_REPORT_ROWS,
     canRender: async (context) => await reportRowsOf(context) !== void 0,
-    buildModel: async (context) => defined(await reportRowsOf(context), BUILTIN_MANIFEST_REPORT_ROWS2.id),
+    buildModel: async (context) => defined(await reportRowsOf(context), BUILTIN_MANIFEST_REPORT_ROWS.id),
     render: (model, host) => renderReportRowsTable(model, host.L1)
   };
+  function withStrict(context) {
+    return context.strict === void 0 ? context.verification : { ...context.verification, strict: context.strict };
+  }
   var resultOutcomeReportModule = {
-    manifest: BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2,
+    manifest: BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
     canRender: async (context) => readOutcomeReportPresentation(context.bundle) !== void 0 && await isResultRoot(context),
     buildModel: async (context) => ({
       result: defined(
         await resultRootOf(context),
-        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
       ),
       card: defined(
         readOutcomeReportPresentation(context.bundle),
-        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
       ),
       bundle: context.bundle,
-      verification: context.verification
+      verification: withStrict(context)
     }),
     render: async (model, host) => {
       host.setChromeClass("oi");
@@ -18881,19 +18508,19 @@ ${pad.repeat(depth)}`;
     }
   };
   var resultComplianceModule = {
-    manifest: BUILTIN_MANIFEST_RESULT_COMPLIANCE2,
-    canRender: async (context) => readCompliancePresentation2(context.bundle) !== void 0 && await isResultRoot(context),
+    manifest: BUILTIN_MANIFEST_RESULT_COMPLIANCE,
+    canRender: async (context) => readCompliancePresentation(context.bundle) !== void 0 && await isResultRoot(context),
     buildModel: async (context) => ({
       result: defined(
         await resultRootOf(context),
-        BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
       ),
       card: defined(
-        readCompliancePresentation2(context.bundle),
-        BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id
+        readCompliancePresentation(context.bundle),
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
       ),
       bundle: context.bundle,
-      verification: context.verification
+      verification: withStrict(context)
     }),
     render: async (model, host) => {
       host.setChromeClass(COMPLIANCE_CHROME);
@@ -18908,7 +18535,7 @@ ${pad.repeat(depth)}`;
     }
   };
   var CONTRACT_REPORT_MANIFEST = Object.freeze({
-    ...BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT2,
+    ...BUILTIN_MANIFEST_RESULT_CONTRACT_REPORT,
     id: "capsuleviewer.contract-report/v0"
   });
   function contractReportGroupingOf(bundle) {
@@ -18917,7 +18544,7 @@ ${pad.repeat(depth)}`;
   function contractReportInput(bundle) {
     const options = readOutcomeReportPresentation(bundle);
     if (options !== void 0) return { grouping: "lines", options };
-    const presentation = readCompliancePresentation2(bundle);
+    const presentation = readCompliancePresentation(bundle);
     if (presentation !== void 0) return { grouping: "groups", presentation };
     return void 0;
   }
@@ -18962,7 +18589,7 @@ ${pad.repeat(depth)}`;
         ...input === void 0 ? {} : { input },
         ...supported !== void 0 && input === void 0 ? { unfit: true } : {},
         bundle: context.bundle,
-        verification: context.verification
+        verification: withStrict(context)
       };
     },
     render: async (model, host) => {
@@ -18989,20 +18616,20 @@ ${pad.repeat(depth)}`;
     }
   };
   var resultModule = {
-    manifest: BUILTIN_MANIFEST_RESULT2,
+    manifest: BUILTIN_MANIFEST_RESULT,
     canRender: (context) => isResultRoot(context),
-    buildModel: async (context) => defined(await resultRootOf(context), BUILTIN_MANIFEST_RESULT2.id),
+    buildModel: async (context) => defined(await resultRootOf(context), BUILTIN_MANIFEST_RESULT.id),
     render: (model, host) => renderResultPage(model, host.L1)
   };
   var evaluationSummaryGraphModule = {
-    manifest: BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2,
+    manifest: BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
     canRender: async (context) => await evidenceGraphOf(context) !== void 0,
     buildModel: async (context) => {
-      const records = object12(context.bundle).records;
+      const records = object11(context.bundle).records;
       return {
         graph: defined(
           await evidenceGraphOf(context),
-          BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH2.id
+          BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH.id
         ),
         records: Array.isArray(records) ? records : []
       };
@@ -19010,7 +18637,7 @@ ${pad.repeat(depth)}`;
     render: (model, host) => renderGraph(model.graph, host.L1, model.records)
   };
   var noAggregateModule = {
-    manifest: BUILTIN_MANIFEST_NO_AGGREGATE2,
+    manifest: BUILTIN_MANIFEST_NO_AGGREGATE,
     canRender: () => true,
     buildModel: () => null,
     render: (_model, host) => {
@@ -19021,13 +18648,13 @@ ${pad.repeat(depth)}`;
     }
   };
   var BUILTIN_MODULE_INTERPRETERS = Object.freeze({
-    [BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT2.id]: [
+    [BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id]: [
       "result-root",
       "outcome-report-card"
     ],
-    [BUILTIN_MANIFEST_RESULT_COMPLIANCE2.id]: ["result-root", "compliance-card"],
-    [BUILTIN_MANIFEST_RESULT2.id]: ["result-root"],
-    [BUILTIN_MANIFEST_COMPOSED2.id]: ["aac.builtin.composed/v0"]
+    [BUILTIN_MANIFEST_RESULT_COMPLIANCE.id]: ["result-root", "compliance-card"],
+    [BUILTIN_MANIFEST_RESULT.id]: ["result-root"],
+    [BUILTIN_MANIFEST_COMPOSED.id]: ["aac.builtin.composed/v0"]
   });
   function moduleInterpreters(id, bundle) {
     if (id === CONTRACT_REPORT_MANIFEST.id) {
@@ -19051,7 +18678,7 @@ ${pad.repeat(depth)}`;
     noAggregateModule
   ]);
   function createPresentationRegistry() {
-    const registry = new PresentationRegistry2();
+    const registry = new PresentationRegistry();
     for (const module of BUILTIN_PRESENTATIONS) registry.register(module);
     return registry;
   }
@@ -19060,7 +18687,7 @@ ${pad.repeat(depth)}`;
     composedSectionModule
   ]);
   function createSectionRegistry(runtime) {
-    const registry = new PresentationRegistry2(runtime);
+    const registry = new PresentationRegistry(runtime);
     for (const module of BUILTIN_SECTIONS) registry.register(module);
     return registry;
   }
@@ -19185,7 +18812,7 @@ ${pad.repeat(depth)}`;
   var checkingRenders = /* @__PURE__ */ new WeakMap();
   async function renderVerifiedContext(context, root, options) {
     const { bundle, verification } = context;
-    const verified = bundleVerified2(verification);
+    const verified = bundleVerified(verification);
     const registry = options.registry ?? defaultRegistry;
     let refusal;
     let selected;
@@ -19197,7 +18824,7 @@ ${pad.repeat(depth)}`;
         options.format ?? DEFAULT_FORMAT
       );
     } catch (err) {
-      if (!(err instanceof PresentationAmbiguityError2)) throw err;
+      if (!(err instanceof PresentationAmbiguityError)) throw err;
       resolution = { kind: "no-presentation", refused: [] };
       refusal = "presentation-unresolved";
     }
@@ -19221,7 +18848,7 @@ ${pad.repeat(depth)}`;
           options.format ?? DEFAULT_FORMAT
         );
       } catch (err) {
-        if (!(err instanceof PresentationAmbiguityError2)) throw err;
+        if (!(err instanceof PresentationAmbiguityError)) throw err;
         sectionResolution = { kind: "no-presentation", refused: [] };
         selected = void 0;
         refusal = "presentation-unresolved";
@@ -19241,7 +18868,7 @@ ${pad.repeat(depth)}`;
       context.countersigners
     );
     const bannerModel = verificationBanner(context, stamps);
-    const records = object12(bundle).records;
+    const records = object11(bundle).records;
     const coverage = {
       uncheckpointed: bannerModel.uncheckpointed,
       total: Array.isArray(records) ? records.length : 0
@@ -19441,10 +19068,10 @@ ${pad.repeat(depth)}`;
       ...input.registry === void 0 ? {} : { registry: input.registry }
     });
   }
-  async function mountPresentationFragment(hash2, element7, maxLength = FRAGMENT_TOKEN_MAX_LENGTH2) {
+  async function mountPresentationFragment(hash2, element7, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
     let payload;
     try {
-      payload = decodePresentationFragment2(hash2, maxLength);
+      payload = decodePresentationFragment(hash2, maxLength);
     } catch (err) {
       const note = document.createElement("p");
       note.dataset.refusal = "fragment-unreadable";
