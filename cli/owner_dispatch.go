@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -36,13 +37,51 @@ func helpRequested(args []string) bool {
 	return false
 }
 
+// rawValue stands in for a flag's value while the selected profile is read from
+// a raw command line: it takes anything, so only where each flag's value
+// begins and ends matters.
+type rawValue struct{ set func(string) }
+
+func (v rawValue) Set(s string) error {
+	if v.set != nil {
+		v.set(s)
+	}
+	return nil
+}
+func (rawValue) String() string { return "" }
+func (rawValue) Type() string   { return "raw" }
+
+// selectedProfileName is the profile c's raw command line selects: the last
+// --profile value, read with c's own flags so that a flag's value that looks
+// like --profile=x is not taken for it, else the inherited one. Flags c does
+// not define (a plugin's) are skipped.
+func selectedProfileName(c *cobra.Command, args []string) string {
+	name := ""
+	fs := pflag.NewFlagSet("route", pflag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	c.InheritedFlags() // merges the persistent flags into c.Flags()
+	c.Flags().VisitAll(func(f *pflag.Flag) {
+		clone := &pflag.Flag{Name: f.Name, Shorthand: f.Shorthand, NoOptDefVal: f.NoOptDefVal, Value: rawValue{}}
+		if f.Name == "profile" {
+			clone.Value = rawValue{set: func(s string) { name = s }}
+		}
+		fs.AddFlag(clone)
+	})
+	_ = fs.Parse(args)
+	if name == "" {
+		name = inheritedProfile()
+	}
+	return name
+}
+
 // routeToOwner runs c's raw command line in the plugin that keeps the log of
 // the profile it selects, and reports whether it did. It does not when no
 // profile is selected or it cannot be loaded (the command then says so itself,
 // after parsing), when the core keeps the log, or when this process serves the
 // owner's logs: it is the owner, or has its backend.
 func routeToOwner(c *cobra.Command, args []string) (bool, error) {
-	name := profileInArgs(args)
+	name := selectedProfileName(c, args)
 	if name == "" {
 		return false, nil
 	}
@@ -74,6 +113,9 @@ func ownerRouted(cmd *cobra.Command) *cobra.Command {
 		c.DisableFlagParsing = true
 		if err != nil {
 			return flagError(c, err)
+		}
+		if help, _ := c.Flags().GetBool("help"); help {
+			return c.Help()
 		}
 		rest := c.Flags().Args()
 		if check != nil {

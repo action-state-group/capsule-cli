@@ -316,9 +316,11 @@ added, so the core can hand it a core command it cannot run itself:
 - **A profile's log has one owner**, declared in the profile as `log: cll`
   or `log: <plugin>`, such as `log: book` (`profile create --log`), and never
   changed afterwards. The plugin name is any plugin name that is not a core
-  command; only a jsonl profile with a `log_id` can name one. A
-  plain profile (mysql, sqlite, or a jsonl profile with `log: cll`) keeps a
-  CLL the core writes, checkpoints and bundles with no plugin. A book profile
+  command; a jsonl profile with a `log_id` (a log the plugin keeps itself) or
+  a sqlite profile with a namespace (a store the plugin writes and the core
+  only reads) can name one. A plain profile (mysql, a sqlite profile that
+  names no plugin, or a jsonl profile with `log: cll`) keeps a CLL the core
+  writes, checkpoints and bundles with no plugin. A book profile
   (a jsonl profile with `log: book`; a jsonl profile with a log_id saved
   before the field reads as one) keeps an evidence book, and the core runs
   `publish`, `cll list|append`, `cll checkpoint create|status|publish`,
@@ -339,7 +341,7 @@ added, so the core can hand it a core command it cannot run itself:
   command under a core one with `cli.GraftCommand`.
 
 This hand-over is the one place the core calls into a plugin for a core
-verb, and it applies only to these two launcher names. The core finds them
+verb, and it goes only to the plugin the selected profile names. The core finds it
 as it finds any plugin, by name on a trusted root, with no vendor check: the
 trusted roots' ownership and permission checks are what keep a lookalike
 out. `verify` and `countersign verify` are never handed over.

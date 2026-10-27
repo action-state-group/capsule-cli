@@ -125,3 +125,51 @@ func TestGraftCommandReplacesAChildAndRefusesAnUnknownPath(t *testing.T) {
 	GraftCommand([]string{"cll", "nowhere"}, &cobra.Command{Use: "x"})
 	assert.PanicsWithValue(t, `GraftCommand: no core command "nowhere" on the path cll nowhere`, func() { NewCommandWith() })
 }
+
+// --help in any form shows help and runs nothing: a disclose that parsed
+// --help=true and carried on would put a disclosure on record.
+func TestBundleHelpInAnyFormRunsNothing(t *testing.T) {
+	pluginRoot(t)
+	p := ownedProfile(t, "jsonl", LogCLL)
+	for _, help := range []string{"--help", "-h", "--help=true"} {
+		out, err := invoke(t, "", "disclose", "--profile", p.Name, "--root", "abc", help)
+		require.NoError(t, err, help)
+		assert.Contains(t, out, "--root", help)
+	}
+	assert.NoDirExists(t, p.Connection.Database, "nothing was opened or written")
+}
+
+// The profile a line selects is read with the command's own flags: a flag's
+// value that looks like --profile=x does not select x.
+func TestRoutingReadsTheProfileWithTheCommandsOwnFlags(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-ledger", firstPartyLauncher("ledger"), 0o755)
+	core := ownedProfile(t, "jsonl", LogCLL)
+	owned := core
+	owned.Name, owned.Log = "ledger-profile", "ledger"
+	owned.Connection.Database = filepath.Join(t.TempDir(), "other")
+	require.NoError(t, SaveProfile(owned, false))
+
+	// --out takes the next token as its file name, so this selects the core profile.
+	out, err := invoke(t, "", "bundle", "--profile", core.Name, "--root", "abc", "--out", "--profile="+owned.Name)
+	assert.NotContains(t, out, "ran capsulectl-ledger", "the core profile stays selected (err: %v)", err)
+	assert.NotContains(t, SafeError(err), "capsulectl-ledger")
+	// The same words with the plugin's profile selected last do route.
+	out, err = invoke(t, "", "bundle", "--root", "abc", "--zzz", "--profile", owned.Name)
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran capsulectl-ledger: bundle")
+}
+
+// Until the plugin owns writing through a handle of its own, the core writes
+// no store a plugin owns.
+func TestTheCoreDoesNotWriteAStoreAPluginOwns(t *testing.T) {
+	pluginRoot(t)
+	p := ownedProfile(t, "sqlite", "ledger")
+	p.Namespace = "ns"
+	require.NoError(t, SaveProfile(p, true))
+	for _, args := range [][]string{{"store", "init"}, {"cll", "checkpoint", "create"}} {
+		_, err := invoke(t, "", append(args, "--profile", p.Name)...)
+		require.ErrorIs(t, err, ErrInput, args)
+		assert.Contains(t, SafeError(err), "owned by the capsulectl-ledger plugin", args)
+	}
+}

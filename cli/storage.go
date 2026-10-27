@@ -258,6 +258,9 @@ func OpenTarget(ctx context.Context, p Profile, use TargetUse) (*Target, error) 
 		if p.IsShelf() {
 			return nil, ErrDealProfileWrite
 		}
+		if p.HasOwnedStore() {
+			return nil, InputError("this store is owned by the capsulectl-" + p.LogOwner() + " plugin and written by it only; the core reads it")
+		}
 		// The profile's fields can be edited (profile update --namespace),
 		// so the store says so too: a deal store on its shelf carries the
 		// deal_shelf marker (capsule-cli#242).
