@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Changed:** names the host package gave a plugin go generic
+  (capsule-cli#428): `LogBundleRequest`, `RemoteCommand`, `ErrPluginLogProfile`
+  and the `Target.Owned` field replace `BookBundleRequest`, `RemoteBookCommand`,
+  `ErrBookProfile` and `Target.Book`; the three functions and types keep their
+  old names as deprecated aliases, and the field is renamed outright. The
+  refusal of `countersign request` on a profile whose log a plugin keeps no
+  longer says "book".
 - **Changed:** a sqlite store a plugin owns is written by that plugin only
   (capsule-cli#428). The plugin opens it with `cli.OpenOwnedTarget` while it
   holds the store's writer lock and records its ownership with

@@ -174,3 +174,12 @@ func TestRetireMoveDataRefusesAnotherPluginsLog(t *testing.T) {
 	assert.Contains(t, profileNames(t), p.Name)
 	assert.DirExists(t, p.Connection.Database)
 }
+
+// The names that went generic keep their old spelling for the plugins that
+// have not moved yet.
+func TestGenericNamesKeepTheirOldSpelling(t *testing.T) {
+	assert.Same(t, ErrPluginLogProfile, ErrBookProfile)
+	var request BookBundleRequest = LogBundleRequest{Root: "r"}
+	assert.Equal(t, "r", request.Root)
+	assert.Equal(t, RemoteCommand().Use, RemoteBookCommand().Use)
+}

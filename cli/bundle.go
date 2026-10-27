@@ -629,14 +629,14 @@ func bundleCommands() []*cobra.Command {
 			defer func() { err = errors.Join(err, target.Close()) }()
 			var value map[string]interface{}
 			var encoded []byte
-			if target.Book != nil {
+			if target.Owned != nil {
 				// A jsonl profile's bundle comes from its book, which puts every
 				// bundle it builds on record as a disclosure record.
 				attach := false
 				if disclosure || permalink {
 					attach, _ = c.Flags().GetBool("attach-input-originals")
 				}
-				bundle, err := target.Book.Bundle(c.Context(), BookBundleRequest{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, Disclose: disclosure || permalink, AttachOriginals: attach, ProducerKey: producerKey})
+				bundle, err := target.Owned.Bundle(c.Context(), LogBundleRequest{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, Disclose: disclosure || permalink, AttachOriginals: attach, ProducerKey: producerKey})
 				if err != nil {
 					return err
 				}
@@ -662,7 +662,7 @@ func bundleCommands() []*cobra.Command {
 					return pageErr
 				}
 			}
-			if use == "disclose" && target.Book == nil {
+			if use == "disclose" && target.Owned == nil {
 				// Every disclose act goes on record: sealed as a capsule and
 				// appended before the bundle is emitted, not merely alongside it.
 				if _, err := sealDisclosure(c.Context(), target, profile, value); err != nil {

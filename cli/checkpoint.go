@@ -410,8 +410,8 @@ func addCheckpointCommands(logs *cobra.Command) {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.Close()) }()
-		if t.Book != nil {
-			result, e := t.Book.Checkpoint(c.Context(), service)
+		if t.Owned != nil {
+			result, e := t.Owned.Checkpoint(c.Context(), service)
 			if e != nil {
 				return e
 			}
