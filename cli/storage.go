@@ -105,8 +105,13 @@ type Target struct {
 	Artifacts ArtifactStore
 	// Log is the CLL of a plain profile. A profile whose log a plugin keeps
 	// has no such log: its one log is the plugin's (Owned), and Log stays nil.
-	Log     cll.Backend
-	Owned   OwnedLog
+	Log   cll.Backend
+	Owned OwnedLog
+	// Book is Owned.
+	//
+	// Deprecated: the name goes with the plugin names in capsule-cli#428. It
+	// is set with Owned and released with it.
+	Book    OwnedLog
 	Profile Profile
 }
 
@@ -509,7 +514,7 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 		if err != nil {
 			return nil, err
 		}
-		t.Owned = book
+		t.Owned, t.Book = book, book
 	} else if needsCLL {
 		if use == UseInitialization {
 			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
