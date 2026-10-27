@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Changed:** a sqlite store a plugin owns is written by that plugin only
+  (capsule-cli#428). The plugin opens it with `cli.OpenOwnedTarget` while it
+  holds the store's writer lock and records its ownership with
+  `Target.MarkOwned`; from then on every core write verb refuses the store
+  whatever the profile says, including a profile that declares `log: cll`
+  over it. The older deal store marker (the `deal_shelf` table) keeps
+  protecting stores the plugin has not marked yet. `profile create|update`
+  refuses a `log:` that disagrees with the owner a store records. The refusal
+  is `cli.ErrPluginStoreWrite` (`ErrDealProfileWrite` stays as another name for
+  it), and its text no longer names a plugin or one of its commands. `OpenDealTarget`,
+  `DealStoreWriter` stay as deprecated names.
 - **Changed:** `DecodeBundleJSON`, which every command that reads a bundle
   or a bare capsule uses (`verify --bundle` and `verify` of a capsule,
   `countersign`, `presentation build` and `list`, and the page gate), now

@@ -350,6 +350,19 @@ added, so the core can hand it a core command it cannot run itself:
   and panics on a path that names none. `bundle --profile <p> --help` shows
   the core's help, without a plugin's flags.
 
+- **A store a plugin owns is written by that plugin only.** The plugin opens
+  it with `cli.OpenOwnedTarget`, passing a `PluginStoreWriter` that names the
+  plugin and reports whether it still holds the store's writer lock (a store
+  marked for another plugin is refused before anything is written), and records its ownership
+  with `Target.MarkOwned` on its writable paths (never on a read). A store
+  carrying that marker, or the older deal store marker, is refused by every
+  core write verb whatever the profile says; the core reads it. The older
+  marker records no owner, so it only refuses writes; it is the one
+  compatibility exception to the core knowing no plugin's stored data, and not
+  a precedent for a second. `profile create` and
+  `update` refuse a `log:` that disagrees with the owner the store records;
+  `update` may bring a profile in line with it.
+
 This hand-over is the one place the core calls into a plugin for a core
 verb, and it goes only to the plugin the selected profile names. The core finds it
 as it finds any plugin, by name on a trusted root, with no vendor check: the

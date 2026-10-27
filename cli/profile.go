@@ -674,12 +674,15 @@ func profileCommands() *cobra.Command {
 			if p.Type == "jsonl" && p.LogID != "" && p.Log == "" {
 				p.Log = LogBook
 			}
-			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() {
+			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() && !storeRecordsOwner(c.Context(), p) {
 				return InputError("a profile's log stays with the owner it was made with (log: " + FirstNonEmpty(before.LogOwner(), LogCLL) + "); make a new profile for the other")
 			}
 			p.Operator = normalizeOperator(p.Operator)
 			if p.OperatorMissing() {
 				return InputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
+			}
+			if e := checkOwnerAgainstStore(c.Context(), p); e != nil {
+				return e
 			}
 			if e := SaveProfile(p, update); e != nil {
 				return e
