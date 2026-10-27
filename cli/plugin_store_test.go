@@ -3,6 +3,7 @@ package cli
 import (
 	"database/sql"
 	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +14,13 @@ import (
 type heldStore bool
 
 func (h heldStore) HoldsPluginStore() bool { return bool(h) }
+func (heldStore) PluginStoreOwner() string { return "ledger" }
+
+// otherOwner holds the lock for a plugin that is not the store's owner.
+type otherOwner struct{}
+
+func (otherOwner) HoldsPluginStore() bool   { return true }
+func (otherOwner) PluginStoreOwner() string { return "other" }
 
 // sqliteStoreProfile is a plain sqlite profile (the core's, no plugin named)
 // whose database the test then marks.
@@ -86,6 +94,27 @@ func TestTheOwnerMarksAndWritesItsStore(t *testing.T) {
 	require.ErrorIs(t, err, ErrPluginStoreWrite, "the disguised profile is refused after marking")
 }
 
+// A plugin pointed at a store another plugin owns is refused before it
+// initializes anything in it.
+func TestAnotherOwnerIsRefusedBeforeAnythingIsWritten(t *testing.T) {
+	p := sqliteStoreProfile(t)
+	tg, err := OpenOwnedTarget(t.Context(), p, UseInitialization, heldStore(true))
+	require.NoError(t, err)
+	require.NoError(t, tg.MarkOwned(t.Context(), "ledger", heldStore(true)))
+	require.NoError(t, tg.Close())
+	before, err := os.ReadFile(p.Connection.Database)
+	require.NoError(t, err)
+
+	q := p
+	q.Namespace, q.LogID = "elsewhere", "another-log"
+	_, err = OpenOwnedTarget(t.Context(), q, UseInitialization, otherOwner{})
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "marked as owned by the ledger plugin, not other")
+	after, err := os.ReadFile(p.Connection.Database)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "the database is untouched")
+}
+
 func TestOpenDealTargetStillWorksForTheOldWriter(t *testing.T) {
 	p := sqliteStoreProfile(t)
 	_, err := OpenDealTarget(t.Context(), p, UseInitialization, nil)
@@ -115,10 +144,8 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "the profile file is unchanged")
 
-	// The recorded owner is accepted on a profile that already names it.
-	owned := p
-	owned.Log = "ledger"
-	require.NoError(t, SaveProfile(owned, true))
+	// The profile can be brought in line with the owner the store records,
+	// though a profile's log owner is otherwise fixed once set.
 	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--log", "ledger")
 	require.NoError(t, err, "the recorded owner is accepted")
 

@@ -674,7 +674,7 @@ func profileCommands() *cobra.Command {
 			if p.Type == "jsonl" && p.LogID != "" && p.Log == "" {
 				p.Log = LogBook
 			}
-			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() {
+			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() && !storeRecordsOwner(c.Context(), p) {
 				return InputError("a profile's log stays with the owner it was made with (log: " + FirstNonEmpty(before.LogOwner(), LogCLL) + "); make a new profile for the other")
 			}
 			p.Operator = normalizeOperator(p.Operator)

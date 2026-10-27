@@ -253,6 +253,9 @@ func (use TargetUse) writes() bool {
 type PluginStoreWriter interface {
 	// HoldsPluginStore reports whether the writer lock is still held.
 	HoldsPluginStore() bool
+	// PluginStoreOwner is the plugin's name. A store marked for another
+	// owner is refused before anything is written to it.
+	PluginStoreOwner() string
 }
 
 // DealStoreWriter is a PluginStoreWriter under its old method name.
@@ -266,6 +269,10 @@ type DealStoreWriter interface {
 type dealWriter struct{ DealStoreWriter }
 
 func (w dealWriter) HoldsPluginStore() bool { return w.HoldsDealStore() }
+
+// PluginStoreOwner is empty: the older interface names no plugin, so the
+// marker is checked only when the plugin marks the store.
+func (dealWriter) PluginStoreOwner() string { return "" }
 
 // OpenTarget opens p for use. A store a plugin owns is never opened for
 // writing here (ErrPluginStoreWrite): its owner opens it with OpenOwnedTarget.
@@ -341,8 +348,19 @@ func storeOwnerMarker(ctx context.Context, p Profile) (m ownerMarker, err error)
 // logs (a side log is opened without the artifact store, with its namespace
 // cleared).
 func OpenOwnedTarget(ctx context.Context, p Profile, use TargetUse, w PluginStoreWriter) (*Target, error) {
-	if use.writes() && (w == nil || !w.HoldsPluginStore()) {
-		return nil, ErrPluginStoreWrite
+	if use.writes() {
+		if w == nil || !w.HoldsPluginStore() {
+			return nil, ErrPluginStoreWrite
+		}
+		if owner := w.PluginStoreOwner(); owner != "" {
+			m, err := storeOwnerMarker(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			if m.found && m.owner != owner {
+				return nil, InputError("this store is marked as owned by the " + m.owner + " plugin, not " + owner)
+			}
+		}
 	}
 	return openTarget(ctx, p, use)
 }
@@ -385,6 +403,14 @@ func (t *Target) MarkOwned(ctx context.Context, owner string, w PluginStoreWrite
 		return InputError("this store is marked as owned by the " + current + " plugin, not " + owner)
 	}
 	return nil
+}
+
+// storeRecordsOwner reports whether p's sqlite store records p's log owner as
+// its own: a profile can then be brought in line with the store, which is
+// aligning it with what is there and not moving a log to another owner.
+func storeRecordsOwner(ctx context.Context, p Profile) bool {
+	m, err := storeOwnerMarker(ctx, p)
+	return err == nil && m.found && m.owner == p.LogOwner()
 }
 
 // checkOwnerAgainstStore refuses a profile whose declared log owner disagrees
