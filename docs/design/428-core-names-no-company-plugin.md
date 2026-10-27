@@ -43,7 +43,7 @@ runs. It refuses an X that disagrees with a `plugin_owned` marker (checked
 before the profile is saved; a test shows the profile file unchanged), so the
 fix cannot disguise a store; once a store carries the marker the error names the
 owner the marker records. A plugin-owned log is still a CLL, created and run by
-the owner plugin; the core forwards log commands to it. Rollout: `profile create`
+the owner plugin; the core forwards the log commands it cannot serve itself (section 3). Rollout: `profile create`
 and `update` already store `log: book` for a jsonl profile with a `log_id`
 (profile.go:637) and `log: cll` is explicit, so only profiles saved with no
 `log:` hit the error, once. Which real profiles lack it is checked on the actual
