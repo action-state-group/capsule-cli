@@ -58,6 +58,11 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if moveTo != "" && p.HasPluginLog() && !p.IsBook() {
+		// The locks below are the book's; a plugin that keeps the log in other
+		// files could be written to while its directory moves.
+		return nil, InputError("--move-data is not supported for a profile whose log the capsulectl-" + p.LogOwner() + " plugin keeps")
+	}
 	// A store a running command has open is not retired. The locks are held
 	// until the retire is done, and follow the files through --move-data's
 	// rename, so nothing opens the store mid-move.

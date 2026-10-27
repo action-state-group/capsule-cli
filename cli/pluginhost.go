@@ -146,11 +146,20 @@ func errLogNeedsPlugin(p Profile) error {
 // write, list or bundle a profile's log call it first, before they read any
 // input or open anything.
 func delegateLog(c *cobra.Command, p Profile, args []string) (bool, error) {
-	if !p.IsBook() || backendFor(p) != nil {
+	if !p.HasPluginLog() || backendFor(p) != nil {
 		return false, nil
+	}
+	if p.LogOwner() == runningPlugin {
+		// The owner's own process without a backend for its log: running the
+		// command in the owner again would start this process again.
+		return true, InputError(fmt.Sprintf("capsulectl-%s keeps the log of profile %s but registers no backend for it, so this command cannot run on it", runningPlugin, p.Name))
 	}
 	return true, ForwardToPlugin(c, p.LogOwner(), CommandLine(c, args))
 }
+
+// runningPlugin is the name of the plugin this process is (NewPluginCommand),
+// or "" in the core.
+var runningPlugin string
 
 // CommandLine rebuilds the invocation c parsed: its path below the root,
 // every flag set on it (persistent ones included, a repeated flag once per
@@ -391,6 +400,7 @@ func NewCommandWith(cmds ...*cobra.Command) *cobra.Command {
 // NewPluginCommand is a first-party plugin binary's tree: NewCommandWith,
 // named capsulectl-<name>, answering the cli-plugin-metadata handshake.
 func NewPluginCommand(meta PluginMetadata, cmds ...*cobra.Command) *cobra.Command {
+	runningPlugin = meta.Name
 	root := newCommand(false, cmds)
 	root.Use = pluginLauncherPrefix + meta.Name
 	// It is reached as `capsulectl <name>`, so its help and its messages

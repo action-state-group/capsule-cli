@@ -593,7 +593,7 @@ func bundleCommands() []*cobra.Command {
 			if done, err := delegateLog(c, profile, nil); done {
 				return err
 			}
-			if htmlPath != "" && profile.IsBook() && use == "disclose" {
+			if htmlPath != "" && profile.HasPluginLog() && use == "disclose" {
 				return errJSONLPage // before anything is opened or put on record
 			}
 			root, _ := c.Flags().GetString("root")
@@ -645,7 +645,7 @@ func bundleCommands() []*cobra.Command {
 			// (verify --bundle states its verdict) and exits with the refusal.
 			var pageErr error
 			if htmlPath != "" {
-				if profile.IsBook() {
+				if profile.HasPluginLog() {
 					pageErr = errJSONLPage
 				} else {
 					pageErr = PageGate(value)

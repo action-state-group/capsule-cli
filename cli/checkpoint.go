@@ -458,7 +458,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			}
 			defer func() { err = errors.Join(err, t.Close()) }()
 			var store cll.WitnessStateStore = t.Log
-			if p.IsBook() {
+			if p.HasPluginLog() {
 				store = backendFor(p).WitnessStore(p)
 			}
 			state, e := store.GetWitness(c.Context(), service, size)

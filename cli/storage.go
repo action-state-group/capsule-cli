@@ -309,7 +309,7 @@ func OpenDealTarget(ctx context.Context, p Profile, use TargetUse, w DealStoreWr
 func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err error) {
 	needsArtifacts := use == UseArtifacts || use == UsePublication || use == UseRead || (use == UseInitialization && p.Namespace != "") ||
 		// A book keeps its records' originals in the artifact store.
-		(use == UseCLL && p.IsBook() && p.Namespace != "")
+		(use == UseCLL && p.HasPluginLog() && p.Namespace != "")
 	needsCLL := use == UseCLL || use == UseCLLRead || use == UseRead || use == UsePublication || (use == UseInitialization && p.LogID != "")
 	if needsArtifacts && p.Namespace == "" {
 		return nil, InputError("profile " + p.Name + " has no namespace, which this command needs: `capsulectl profile update --profile " + p.Name + " --namespace NAME`")
@@ -363,19 +363,19 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 			return nil, err
 		}
 	}
-	if needsCLL && p.IsBook() && backendFor(p) == nil {
+	if needsCLL && p.HasPluginLog() && backendFor(p) == nil {
 		return nil, errLogNeedsPlugin(p)
 	}
-	if needsCLL && p.IsBook() && (use == UseCLLRead || use == UseRead) {
+	if needsCLL && p.HasPluginLog() && (use == UseCLLRead || use == UseRead) {
 		// Reads (cll list, checkpoint status) never open the book: that
 		// needs its signing keys and takes its writer lock.
-	} else if needsCLL && p.IsBook() && use == UseInitialization {
+	} else if needsCLL && p.HasPluginLog() && use == UseInitialization {
 		// store init signs nothing, so it creates the book's files without
 		// opening the book: no signing or checkpoint key, no trust check.
 		if err = backendFor(p).Init(ctx, p); err != nil {
 			return nil, err
 		}
-	} else if needsCLL && p.IsBook() {
+	} else if needsCLL && p.HasPluginLog() {
 		book, err := backendFor(p).Open(ctx, p, t.Artifacts)
 		if err != nil {
 			return nil, err

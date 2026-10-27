@@ -568,7 +568,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			if !LogName.MatchString(logID) {
 				return InputError("--log-id must be lowercase letters, digits and ._:/-, such as deal/deal-0123456789abcdef")
 			}
-			if p.IsBook() {
+			if p.HasPluginLog() {
 				return InputError("--log-id does not apply to a book profile: its one log is the evidence book")
 			}
 			p.LogID = logID
@@ -581,7 +581,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.Close()) }()
-		if p.IsBook() {
+		if p.HasPluginLog() {
 			all, _ := c.Flags().GetBool("all")
 			items, next, e := backendFor(p).List(c.Context(), p, after, through, limit, all)
 			if e != nil {

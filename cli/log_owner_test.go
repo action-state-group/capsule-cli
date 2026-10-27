@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -25,7 +26,8 @@ func TestLogOwner(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, tc.p.LogOwner())
-			assert.Equal(t, tc.want != "", tc.p.IsBook())
+			assert.Equal(t, tc.want != "", tc.p.HasPluginLog())
+			assert.Equal(t, tc.want == LogBook, tc.p.IsBook())
 		})
 	}
 }
@@ -97,3 +99,70 @@ func TestARegisteredBackendServesItsOwnersProfiles(t *testing.T) {
 }
 
 type fakeBackend struct{ LogBackend }
+
+// IsBook means the book plugin, and only it: the book plugin's own checks use
+// it, so another plugin's profile is not one.
+func TestIsBookNamesTheBookOnly(t *testing.T) {
+	ledger := Profile{Type: "jsonl", LogID: "l", Log: "ledger"}
+	assert.True(t, ledger.HasPluginLog())
+	assert.False(t, ledger.IsBook())
+	assert.False(t, ledger.OperatorMissing(), "the operator is the book's")
+	book := Profile{Type: "jsonl", LogID: "l", Log: LogBook}
+	assert.True(t, book.IsBook())
+	assert.True(t, book.OperatorMissing())
+	assert.True(t, Profile{Type: "jsonl", LogID: "l"}.IsBook(), "a legacy profile still reads as a book")
+}
+
+// In the owner's own process, a missing backend is an error and never another
+// launch of the owner.
+func TestOwnerProcessWithoutBackendDoesNotForwardToItself(t *testing.T) {
+	previous := runningPlugin
+	runningPlugin = "ledger"
+	t.Cleanup(func() { runningPlugin = previous })
+	pluginRoot(t) // no launcher: a forward would say "not installed"
+	done, err := delegateLog(nil, Profile{Name: "p", Type: "jsonl", LogID: "l", Log: "ledger"}, nil)
+	assert.True(t, done)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "registers no backend")
+	assert.NotContains(t, SafeError(err), "not installed")
+}
+
+// A profile keeps its log owner: the saved owner cannot be swapped by update,
+// and the fix line for a profile saved without one is accepted.
+func TestLogOwnerCannotBeSwappedByUpdate(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Type, p.Log, p.Operator = "jsonl", LogBook, "op"
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, SaveProfile(p, false))
+	for _, log := range []string{"ledger", LogCLL} {
+		_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--log", log)
+		require.ErrorIs(t, err, ErrInput, log)
+		assert.Contains(t, SafeError(err), "stays with the owner it was made with (log: book)")
+	}
+	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--log", LogBook)
+	require.NoError(t, err, "restating the owner is accepted")
+
+	legacy := p
+	legacy.Name, legacy.Log = "legacy-book", ""
+	require.NoError(t, SaveProfile(legacy, false))
+	_, err = invoke(t, "", "profile", "update", "--profile", legacy.Name, "--log", LogBook)
+	require.NoError(t, err, "the fix line for a profile saved without an owner")
+}
+
+// A plugin that keeps a log in its own files is not retired with --move-data:
+// the core holds only the book's locks.
+func TestRetireMoveDataRefusesAnotherPluginsLog(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Type, p.Log = "jsonl", "ledger"
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, os.MkdirAll(p.Connection.Database, 0o700))
+	require.NoError(t, SaveProfile(p, false))
+	_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", filepath.Join(t.TempDir(), "x"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--move-data is not supported")
+	assert.Contains(t, profileNames(t), p.Name)
+	assert.DirExists(t, p.Connection.Database)
+}

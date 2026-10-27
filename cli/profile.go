@@ -93,11 +93,12 @@ type Profile struct {
 	LogID     string `yaml:"log_id" mapstructure:"log_id"`
 	Namespace string `yaml:"namespace" mapstructure:"namespace"`
 	ReadOnly  bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
-	// Log names who keeps the profile's log (capsule-cli#236): LogCLL, the
-	// core's own CLL, or LogBook, an evidence book kept by the
-	// capsulectl-book plugin. Only a jsonl profile can be a book, and a
-	// profile is one or the other for good. A jsonl profile with a log_id
-	// saved before the field existed reads as a book.
+	// Log names who keeps the profile's log (capsule-cli#236, #428): LogCLL,
+	// the core's own CLL, or the name of the plugin that keeps it, such as
+	// LogBook, an evidence book kept by the capsulectl-book plugin. Only a
+	// jsonl profile with a log_id can name a plugin, and a profile keeps its
+	// owner for good. A jsonl profile with a log_id saved before the field
+	// existed reads as a book.
 	Log string `yaml:"log,omitempty" mapstructure:"log" json:",omitempty"`
 	// Operator is the AAC operator value the book verbs write into every
 	// record they seal. Only those verbs require it.
@@ -211,9 +212,12 @@ func (p Profile) LogOwner() string {
 	return p.Log
 }
 
-// IsBook reports whether a plugin keeps the profile's log. Every record such a
-// log seals carries the profile's operator.
-func (p Profile) IsBook() bool { return p.LogOwner() != "" }
+// HasPluginLog reports whether a plugin keeps the profile's log.
+func (p Profile) HasPluginLog() bool { return p.LogOwner() != "" }
+
+// IsBook reports whether the book plugin keeps the profile's log: an evidence
+// book. Every record a book seals carries the profile's operator.
+func (p Profile) IsBook() bool { return p.LogOwner() == LogBook }
 
 // validLogOwner reports whether name can own a profile's log: LogCLL, or a
 // plugin name that is not a core command.
