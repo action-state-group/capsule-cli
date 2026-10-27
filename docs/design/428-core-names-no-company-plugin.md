@@ -1,8 +1,7 @@
 # Design note: the core names no company plugin
 
-capsule-cli#428 (donation blocker, follow-up of #326). Status: Kimi and Sherlock2
-converged (section 7 point accepted); Codex's last finding is the section 7
-point, resolved by Sherlock2's ruling on it, pending Codex's check. Checked against `main` at `ad10fe46`, evidencebook
+capsule-cli#428 (donation blocker, follow-up of #326). Status: Ethan's rulings of
+2026-10-27 folded in; final verification round pending. Checked against `main` at `ad10fe46`, evidencebook
 `capsulectl` and evidencebook-deal `main` (read-only).
 
 Scope: steps 1 and 2 of the How ack (generic plugin hand-over; `canary` and the
@@ -32,26 +31,32 @@ owns its log. Sealed vocabulary (section 5) is not renamed.
 
 `Profile.Log` is `cll` (the core keeps the log) or a plugin name. The name uses
 `pluginNameGrammar` and is not in `reservedPluginNames`. Ownership is explicit
-only: it never depends on which plugins are installed. A profile that today has
-no `log:` but a `log_id` (or the sqlite `deal` namespace) has no declared
-owner; commands that need an owner stop with
+only: it never depends on which plugins are installed. A profile that today
+reads as owned by a plugin without saying so has no declared owner: a jsonl
+profile with a `log_id` and no `log:` (it reads as a book), and a sqlite
+profile in the `deal` namespace. Commands that need an owner stop with an input
+error and the one-command fix, and never write `log:` themselves (Ethan,
+2026-10-27):
 `profile X has no declared log owner: capsulectl profile update --profile X --log <plugin>`.
 `profile update` reads such a profile without resolving an owner, so the fix
-runs. A plugin's own verb also adopts such a profile: when the user runs a
-plugin command on a profile with no owner, the plugin writes `log: <itself>`
-(the user chose the plugin, so it is still explicit). `profile update --log X`
-refuses an X that disagrees with a `plugin_owned` marker, and so does adoption
-(one shared check, run before the profile is saved or any work starts; a test
-shows the profile file unchanged), so neither can disguise a store; once a store
-carries the marker the error names the owner the marker records. Rollout: only a
-profile saved with no `log:` is affected. `profile create` and `update` have
-stored `log: book` for a jsonl profile with a `log_id` (profile.go:637), and
-`log: cll` is explicit, so those need nothing. Which existing profiles lack
-`log:` (Muse's VM included) is checked on the real profile files, not inferred
-from the profile type; each such profile hits the error once, the first plugin
-verb adopts it, and the plugin PRs' release notes name the one command. The
-coordinator decides who runs anything on Muse, and when. Plain profiles without a `log_id` stay core-owned. `profile create` and the
-plugins' `init` write `log:`. The `cli-plugin/v1` handshake does not change.
+runs. It refuses an X that disagrees with a `plugin_owned` marker (checked
+before the profile is saved; a test shows the profile file unchanged), so the
+fix cannot disguise a store; once a store carries the marker the error names the
+owner the marker records. A plugin-owned log is still a CLL, created and run by
+the owner plugin; the core forwards log commands to it. Rollout: `profile create`
+and `update` already store `log: book` for a jsonl profile with a `log_id`
+(profile.go:637) and `log: cll` is explicit, so only profiles saved with no
+`log:` hit the error, once. Which real profiles lack it is checked on the actual
+files, not inferred from the type. Muse: its `actionstate-rules` profile is
+sqlite with a `log_id` outside the `deal` namespace, written by the core's own
+`publish`; no plugin reads it as owner today, so it is core-owned (`cll`) and
+needs no change. Its `deal` profile is created by `deal init` (plugin PR writes
+`log:`; a Muse profile saved before that hits the error once and gets the fix
+line). Muse's install and test scripts call no removed alias (grep of
+actionstate-muse `main`, including `scripts/`); the Muse PR adds `log:` where a
+script creates a deal or book profile, if any does. Plain profiles without a
+`log_id` stay core-owned. `profile create` and the plugins' `init` write
+`log:`. The `cli-plugin/v1` handshake does not change.
 
 ## 3. Dispatch
 
@@ -93,8 +98,8 @@ The old `deal_shelf` table records no plugin name, so nothing can be derived
 from it. Migration: the plugin writes `plugin_owned` only on its writable
 initialization and migration paths, under the writer lock (`deal init`,
 `open`, `tick`, `check`, `report`, `history`: every verb that holds the lock).
-Read paths never write it (`openDealStoreRead` stays write-free). The core keeps the old `deal_shelf`
-guard permanently, beside `plugin_owned`, as the one compatibility exception of
+Read paths never write it (`openDealStoreRead` stays write-free). The core keeps recognising the old `deal_shelf`
+marker permanently, beside `plugin_owned`, as the one compatibility exception of
 section 7. Tests, before and after
 migration (PR B keeps the old-table case): a store with only the old table plus a profile declaring `log: cll`
 is refused; a marked store with a disguised profile is refused; the plugin
@@ -139,7 +144,8 @@ switch to the generic API and write the marker. PR B (capsule-cli): delete the
 old names, aliases, the `canary` verb and `isFirstParty` (the legacy-table probe stays); the core builds
 against neither plugin.
 
-Open (needs a ruling): PR B cannot drop the old `deal_shelf` guard on release
+Ruled (Ethan, 2026-10-27: option (a); aliases deleted in PR B; owner explicit; Sherlock2's four
+conditions apply). PR B cannot drop the old `deal_shelf` guard on release
 order alone, because a store the migrated plugin never opened still has only
 that table. Options: (a) the core keeps probing the legacy table as a
 stored-data compatibility check, the one remaining deal word, a data
@@ -151,6 +157,6 @@ stores, Muse's included) and (c) (refuses any unrecognised shared or older
 store, mysql included), on four conditions that this note adopts: the probe
 stays unexported and its message names no plugin ("this store is owned by a
 plugin (legacy marker); use its owner's verbs"); this note and PLUGINS.md list
-it as the one compatibility exception, with its test; it only refuses writes,
+it as the one compatibility exception, with its test; it only refuses writes (Ethan's wording is that the old marker counts as the deal plugin's until the plugin rewrites it; the core does not name or pick that owner: forwarding always takes the owner from the profile's `log:`),
 never forwards and never picks an owner; and it is not precedent for a second
 exception.
