@@ -667,9 +667,15 @@ func selfExecutable() (string, error) {
 // plugin owns its own flags). A plugin never shadows a core command: cobra does
 // NOT ignore a duplicate Use, so addPluginCommands explicitly skips any name
 // already reserved by a core command (and by help/completion).
+// pluginAnnotation marks the top-level command that dispatches to a
+// discovered plugin, so a reader of the tree can tell it from a core command
+// of the same name.
+const pluginAnnotation = "capsulectl-plugin"
+
 func pluginCommand(info pluginInfo) *cobra.Command {
 	return &cobra.Command{
 		Use:                info.Name,
+		Annotations:        map[string]string{pluginAnnotation: info.Name},
 		Short:              fmt.Sprintf("%s (plugin · %s)", FirstNonEmpty(pluginShort(info), "external plugin"), FirstNonEmpty(info.Vendor, "unknown vendor")),
 		DisableFlagParsing: true,
 		RunE: func(c *cobra.Command, args []string) error {

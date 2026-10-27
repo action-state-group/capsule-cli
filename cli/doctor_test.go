@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -180,6 +181,29 @@ func TestDoctorPluginTrustWalk(t *testing.T) {
 	require.Len(t, discovered, 1)
 	entry, _ := discovered[0].(map[string]any)
 	assert.Equal(t, "guard", entry["name"])
+}
+
+// A plugin whose metadata declares a doctor subcommand is listed by the
+// command that runs it; the core names no plugin of its own.
+func TestDoctorListsPluginDoctors(t *testing.T) {
+	root := pluginRoot(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
+	writeLauncher(t, root, "capsulectl-audit", strings.ReplaceAll(strings.ReplaceAll(fakePlugin, `"guard"`, `"audit"`), `["decide"]`, `["close","doctor"]`), 0o755)
+
+	// A plugin named like a core command is never dispatched to, so its
+	// doctor is not listed: `capsulectl verify doctor` reaches the core.
+	writeLauncher(t, root, "capsulectl-verify", strings.ReplaceAll(strings.ReplaceAll(fakePlugin, `"guard"`, `"verify"`), `["decide"]`, `["doctor"]`), 0o755)
+
+	report := doctorReport(t)
+	plugins, _ := report["plugins"].(map[string]any)
+	assert.Equal(t, []any{"capsulectl audit doctor"}, plugins["doctors"])
+	require.NoError(t, os.Remove(filepath.Join(root, "capsulectl-verify")))
+
+	// With no such plugin the list is empty, not missing.
+	require.NoError(t, os.Remove(filepath.Join(root, "capsulectl-audit")))
+	plugins, _ = doctorReport(t)["plugins"].(map[string]any)
+	assert.Equal(t, []any{}, plugins["doctors"])
 }
 
 func TestDoctorNeverPrintsAPrivateKeySeed(t *testing.T) {

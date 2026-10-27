@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,8 +86,23 @@ func doctorCommand() *cobra.Command {
 			userRoot := doctorUserRoot()
 			plugins := discoverPlugins()
 			pluginRows := make([]map[string]any, 0, len(plugins))
+			// A plugin whose metadata declares a doctor subcommand checks
+			// what it owns itself; the core names it, never what it checks.
+			// Only a plugin this tree dispatches to is listed: one named like
+			// a core command, or not a single token, is never registered
+			// (addPluginCommands), so its command would not reach it.
+			dispatched := map[string]bool{}
+			for _, cmd := range c.Root().Commands() {
+				if name, ok := cmd.Annotations[pluginAnnotation]; ok {
+					dispatched[name] = true
+				}
+			}
+			doctors := []string{}
 			for _, p := range plugins {
 				pluginRows = append(pluginRows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version, "plugin_api": p.PluginAPI})
+				if dispatched[p.Name] && slices.Contains(p.Subcommands, "doctor") {
+					doctors = append(doctors, "capsulectl "+p.Name+" doctor")
+				}
 			}
 			report := map[string]any{
 				"binary_version": CLIVersion,
@@ -95,6 +111,7 @@ func doctorCommand() *cobra.Command {
 					"roots":      trustedPluginRoots(),
 					"discovered": pluginRows,
 					"user_root":  userRoot,
+					"doctors":    doctors,
 				},
 			}
 

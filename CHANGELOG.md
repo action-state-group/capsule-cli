@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Added:** `doctor` lists, under `plugins.doctors`, the command of each
+  trusted plugin whose metadata declares a `doctor` subcommand, such as
+  `capsulectl book doctor` (evidencebook#130). It reads the plugin's
+  `subcommands` and names no plugin itself.
 - **Changed:** the pages capsulectl writes with its vendored viewer
   (`presentation build`, and `bundle` or `disclose --html`) draw the
   verification banner in the presentation contract's words
