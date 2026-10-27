@@ -346,7 +346,10 @@ operation, offered under both names (`seal` stays for existing callers).
 `doctor` never opens a database connection or requires a profile; it reports
 plugin trust, profile presence, signing-key-file permissions, and (only with
 `--check-witness`) an unauthenticated reachability probe of the profile's
-checkpoint endpoint. `result open` validates and prints a Result v0
+checkpoint endpoint. Under `plugins.doctors` it lists the command of each
+trusted plugin whose metadata declares a `doctor` subcommand (for example
+`capsulectl book doctor`), which checks what that plugin owns; the core runs
+none of them. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
 validation, and it stands in for the `capsule-viewer` build. `result build`

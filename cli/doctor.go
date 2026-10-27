@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,8 +86,14 @@ func doctorCommand() *cobra.Command {
 			userRoot := doctorUserRoot()
 			plugins := discoverPlugins()
 			pluginRows := make([]map[string]any, 0, len(plugins))
+			// A plugin whose metadata declares a doctor subcommand checks
+			// what it owns itself; the core names it, never what it checks.
+			doctors := []string{}
 			for _, p := range plugins {
 				pluginRows = append(pluginRows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version, "plugin_api": p.PluginAPI})
+				if slices.Contains(p.Subcommands, "doctor") {
+					doctors = append(doctors, "capsulectl "+p.Name+" doctor")
+				}
 			}
 			report := map[string]any{
 				"binary_version": CLIVersion,
@@ -95,6 +102,7 @@ func doctorCommand() *cobra.Command {
 					"roots":      trustedPluginRoots(),
 					"discovered": pluginRows,
 					"user_root":  userRoot,
+					"doctors":    doctors,
 				},
 			}
 
