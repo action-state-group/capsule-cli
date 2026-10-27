@@ -357,7 +357,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		t, e := OpenTarget(c.Context(), p, UseInitialization)
@@ -510,7 +510,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if p.ReadOnly {
 			return ErrReadOnlyCLL
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		path, _ := c.Flags().GetString("request")
@@ -568,12 +568,12 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			if !LogName.MatchString(logID) {
 				return InputError("--log-id must be lowercase letters, digits and ._:/-, such as deal/deal-0123456789abcdef")
 			}
-			if p.IsBook() {
-				return InputError("--log-id does not apply to a book profile: its one log is the evidence book")
+			if p.HasPluginLog() {
+				return InputError("--log-id does not apply to a profile whose log the capsulectl-" + p.LogOwner() + " plugin keeps: it has one log")
 			}
 			p.LogID = logID
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		t, e := OpenTarget(c.Context(), p, UseCLLRead)
@@ -581,9 +581,9 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.Close()) }()
-		if p.IsBook() {
+		if p.HasPluginLog() {
 			all, _ := c.Flags().GetBool("all")
-			items, next, e := bookBackend.List(c.Context(), p, after, through, limit, all)
+			items, next, e := backendFor(p).List(c.Context(), p, after, through, limit, all)
 			if e != nil {
 				return e
 			}
@@ -607,7 +607,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	list.Flags().Uint64("after", 0, "Exclusive sequence lower bound")
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
-	list.Flags().Bool("all", false, "Book profiles: also list the evidence book's internal records")
+	list.Flags().Bool("all", false, "Plugin-kept logs: also list the log's internal records")
 	list.Flags().String("log-id", "", "Read this log of the profile's store instead of its log_id (a deal's log is deal/<deal id>)")
 	logs.AddCommand(list)
 	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
@@ -615,7 +615,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if done, e := delegateBook(c, p, nil); done {
+		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
 		path, _ := c.Flags().GetString("capsule")

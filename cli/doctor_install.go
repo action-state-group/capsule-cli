@@ -184,8 +184,8 @@ func profilePlugin(p Profile) string {
 	switch {
 	case p.Type == "sqlite":
 		return DealPluginName
-	case p.IsBook():
-		return BookPluginName
+	case p.HasPluginLog():
+		return p.LogOwner()
 	}
 	return ""
 }

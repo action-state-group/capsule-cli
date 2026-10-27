@@ -314,15 +314,19 @@ Each plugin is a whole `capsulectl` command tree with its own commands
 added, so the core can hand it a core command it cannot run itself:
 
 - **A profile's log has one owner**, declared in the profile as `log: cll`
-  or `log: book` (`profile create --log`), and never changed afterwards. A
+  or `log: <plugin>`, such as `log: book` (`profile create --log`), and never
+  changed afterwards. The plugin name is any plugin name that is not a core
+  command; only a jsonl profile with a `log_id` can name one. A
   plain profile (mysql, sqlite, or a jsonl profile with `log: cll`) keeps a
   CLL the core writes, checkpoints and bundles with no plugin. A book profile
   (a jsonl profile with `log: book`; a jsonl profile with a log_id saved
   before the field reads as one) keeps an evidence book, and the core runs
   `publish`, `cll list|append`, `cll checkpoint create|status|publish`,
-  `store init` and `bundle|disclose|permalink` on it in `capsulectl-book`,
-  with the same arguments. Without the plugin those commands refuse and say
-  which plugin to install.
+  `store init` and `bundle|disclose|permalink` on it in the plugin the
+  profile names (`capsulectl-book` for a book), with the same arguments. A
+  plugin serves its own profiles in its own process by registering a
+  `LogBackend` for its name (`cli.RegisterLogBackend`). Without the plugin
+  those commands refuse and say which plugin to install.
 - `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
   `capsulectl-deal` the same way.
 

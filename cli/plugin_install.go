@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -237,6 +238,18 @@ func installRoot(home string, create bool) (string, error) {
 	}
 	return canonical, nil
 }
+
+// coreCommandNames is reservedPluginNames, built once: the core tree is fixed
+// for the life of the process.
+func coreCommandNames() map[string]bool {
+	coreNamesOnce.Do(func() { coreNames = reservedPluginNames() })
+	return coreNames
+}
+
+var (
+	coreNamesOnce sync.Once
+	coreNames     map[string]bool
+)
 
 // reservedPluginNames are the names dispatch never wires: core commands and
 // cobra's help and completion.
