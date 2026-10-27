@@ -190,3 +190,41 @@ func TestRoutedPluginInheritsTheSelectedProfile(t *testing.T) {
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "| profile="+owned.Name)
 }
+
+func TestRoutingLineForms(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-ledger", firstPartyLauncher("ledger"), 0o755)
+	owned := ownedProfile(t, "jsonl", "ledger")
+
+	// --profile=x, and a profile named before the subcommand, both route.
+	out, err := invoke(t, "", "bundle", "--profile="+owned.Name, "--root", "abc", "--zzz")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran capsulectl-ledger: bundle --profile="+owned.Name)
+	out, err = invoke(t, "", "--profile", owned.Name, "bundle", "--root", "abc")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "| profile="+owned.Name)
+
+	// After "--" nothing is a flag, so no profile is selected there.
+	_, err = invoke(t, "", "bundle", "--root", "abc", "--", "--profile", owned.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "takes no positional arguments")
+
+	// A profile that does not exist is reported, not the plugin's flags.
+	_, err = invoke(t, "", "bundle", "--profile", "nope", "--zzz")
+	require.ErrorIs(t, err, ErrInput)
+	assert.NotContains(t, SafeError(err), "has no flag")
+}
+
+func TestRoutingToAPluginThatIsNotInstalledSaysSo(t *testing.T) {
+	pluginRoot(t)
+	owned := ownedProfile(t, "sqlite", "ledger")
+	_, err := invoke(t, "", "bundle", "--profile", owned.Name, "--root", "abc")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "needs the capsulectl-ledger plugin, which is not installed")
+}
+
+func TestGraftNeedsAPath(t *testing.T) {
+	assert.PanicsWithValue(t, "GraftCommand: a path names the core command to graft under", func() {
+		GraftCommand(nil, &cobra.Command{Use: "x"})
+	})
+}

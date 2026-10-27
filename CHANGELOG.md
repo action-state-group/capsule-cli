@@ -3,9 +3,12 @@
 ## Unreleased
 
 - **Changed:** `bundle`, `disclose` and `permalink` hand their whole command
-  line to the plugin that keeps the selected profile's log when the core
-  cannot serve it, before the core reads any flag, so a plugin's own flags
-  (`--deal`, `--share`, `--to`) reach it (capsule-cli#428). A sqlite profile
+  line to the plugin that keeps the selected profile's log, before the core
+  reads any flag, so a plugin's own flags (`--deal`, `--share`, `--to`) reach
+  it (capsule-cli#428). A process that has the plugin's backend, or is the
+  plugin, serves the command itself; otherwise a plugin-kept profile always
+  goes to its plugin, and a plugin that is not installed fails the command
+  instead of the core running it. A sqlite profile
   with a namespace can now name its plugin in `log:`; a deal profile saved
   without one still reads as the deal plugin's. Plugin authors get
   `cli.ExtendBundle` (flags and a run step for those commands) and

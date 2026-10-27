@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -76,9 +77,10 @@ func selectedProfileName(c *cobra.Command, args []string) string {
 }
 
 // routeToOwner runs c's raw command line in the plugin that keeps the log of
-// the profile it selects, and reports whether it did. It does not when no
-// profile is selected or it cannot be loaded (the command then says so itself,
-// after parsing), when the core keeps the log, or when this process serves the
+// the profile it selects, and reports whether it did. A profile that cannot be
+// loaded is reported at once, as Selected would. It does not route when no
+// profile is selected (the command then says so itself, after parsing), when
+// the core keeps the log, or when this process serves the
 // owner's logs: it is the owner, or has its backend.
 func routeToOwner(c *cobra.Command, args []string) (bool, error) {
 	name := selectedProfileName(c, args)
@@ -87,7 +89,7 @@ func routeToOwner(c *cobra.Command, args []string) (bool, error) {
 	}
 	p, err := LoadProfile(name)
 	if err != nil {
-		return false, nil
+		return true, errors.Join(ErrInput, err)
 	}
 	owner := p.LogOwner()
 	if owner == "" || owner == runningPlugin || backendFor(p) != nil {
@@ -156,6 +158,9 @@ var grafts []graft
 // building its tree; cmd is used by the one tree the process builds. A path
 // that names no core command is a programming error.
 func GraftCommand(path []string, cmd *cobra.Command) {
+	if len(path) == 0 {
+		panic("GraftCommand: a path names the core command to graft under")
+	}
 	grafts = append(grafts, graft{append([]string(nil), path...), cmd})
 }
 

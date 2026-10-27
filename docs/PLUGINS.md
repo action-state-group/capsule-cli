@@ -340,6 +340,16 @@ added, so the core can hand it a core command it cannot run itself:
   own process a plugin adds those flags with `cli.ExtendBundle` and mounts a
   command under a core one with `cli.GraftCommand`.
 
+  These two are a Go API of the host package, outside `cli-plugin/v1`. A
+  `BundleExtension`'s `Flags` must skip a flag the command already defines
+  (the core still defines `--deal`, `--share` and `--to` until the plugins
+  move to the extension), because defining one twice panics. Its `Run` runs
+  after the flags are parsed and before the command's own checks, and the
+  first extension that reports the command handled ends it. `GraftCommand`
+  replaces a child of the same name, needs a non-empty path of core commands,
+  and panics on a path that names none. `bundle --profile <p> --help` shows
+  the core's help, without a plugin's flags.
+
 This hand-over is the one place the core calls into a plugin for a core
 verb, and it goes only to the plugin the selected profile names. The core finds it
 as it finds any plugin, by name on a trusted root, with no vendor check: the
