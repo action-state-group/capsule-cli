@@ -191,6 +191,18 @@ func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 	return forwardDiscovered(c, name, args, plugins, refused)
 }
 
+// forwardToPluginAs is ForwardToPlugin with the profile the plugin inherits
+// named instead of scanned out of args.
+func forwardToPluginAs(c *cobra.Command, name string, args []string, profile string) error {
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, info := range plugins {
+		if info.Name == name {
+			return execPluginAs(c, info, args, profile)
+		}
+	}
+	return missingPluginError(name, refused)
+}
+
 // forwardDiscovered is ForwardToPlugin over one discovery's result.
 func forwardDiscovered(c *cobra.Command, name string, args []string, plugins []pluginInfo, refused []refusedPlugin) error {
 	for _, info := range plugins {

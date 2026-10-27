@@ -178,17 +178,9 @@ func SkillName(path string) string {
 	return ""
 }
 
-// profilePlugin is the first-party plugin a profile's commands run in: deal
-// for a deal (sqlite) profile, book for a book profile, none for a plain one.
-func profilePlugin(p Profile) string {
-	switch {
-	case p.Type == "sqlite":
-		return DealPluginName
-	case p.HasPluginLog():
-		return p.LogOwner()
-	}
-	return ""
-}
+// profilePlugin is the plugin that keeps a profile's log (a deal profile's
+// store, a book), and none for a profile whose log the core keeps.
+func profilePlugin(p Profile) string { return p.LogOwner() }
 
 // pluginInstallCheck reports the installed first-party plugin: present, and
 // on a release core the same version. A development core reports the

@@ -23,11 +23,15 @@ func TestLogOwner(t *testing.T) {
 		{"jsonl naming another plugin", Profile{Type: "jsonl", LogID: "l", Log: "ledger"}, "ledger"},
 		{"jsonl with no log_id", Profile{Type: "jsonl"}, ""},
 		{"sqlite", Profile{Type: "sqlite", LogID: "l"}, ""},
+		{"sqlite deal namespace saved before the field reads as the deal plugin", Profile{Type: "sqlite", Namespace: "deal"}, DealPluginName},
+		{"sqlite namespace naming a plugin", Profile{Type: "sqlite", Namespace: "ns", Log: "ledger"}, "ledger"},
+		{"sqlite namespace declared cll", Profile{Type: "sqlite", Namespace: "deal", Log: LogCLL}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, tc.p.LogOwner())
-			assert.Equal(t, tc.want != "", tc.p.HasPluginLog())
-			assert.Equal(t, tc.want == LogBook, tc.p.IsBook())
+			assert.Equal(t, tc.want != "" && tc.p.Type == "jsonl", tc.p.HasPluginLog())
+			assert.Equal(t, tc.want != "" && tc.p.Type == "sqlite", tc.p.HasOwnedStore())
+			assert.Equal(t, tc.want == LogBook && tc.p.Type == "jsonl", tc.p.IsBook())
 		})
 	}
 }
@@ -53,13 +57,17 @@ func TestLogOwnerIsValidated(t *testing.T) {
 		assert.Contains(t, SafeError(err), "log must be cll")
 	}
 	p := base()
-	p.Type, p.Log = "sqlite", "ledger"
+	p.Type, p.Namespace, p.Log = "sqlite", "ns", "ledger"
+	require.NoError(t, p.validate(), "a sqlite store with a namespace can be a plugin's")
+	assert.True(t, p.HasOwnedStore())
+	assert.False(t, p.HasPluginLog(), "the core reads it itself")
+	p.Namespace, p.LogID = "", "l"
 	err := p.validate()
 	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "only a jsonl profile with a log_id can name a plugin")
+	assert.Contains(t, SafeError(err), "can name a plugin as its log owner")
 	p = base()
 	p.LogID, p.Namespace, p.Log = "", "ns", "ledger"
-	require.ErrorIs(t, p.validate(), ErrInput)
+	require.ErrorIs(t, p.validate(), ErrInput, "a jsonl profile needs a log_id")
 }
 
 // A profile naming a plugin other than book forwards its log commands to that

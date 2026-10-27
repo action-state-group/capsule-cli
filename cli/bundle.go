@@ -570,6 +570,14 @@ func bundleCommands() []*cobra.Command {
 	}
 	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
 		command := &cobra.Command{Use: use, Short: shortFor[use], Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+			for _, ext := range bundleExtensions {
+				if ext.Run == nil {
+					continue
+				}
+				if handled, err := ext.Run(c, use); handled {
+					return err
+				}
+			}
 			htmlPath, _ := c.Flags().GetString("html")
 			if htmlPath != "" && permalink {
 				return InputError("--html writes a page holding the bundle; a permalink carries the bundle in its link. Use `bundle --html FILE` or `disclose --html FILE` for a page")
@@ -727,7 +735,12 @@ func bundleCommands() []*cobra.Command {
 		} else {
 			command.Flags().String("base-url", DefaultBundleURL, "Bundle viewer base URL")
 		}
-		return command
+		for _, ext := range bundleExtensions {
+			if ext.Flags != nil {
+				ext.Flags(command.Flags(), use)
+			}
+		}
+		return ownerRouted(command)
 	}
 	return []*cobra.Command{makeCommand("bundle", false, false), makeCommand("disclose", true, false), makeCommand("permalink", true, true)}
 }

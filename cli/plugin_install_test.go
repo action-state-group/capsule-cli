@@ -1024,7 +1024,10 @@ func TestHandOverWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
 }
 
 func TestProfilePlugin(t *testing.T) {
-	assert.Equal(t, DealPluginName, profilePlugin(Profile{Type: "sqlite"}))
+	assert.Equal(t, DealPluginName, profilePlugin(Profile{Type: "sqlite", Namespace: "deal"}))
+	assert.Equal(t, "ledger", profilePlugin(Profile{Type: "sqlite", Namespace: "ns", Log: "ledger"}))
+	assert.Equal(t, "", profilePlugin(Profile{Type: "sqlite", Namespace: "capsule"}), "a plain sqlite profile needs no plugin")
+	assert.Equal(t, "", profilePlugin(Profile{Type: "sqlite"}))
 	assert.Equal(t, BookPluginName, profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogBook}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogCLL}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "mysql"}))

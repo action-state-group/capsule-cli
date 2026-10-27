@@ -203,21 +203,35 @@ const (
 // declared a plain CLL. One saved before the log field existed has no declared
 // owner and reads as LogBook until that default goes.
 func (p Profile) LogOwner() string {
-	if p.Type != "jsonl" || p.LogID == "" || p.Log == LogCLL {
+	switch {
+	case p.Log == LogCLL:
 		return ""
+	case p.Type == "jsonl" && p.LogID != "":
+		return FirstNonEmpty(p.Log, LogBook)
+	case p.Type == "sqlite" && p.Namespace != "":
+		// A store the plugin writes and the core only reads. A deal profile
+		// (namespace deal) saved before the field existed reads as the deal
+		// plugin's until that default goes.
+		if p.Log == "" && p.IsShelf() {
+			return DealPluginName
+		}
+		return p.Log
 	}
-	if p.Log == "" {
-		return LogBook
-	}
-	return p.Log
+	return ""
 }
 
-// HasPluginLog reports whether a plugin keeps the profile's log.
-func (p Profile) HasPluginLog() bool { return p.LogOwner() != "" }
+// HasPluginLog reports whether a plugin keeps the profile's log in a store of
+// its own (a jsonl profile): the core needs the plugin's backend to open it.
+// A sqlite store a plugin owns is a plain CLL the core reads (HasOwnedStore).
+func (p Profile) HasPluginLog() bool { return p.Type == "jsonl" && p.LogOwner() != "" }
+
+// HasOwnedStore reports whether a plugin owns the profile's sqlite store: the
+// core reads it and never writes it.
+func (p Profile) HasOwnedStore() bool { return p.Type == "sqlite" && p.LogOwner() != "" }
 
 // IsBook reports whether the book plugin keeps the profile's log: an evidence
 // book. Every record a book seals carries the profile's operator.
-func (p Profile) IsBook() bool { return p.LogOwner() == LogBook }
+func (p Profile) IsBook() bool { return p.HasPluginLog() && p.LogOwner() == LogBook }
 
 // validLogOwner reports whether name can own a profile's log: LogCLL, or a
 // plugin name that is not a core command.
@@ -274,8 +288,8 @@ func (p Profile) validate() error {
 	switch {
 	case p.Log != "" && !validLogOwner(p.Log):
 		return InputError("log must be cll (the core keeps the log) or the name of the plugin that keeps it (capsulectl-<name>); a core command name is not a plugin")
-	case p.Log != "" && p.Log != LogCLL && (p.Type != "jsonl" || p.LogID == ""):
-		return InputError("only a jsonl profile with a log_id can name a plugin as its log owner (log: " + p.Log + ")")
+	case p.Log != "" && p.Log != LogCLL && !((p.Type == "jsonl" && p.LogID != "") || (p.Type == "sqlite" && p.Namespace != "")):
+		return InputError("only a jsonl profile with a log_id or a sqlite profile with a namespace can name a plugin as its log owner (log: " + p.Log + ")")
 	}
 	if p.Type == RemoteProfileType {
 		if e := validateRemoteConnection(p); e != nil {

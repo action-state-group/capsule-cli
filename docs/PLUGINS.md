@@ -316,9 +316,11 @@ added, so the core can hand it a core command it cannot run itself:
 - **A profile's log has one owner**, declared in the profile as `log: cll`
   or `log: <plugin>`, such as `log: book` (`profile create --log`), and never
   changed afterwards. The plugin name is any plugin name that is not a core
-  command; only a jsonl profile with a `log_id` can name one. A
-  plain profile (mysql, sqlite, or a jsonl profile with `log: cll`) keeps a
-  CLL the core writes, checkpoints and bundles with no plugin. A book profile
+  command; a jsonl profile with a `log_id` (a log the plugin keeps itself) or
+  a sqlite profile with a namespace (a store the plugin writes and the core
+  only reads) can name one. A plain profile (mysql, a sqlite profile that
+  names no plugin, or a jsonl profile with `log: cll`) keeps a CLL the core
+  writes, checkpoints and bundles with no plugin. A book profile
   (a jsonl profile with `log: book`; a jsonl profile with a log_id saved
   before the field reads as one) keeps an evidence book, and the core runs
   `publish`, `cll list|append`, `cll checkpoint create|status|publish`,
@@ -330,8 +332,26 @@ added, so the core can hand it a core command it cannot run itself:
 - `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
   `capsulectl-deal` the same way.
 
+- `bundle`, `disclose` and `permalink` read no flag before they know whose
+  log the selected profile has: if a plugin keeps it and this process does not
+  serve it, the whole command line goes to that plugin, so the plugin's own
+  flags reach it. A sqlite profile with a namespace can name its plugin in
+  `log:` too (the plugin writes that store; the core only reads it). In its
+  own process a plugin adds those flags with `cli.ExtendBundle` and mounts a
+  command under a core one with `cli.GraftCommand`.
+
+  These two are a Go API of the host package, outside `cli-plugin/v1`. A
+  `BundleExtension`'s `Flags` must skip a flag the command already defines
+  (the core still defines `--deal`, `--share` and `--to` until the plugins
+  move to the extension), because defining one twice panics. Its `Run` runs
+  after the flags are parsed and before the command's own checks, and the
+  first extension that reports the command handled ends it. `GraftCommand`
+  replaces a child of the same name, needs a non-empty path of core commands,
+  and panics on a path that names none. `bundle --profile <p> --help` shows
+  the core's help, without a plugin's flags.
+
 This hand-over is the one place the core calls into a plugin for a core
-verb, and it applies only to these two launcher names. The core finds them
+verb, and it goes only to the plugin the selected profile names. The core finds it
 as it finds any plugin, by name on a trusted root, with no vendor check: the
 trusted roots' ownership and permission checks are what keep a lookalike
 out. `verify` and `countersign verify` are never handed over.
