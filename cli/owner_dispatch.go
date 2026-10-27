@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -89,7 +88,7 @@ func routeToOwner(c *cobra.Command, args []string) (bool, error) {
 	}
 	p, err := LoadProfile(name)
 	if err != nil {
-		return true, errors.Join(ErrInput, err)
+		return true, Hint(ErrInput, err.Error())
 	}
 	owner := p.LogOwner()
 	if owner == "" || owner == runningPlugin || backendFor(p) != nil {
