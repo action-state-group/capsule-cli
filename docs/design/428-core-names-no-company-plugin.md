@@ -146,7 +146,8 @@ stay until step 5 decides.
 PR A (capsule-cli): the generic API and dispatch, old names kept as thin
 wrappers, no behavior change. Plugin PRs (evidencebook, evidencebook-deal):
 switch to the generic API and write the marker. PR B (capsule-cli): delete the
-old names, aliases, the `canary` verb and `isFirstParty` (the legacy-table probe stays); the core builds
+old names, aliases, the `canary` verb, `isFirstParty` and `IsShelf` with the
+deal-namespace default (the legacy-table probe stays as the one exception); the core builds
 against neither plugin.
 
 Ruled (Ethan, 2026-10-27: option (a); aliases deleted in PR B; owner explicit; Sherlock2's four

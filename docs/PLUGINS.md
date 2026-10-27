@@ -357,7 +357,9 @@ added, so the core can hand it a core command it cannot run itself:
   with `Target.MarkOwned` on its writable paths (never on a read). A store
   carrying that marker, or the older deal store marker, is refused by every
   core write verb whatever the profile says; the core reads it. The older
-  marker records no owner, so it only refuses writes. `profile create` and
+  marker records no owner, so it only refuses writes; it is the one
+  compatibility exception to the core knowing no plugin's stored data, and not
+  a precedent for a second. `profile create` and
   `update` refuse a `log:` that disagrees with the owner the store records;
   `update` may bring a profile in line with it.
 

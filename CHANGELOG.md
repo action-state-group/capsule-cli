@@ -11,7 +11,7 @@
   protecting stores the plugin has not marked yet. `profile create|update`
   refuses a `log:` that disagrees with the owner a store records. The refusal
   is `cli.ErrPluginStoreWrite` (`ErrDealProfileWrite` stays as another name for
-  it), and its text no longer names a command. `OpenDealTarget`,
+  it), and its text no longer names a plugin or one of its commands. `OpenDealTarget`,
   `DealStoreWriter` stay as deprecated names.
 - **Changed:** `bundle`, `disclose` and `permalink` hand their whole command
   line to the plugin that keeps the selected profile's log, before the core
