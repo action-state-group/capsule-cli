@@ -22,16 +22,16 @@ import (
 // verify under the directory's keys. present is false when the bundle claims
 // no witnessed chain. dealStatement is nil when the bundle's checkpoint did
 // not verify.
-func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory *witness.Directory) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
+func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory *witness.Directory) (result aacbundle.ClaimResult, receipts []map[string]any, present bool) {
 	chain := CadenceChainOf(value)
 	if chain["state"] != "witnessed" {
 		return aacbundle.ClaimResult{}, nil, false
 	}
-	fail := func(finding string) (aacbundle.ClaimResult, []map[string]string, bool) {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{finding}}, []map[string]string{}, true
+	fail := func(finding string) (aacbundle.ClaimResult, []map[string]any, bool) {
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{finding}}, []map[string]any{}, true
 	}
 	if dealStatement == nil {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, []map[string]string{}, true
+		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, []map[string]any{}, true
 	}
 	deal, err := checkpoint.ParseRecord(dealStatement)
 	if err != nil {

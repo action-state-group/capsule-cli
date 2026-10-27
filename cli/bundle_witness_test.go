@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
@@ -29,12 +30,22 @@ const testWitness = "https://witness.example"
 // own tests mint them).
 func mintReceipt(t *testing.T, entry []byte, key ed25519.PrivateKey) []byte {
 	t.Helper()
+	return mintReceiptAt(t, entry, key, nil)
+}
+
+// mintReceiptAt is mintReceipt with, when iat is set, a CWT claims map
+// (protected header 15) carrying the witness's signed time (claim 6).
+func mintReceiptAt(t *testing.T, entry []byte, key ed25519.PrivateKey, iat *int64) []byte {
+	t.Helper()
 	proof, err := cbor.Marshal([]any{int64(1), int64(0), [][]byte{}})
 	require.NoError(t, err)
 	leaf := sha256.Sum256(append([]byte{0}, entry...))
 	message := cose.NewSign1Message()
 	message.Headers.Protected.SetAlgorithm(cose.AlgorithmEdDSA)
 	message.Headers.Protected[int64(395)] = int64(1)
+	if iat != nil {
+		message.Headers.Protected[int64(15)] = map[any]any{int64(6): *iat}
+	}
 	message.Headers.Unprotected[int64(396)] = map[any]any{int64(-1): []any{proof}}
 	message.Payload = leaf[:]
 	signer, err := cose.NewSigner(cose.AlgorithmEdDSA, key)
@@ -669,4 +680,113 @@ func TestReceiptsClaimFailsANonCanonicalCadenceReceiptWithoutADirectory(t *testi
 	claim, receipts := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
 	assert.Equal(t, aacbundle.ClaimResult{Status: "fail", Findings: []string{"witness_receipt_malformed:0"}}, claim)
 	assert.Empty(t, receipts)
+}
+
+// witnessedAt is witnessed with the receipt's signed time set to iat (nil for
+// none).
+func witnessedAt(t *testing.T, key ed25519.PrivateKey, iat *int64) func(map[string]interface{}) {
+	return func(b map[string]interface{}) {
+		witnessed(t, key)(b)
+		cp := b["checkpoint"].(map[string]interface{})
+		statement, err := base64.RawURLEncoding.DecodeString(cp["cose"].(string))
+		require.NoError(t, err)
+		record, err := checkpoint.ParseRecord(statement)
+		require.NoError(t, err)
+		entry, err := record.EntryHash()
+		require.NoError(t, err)
+		witnessEntry(b)["receipt_b64"] = base64.StdEncoding.EncodeToString(mintReceiptAt(t, entry, key, iat))
+	}
+}
+
+func bundleReceipt(t *testing.T, result map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	receipts := result["witnesses"].(map[string]interface{})["receipts"].([]interface{})
+	require.Len(t, receipts, 1)
+	return receipts[0].(map[string]interface{})
+}
+
+// A passing receipt reports the iat the witness signed, and the directory key
+// that verified it (chips D4, AAC go/v0.14.0).
+func TestVerifyBundleReportsASignedRegistrationTime(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	iat := int64(1792022400)
+	result, err := verifyWithDirectory(t, producedBundle(t, witnessedAt(t, private, &iat)), writeDirectory(t, rawKeyRow(testWitness, public)))
+	require.NoError(t, err)
+	receipt := bundleReceipt(t, result)
+	assert.Equal(t, "pass", receipt["status"])
+	assert.Equal(t, float64(1792022400), receipt["registration_time"])
+	assert.Nil(t, receipt["registration_time_reason"])
+	assert.Equal(t, hex.EncodeToString(public), receipt["key_id"])
+	assert.Equal(t, "signed by the witness at 2026-10-15T00:00:00Z", receipt["registration_time_text"])
+}
+
+// A passing receipt whose witness signed no time says so, and never falls
+// back to another time.
+func TestVerifyBundleSaysAPassingReceiptHasNoSignedTime(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	result, err := verifyWithDirectory(t, producedBundle(t, witnessedAt(t, private, nil)), writeDirectory(t, rawKeyRow(testWitness, public)))
+	require.NoError(t, err)
+	receipt := bundleReceipt(t, result)
+	assert.Equal(t, "pass", receipt["status"])
+	assert.Nil(t, receipt["registration_time"])
+	assert.Equal(t, "iat_absent", receipt["registration_time_reason"])
+	assert.Equal(t, "no signed time (iat_absent)", receipt["registration_time_text"])
+}
+
+// A receipt signed under a key outside the caller's directory is not checked,
+// so its signed time is not reported either.
+func TestVerifyBundleReportsNoRegistrationTimeUnderAKeyNotInTheDirectory(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	otherPublic, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	iat := int64(1792022400)
+	path := producedBundle(t, witnessedAt(t, private, &iat))
+
+	for name, directory := range map[string]string{
+		"no directory":    "",
+		"no row":          writeDirectory(t, rawKeyRow("https://other.example", otherPublic)),
+		"a different key": writeDirectory(t, rawKeyRow(testWitness, otherPublic)),
+	} {
+		result, _ := verifyWithDirectory(t, path, directory)
+		receipt := bundleReceipt(t, result)
+		assert.NotEqual(t, "pass", receipt["status"], name)
+		assert.Nil(t, receipt["registration_time"], name)
+		assert.Nil(t, receipt["key_id"], name)
+		assert.Equal(t, "receipt_not_passed", receipt["registration_time_reason"], name)
+		assert.Equal(t, "no signed time (receipt_not_passed)", receipt["registration_time_text"], name)
+	}
+}
+
+// A cadence checkpoint's receipts carry the same fields as a bundle's.
+func TestReceiptsClaimReportsTheRegistrationTimeOfACadenceReceipt(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	iat := int64(1792022400)
+	raw, err := os.ReadFile(producedBundle(t, witnessedAt(t, private, &iat)))
+	require.NoError(t, err)
+	value, err := DecodeBundleJSON(raw)
+	require.NoError(t, err)
+	_, statement := CheckpointClaim(value)
+	require.NotNil(t, statement)
+	directory, err := LoadWitnessDirectory(writeDirectory(t, rawKeyRow(testWitness, public)))
+	require.NoError(t, err)
+
+	claim, receipts := receiptsClaim([]interface{}{witnessEntry(value)}, statement, &directory, "cadence")
+	assert.Equal(t, "pass", claim.Status)
+	require.Len(t, receipts, 1)
+	assert.Equal(t, "cadence", receipts[0]["via"])
+	require.NotNil(t, receipts[0]["registration_time"])
+	assert.Equal(t, iat, *receipts[0]["registration_time"].(*int64))
+}
+
+func TestRegistrationTimeTextNamesARekorEntryWithoutIatApart(t *testing.T) {
+	reason := witness.ReasonBindingWithoutIat
+	assert.Equal(t, "Rekor entry: time not reported (binding_without_iat)", registrationTimeText(witness.ReceiptResult{RegistrationTimeReason: &reason}))
 }

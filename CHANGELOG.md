@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Added:** `verify --bundle` and cadence verify report, for each witness
+  receipt, the checked `registration_time` (the `iat` the witness signed),
+  the verifying `key_id`, and `registration_time_reason` when there is no
+  time (chips D4, capsule-cli#402). Needs agent-action-capsule `go/v0.14.0`,
+  which `go.mod` now pins.
 - **Added:** `doctor` lists, under `plugins.doctors`, the command of each
   trusted plugin whose metadata declares a `doctor` subcommand, such as
   `capsulectl book doctor` (evidencebook#130). It reads the plugin's
