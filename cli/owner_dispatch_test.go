@@ -173,3 +173,20 @@ func TestTheCoreDoesNotWriteAStoreAPluginOwns(t *testing.T) {
 		assert.Contains(t, SafeError(err), "owned by the capsulectl-ledger plugin", args)
 	}
 }
+
+// The plugin inherits the profile the routing selected, not one a rescan of
+// the raw line would find.
+func TestRoutedPluginInheritsTheSelectedProfile(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-ledger", firstPartyLauncher("ledger"), 0o755)
+	owned := ownedProfile(t, "jsonl", "ledger")
+	out, err := invoke(t, "", "bundle", "--profile", owned.Name, "--root", "abc", "--out", "--profile=other")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "| profile="+owned.Name)
+
+	t.Setenv("CAPSULECTL_PLUGIN_API", PluginAPI)
+	t.Setenv(ProfileEnv, owned.Name)
+	out, err = invoke(t, "", "bundle", "--root", "abc")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "| profile="+owned.Name)
+}

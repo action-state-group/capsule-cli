@@ -570,6 +570,12 @@ var pluginBeforeExec = func() {}
 // that runs; what remains is the resolved path's own chain, which the walk
 // holds to the user or root (closing that would need an O_PATH fd).
 func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
+	return execPluginAs(c, info, args, profileInArgs(args))
+}
+
+// execPluginAs is execPlugin with the profile the plugin inherits named, for a
+// caller that read the selection with the command's own flags.
+func execPluginAs(c *cobra.Command, info pluginInfo, args []string, profile string) error {
 	checked, err := CheckedTrustedPath(info.path)
 	if err != nil {
 		return InputError("refusing to run plugin from an untrusted path")
@@ -589,8 +595,8 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	// The profile this command line selects goes with it, so a command the
 	// plugin runs back in the core uses the same one. --profile anywhere in
 	// args still wins inside the plugin.
-	if name := profileInArgs(args); name != "" {
-		cmd.Env = append(cmd.Env, ProfileEnv+"="+name)
+	if profile != "" {
+		cmd.Env = append(cmd.Env, ProfileEnv+"="+profile)
 	}
 	// A plugin that calls core back (sealing, verify, profile show) needs to
 	// find this binary; on a host whose PATH lacks the install folder (a Muse

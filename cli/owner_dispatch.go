@@ -93,7 +93,7 @@ func routeToOwner(c *cobra.Command, args []string) (bool, error) {
 	if owner == "" || owner == runningPlugin || backendFor(p) != nil {
 		return false, nil
 	}
-	return true, ForwardToPlugin(c, owner, append(commandPath(c), args...))
+	return true, forwardToPluginAs(c, owner, append(commandPath(c), args...), name)
 }
 
 // ownerRouted makes cmd take its flags only after routeToOwner has declined.
