@@ -820,3 +820,22 @@ func TestCountersignVerifySpoofedSignerIDIsInvalid(t *testing.T) {
 	assert.Equal(t, "invalid", reports[0].State)
 	assert.Nil(t, reports[0].Checks)
 }
+
+// DecodeBundleJSON is aacbundle.Decode under the input class: one JSON
+// object, numbers kept, and nothing after it.
+func TestDecodeBundleJSONReadsOneObject(t *testing.T) {
+	value, err := DecodeBundleJSON([]byte(`{"checkpoint":{"mmr_size":8}}`))
+	require.NoError(t, err)
+	require.Equal(t, json.Number("8"), value["checkpoint"].(map[string]interface{})["mmr_size"])
+	for name, raw := range map[string]string{
+		"not JSON":       `{"root":`,
+		"trailing data":  `{"root":"a"} {}`,
+		"an array":       `[{"root":"a"}]`,
+		"invalid UTF-8":  "{\"a\":\"\xff\"}",
+		"lone surrogate": `{"a":"\ud800"}`,
+	} {
+		_, err := DecodeBundleJSON([]byte(raw))
+		require.ErrorIs(t, err, ErrInput, name)
+		require.Contains(t, SafeError(err), "the bundle file is not valid JSON", name)
+	}
+}

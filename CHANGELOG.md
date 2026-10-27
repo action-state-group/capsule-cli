@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Changed:** `DecodeBundleJSON`, which every command that reads a bundle
+  or a bare capsule uses (`verify --bundle` and `verify` of a capsule,
+  `countersign`, `presentation build` and `list`, and the page gate), now
+  decodes with agent-action-capsule/go's `bundle.Decode` (evidencebook#144).
+  A file with data after its JSON object, or with invalid UTF-8 or an
+  unpaired surrogate escape, is now refused as not valid JSON (exit 2), as
+  agent-action-capsule's capsule decoder and every permalink decoder already
+  did. `go.mod` requires agent-action-capsule/go at 1d1752b.
+
 - **Changed:** `bundle`, `disclose` and `permalink` hand their whole command
   line to the plugin that keeps the selected profile's log, before the core
   reads any flag, so a plugin's own flags (`--deal`, `--share`, `--to`) reach

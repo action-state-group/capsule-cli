@@ -23,16 +23,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// decodeBundleJSON decodes an Evidence Bundle into a generic map with
-// UseNumber, matching the convention getCapsule and aacbundle.DecodeFragment
-// already use for map[string]interface{} targets: without it, encoding/json
-// decodes every JSON number as float64, which aacbundle's JCS canonicalizer
-// (and BundleDigest, which it backs) rejects outright.
+// DecodeBundleJSON decodes an Evidence Bundle file with aacbundle.Decode
+// (numbers kept as json.Number, one JSON object, no trailing data), under
+// the input class.
 func DecodeBundleJSON(raw []byte) (map[string]interface{}, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var bundle map[string]interface{}
-	if err := decoder.Decode(&bundle); err != nil {
+	bundle, err := aacbundle.Decode(raw)
+	if err != nil {
 		return nil, InputError("the bundle file is not valid JSON")
 	}
 	return bundle, nil
