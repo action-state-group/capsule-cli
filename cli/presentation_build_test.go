@@ -421,8 +421,8 @@ func TestPresentationBuildSaysWhatItLeavesOut(t *testing.T) {
 	assert.ErrorContains(t, err, "org.example.absent/v0")
 	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "static")
 	assert.ErrorContains(t, err, "unavailable (no-document)")
-	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "fragment")
-	assert.ErrorContains(t, err, "not built by this tool yet")
+	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "pdf")
+	assert.ErrorContains(t, err, "is not a packaging target")
 }
 
 // excludesAudience agrees with the resolver's own declarative match on
