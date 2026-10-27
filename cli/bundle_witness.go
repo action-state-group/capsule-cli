@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
@@ -56,7 +57,7 @@ func LoadWitnessDirectory(path string) (witness.Directory, error) {
 // witnessClaim checks every receipt in checkpoint.witnesses against the
 // signed checkpoint statement (nil when it did not verify), under the keys
 // of directory's row for the receipt's witness.
-func witnessClaim(value map[string]interface{}, statement []byte, directory *witness.Directory) (aacbundle.ClaimResult, []map[string]string) {
+func witnessClaim(value map[string]interface{}, statement []byte, directory *witness.Directory) (aacbundle.ClaimResult, []map[string]any) {
 	stated, _ := value["checkpoint"].(map[string]interface{})
 	return receiptsClaim(stated["witnesses"], statement, directory, "")
 }
@@ -67,7 +68,7 @@ func witnessClaim(value map[string]interface{}, statement []byte, directory *wit
 // witness directory, nil when none was given (no witness is trusted); via,
 // when set, is added to each receipt. The claim, its findings (malformed
 // entries first) and each receipt's status and reason are AAC's.
-func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory, via string) (aacbundle.ClaimResult, []map[string]string) {
+func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory, via string) (aacbundle.ClaimResult, []map[string]any) {
 	var signed *witness.SignedCheckpoint
 	if statement != nil {
 		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
@@ -79,13 +80,36 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 		directory = *trusted
 	}
 	status, findings, results := witness.VerifyReceipts(entries, signed, statement, directory)
-	receipts := make([]map[string]string, 0, len(results))
+	receipts := make([]map[string]any, 0, len(results))
 	for _, r := range results {
-		receipt := map[string]string{"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason}
+		receipt := map[string]any{
+			"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason,
+			"key_id": r.KeyID, "registration_time": r.RegistrationTime, "registration_time_reason": r.RegistrationTimeReason,
+			"registration_time_text": registrationTimeText(r),
+		}
 		if via != "" {
 			receipt["via"] = via
 		}
 		receipts = append(receipts, receipt)
 	}
 	return aacbundle.ClaimResult{Status: status, Findings: findings}, receipts
+}
+
+// registrationTimeText says in words what AAC's checked registration time of
+// one receipt is. The time is the iat the witness signed into a passing
+// receipt; nothing checks it against the current time or the checkpoint's
+// timestamp, and no unsigned time stands in for it. A Rekor entry carries a
+// signed integratedTime of its own, so a missing iat on one is not "no time".
+func registrationTimeText(r witness.ReceiptResult) string {
+	if r.RegistrationTime != nil {
+		return "signed by the witness at " + time.Unix(*r.RegistrationTime, 0).UTC().Format(time.RFC3339)
+	}
+	reason := ""
+	if r.RegistrationTimeReason != nil {
+		reason = *r.RegistrationTimeReason
+	}
+	if reason == witness.ReasonBindingWithoutIat {
+		return "Rekor entry: time not reported (" + reason + ")"
+	}
+	return "no signed time (" + reason + ")"
 }

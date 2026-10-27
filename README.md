@@ -1015,6 +1015,20 @@ row by agent-action-capsule's witness receipt check, and reported under
 The CLI privileges no witness. Without `--witness-directory` no receipt is
 checked, so receipts are `withheld`.
 
+Each receipt also reports the time its witness signed, as agent-action-capsule
+checks it: `registration_time` (seconds since the epoch, from the `iat` in the
+receipt's protected header) and `key_id`, the directory key that verified it,
+with `registration_time_text` saying it in words. A receipt that passed reports
+the time its witness signed. One whose binding carries no reportable `iat` (a
+Rekor entry, or a COSE Receipt with a missing or invalid `iat`) still passes,
+with `registration_time: null` and `registration_time_reason` of
+`binding_without_iat`, `iat_absent` or `iat_invalid`; a Rekor entry carries its
+own signed integration time, which this field does not report. A receipt that
+did not pass has no time, `key_id` is `null` and the reason is
+`receipt_not_passed`. The time is when the witness signed; nothing checks it
+against the current time or the checkpoint's `timestamp`, and neither stands
+in for it.
+
 All three bindings are checked: `cll` (`https://`), `rekor` (`rekor+https://`, a
 Sigstore Rekor entry under the row's ECDSA P-256 key) and `scrapi`
 (`scrapi+https://`, a SCITT COSE Receipt). The bundle draft defines no witness
