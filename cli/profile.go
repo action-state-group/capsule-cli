@@ -681,6 +681,9 @@ func profileCommands() *cobra.Command {
 			if p.OperatorMissing() {
 				return InputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
 			}
+			if e := checkOwnerAgainstStore(c.Context(), p); e != nil {
+				return e
+			}
 			if e := SaveProfile(p, update); e != nil {
 				return e
 			}

@@ -340,6 +340,15 @@ added, so the core can hand it a core command it cannot run itself:
   own process a plugin adds those flags with `cli.ExtendBundle` and mounts a
   command under a core one with `cli.GraftCommand`.
 
+- **A store a plugin owns is written by that plugin only.** The plugin opens
+  it with `cli.OpenOwnedTarget`, passing a `PluginStoreWriter` that reports
+  whether it still holds the store's writer lock, and records its ownership
+  with `Target.MarkOwned` on its writable paths (never on a read). A store
+  carrying that marker, or the older deal store marker, is refused by every
+  core write verb whatever the profile says; the core reads it. The older
+  marker records no owner, so it only refuses writes. `profile create` and
+  `update` refuse a `log:` that disagrees with the owner the store records.
+
   These two are a Go API of the host package, outside `cli-plugin/v1`. A
   `BundleExtension`'s `Flags` must skip a flag the command already defines
   (the core still defines `--deal`, `--share` and `--to` until the plugins

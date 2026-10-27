@@ -169,8 +169,7 @@ func TestTheCoreDoesNotWriteAStoreAPluginOwns(t *testing.T) {
 	require.NoError(t, SaveProfile(p, true))
 	for _, args := range [][]string{{"store", "init"}, {"cll", "checkpoint", "create"}} {
 		_, err := invoke(t, "", append(args, "--profile", p.Name)...)
-		require.ErrorIs(t, err, ErrInput, args)
-		assert.Contains(t, SafeError(err), "owned by the capsulectl-ledger plugin", args)
+		require.ErrorIs(t, err, ErrPluginStoreWrite, args)
 	}
 }
 
@@ -213,6 +212,7 @@ func TestRoutingLineForms(t *testing.T) {
 	_, err = invoke(t, "", "bundle", "--profile", "nope", "--zzz")
 	require.ErrorIs(t, err, ErrInput)
 	assert.NotContains(t, SafeError(err), "has no flag")
+	assert.Contains(t, SafeError(err), "nope")
 }
 
 func TestRoutingToAPluginThatIsNotInstalledSaysSo(t *testing.T) {
