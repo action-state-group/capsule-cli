@@ -381,6 +381,9 @@ func presentationListCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if err := checkFragmentSettings(s); err != nil {
+			return err
+		}
 		audience := s.audience
 		known := false
 		for _, f := range aacpresentation.Formats {

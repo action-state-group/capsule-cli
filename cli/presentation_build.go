@@ -323,8 +323,10 @@ type presentationBuildResult struct {
 	Page   string `json:"page"`
 	Out    string `json:"out,omitempty"`
 	Format string `json:"format"`
-	// Fragment is the token's length and the budget it was packaged within
-	// (--format fragment); Unavailable is why the packaging was not written.
+	// FragmentLength and FragmentLimit are the token's length and the token
+	// budget it was packaged within (--format fragment); with --viewer-url
+	// the whole URL is also checked against 1 MiB. Unavailable is why the
+	// packaging was not written.
 	FragmentLength int              `json:"fragment_length,omitempty"`
 	FragmentLimit  int              `json:"fragment_limit,omitempty"`
 	Unavailable    *packagingReason `json:"unavailable,omitempty"`
@@ -430,7 +432,9 @@ const noDocumentMessage = "format static is unavailable (no-document): this tool
 
 // presentationSettings are the flags every packaging of a page is built
 // with; `presentation build` and `presentation list` read the same ones, so
-// list's availability is build's.
+// list's availability is build's. Only build takes --module: list resolves
+// among every installed module, so its packagings are for build's default
+// module set too.
 type presentationSettings struct {
 	audience, depth, title string
 	only                   []string
@@ -441,7 +445,6 @@ type presentationSettings struct {
 func addPresentationSettingsFlags(c *cobra.Command) {
 	c.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
 	c.Flags().String("title", "", "Page title (wins over the wording pack's page.title; html and fragment only: an embedded snippet takes its host page's title)")
-	c.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
 	c.Flags().Int("max-fragment-length", 0, fmt.Sprintf("fragment only: the token budget in characters (default %d, at most %d)", emitter.FragmentTokenDefaultBudget, emitter.FragmentTokenMaxLength))
 	c.Flags().String("viewer-url", "", "fragment only: the viewer address the token is appended to; the page is then the whole URL, at most 1 MiB")
 }
@@ -451,7 +454,9 @@ func readPresentationSettings(c *cobra.Command) (presentationSettings, error) {
 	s.audience, _ = c.Flags().GetString("audience")
 	s.depth, _ = c.Flags().GetString("depth")
 	s.title, _ = c.Flags().GetString("title")
-	s.only, _ = c.Flags().GetStringSlice("module")
+	if c.Flags().Lookup("module") != nil {
+		s.only, _ = c.Flags().GetStringSlice("module")
+	}
 	s.maxFragmentLength, _ = c.Flags().GetInt("max-fragment-length")
 	s.viewerURL, _ = c.Flags().GetString("viewer-url")
 	if s.audience == "" {
@@ -462,13 +467,20 @@ func readPresentationSettings(c *cobra.Command) (presentationSettings, error) {
 	default:
 		return s, Hint(ErrInput, "--depth must be L0, L1 or L2")
 	}
+	return s, nil
+}
+
+// checkFragmentSettings checks the fragment-only flags. build checks them for
+// --format fragment only, where they apply; list checks them always, as a
+// malformed one is a malformed request for its fragment row.
+func checkFragmentSettings(s presentationSettings) error {
 	if s.maxFragmentLength < 0 || s.maxFragmentLength > emitter.FragmentTokenMaxLength {
-		return s, Hint(ErrInput, fmt.Sprintf("--max-fragment-length must be from 1 to %d", emitter.FragmentTokenMaxLength))
+		return Hint(ErrInput, fmt.Sprintf("--max-fragment-length must be 0 (the default budget, %d) or from 1 to %d", emitter.FragmentTokenDefaultBudget, emitter.FragmentTokenMaxLength))
 	}
 	if strings.Contains(s.viewerURL, "#") {
-		return s, Hint(ErrInput, "--viewer-url must not already carry a fragment")
+		return Hint(ErrInput, "--viewer-url must not already carry a fragment")
 	}
-	return s, nil
+	return nil
 }
 
 // pageGateRefusal is the page gate's error: the bundle is not one any page
@@ -596,7 +608,11 @@ func presentationCommands() *cobra.Command {
 			return err
 		}
 		switch format {
-		case "html", "fragment", "embedded":
+		case "html", "embedded":
+		case "fragment":
+			if err := checkFragmentSettings(s); err != nil {
+				return err
+			}
 		case "static":
 			return Hint(ErrInput, "--"+noDocumentMessage)
 		default:
@@ -651,6 +667,7 @@ func presentationCommands() *cobra.Command {
 	build.Flags().String("out", "", "Write the page here (new file): the offline .html, the fragment token (or URL) with a newline, or the embedded snippet")
 	build.Flags().String("audience", "*", "Audience token the page resolves for; \"*\" is no particular audience")
 	build.Flags().String("format", "html", "Packaging target: html (offline file), fragment (permalink), embedded (host-page snippet); static is unavailable")
+	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
 	addPresentationSettingsFlags(build)
 	group.AddCommand(build, presentationListCommand())
 	return group

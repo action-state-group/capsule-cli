@@ -206,6 +206,22 @@ func TestPresentationBuildEmbeddedWritesTheSnippet(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
 	assert.Equal(t, "VALID", verdictOf(t, path))
 
+	// Fragment-only flags do not apply here, malformed or not; for
+	// --format fragment, and for list, a malformed one is refused.
+	_, _, err = buildPage(t, "--bundle", presentationBuildBundle, "--format", "embedded", "--viewer-url", "https://v.example/#old", "--max-fragment-length", "-1")
+	require.NoError(t, err)
+	_, _, err = buildPage(t, "--bundle", presentationBuildBundle, "--format", "html", "--max-fragment-length", "-1")
+	require.NoError(t, err)
+	_, _, err = buildPage(t, "--bundle", presentationBuildBundle, "--format", "fragment", "--viewer-url", "https://v.example/#old")
+	assert.ErrorContains(t, err, "--viewer-url must not already carry a fragment")
+	_, _, err = buildPage(t, "--bundle", presentationBuildBundle, "--format", "fragment", "--max-fragment-length", "1046529")
+	assert.ErrorContains(t, err, "--max-fragment-length must be 0 (the default budget, 65536) or from 1 to 1046528")
+	_, err = invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle, "--max-fragment-length", "-1")
+	assert.ErrorIs(t, err, ErrInput)
+	// list resolves among every installed module, so it takes no --module.
+	_, err = invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle, "--module", "org.example.deal-view/v0")
+	assert.ErrorContains(t, err, "has no flag --module")
+
 	// --title is the host page's for a snippet, as for TypeScript's mount.
 	titled, _, err := buildPage(t, "--bundle", presentationBuildBundle, "--format", "embedded", "--title", "T")
 	require.NoError(t, err)

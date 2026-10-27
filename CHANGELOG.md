@@ -7,8 +7,11 @@
   or the whole URL with `--viewer-url`, plus a newline. The token is packaged
   within a budget of 65,536 characters by default (`--max-fragment-length`,
   at most 1,046,528). The whole URL is at most 1 MiB. A page over either
-  limit is refused with `unavailable.code` `fragment-too-large`, naming the
-  length and the limit, and nothing is written. A monthly report is over the
+  limit is refused with `unavailable.code` `fragment-too-large`, and nothing
+  is written. `unavailable.subject` says which limit (`fragment token` or
+  `permalink URL`), with its `length` and `limit`. A written fragment's
+  result reports `fragment_length` and `fragment_limit`, which is always
+  the token budget. A monthly report is over the
   default budget. The fragment carries the page's settings and bundle and
   pins its code: capsule-viewer's `OfflineHTMLFromFragment` hands back
   exactly the page `--format html` writes (capsule-cli#254).
@@ -20,12 +23,14 @@
   snippet takes the host page's title, so `--title` does not change it
   (capsule-cli#254).
 - **Added:** `presentation list` reports `packagings`: for the bundle,
-  `--audience` and build's settings (`--depth`, `--title`, `--module`,
-  `--max-fragment-length`, `--viewer-url`), each target in the order html,
+  `--audience` and build's settings (`--depth`, `--title`,
+  `--max-fragment-length`, `--viewer-url`; the default module set, as
+  `list` resolves among every installed module), each target in the order html,
   fragment, embedded, static. Each is either available or unavailable with
   a `reason` (`fragment-too-large`, or `no-document` for static). A target is
   available exactly when `presentation build` writes it with the same
-  settings. A bundle no page may be written for lists none and says why in
+  settings. `packagings` is independent of `--format`, which still names
+  only the format the module is resolved for. A bundle no page may be written for lists none and says why in
   `packagings_refused` (capsule-cli#254).
 - **Changed:** `go.mod` pins capsule-viewer `go/v0.2.0`, and the vendored
   browser runtime moves with it, to capsule-viewer `cdc83dc` with the
