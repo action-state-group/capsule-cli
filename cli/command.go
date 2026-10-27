@@ -675,6 +675,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		addPluginCommands(root)
 	}
 	replaceCommands(root, extra)
+	applyGrafts(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)
 		if e != nil {

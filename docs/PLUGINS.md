@@ -330,6 +330,14 @@ added, so the core can hand it a core command it cannot run itself:
 - `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
   `capsulectl-deal` the same way.
 
+- `bundle`, `disclose` and `permalink` read no flag before they know whose
+  log the selected profile has: if a plugin keeps it and this process does not
+  serve it, the whole command line goes to that plugin, so the plugin's own
+  flags reach it. A sqlite profile with a namespace can name its plugin in
+  `log:` too (the plugin writes that store; the core only reads it). In its
+  own process a plugin adds those flags with `cli.ExtendBundle` and mounts a
+  command under a core one with `cli.GraftCommand`.
+
 This hand-over is the one place the core calls into a plugin for a core
 verb, and it applies only to these two launcher names. The core finds them
 as it finds any plugin, by name on a trusted root, with no vendor check: the
