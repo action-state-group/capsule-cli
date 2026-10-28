@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
+
 	aacpresentation "github.com/action-state-group/capsule-viewer/go/presentation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -405,7 +407,7 @@ func TestPresentationListNamesThePagesContractReportModule(t *testing.T) {
 			require.NotNil(t, l.Selected)
 			assert.Equal(t, contractReportPageID, l.Selected["id"])
 			assert.Equal(t, "builtin", l.Selected["source"])
-			assert.Contains(t, string(EvidenceGraphIIFE), `"`+contractReportPageID+`"`, "the page registers it")
+			assert.Contains(t, string(pageruntime.IIFE), `"`+contractReportPageID+`"`, "the page registers it")
 		})
 	}
 }

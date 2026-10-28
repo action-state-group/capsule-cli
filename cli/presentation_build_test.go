@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/action-state-group/capsule-viewer/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
 	aacpresentation "github.com/action-state-group/capsule-viewer/go/presentation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -130,7 +131,7 @@ func TestPresentationBuildWithoutModulesWritesTheDefaultPage(t *testing.T) {
 	require.NoError(t, err)
 	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	want, err := emitter.EmitEvidenceGraphHTML(value, EvidenceGraphIIFE)
+	want, err := emitter.EmitEvidenceGraphHTML(value, pageruntime.IIFE)
 	require.NoError(t, err)
 	got, err := os.ReadFile(out)
 	require.NoError(t, err)
@@ -163,7 +164,7 @@ func TestPresentationBuildCarriesAPluginsModule(t *testing.T) {
 	require.NoError(t, err)
 	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	base, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{Audience: "*",
+	base, err := emitter.BuildOfflineHTML(value, pageruntime.IIFE, emitter.OfflineOptions{Audience: "*",
 		Wording: &emitter.Wording{Pack: string(fixtureWording), SHA256: hexSHA256(fixtureWording)}})
 	require.NoError(t, err)
 	assert.Equal(t, sortedSources(append(cspSources(t, base, "script-src"), sha256CSPSource(script))), cspSources(t, string(page), "script-src"))
@@ -355,10 +356,10 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 	}
 }
 
-// The declaration is the vendored runtime's own, and the built-ins are the
+// The declaration is the page runtime's own, and the built-ins are the
 // pinned commit's files.
-func TestThePresentationRuntimeDeclarationIsTheVendoredOne(t *testing.T) {
-	assert.Contains(t, string(EvidenceGraphIIFE), `var PRESENTATION_API_V0 = "aac.presentation-api/v0";
+func TestThePresentationRuntimeDeclarationIsTheRuntimes(t *testing.T) {
+	assert.Contains(t, string(pageruntime.IIFE), `var PRESENTATION_API_V0 = "aac.presentation-api/v0";
   var REFERENCE_PRESENTATION_RUNTIME = Object.freeze({
     presentationApis: Object.freeze([PRESENTATION_API_V0]),
     runtimeVersion: "0.1.0"
@@ -386,7 +387,7 @@ func TestThePresentationRuntimeDeclarationIsTheVendoredOne(t *testing.T) {
 	builtins, err := BuiltinPresentationManifests()
 	require.NoError(t, err)
 	for _, m := range builtins {
-		assert.Contains(t, string(EvidenceGraphIIFE), `"`+m["id"].(string)+`"`, "the runtime carries %s", m["id"])
+		assert.Contains(t, string(pageruntime.IIFE), `"`+m["id"].(string)+`"`, "the runtime carries %s", m["id"])
 	}
 }
 
@@ -498,7 +499,7 @@ func TestPresentationBuildLeavesOutAModuleForAnotherAudience(t *testing.T) {
 	require.NoError(t, err)
 	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	bare, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{Audience: "counterparty", CoreRuntimeSHA256: EvidenceGraphIIFEDigest})
+	bare, err := emitter.BuildOfflineHTML(value, pageruntime.IIFE, emitter.OfflineOptions{Audience: "counterparty", CoreRuntimeSHA256: pageruntime.SHA256})
 	require.NoError(t, err)
 	assert.Equal(t, bare, string(page))
 

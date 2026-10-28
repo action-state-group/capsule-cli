@@ -136,8 +136,8 @@ check "zero-rows: no page is written for a report that would show 1 of 2 rows" r
 
 # incomplete-bundle: the README page with its records' producer signatures
 # removed is INCOMPLETE by `verify --bundle`; its page must never say the
-# bundle passed. capsulectl writes no such page; this checks the vendored
-# viewer itself, once it states a verdict (data-verdict).
+# bundle passed. capsulectl writes no such page; this checks the page
+# runtime itself, once it states a verdict (data-verdict).
 jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
 replace_bundle report.html incomplete.json >incomplete.html
 rehash_bundle_csp report.html incomplete.html

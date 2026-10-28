@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/action-state-group/capsule-viewer/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -110,12 +111,12 @@ func TestPresentationBuildFragmentHandsBackTheOfflinePage(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "counterparty", payload.Audience)
 		assert.Equal(t, "auto", payload.Presentation)
-		assert.Equal(t, EvidenceGraphIIFEDigest, payload.CoreRuntimeSHA256)
+		assert.Equal(t, pageruntime.SHA256, payload.CoreRuntimeSHA256)
 		digest, err := aacbundle.BundleDigest(payload.Bundle)
 		require.NoError(t, err)
 		assert.Equal(t, b.BundleDigest, digest)
 
-		rebuilt, err := emitter.OfflineHTMLFromFragment(token, EvidenceGraphIIFE, modules)
+		rebuilt, err := emitter.OfflineHTMLFromFragment(token, pageruntime.IIFE, modules)
 		require.NoError(t, err)
 		require.True(t, rebuilt == string(page), "the hand-back is the offline page byte for byte (module: %v)", withModule)
 		path := filepath.Join(t.TempDir(), "rebuilt.html")
@@ -189,8 +190,8 @@ func TestPresentationBuildEmbeddedWritesTheSnippet(t *testing.T) {
 	assert.Equal(t, "written", b.Page)
 	snippet, err := os.ReadFile(out)
 	require.NoError(t, err)
-	want, err := emitter.BuildEmbeddedHTML(readBundleValue(t, presentationBuildBundle), EvidenceGraphIIFE,
-		emitter.OfflineOptions{Audience: "*", CoreRuntimeSHA256: EvidenceGraphIIFEDigest})
+	want, err := emitter.BuildEmbeddedHTML(readBundleValue(t, presentationBuildBundle), pageruntime.IIFE,
+		emitter.OfflineOptions{Audience: "*", CoreRuntimeSHA256: pageruntime.SHA256})
 	require.NoError(t, err)
 	require.True(t, want.HTML == string(snippet), "the snippet is the Go builder's")
 	assert.Equal(t, want.ScriptSources, b.ScriptSources)

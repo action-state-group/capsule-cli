@@ -21,13 +21,13 @@ changes which plugin manifests are accepted.
 
 `builtin/builtin-*.json` are agent-action-capsule's
 `schemas/examples/presentation-manifest-v0/builtin-*.json` at the same commit,
-copied unmodified: the six page modules the vendored browser runtime
-registers by default. `capsulectl presentation build` checks the plugin
+copied unmodified: the six page modules the page runtime
+(capsule-viewer's `go/pageruntime`) registers by default. `capsulectl presentation build` checks the plugin
 modules it puts in a page against them (presentation contract section 4.5),
 after leaving out every module whose audiences exclude the page's.
 Their digests are pinned in `presentation_build_test.go`
-(`TestThePresentationRuntimeDeclarationIsTheVendoredOne`), which also checks
-that the vendored runtime carries each id and declares the runtime
+(`TestThePresentationRuntimeDeclarationIsTheRuntimes`), which also checks
+that the runtime carries each id and declares the runtime
 (`aac.presentation-api/v0`, version `0.1.0`) capsulectl checks modules
 against. Refresh them with the runtime, from the release `go.mod` pins.
 

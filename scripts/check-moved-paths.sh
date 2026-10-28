@@ -27,7 +27,7 @@ moved='(skills/deal/|plugins/(cmd|internal|scripts)/)'
 status=0
 hits=$(git grep -nE "$moved" -- \
   ':!plugins/' ':!skills/deal/' ':!CHANGELOG.md' ':!docs/design/' \
-  ':!cli/assets/evidence-graph.iife.js' ':!cli/testdata/presentation/*/page.html' \
+  ':!cli/testdata/presentation/*/page.html' \
   ':!scripts/check-moved-paths.sh' ':!cli/check_scripts_test.go') || status=$?
 if [ "$status" -gt 1 ]; then
   echo "::error::git grep failed ($status): the check could not run"

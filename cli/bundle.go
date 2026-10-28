@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/action-state-group/capsule-viewer/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -684,10 +685,10 @@ func bundleCommands() []*cobra.Command {
 			}
 			if htmlPath != "" && pageErr == nil {
 				// One self-contained page: the bundle embedded and
-				// agent-action-capsule's own evidence-graph verifier, vendored
-				// (assets/evidence-graph.iife.js), which checks it with no
+				// capsule-viewer's page runtime (pageruntime), with
+				// agent-action-capsule's verifier, which checks it with no
 				// network when the page is opened.
-				page, err := emitter.EmitEvidenceGraphHTML(value, EvidenceGraphIIFE)
+				page, err := emitter.EmitEvidenceGraphHTML(value, pageruntime.IIFE)
 				if err != nil {
 					return err
 				}
@@ -712,7 +713,7 @@ func bundleCommands() []*cobra.Command {
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
 		if !permalink {
-			command.Flags().String("html", "", "Also write the bundle as one self-contained page that checks itself offline (the bundle and the vendored verifier) to this new file")
+			command.Flags().String("html", "", "Also write the bundle as one self-contained page that checks itself offline (the bundle and capsule-viewer's page runtime with its verifier) to this new file")
 		} else {
 			command.Flags().String("html", "", "Not for permalink: a link carries the bundle; use bundle or disclose --html")
 		}

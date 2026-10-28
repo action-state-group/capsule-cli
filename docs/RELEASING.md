@@ -43,8 +43,6 @@ A. **Everything the tag must carry has merged.**
    - If the companion plugin embeds definitions this release depends on, their inputs are final
      first. A plugin that embeds a digest re-cuts when that digest moves.
 B. **CI on `main` is green.** In particular, these jobs block a release:
-   - `iife`: the vendored report viewer (the evidence-graph IIFE) equals a fresh build from the
-     upstream commit it pins, and that commit is on the upstream main;
    - `report page renders and checks itself`: the shipped page renders and verifies its own
      bundle.
 

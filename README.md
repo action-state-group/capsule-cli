@@ -377,10 +377,10 @@ and CONTESTED wait on a way to bring the peer's record into the book.
 Result (either carrier: the document itself, or the book record header
 whose statement is the document), records `--card` and the optional
 `presentation/v1` header in the embedded copy, and renders an offline
-`report.html` through capsule-viewer's Go emitter with the vendored
-browser runtime (`cli/assets/`: capsule-viewer's page code with
-agent-action-capsule's verifier, digest pinned; refresh with
-`scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
+`report.html` through capsule-viewer's Go emitter with capsule-viewer's
+page runtime (`go/pageruntime` in the capsule-viewer Go module go.mod
+requires: its page code with agent-action-capsule's verifier, digest
+pinned); `--permalink` mints the viewer fragment over the
 same bytes and `--dry-run` writes the page marked draft.
 
 validation, and it stands in for the `capsule-viewer` build. A plugin is an
@@ -391,8 +391,8 @@ contract (`cli-plugin/v1`: discovery roots, handshake, and what a plugin can
 never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
 
 `--html PAGE.html` on `bundle` and `disclose` also writes the bundle as one
-self-contained page: the bundle embedded and agent-action-capsule's own
-evidence-graph verifier (vendored, `cli/assets/`), which checks it
+self-contained page: the bundle embedded and capsule-viewer's page
+runtime (`go/pageruntime`, with agent-action-capsule's verifier), which checks it
 with no network when the page is opened. The file must be new. A permalink
 carries its bundle in the link and takes no `--html`; a deal's page is its
 receipt, `deal report --html`.
@@ -481,14 +481,14 @@ override is enabled.
 | `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
 | `cli/` | every core command, and the host package the plugins build against (no compatibility promise before v1) |
 | `settlement/` | the settlement leg records, read and checked; public for the deal plugin until settlement verification moves to agent-action-capsule |
-| `cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
+| `cli/assets/` | the core's built-in wording, materiality and presentation manifests; the pages' browser runtime is capsule-viewer's `go/pageruntime` |
 | `cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
 | `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
 | `skills/` | the `capsulectl` skill (generated), with a contributor demo script; `skills/SKILL-SPEC.md` is the spec format |
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
 | `docs/` | plugins, release transparency, the test-account harness, the PR capsule profile, and design notes |
 | `examples/` | a workflow file to copy: adopting the PR-capsule action |
-| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, `build-evidence-graph-iife.sh` and `build-report-runtime.mjs`, which rebuild the vendored browser runtime (capsule-viewer's page code and agent-action-capsule's verifier), `check-html-render.sh`, which opens the report example's page in headless Chrome (with `lib/page-checks.sh`), and the CI checks `check-neutral-deps.sh` and `check-moved-paths.sh` |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, `check-html-render.sh`, which opens the report example's page in headless Chrome (with `lib/page-checks.sh`), and the CI checks `check-neutral-deps.sh` and `check-moved-paths.sh` |
 
 ## Profile setup
 

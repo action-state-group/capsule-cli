@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
+
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -187,7 +189,7 @@ func TestBundleCommandDeclaresProducerKeyOnSQLite(t *testing.T) {
 }
 
 // bundle --html writes the bundle as one self-contained page: the bundle
-// embedded and the vendored verifier, which checks it offline.
+// embedded and capsule-viewer's page runtime, which checks it offline.
 func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
 	// A sqlite profile: a jsonl profile writes no page (page_gate_test.go).
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -213,7 +215,7 @@ func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
 	raw, err := os.ReadFile(page)
 	require.NoError(t, err)
 	html := string(raw)
-	assert.Contains(t, html, string(EvidenceGraphIIFE), "the verifier is in the page")
+	assert.Contains(t, html, string(pageruntime.IIFE), "the verifier is in the page")
 	assert.NotRegexp(t, regexp.MustCompile(`(?i)<(script|link|img|iframe)[^>]+(src|href)=`), html, "nothing is fetched")
 	embedded, err := json.Marshal(embeddedBundle(t, html))
 	require.NoError(t, err)

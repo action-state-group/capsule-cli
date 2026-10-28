@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **Changed:** the pages capsulectl writes (`presentation build`, and `bundle` or
+  `disclose --html`) embed capsule-viewer's released page runtime, `go/pageruntime`
+  in capsule-viewer/go v0.3.0, pinned by its digest `0758f29b…`. capsule-cli's own
+  build of it is gone (capsule-cli#472, evidencebook#144 move 3). That covers
+  `cli/assets/evidence-graph.iife.js` and its digest, NOTICE and third-party
+  notices, which now ship with `go/pageruntime`. It also covers
+  `scripts/build-report-runtime.mjs`, `build-evidence-graph-iife.sh`,
+  `iife-sync.sh` and `check-viewer-without-webcrypto.mjs`, `make iife-check`, and
+  the `iife` CI job. The page's "Verified by" line names viewer commit
+  `3fe9ad7b0737`; the verifier is still agent-action-capsule 0.8.0. From the
+  viewer's fixes since: the summary line names only the signature checks the page
+  did not run, such as "checkpoint signature not checked here"
+  (capsule-viewer#118), and the banner's frame check is tighter (capsule-viewer#117,
+  #125).
+- **Removed:** `cli.EvidenceGraphIIFE`, `EvidenceGraphIIFESHA256`,
+  `EvidenceGraphIIFEDigest`, `CardExtension` and `PresentationExtension`, with no
+  alias. Use `pageruntime.IIFE`, `pageruntime.SHA256`,
+  `presentation.CardExtension` and `presentation.PresentationExtension` from
+  capsule-viewer/go. The runtime exports 45 names to presentation modules (its
+  `browser.ts` contract), not every name agent-action-capsule's browser entry
+  exports. A page bootstrap that called another name, such as
+  `buildVerifiedBundleContext`, calls `renderEvidenceGraph` with the bundle
+  instead (evidencebook-deal#49).
+
 - **Changed:** the deal words leave the core's built-in wording pack for the
   deal plugin's own pack (capsule-cli#428). The core's pack keeps the 24 keys
   core commands speak (`say.verify.*`, `say.settlement.*`, `say.error.*`,
