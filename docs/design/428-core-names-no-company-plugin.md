@@ -1,7 +1,7 @@
 # Design note: the core names no company plugin
 
-capsule-cli#428 (donation blocker, follow-up of #326). Status: Ethan's rulings of
-2026-10-27 folded in; final verification round pending. Checked against `main` at `ad10fe46`, evidencebook
+capsule-cli#428 (donation blocker, follow-up of #326). Status: converged (Codex, Kimi, Sherlock2),
+Ethan's rulings of 2026-10-27 folded in; merged as #453. Checked against `main` at `ad10fe46`, evidencebook
 `capsulectl` and evidencebook-deal `main` (read-only).
 
 Scope: steps 1 and 2 of the How ack (generic plugin hand-over; `canary` and the
@@ -103,7 +103,8 @@ The old `deal_shelf` table records no plugin name, so nothing can be derived
 from it. Migration: the plugin writes `plugin_owned` only on its writable
 initialization and migration paths, under the writer lock (`deal init`,
 `open`, `tick`, `check`, `report`, `history`: every verb that holds the lock).
-Read paths never write it (`openDealStoreRead` stays write-free). The core keeps recognising the old `deal_shelf`
+A session that writes without opening a target marks through its own sqlite
+handle with `cli.MarkStoreOwned`, under the same writer-lock contract. Read paths never write it (`openDealStoreRead` stays write-free). The core keeps recognising the old `deal_shelf`
 marker permanently, beside `plugin_owned`, as the one compatibility exception of
 section 7. Tests, before and after
 migration (PR B keeps the old-table case): a store with only the old table plus a profile declaring `log: cll`

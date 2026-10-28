@@ -409,6 +409,9 @@ func MarkStoreOwned(ctx context.Context, db *sql.DB, owner string, w PluginStore
 	if !validLogOwner(owner) || owner == LogCLL {
 		return InputError("the owner of a store is the name of a plugin")
 	}
+	if named := w.PluginStoreOwner(); named != "" && named != owner {
+		return InputError("a writer for the " + named + " plugin cannot mark a store as " + owner + "'s")
+	}
 	// Already marked for this owner: nothing is written, so a plugin's
 	// read-only checks of a marked store leave its files as they are.
 	var tables int
