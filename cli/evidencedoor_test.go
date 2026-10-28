@@ -111,11 +111,11 @@ func serveVectors(t *testing.T) func([]byte) (int, []byte) {
 }
 
 // invokeRemote runs `capsulectl book remote ARGS...` as the capsulectl-book
-// plugin mounts it: the core's RemoteBookCommand under `book`.
+// plugin mounts it: the core's RemoteCommand under `book`.
 func invokeRemote(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	book := &cobra.Command{Use: BookPluginName}
-	book.AddCommand(RemoteBookCommand())
+	book.AddCommand(RemoteCommand())
 	c := NewCommandWith(book)
 	var out bytes.Buffer
 	c.SetOut(&out)

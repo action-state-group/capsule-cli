@@ -389,10 +389,15 @@ func askPartyFor(c *cobra.Command, request evidenceRequest) (evidenceAnswer, err
 	return askParty(c, body)
 }
 
-// RemoteBookCommand is `capsulectl book remote ...`: reading another party's
-// evidence book through a remote profile's transport. It opens no book of
-// its own, and the capsulectl-book plugin mounts it.
-func RemoteBookCommand() *cobra.Command {
+// RemoteBookCommand is RemoteCommand.
+//
+// Deprecated: the name goes with the plugin names in capsule-cli#428.
+func RemoteBookCommand() *cobra.Command { return RemoteCommand() }
+
+// RemoteCommand is `remote ...` for a plugin to mount (`capsulectl book
+// remote ...`): reading another party's log through a remote profile's
+// transport. It opens no log of its own.
+func RemoteCommand() *cobra.Command {
 	group := &cobra.Command{Use: "remote", Short: "Read another party's evidence book through the profile's transport (read-only; answers are carried, not re-signed)"}
 
 	list := &cobra.Command{Use: "list", Short: "List a range of the party's records (one page; follow next_page_token; bundles are carried, not verified)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {

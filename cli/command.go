@@ -647,8 +647,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 				return e
 			}
 		}
-		if t.Book != nil {
-			seq, warning, e := t.Book.Append(c.Context(), r)
+		if t.Owned != nil {
+			seq, warning, e := t.Owned.Append(c.Context(), r)
 			if e != nil {
 				return e
 			}

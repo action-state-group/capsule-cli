@@ -633,12 +633,9 @@ func countersignCommands() *cobra.Command {
 				return err
 			}
 			if profile.HasPluginLog() {
-				// A book bundle always carries a disclosures member, which this
-				// request refuses; build it elsewhere and pass --bundle.
-				if !profile.IsBook() {
-					return InputError("not available on a profile whose log the capsulectl-" + profile.LogOwner() + " plugin keeps: build the bundle elsewhere and pass --bundle")
-				}
-				return ErrBookProfile
+				// A plugin's bundle carries a disclosures member, which this
+				// request refuses.
+				return Hint(ErrPluginLogProfile, "build the bundle elsewhere and pass --bundle")
 			}
 			target, err := OpenTarget(c.Context(), profile, UsePublication)
 			if err != nil {

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -173,4 +174,23 @@ func TestRetireMoveDataRefusesAnotherPluginsLog(t *testing.T) {
 	assert.Contains(t, SafeError(err), "--move-data is not supported")
 	assert.Contains(t, profileNames(t), p.Name)
 	assert.DirExists(t, p.Connection.Database)
+}
+
+// The names that went generic keep their old spelling for the plugins that
+// have not moved yet.
+func TestGenericNamesKeepTheirOldSpelling(t *testing.T) {
+	assert.Same(t, ErrPluginLogProfile, ErrBookProfile)
+	var request BookBundleRequest = LogBundleRequest{Root: "r"}
+	assert.Equal(t, "r", request.Root)
+	assert.Equal(t, RemoteCommand().Use, RemoteBookCommand().Use)
+}
+
+// countersign request builds a bundle from the core's own log; on a profile
+// whose log a plugin keeps it says so and names the way out.
+func TestCountersignRequestOnAPluginKeptProfileNamesTheWayOut(t *testing.T) {
+	pluginRoot(t)
+	p := ownedProfile(t, "jsonl", "ledger")
+	_, err := invoke(t, "", "countersign", "request", "--profile", p.Name, "--service", "https://countersign.example/v1", "--window", "2026-Q3", "--root", strings.Repeat("ab", 32))
+	require.ErrorIs(t, err, ErrPluginLogProfile)
+	assert.Contains(t, SafeError(err), "pass --bundle")
 }

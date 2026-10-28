@@ -103,16 +103,26 @@ type ArtifactStore interface {
 type Target struct {
 	db        *sql.DB
 	Artifacts ArtifactStore
-	// Log is the CLL of a plain profile. A book profile has no such log:
-	// its one log is the evidence book (Book), and Log stays nil.
-	Log     cll.Backend
-	Book    BookLog
+	// Log is the CLL of a plain profile. A profile whose log a plugin keeps
+	// has no such log: its one log is the plugin's (Owned), and Log stays nil.
+	Log   cll.Backend
+	Owned OwnedLog
+	// Book is Owned.
+	//
+	// Deprecated: the name goes with the plugin names in capsule-cli#428. It
+	// is set with Owned and released with it.
+	Book    OwnedLog
 	Profile Profile
 }
 
-// errBookProfile refuses a CLL-only operation on a book profile, whose one
-// log is its evidence book, rather than reaching for a second log.
-var ErrBookProfile = InputError("not available on a book profile: its log is the evidence book")
+// ErrPluginLogProfile refuses a CLL-only operation on a profile whose log a
+// plugin keeps, rather than reaching for a second log.
+var ErrPluginLogProfile = InputError("not available on a profile whose log a plugin keeps: that log is the profile's one log")
+
+// ErrBookProfile is ErrPluginLogProfile.
+//
+// Deprecated: the name goes with the plugin names in capsule-cli#428.
+var ErrBookProfile = ErrPluginLogProfile
 
 // targetUse names the actual dependencies instead of inferring artifact access
 // from whether a command also needs a log. CLL-only commands never build SDK
@@ -135,8 +145,8 @@ func (t *Target) Close() error {
 	if t.Log != nil {
 		e = t.Log.Close()
 	}
-	if t.Book != nil {
-		e = errors.Join(e, t.Book.Release())
+	if t.Owned != nil {
+		e = errors.Join(e, t.Owned.Release())
 	}
 	// The jsonl backend uses no *sql.DB, so t.db is nil for that profile type.
 	if t.db != nil {
@@ -389,8 +399,16 @@ func (t *Target) MarkOwned(ctx context.Context, owner string, w PluginStoreWrite
 	if !validLogOwner(owner) || owner == LogCLL {
 		return InputError("the owner of a store is the name of a plugin")
 	}
-	if _, err := t.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
+	// Already marked for this owner: nothing is written, so a plugin's
+	// read-only checks of a marked store leave its files as they are.
+	var tables int
+	if err := t.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'plugin_owned'`).Scan(&tables); err != nil {
 		return err
+	}
+	if tables == 0 {
+		if _, err := t.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
+			return err
+		}
 	}
 	var current string
 	switch err := t.db.QueryRowContext(ctx, `SELECT owner FROM plugin_owned LIMIT 1`).Scan(&current); {
@@ -504,7 +522,7 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 		if err != nil {
 			return nil, err
 		}
-		t.Book = book
+		t.Owned, t.Book = book, book
 	} else if needsCLL {
 		if use == UseInitialization {
 			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
@@ -577,8 +595,8 @@ func (t *Target) preparePublication(ctx context.Context, r Request, private ed25
 // the artifact store and its id appended to the CLL. On a book profile the
 // book seals it, carrying its record header, as the record itself.
 func (t *Target) Publish(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
-	if t.Book != nil {
-		return t.Book.Publish(ctx, r, private)
+	if t.Owned != nil {
+		return t.Owned.Publish(ctx, r, private)
 	}
 	result, err := t.preparePublication(ctx, r, private)
 	if err != nil {

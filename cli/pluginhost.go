@@ -76,7 +76,7 @@ type OwnedLog interface {
 	// then due for.
 	Checkpoint(ctx context.Context, service string) (map[string]any, error)
 	// Bundle builds an Evidence Bundle and puts it on record.
-	Bundle(ctx context.Context, req BookBundleRequest) ([]byte, error)
+	Bundle(ctx context.Context, req LogBundleRequest) ([]byte, error)
 	Release() error
 }
 
@@ -85,9 +85,14 @@ type OwnedLog interface {
 // Deprecated: use OwnedLog.
 type BookLog = OwnedLog
 
-// BookBundleRequest is `bundle`, `disclose` or `permalink` on a plugin-kept
+// BookBundleRequest is LogBundleRequest.
+//
+// Deprecated: the name goes with the plugin names in capsule-cli#428.
+type BookBundleRequest = LogBundleRequest
+
+// LogBundleRequest is `bundle`, `disclose` or `permalink` on a plugin-kept
 // profile.
-type BookBundleRequest struct {
+type LogBundleRequest struct {
 	Root            string
 	ClosureDepth    int
 	Payloads        string
