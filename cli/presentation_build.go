@@ -20,7 +20,7 @@ import (
 
 // `presentation build` writes the offline page with the trusted-executable
 // presentation modules of the installed plugins in its module slots. Which
-// module renders is decided in the page, by the vendored runtime's resolver
+// module renders is decided in the page, by the page runtime's resolver
 // (presentation contract section 4.3); capsulectl carries no copy of it. A
 // module whose manifest audiences exclude --audience can never render on the
 // page, so the page does not carry it (presentationSelection). It runs only

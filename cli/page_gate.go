@@ -8,8 +8,8 @@ import (
 )
 
 // A page that checks itself (`bundle --html`, `disclose --html`, `deal report
-// --html`) carries a verdict its reader takes at face value. The vendored
-// viewer's banner says the bundle passed whenever its own checks pass, which
+// --html`) carries a verdict its reader takes at face value. The page
+// runtime's banner says the bundle passed whenever its own checks pass, which
 // is more than `verify --bundle` may say about the same bundle, and it shows
 // no rows, without failing, when the report the bundle carries cannot be
 // built. So capsulectl writes a page only when it can stand behind what the

@@ -248,7 +248,7 @@ from the sealed claims and reports, or marked "not stated".
 | --- | --- | --- |
 | `capsule-cli` | PR #19 and PR #30 merged to `main`, then a `v*` tag cut after that merge (the next after `v0.1.0-rc2`). `release.yml` already builds linux/amd64, linux/arm64, darwin/arm64 and `SHA256SUMS` on any `v*` tag. | Both PRs open; tags are `v0.1.0-rc1`, `v0.1.0-rc2`. The vendored card is pinned to agent-action-capsule PR #160's head and must be re-pinned to the merged commit first. |
 | `evidencebook-skills` | PR #7 merged, then a tag naming the pack/skill version to pin to. | PR #7 open; no tags; the only CI is the neutrality scan. |
-| `agent-action-capsule` | PR #160 merged, so capsule-cli can vendor the card from `main` (`scripts/iife-sync.sh` takes a checkout of this repo at the merged commit). | PR #160 open; latest tag `v0.6.0` predates the card. |
+| `agent-action-capsule` | PR #160 merged, so the card can ship from `main` (it now reaches capsulectl's pages through capsule-viewer's `go/pageruntime`). | PR #160 open; latest tag `v0.6.0` predates the card. |
 
 ## What this page does not cover
 

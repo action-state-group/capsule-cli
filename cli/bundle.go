@@ -713,7 +713,7 @@ func bundleCommands() []*cobra.Command {
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
 		if !permalink {
-			command.Flags().String("html", "", "Also write the bundle as one self-contained page that checks itself offline (the bundle and the vendored verifier) to this new file")
+			command.Flags().String("html", "", "Also write the bundle as one self-contained page that checks itself offline (the bundle and capsule-viewer's page runtime with its verifier) to this new file")
 		} else {
 			command.Flags().String("html", "", "Not for permalink: a link carries the bundle; use bundle or disclose --html")
 		}

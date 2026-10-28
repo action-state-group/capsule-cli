@@ -189,7 +189,7 @@ func TestBundleCommandDeclaresProducerKeyOnSQLite(t *testing.T) {
 }
 
 // bundle --html writes the bundle as one self-contained page: the bundle
-// embedded and the vendored verifier, which checks it offline.
+// embedded and capsule-viewer's page runtime, which checks it offline.
 func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
 	// A sqlite profile: a jsonl profile writes no page (page_gate_test.go).
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

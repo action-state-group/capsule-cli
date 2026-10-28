@@ -408,7 +408,6 @@
 0.00 TestResultSchemaCompilesAtItsPin
 0.00 TestRetiredStoreIDFieldRejected
 0.00 TestRunWritesOneObjectAtMost
-0.00 TestRuntimeAndShellComeFromOneViewerCommit
 0.01 TestSQLiteProfileCreate
 0.87 TestSQLiteSDKOnlyStorage
 0.00 TestSameJSONValue

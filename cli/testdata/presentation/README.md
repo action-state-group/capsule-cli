@@ -19,7 +19,7 @@ its own copy of these fixtures, and, for the two pages `book report build` write
 (`capsulectl/internal/book/presentation_golden_test.go`). They hold every later viewer to them:
 
 - **Without Chrome:** each page is re-emitted from its `bundle.json` the way capsulectl
-  does, and the page gate's decision checked. While the vendored viewer is unchanged,
+  does, and the page gate's decision checked. While the page runtime is unchanged,
   the result must equal `page.html` byte for byte.
 - **With `CAPSULECTL_CHROME` set:** it also opens each page headless, with no network:
   Chrome resolves no host name or IP literal, and a request for anything outside the
@@ -107,7 +107,7 @@ the one registry, shell and builder capsulectl has, with no plugin installed:
   unavailable: the test asserts each refusal for every bundle.
 - **Views agree.** In Chrome, each page's semantic snapshot is the same at 390px, at 1280px, in
   print and for both audiences. The snapshot reads the DOM, whatever CSS shows or hides. The
-  vendored runtime builds the same DOM at every width and medium, so this check catches only a
+  page runtime builds the same DOM at every width and medium, so this check catches only a
   script that changes the content by viewport.
 - **Flips.** Wording (an installed module's wording pack, the one way a page gets one), the pack's
   locale and depth (`--depth L0`/`L1`/`L2`) each change the page's bytes. None changes the bundle
@@ -138,7 +138,7 @@ One gap is pinned so it fails once it closes:
 
 - **A record signed by another key than the one it names.** `verify --bundle` calls it INVALID
   (`producer_signature_invalid`), so build writes no page. The page's own gate (the
-  vendored viewer, and agent-action-capsule's Go resolver that `list` uses) checks each record's
+  page runtime, and agent-action-capsule's Go resolver that `list` uses) checks each record's
   identity, not its producer signature. So `list` resolves the bundle, and a page carrying it
   says it verified (`TestPresentationPassWrongSigner`).
 
