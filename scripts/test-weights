@@ -446,7 +446,7 @@
 0.00 TestTheHopCheckLeavesTheRootsParentsToTheRootsRule
 0.01 TestThePackIsSorted
 0.00 TestThePhaseAndCauseOfAnErrorPickItsLines
-0.01 TestThePresentationRuntimeDeclarationIsTheVendoredOne
+0.01 TestThePresentationRuntimeDeclarationIsTheRuntimes
 0.00 TestThePresentationSchemaIsPinned
 0.01 TestThePrintedFixRunsAsPastedWithASpaceInHome
 0.00 TestTheRootsOverrideDoesNotTrustPresentations

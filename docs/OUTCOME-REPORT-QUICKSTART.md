@@ -31,8 +31,8 @@ it is a released artefact yet**:
   `outcome-report-view.ts`) is
   [agent-action-capsule PR #160](https://github.com/action-state-group/agent-action-capsule/pull/160)
   (open). You do **not** need to clone or build it:
-  PR #30 already vendors the card's compiled bundle into
-  `cli/assets/evidence-graph.iife.js`. It is named here only for
+  PR #30 vendored the card's compiled bundle into capsule-cli's page
+  runtime, which is now capsule-viewer's `go/pageruntime`. It is named here only for
   readers who want the card's source.
 
 "[What a release must contain](#what-a-release-must-contain)" at the end of

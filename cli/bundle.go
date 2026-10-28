@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/action-state-group/capsule-viewer/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -684,10 +685,10 @@ func bundleCommands() []*cobra.Command {
 			}
 			if htmlPath != "" && pageErr == nil {
 				// One self-contained page: the bundle embedded and
-				// agent-action-capsule's own evidence-graph verifier, vendored
-				// (assets/evidence-graph.iife.js), which checks it with no
+				// capsule-viewer's page runtime (pageruntime), with
+				// agent-action-capsule's verifier, which checks it with no
 				// network when the page is opened.
-				page, err := emitter.EmitEvidenceGraphHTML(value, EvidenceGraphIIFE)
+				page, err := emitter.EmitEvidenceGraphHTML(value, pageruntime.IIFE)
 				if err != nil {
 					return err
 				}

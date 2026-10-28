@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/action-state-group/capsule-viewer/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/pageruntime"
 	"github.com/spf13/cobra"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -35,9 +36,9 @@ import (
 // `presentation list` (presentation_list.go) says which module a bundle
 // resolves to, with agent-action-capsule's Go resolver.
 
-// presentationRuntime is the vendored runtime's declaration
-// (REFERENCE_PRESENTATION_RUNTIME in assets/evidence-graph.iife.js; pinned
-// by TestThePresentationRuntimeDeclarationIsTheVendoredOne).
+// presentationRuntime is the page runtime's declaration
+// (REFERENCE_PRESENTATION_RUNTIME in capsule-viewer's pageruntime.IIFE;
+// pinned by TestThePresentationRuntimeDeclarationIsTheRuntimes).
 var presentationRuntime = struct {
 	PresentationAPIs []string `json:"presentation_apis"`
 	Version          string   `json:"version"`
@@ -548,7 +549,7 @@ func preparePresentationPage(s presentationSettings, readBundle func() (map[stri
 	}
 	return value, emitter.OfflineOptions{
 		Audience: s.audience, Depth: s.depth, Title: s.title, Wording: wording,
-		CoreRuntimeSHA256: EvidenceGraphIIFEDigest, Modules: slots,
+		CoreRuntimeSHA256: pageruntime.SHA256, Modules: slots,
 	}, nil
 }
 
@@ -558,12 +559,12 @@ func preparePresentationPage(s presentationSettings, readBundle func() (map[stri
 func packagePresentation(value map[string]interface{}, options emitter.OfflineOptions, s presentationSettings, format string, result *presentationBuildResult) ([]byte, error) {
 	switch format {
 	case "html":
-		html, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, options)
+		html, err := emitter.BuildOfflineHTML(value, pageruntime.IIFE, options)
 		return []byte(html), err
 	case "fragment":
 		// The fragment's presentation member is informational; the page's
 		// runtime resolves when it opens, so this tool names none.
-		built, err := emitter.BuildPresentationFragment(value, EvidenceGraphIIFE, emitter.FragmentOptions{
+		built, err := emitter.BuildPresentationFragment(value, pageruntime.IIFE, emitter.FragmentOptions{
 			OfflineOptions: options, MaxLength: s.maxFragmentLength, ViewerURL: s.viewerURL,
 		})
 		var tooLarge *emitter.FragmentTooLargeError
@@ -582,7 +583,7 @@ func packagePresentation(value map[string]interface{}, options emitter.OfflineOp
 		}
 		return []byte(built.Fragment + "\n"), nil
 	case "embedded":
-		built, err := emitter.BuildEmbeddedHTML(value, EvidenceGraphIIFE, options)
+		built, err := emitter.BuildEmbeddedHTML(value, pageruntime.IIFE, options)
 		if err != nil {
 			return nil, err
 		}
