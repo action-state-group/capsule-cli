@@ -98,8 +98,9 @@ type Profile struct {
 	// plugin; a profile keeps its owner for good. A jsonl profile with a
 	// log_id that names none is OwnerUndeclared.
 	Log string `yaml:"log,omitempty" mapstructure:"log" json:",omitempty"`
-	// Operator is the AAC operator value the book verbs write into every
-	// record they seal. Only those verbs require it.
+	// Operator is the AAC operator value the plugin that keeps the profile's
+	// log writes into every record it seals; a profile whose log a plugin
+	// keeps must carry one.
 	Operator string `yaml:"operator,omitempty" mapstructure:"operator"`
 	// ClockTolerance (a Go duration, default 5m, at most 1h) is how far the
 	// book's last commit time may sit ahead of this machine's clock before

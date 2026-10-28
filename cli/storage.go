@@ -225,8 +225,8 @@ func SqliteConnection(p Profile) (*sql.DB, string, error) {
 // missingLogIDReason says why a profile without a log_id cannot serve a log
 // command, and what to pass instead.
 func missingLogIDReason(p Profile) string {
-	if p.Type == "sqlite" && p.Namespace == "deal" {
-		return "profile " + p.Name + " has no log_id: a deal profile keeps one log per deal; pass --log-id deal/<deal id> (cll list), or add a log with `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
+	if p.HasOwnedStore() {
+		return "profile " + p.Name + " has no log_id: the " + p.LogOwner() + " plugin keeps several logs in its store; name one with --log-id (cll list), or add a log with `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
 	}
 	return "profile " + p.Name + " has no log_id, which this command needs: `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
 }

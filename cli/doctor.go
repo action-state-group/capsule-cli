@@ -232,11 +232,11 @@ func doctorCommand() *cobra.Command {
 			return ErrPartial
 		},
 	}
-	cmd.Flags().Bool("install-check", false, "Check a fresh install before its first deal: the expected release, exactly one deal skill, a witness endpoint with its key; one JSON object, exit 3 on any issue")
+	cmd.Flags().Bool("install-check", false, "Check a fresh install before its first use: the expected release, exactly one skill named like the plugin that keeps the profile's log (or capsulectl-<plugin>), that plugin installed and built for this release, a witness endpoint with its key; one JSON object, exit 3 on any issue")
 	cmd.Flags().String("expect-version", "", "With --install-check: the release tag this binary must report")
 	cmd.Flags().String("expect-commit", "", "With --install-check: the full commit this binary must report, exactly")
-	cmd.Flags().String("evidence-out", "", "With --install-check: also write the body for `deal note --kind evidence --input FILE`, which seals this result")
-	cmd.Flags().String("expect-skill-sha256", "", "With --install-check: the sha256 of the release's deal SKILL.md")
+	cmd.Flags().String("evidence-out", "", "With --install-check: also write the body of an evidence note that seals this result (the plugin's `note --kind evidence --input FILE`)")
+	cmd.Flags().String("expect-skill-sha256", "", "With --install-check: the sha256 of the release's SKILL.md for that plugin")
 	cmd.Flags().String("skills-dir", "", "With --install-check: the directory the agent loads skills from")
 	cmd.Flags().Bool("check-witness", false, "Also probe the profile's checkpoint endpoint with an unauthenticated, read-only GET of its /health (opt-in; prints exactly what would leave); ok only on a 2xx answer")
 	return cmd

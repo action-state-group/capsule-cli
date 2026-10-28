@@ -23,7 +23,7 @@ import (
 //   - exactly one skill named like the plugin that keeps the profile's log (or
 //     capsulectl-<plugin>) is visible under the skills directory (and, when given, it is the expected
 //     release's SKILL.md by sha256): a backup copy left beside it
-//     (deal.bak-*/SKILL.md) is a second one, and an agent may load either;
+//     (<skill>.bak-*/SKILL.md) is a second one, and an agent may load either;
 //   - the profile names both a witness endpoint and that witness's public
 //     key, without which a plugin that opens deals fails closed.
 //
@@ -89,7 +89,7 @@ func installCheck(c *cobra.Command) error {
 	if loadErr != nil {
 		issues = append(issues, "profile "+name+" does not load: "+SafeError(loadErr))
 	} else {
-		if p.OwnerUndeclared() {
+		if p.OwnerUndeclared() || legacyUnowned(c.Context(), p) {
 			issues = append(issues, "profile "+name+" has no declared log owner: capsulectl profile update --profile "+name+" --log <cll or the plugin that keeps its log>")
 		}
 		witness["endpoint_set"] = p.Checkpoint.Endpoint != ""

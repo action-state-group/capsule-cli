@@ -350,7 +350,8 @@ added, so the core can hand it a core command it cannot run itself:
   already holds) on its writable paths (never on a read). A store
   carrying that marker, or the older deal store marker, is refused by every
   core write verb whatever the profile says; the core reads it. The older
-  marker records no owner, so it only refuses writes; it is the one
+  marker records no owner, so it only refuses writes (and a `bundle`, which
+  would read the store without the owner's rules for what a copy may carry); it is the one
   compatibility exception to the core knowing no plugin's stored data, and not
   a precedent for a second. `profile create` and
   `update` refuse a `log:` that disagrees with the owner the store records;

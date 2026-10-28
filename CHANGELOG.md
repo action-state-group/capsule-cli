@@ -42,8 +42,9 @@
   `deal_skills`, and checks that plugin's version. `bundle` on a store a
   plugin owns says its bundles come from that plugin. `profile retire
   --move-data` is refused for a profile whose log a plugin keeps, and the
-  running-command check no longer looks at a book's `book/log.jsonl`. The exit
-  class `ErrAlarm` (code 6) is named "alarm".
+  running-command check no longer looks at a book's `book/log.jsonl`. A profile whose log a plugin keeps must carry an `--operator`, as a
+  book's always had to (it was the book's rule; it now holds for every plugin's
+  log). The exit class `ErrAlarm` (code 6) is named "alarm".
 - **Added:** `cli.MarkStoreOwned`, `Target.MarkOwned` on a sqlite handle the
   plugin already holds (capsule-cli#428), for a plugin session that writes
   without ever opening a target. Same rules: the writer lock, one owner, no

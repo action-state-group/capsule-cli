@@ -234,3 +234,41 @@ func TestSkillsNamedLikeThePlugin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a/SKILL.md"}, found)
 }
+
+func TestNewRefusalsOfOwnerlessAndCoreKeptProfiles(t *testing.T) {
+	pluginRoot(t)
+	// A cadence on a profile the core keeps says it has none.
+	core := ownedProfile(t, "jsonl", LogCLL)
+	_, err := invoke(t, "", "cll", "checkpoint", "cadence", "--profile", core.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "kept by the core: it has no checkpoint cadence")
+
+	// profile create names its owner, or is refused.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, err = invoke(t, "", "profile", "create", "--name", "nolog", "--type", "jsonl",
+		"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log-id", "l", "--operator", "op")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--log is required for a jsonl profile with a log_id")
+
+	// A sqlite store only the older marker covers is declared once, by the user.
+	q := sqliteStoreProfile(t)
+	execSQL(t, q, `CREATE TABLE deal_shelf (id INTEGER PRIMARY KEY)`)
+	_, err = invoke(t, "", "profile", "update", "--profile", q.Name, "--log", "ledger")
+	require.NoError(t, err, "the owner of a store the older marker covers is named once")
+	declared, err := LoadProfile(q.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "ledger", declared.LogOwner())
+	_, err = invoke(t, "", "profile", "update", "--profile", q.Name, "--log", "other")
+	require.ErrorIs(t, err, ErrInput, "and then it stays")
+
+	// A store a plugin owns is not bundled by the core; inside that plugin the
+	// message points at its own flags.
+	_, err = invoke(t, "", "bundle", "--profile", q.Name, "--root", strings.Repeat("ab", 32))
+	require.Error(t, err)
+	previous := runningPlugin
+	runningPlugin = "ledger"
+	t.Cleanup(func() { runningPlugin = previous })
+	_, err = invoke(t, "", "bundle", "--profile", q.Name, "--root", strings.Repeat("ab", 32))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "owned by this plugin")
+}

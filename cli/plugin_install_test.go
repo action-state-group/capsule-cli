@@ -1327,7 +1327,7 @@ func TestDriftWarningAndDoctorCompareCoreVersion(t *testing.T) {
 	CLIVersion = "v0.2.0"
 
 	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.2.0", path: "/x/capsulectl-deal"}))
-	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v0.2.0", path: "/x/capsulectl-deal"}), "no core_version: version is the core's")
+	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v0.2.0", path: "/x/capsulectl-deal"}), "no core_version: not checked, whatever its version")
 	assert.Contains(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.1.9", path: "/x/capsulectl-deal"}), "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
 
 	root := pluginRoot(t)

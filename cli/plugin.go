@@ -418,8 +418,7 @@ type pluginInfo struct {
 	Version   string `json:"version"`
 	PluginAPI string `json:"plugin_api"`
 	// CoreVersion is the capsulectl release a plugin that embeds the core embeds
-	// (its CLIVersion). Plugins built before it existed carry the same value
-	// in Version; coreVersion falls back to that.
+	// (its CLIVersion). A plugin that declares none is not version-checked.
 	CoreVersion string   `json:"core_version,omitempty"`
 	Subcommands []string `json:"subcommands,omitempty"`
 	// Presentations are the modules the plugin offers a page builder

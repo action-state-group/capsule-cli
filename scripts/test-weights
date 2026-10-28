@@ -288,7 +288,6 @@
 0.01 TestNoBuildOutputIsNamedLikeAPluginLauncher
 0.53 TestNoGenericInputErrors
 0.01 TestOneSidedOriginalCoverage
-0.05 TestOpenDealTarget
 0.00 TestOptionalProfileFacilities
 0.00 TestOtherForwardsNeverHeal
 0.00 TestOutputFlatObject

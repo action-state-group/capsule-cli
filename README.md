@@ -478,7 +478,7 @@ override is enabled.
 |---|---|
 | `cmd/capsulectl/` | the CLI's entry point |
 | `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
-| `cli/` | every core command, and the host package the first-party plugins build against (no compatibility promise before v1) |
+| `cli/` | every core command, and the host package the plugins build against (no compatibility promise before v1) |
 | `settlement/` | the settlement leg records, read and checked; public for the deal plugin until settlement verification moves to agent-action-capsule |
 | `cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
 | `cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |

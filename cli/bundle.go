@@ -540,6 +540,9 @@ const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the produce
 // read).
 func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
 	if p.HasOwnedStore() {
+		if p.LogOwner() == runningPlugin {
+			return p, InputError("this profile's store is owned by this plugin: build its bundle with the plugin's own flags (see --help)")
+		}
 		return p, InputError("this profile's store is owned by the " + p.LogOwner() + " plugin: its bundles come from that plugin")
 	}
 	if m, err := storeOwnerMarker(c.Context(), p); err != nil {
