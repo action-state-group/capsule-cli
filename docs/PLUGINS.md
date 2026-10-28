@@ -356,7 +356,8 @@ added, so the core can hand it a core command it cannot run itself:
   it with `cli.OpenOwnedTarget`, passing a `PluginStoreWriter` that names the
   plugin and reports whether it still holds the store's writer lock (a store
   marked for another plugin is refused before anything is written), and records its ownership
-  with `Target.MarkOwned` on its writable paths (never on a read). A store
+  with `Target.MarkOwned` (or `cli.MarkStoreOwned` on a sqlite handle it
+  already holds) on its writable paths (never on a read). A store
   carrying that marker, or the older deal store marker, is refused by every
   core write verb whatever the profile says; the core reads it. The older
   marker records no owner, so it only refuses writes; it is the one

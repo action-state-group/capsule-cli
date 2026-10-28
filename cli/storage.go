@@ -390,30 +390,43 @@ func OpenDealTarget(ctx context.Context, p Profile, use TargetUse, w DealStoreWr
 // profile says. The owner calls it while it holds the writer lock (w), on its
 // writable paths only. A store marked for another owner is refused.
 func (t *Target) MarkOwned(ctx context.Context, owner string, w PluginStoreWriter) error {
+	if t.Profile.Type != "sqlite" {
+		return InputError("only a sqlite store carries an owner marker")
+	}
+	return MarkStoreOwned(ctx, t.db, owner, w)
+}
+
+// MarkStoreOwned is Target.MarkOwned on a sqlite handle the plugin holds
+// itself (its session's own connection): a session that writes without ever
+// opening a target marks the store the same way.
+func MarkStoreOwned(ctx context.Context, db *sql.DB, owner string, w PluginStoreWriter) error {
 	if w == nil || !w.HoldsPluginStore() {
 		return ErrPluginStoreWrite
 	}
-	if t.db == nil || t.Profile.Type != "sqlite" {
+	if db == nil {
 		return InputError("only a sqlite store carries an owner marker")
 	}
 	if !validLogOwner(owner) || owner == LogCLL {
 		return InputError("the owner of a store is the name of a plugin")
 	}
+	if named := w.PluginStoreOwner(); named != "" && named != owner {
+		return InputError("a writer for the " + named + " plugin cannot mark a store as " + owner + "'s")
+	}
 	// Already marked for this owner: nothing is written, so a plugin's
 	// read-only checks of a marked store leave its files as they are.
 	var tables int
-	if err := t.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'plugin_owned'`).Scan(&tables); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'plugin_owned'`).Scan(&tables); err != nil {
 		return err
 	}
 	if tables == 0 {
-		if _, err := t.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
+		if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL)`); err != nil {
 			return err
 		}
 	}
 	var current string
-	switch err := t.db.QueryRowContext(ctx, `SELECT owner FROM plugin_owned LIMIT 1`).Scan(&current); {
+	switch err := db.QueryRowContext(ctx, `SELECT owner FROM plugin_owned LIMIT 1`).Scan(&current); {
 	case errors.Is(err, sql.ErrNoRows):
-		_, err = t.db.ExecContext(ctx, `INSERT INTO plugin_owned (owner, version) VALUES (?, 1)`, owner)
+		_, err = db.ExecContext(ctx, `INSERT INTO plugin_owned (owner, version) VALUES (?, 1)`, owner)
 		return err
 	case err != nil:
 		return err

@@ -83,7 +83,7 @@ func TestTheOwnerMarksAndWritesItsStore(t *testing.T) {
 	require.ErrorIs(t, tg.MarkOwned(t.Context(), LogCLL, heldStore(true)), ErrInput, "cll owns no plugin store")
 	require.NoError(t, tg.MarkOwned(t.Context(), "ledger", heldStore(true)))
 	require.NoError(t, tg.MarkOwned(t.Context(), "ledger", heldStore(true)), "marking twice is fine")
-	err = tg.MarkOwned(t.Context(), "other", heldStore(true))
+	err = tg.MarkOwned(t.Context(), "other", otherOwner{})
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "marked as owned by the ledger plugin")
 	require.NoError(t, tg.Close())
@@ -180,4 +180,24 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	_, err = invoke(t, "", "profile", "update", "--profile", mysqlish.Name, "--type", "sqlite")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "records its owner as the ledger plugin")
+}
+
+// A plugin session that holds its own sqlite handle marks the store without a
+// target, with the same rules as Target.MarkOwned.
+func TestMarkStoreOwnedOnTheSessionsOwnHandle(t *testing.T) {
+	p := sqliteStoreProfile(t)
+	db, _, err := SqliteConnection(p)
+	require.NoError(t, err)
+	defer db.Close()
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(false)), ErrPluginStoreWrite)
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), nil, "ledger", heldStore(true)), ErrInput)
+	require.NoError(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(true)))
+	require.NoError(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(true)), "idempotent")
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), db, "other", otherOwner{}), ErrInput, "another owner is refused")
+	err = MarkStoreOwned(t.Context(), db, "ledger", otherOwner{})
+	require.ErrorIs(t, err, ErrInput, "a writer cannot mark a store as another plugin's")
+	assert.Contains(t, SafeError(err), "writer for the other plugin")
+	m, err := storeOwnerMarker(t.Context(), p)
+	require.NoError(t, err)
+	assert.Equal(t, ownerMarker{found: true, owner: "ledger"}, m)
 }
