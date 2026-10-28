@@ -1,7 +1,6 @@
 // Package cli implements the profile-first Capsule command boundary.
 //
-// It is also the host package the first-party plugins (capsulectl-book and
-// capsulectl-deal) build against: each plugin binary is this command tree
+// It is also the host package the plugins build against: each plugin binary is this command tree
 // plus its own commands (NewPluginCommand). Before v1 it carries no
 // compatibility promise; a plugin pins an exact capsule-cli release
 // (docs/design/326-plugins-leave-the-core.md, section 4.2).
@@ -94,11 +93,10 @@ type Profile struct {
 	Namespace string `yaml:"namespace" mapstructure:"namespace"`
 	ReadOnly  bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
 	// Log names who keeps the profile's log (capsule-cli#236, #428): LogCLL,
-	// the core's own CLL, or the name of the plugin that keeps it, such as
-	// LogBook, an evidence book kept by the capsulectl-book plugin. Only a
-	// jsonl profile with a log_id can name a plugin, and a profile keeps its
-	// owner for good. A jsonl profile with a log_id saved before the field
-	// existed reads as a book.
+	// the core's own CLL, or the name of the plugin that keeps it. A jsonl
+	// profile with a log_id, or a sqlite profile with a namespace, can name a
+	// plugin; a profile keeps its owner for good. A jsonl profile with a
+	// log_id that names none is OwnerUndeclared.
 	Log string `yaml:"log,omitempty" mapstructure:"log" json:",omitempty"`
 	// Operator is the AAC operator value the book verbs write into every
 	// record they seal. Only those verbs require it.
@@ -192,33 +190,29 @@ func (r ProfileRulesChecker) PinnedDigests() []string {
 	return nil
 }
 
-// The two owners a profile's log can have (Profile.Log).
-const (
-	LogCLL  = "cll"
-	LogBook = "book"
-)
+// LogCLL is the Profile.Log of a log the core keeps (a plain CLL). Any other
+// value names the plugin that keeps it.
+const LogCLL = "cll"
 
 // LogOwner is the plugin that keeps the profile's log, or "" when the core
-// does (capsule-cli#428): a jsonl profile with a log_id whose log is not
-// declared a plain CLL. One saved before the log field existed has no declared
-// owner and reads as LogBook until that default goes.
+// does (capsule-cli#428): the plugin Profile.Log names, on a jsonl profile with
+// a log_id (a log the plugin keeps itself) or a sqlite profile with a namespace
+// (a store the plugin writes and the core only reads).
 func (p Profile) LogOwner() string {
 	switch {
-	case p.Log == LogCLL:
+	case p.Log == LogCLL || p.Log == "":
 		return ""
-	case p.Type == "jsonl" && p.LogID != "":
-		return FirstNonEmpty(p.Log, LogBook)
-	case p.Type == "sqlite" && p.Namespace != "":
-		// A store the plugin writes and the core only reads. A deal profile
-		// (namespace deal) saved before the field existed reads as the deal
-		// plugin's until that default goes.
-		if p.Log == "" && p.IsShelf() {
-			return DealPluginName
-		}
+	case (p.Type == "jsonl" && p.LogID != "") || (p.Type == "sqlite" && p.Namespace != ""):
 		return p.Log
 	}
 	return ""
 }
+
+// OwnerUndeclared reports a jsonl profile with a log_id that says nothing
+// about who keeps its log, as every profile saved before the log field did. The
+// core does not guess: a plugin's log in the same directory would be shadowed by
+// a new plain CLL.
+func (p Profile) OwnerUndeclared() bool { return p.Type == "jsonl" && p.LogID != "" && p.Log == "" }
 
 // HasPluginLog reports whether a plugin keeps the profile's log in a store of
 // its own (a jsonl profile): the core needs the plugin's backend to open it.
@@ -229,20 +223,11 @@ func (p Profile) HasPluginLog() bool { return p.Type == "jsonl" && p.LogOwner() 
 // core reads it and never writes it.
 func (p Profile) HasOwnedStore() bool { return p.Type == "sqlite" && p.LogOwner() != "" }
 
-// IsBook reports whether the book plugin keeps the profile's log: an evidence
-// book. Every record a book seals carries the profile's operator.
-func (p Profile) IsBook() bool { return p.HasPluginLog() && p.LogOwner() == LogBook }
-
 // validLogOwner reports whether name can own a profile's log: LogCLL, or a
 // plugin name that is not a core command.
 func validLogOwner(name string) bool {
 	return name == LogCLL || (pluginNameGrammar.MatchString(name) && !coreCommandNames()[name])
 }
-
-// IsShelf reports whether the profile is a deal profile (`deal init`): its
-// logs, each deal's and the cadence log, are written by capsulectl deal
-// alone, under the deal store's writer lock (capsule-cli#242).
-func (p Profile) IsShelf() bool { return p.Type == "sqlite" && p.Namespace == "deal" }
 
 // invisibleRune reports whitespace and format characters (Unicode category
 // Cf: U+200B, U+FEFF, U+200D and the like), which print as nothing.
@@ -264,12 +249,11 @@ func operatorVisible(s string) bool {
 	return false
 }
 
-// operatorMissing reports a book whose operator has no visible character:
-// empty, whitespace, or only invisible characters such as U+200B. Such a
-// profile is refused when it is created or updated, and refused at seal time
-// if an earlier capsulectl saved it.
+// OperatorMissing reports a profile whose log a plugin keeps and whose operator
+// has no visible character: empty, whitespace, or only invisible characters
+// such as U+200B. Such a profile is refused when it is created or updated.
 func (p Profile) OperatorMissing() bool {
-	return p.IsBook() && !operatorVisible(p.Operator)
+	return p.HasPluginLog() && !operatorVisible(p.Operator)
 }
 
 func (p Profile) validate() error {
@@ -543,7 +527,7 @@ func profileCommands() *cobra.Command {
 			v.SetConfigType("yaml")
 			var before Profile
 			if update {
-				p, e := Selected(c)
+				p, e := selectedProfile(c)
 				if e != nil {
 					return e
 				}
@@ -634,10 +618,10 @@ func profileCommands() *cobra.Command {
 						return e
 					}
 				}
-				// Only a book seals records with the operator, and whether this
-				// profile is one depends on the log ID just asked for.
-				if p.IsBook() {
-					if e := ask(prompt{"Operator (who signs the book's records)", &p.Operator}); e != nil {
+				// Only a plugin's log carries the operator, and whether this
+				// profile has one depends on the log ID just asked for.
+				if p.HasPluginLog() {
+					if e := ask(prompt{"Operator (who signs the log's records)", &p.Operator}); e != nil {
 						return e
 					}
 				}
@@ -668,18 +652,20 @@ func profileCommands() *cobra.Command {
 					return e
 				}
 			}
-			// The log's owner is declared when the profile is made, and a
-			// jsonl profile with a log_id is a book unless it says cll. It
-			// never changes: the other owner would not see the log.
-			if p.Type == "jsonl" && p.LogID != "" && p.Log == "" {
-				p.Log = LogBook
+			// The log's owner is declared when the profile is made, and a jsonl
+			// profile with a log_id must say it (the core guesses neither a plugin
+			// nor the core). It never changes afterwards: the other owner would
+			// not see the log. A profile saved without one may declare it once,
+			// as may one over a store the older owner marker covers.
+			if p.OwnerUndeclared() {
+				return InputError("--log is required for a jsonl profile with a log_id: cll (the core keeps the log) or the name of the plugin that keeps it")
 			}
-			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() && !storeRecordsOwner(c.Context(), p) {
+			if update && before.LogID != "" && before.LogOwner() != p.LogOwner() && !before.OwnerUndeclared() && !storeRecordsOwner(c.Context(), p) && !legacyUnowned(c.Context(), before) {
 				return InputError("a profile's log stays with the owner it was made with (log: " + FirstNonEmpty(before.LogOwner(), LogCLL) + "); make a new profile for the other")
 			}
 			p.Operator = normalizeOperator(p.Operator)
 			if p.OperatorMissing() {
-				return InputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
+				return InputError("--operator is required for a profile whose log a plugin keeps: the plugin writes it into every record it seals")
 			}
 			// The store is read only when the profile is new or now names another
 			// owner, type or file: an update of anything else (a witness endpoint, say)

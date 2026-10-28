@@ -106,8 +106,8 @@ and expects exactly one line of JSON on stdout:
 |---------------|----------|---------------------------------------------------------------------|
 | `name`        | yes      | Must equal the launcher's filename with the `capsulectl-` prefix stripped. A mismatch is a handshake failure. |
 | `vendor`      | no       | Free text, shown in `capsulectl plugin ls` and in the command's `--help`. |
-| `version`     | no       | Free text, shown in `capsulectl plugin ls`. For the first-party plugins it is their release tag; see "Versions" below. |
-| `core_version` | no      | Free text. A first-party plugin's embedded capsulectl release, which the version check below compares. Absent on plugins released before it; the check then uses `version`. |
+| `version`     | no       | Free text, shown in `capsulectl plugin ls`. |
+| `core_version` | no      | Free text. The capsulectl release a plugin that embeds the core's code was built against, which the version check below compares. A plugin without it is not checked, and its `version` is never read as one. |
 | `plugin_api`  | yes      | Must be exactly `"cli-plugin/v1"`. Any other value (including a newer or older version string) is a handshake failure -- there is no negotiation. |
 | `subcommands` | no       | Free text list, shown in the command's `--help` as a hint; `capsulectl` does not parse or validate it. |
 
@@ -250,7 +250,7 @@ fails when the profile's plugin is the one refused.
    runs (`.install-*`), and its handshake runs.
 3. The name it reports must match `^[a-z][a-z0-9-]{0,62}$` and must not
    be a core command.
-4. A first-party plugin's version is checked (see "Versions").
+4. A plugin that declares a `core_version` has it checked (see "Versions").
 5. If an earlier root holds a launcher of that name that discovery would
    accept, install refuses (exit 5), because that one would still run. A
    launcher there that sits on an unsafe path is never run, and is reported
@@ -263,10 +263,9 @@ Any refusal before the rename leaves the destination unchanged and removes
 the temporary file. A killed install can leave a `.install-*` file behind.
 It is inert, and `plugin ls` lists it under `interrupted_installs`.
 
-**No install by name.** The first-party plugins ship from their own
-releases (below), which the core's messages do not name: `plugin install book` and
-`plugin install deal` refuse, and say to install the plugin file from its
-release with the file form.
+**No install by name.** A plugin ships from its own release, which the
+core's messages do not name: `plugin install NAME` refuses, and says to
+install the plugin file from its release with the file form.
 
 **Remove** deletes `capsulectl-NAME` from the per-user root if it is a
 regular file. It leaves a `capsulectl-NAME.d/` presentation directory in
@@ -276,11 +275,9 @@ another root.
 ### Versions
 
 - The handshake's `version` stays free text on the wire.
-- **First-party plugins.** `book` and `deal` embed the core's code, so the
-  core release they embed, their `core_version`, is expected to equal the
-  core's. A plugin without `core_version` is compared by its `version`,
-  which every first-party plugin released before `core_version` existed sets
-  to the core's:
+- **Plugins that embed the core.** A plugin built from this repository's host
+  package carries the core release it embeds, its `core_version`, which is
+  expected to equal the core's. A plugin that declares none is not checked:
   - `plugin install` refuses a mismatch on a release core unless
     `--allow-version-mismatch` is given.
   - A development core does not check it.
@@ -289,49 +286,43 @@ another root.
   - `doctor --install-check --profile P` fails when the plugin P needs is
     missing or mismatched.
 
-## The first-party plugins: `capsulectl-book` and `capsulectl-deal`
+## Plugins that keep a profile's log
 
-The core (capsule-cli#236) keeps no evidence book and no deal store, and
+The core (capsule-cli#236, #428) keeps no evidence book and no deal store, and
 does not depend on the evidencebook library: an implementer needs neither to
-conform. Two plugins carry them, each built and released from its own
-repository (capsule-cli#326):
-
-| Launcher | Repository and release tags | `capsulectl ...` | What it holds |
-|---|---|---|---|
-| `capsulectl-book` | [evidencebook](https://github.com/action-state-group/evidencebook), the nested module `capsulectl/`, tags `capsulectl/vX.Y.Z` | `book close`, `reconcile`, `request`, `respond`, `remote list\|get\|head\|request`, `result inspect\|build`, `report build`, `backfill run\|status`, `migrate` | the evidence book behind every book profile |
-| `capsulectl-deal` | [evidencebook-deal](https://github.com/action-state-group/evidencebook-deal), tags `vX.Y.Z` | `deal ...` (`init`, `open`, `check`, ..., `compose`, `request`, `respond`) | a deal profile's SQLite deal store, and the deal skill |
-
-Each release publishes the plugin's binaries
-(`capsulectl-book-<version>-<os>-<arch>`, `capsulectl-deal-<version>-<os>-<arch>`),
-`SHA256SUMS` and a build attestation from that repository's workflow. Each
+conform. A plugin keeps such a log, built and released from its own
+repository (capsule-cli#326): the evidence book plugin
+([evidencebook](https://github.com/action-state-group/evidencebook), the
+nested module `capsulectl/`) and the deal plugin
+([evidencebook-deal](https://github.com/action-state-group/evidencebook-deal))
+are the ones the company ships. Each release publishes the plugin's binaries,
+`SHA256SUMS` and a build attestation from that repository's workflow. A
 binary is built against one capsulectl release, which its handshake reports as
 `core_version` (see "Versions"). Download the one built for your capsulectl,
 check it, and install the downloaded file, such as `capsulectl plugin install
-./capsulectl-deal-<version>-<os>-<arch>`. Install names the plugin by its
+./capsulectl-<name>-<version>-<os>-<arch>`. Install names the plugin by its
 handshake, not by the file name.
 
-Each plugin is a whole `capsulectl` command tree with its own commands
+A plugin is a whole `capsulectl` command tree with its own commands
 added, so the core can hand it a core command it cannot run itself:
 
 - **A profile's log has one owner**, declared in the profile as `log: cll`
-  or `log: <plugin>`, such as `log: book` (`profile create --log`), and never
-  changed afterwards. The plugin name is any plugin name that is not a core
+  or `log: <plugin>` (`profile create --log`), and never changed afterwards;
+  a jsonl profile with a `log_id` must say which. The plugin name is any plugin name that is not a core
   command; a jsonl profile with a `log_id` (a log the plugin keeps itself) or
   a sqlite profile with a namespace (a store the plugin writes and the core
   only reads) can name one. A plain profile (mysql, a sqlite profile that
   names no plugin, or a jsonl profile with `log: cll`) keeps a CLL the core
-  writes, checkpoints and bundles with no plugin. A book profile
-  (a jsonl profile with `log: book`; a jsonl profile with a log_id saved
-  before the field reads as one) keeps an evidence book, and the core runs
-  `publish`, `cll list|append`, `cll checkpoint create|status|publish`,
-  `store init` and `bundle|disclose|permalink` on it in the plugin the
-  profile names (`capsulectl-book` for a book), with the same arguments. A
+  writes, checkpoints and bundles with no plugin. When a plugin keeps a
+  jsonl profile's log, the core runs `publish`, `cll list|append`,
+  `cll checkpoint create|status|publish`, `store init` and
+  `bundle|disclose|permalink` on it in the plugin the profile names, with the
+  same arguments. A profile saved before the field, with a `log_id` and no
+  `log:`, has no declared owner: its commands stop with the one-command fix,
+  `capsulectl profile update --profile NAME --log <cll or the plugin>`. A
   plugin serves its own profiles in its own process by registering a
   `LogBackend` for its name (`cli.RegisterLogBackend`). Without the plugin
   those commands refuse and say which plugin to install.
-- `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
-  `capsulectl-deal` the same way.
-
 - `bundle`, `disclose` and `permalink` read no flag before they know whose
   log the selected profile has: if a plugin keeps it and this process does not
   serve it, the whole command line goes to that plugin, so the plugin's own
@@ -342,8 +333,7 @@ added, so the core can hand it a core command it cannot run itself:
 
   These two are a Go API of the host package, outside `cli-plugin/v1`. A
   `BundleExtension`'s `Flags` must skip a flag the command already defines
-  (the core still defines `--deal`, `--share` and `--to` until the plugins
-  move to the extension), because defining one twice panics. Its `Run` runs
+  because defining one twice panics. Its `Run` runs
   after the flags are parsed and before the command's own checks, and the
   first extension that reports the command handled ends it. `GraftCommand`
   takes a function that builds the command, called for each tree the process
@@ -372,30 +362,9 @@ as it finds any plugin, by name on a trusted root, with no vendor check: the
 trusted roots' ownership and permission checks are what keep a lookalike
 out. `verify` and `countersign verify` are never handed over.
 
-A first-party plugin builds against capsule-cli's host package,
+A plugin builds against capsule-cli's host package,
 `github.com/action-state-group/capsule-cli/cli`, required at a capsulectl
 release: build it in its own repository, or install its release assets.
-
-### Transitional aliases
-
-The commands that moved into the plugins keep their old names for one
-release window (capsule-cli#238). Each old name runs its replacement with
-the arguments unchanged, prints one line on stderr naming the replacement
-and the release that removes it, and keeps the replacement's stdout and exit
-code; its help says it is deprecated.
-
-| Old | Now |
-|---|---|
-| `capsulectl close`, `reconcile` | `capsulectl book close`, `reconcile` |
-| `capsulectl request`, `respond` | `capsulectl book request`, `respond`; on a deal (sqlite) profile `capsulectl deal request`, `respond` |
-| `capsulectl compose` | `capsulectl deal compose` |
-| `capsulectl book list`, `get`, `head`, `request` (another party's book, on a remote profile) | `capsulectl book remote list`, `get`, `head`, `request` |
-| `capsulectl result`, `report`, `backfill` | `capsulectl book result`, `report`, `backfill` |
-| `capsulectl store migrate` | `capsulectl book migrate` |
-
-The aliases arrive with the release after v0.1.0-rc16 and are removed in
-v0.2.0, once the skills, the Muse integration and the docs use only the new
-names.
 
 ## Reserved verbs
 
@@ -417,8 +386,8 @@ reserved name that way.
 There is also no per-subcommand reservation below the top level: a plugin
 cannot register `capsulectl countersign something` or `capsulectl bundle
 something` -- a third-party plugin is always exactly one new top-level verb,
-dispatched whole to the launcher, which owns everything under it. (The
-first-party plugins above also receive the core verbs of their profiles.)
+dispatched whole to the launcher, which owns everything under it. (A plugin that keeps a profile's log also receives the core verbs of its
+profiles.)
 
 ## The rule that matters most: a plugin may never change what `verify` says
 

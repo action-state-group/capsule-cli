@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// A book profile's clock_tolerance setting. The book that applies it is the
-// capsulectl-book plugin's; the core validates the setting with the rest of
-// the profile.
+// A profile's clock_tolerance setting. The plugin that keeps the profile's log
+// applies it; the core validates the setting with the rest of the profile.
 
 // defaultClockTolerance is how far ahead of this clock a book's last commit
 // time may be before the book is refused for writing. maxClockTolerance

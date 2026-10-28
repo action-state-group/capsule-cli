@@ -255,7 +255,7 @@ release):
 
 ```console
 $ capsulectl profile update --profile demo --operator example-operator
-$ capsulectl store migrate --profile demo --log-id <new-log-id>
+$ capsulectl book migrate --profile demo --log-id <new-log-id>
 {"backfilled":1,"log_id":"<new-log-id>","migration_record_id":"<record-id>","retired_log_id":"demo-log","spec_version":"capsule-cli-result/v1","voice":"silent"}
 ```
 
@@ -305,13 +305,13 @@ capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
-capsulectl result open FILE [--format text|json]
+capsulectl book result open FILE [--format text|json]
 capsulectl result build --profile NAME --result RESULT.json [--out CANONICAL.json] [--contract REF] [--capsule-out RECORD.json]
 capsulectl book result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
-capsulectl report build --bundle BUNDLE.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
+capsulectl book report build --bundle BUNDLE.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
 capsulectl <plugin> [args passed to the plugin]   # a discovered capsulectl-<plugin> launcher
 capsulectl plugin ls
-capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
+capsulectl book migrate --profile NAME [--log-id NEW_LOG_ID]
 capsulectl contract validate FILE --schema PATH_OR_URL [--json]
 capsulectl contract diff A B [--schema PATH_OR_URL] [--json]
 capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
@@ -321,11 +321,11 @@ capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--html P
 capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
 capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
 capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
-capsulectl request --profile NAME --request FILE --responder NAME --output FILE
-capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE (deal profile)] | --absent-until TIME)
-capsulectl respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
-capsulectl close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
-capsulectl reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
+capsulectl book request --profile NAME --request FILE --responder NAME --output FILE
+capsulectl book request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE (deal profile)] | --absent-until TIME)
+capsulectl book respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
+capsulectl book close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
+capsulectl book reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
 capsulectl judge pin FILE
 capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
@@ -333,9 +333,9 @@ capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report|countersign|audit-host|tick --profile NAME [...]   # audit-host was `deal reconcile`, which still runs it with a warning for one release
 capsulectl deal settlement --profile NAME --deal ID [--leg LEG.json ...] [--object OCTETS ...] [--payer-key HEX ...] [--payee-key HEX ...]   # a deal's own legs with the buyer's
 capsulectl settlement status --leg LEG.json [--leg ...] [--object OCTETS ...] [--payer-key HEX ...] [--payee-key HEX ...]   # settlement legs, checked offline
-capsulectl backfill run|status --profile NAME [...]
-capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
-capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
+capsulectl book backfill run|status --profile NAME [...]
+capsulectl deal canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
+capsulectl deal canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -455,11 +455,13 @@ provenance mode `backfilled`. It shows effects only, never an amount charged
 or an approval, and it gives detectability of absence, not prevention. It is
 the book plugin's; its `BACKFILL.md` moved with it.
 
-`canary run` plays a scripted DEMO deal on a profile of its own and ticks that
-profile's cadence log only when every step succeeded; `canary watch` reads the
+`deal canary run` plays a scripted DEMO deal on a profile of its own and ticks that
+profile's cadence log only when every step succeeded; `deal canary watch` reads the
 log's last checkpoint from the public witness and exits 6 with one line when it
 has stopped advancing or its history was rewritten. Absence is the alarm, seen
-from outside with no access to the host; see [docs/CANARY.md](docs/CANARY.md).
+from outside with no access to the host; both are the deal plugin's, with their
+guide and workflow templates in its repository (`docs/CANARY.md`,
+`examples/`).
 A harness for test accounts on an agent host (`doctor --install-check`, a
 scheduled outside verdict, what each check catches and its limits) is in
 [docs/HARNESS.md](docs/HARNESS.md).
@@ -483,8 +485,8 @@ override is enabled.
 | `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
 | `skills/` | the `capsulectl` skill (generated), with a contributor demo script; `skills/SKILL-SPEC.md` is the spec format |
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
-| `docs/` | plugins, release transparency, canary, the test-account harness, the PR capsule profile, and design notes |
-| `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
+| `docs/` | plugins, release transparency, the test-account harness, the PR capsule profile, and design notes |
+| `examples/` | a workflow file to copy: adopting the PR-capsule action |
 | `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, `build-evidence-graph-iife.sh` and `build-report-runtime.mjs`, which rebuild the vendored browser runtime (capsule-viewer's page code and agent-action-capsule's verifier), `check-html-render.sh`, which opens the report example's page in headless Chrome (with `lib/page-checks.sh`), and the CI checks `check-neutral-deps.sh` and `check-moved-paths.sh` |
 
 ## Profile setup
@@ -1148,7 +1150,7 @@ Successful stdout is one JSON object:
 `{"spec_version":"capsule-cli-result/v1",...}`.
 Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success,
 1 operational failure, 2 invalid input/profile, 3 partial verification, 4 durable delivery pending,
-5 frozen input/target conflict, 6 canary alarm (`canary watch`), 7 paused for the user (a deal step that needs the user's approval first). Inspect the exit code, not only a result object.
+5 frozen input/target conflict, 6 alarm (a monitor such as `deal canary watch`), 7 paused for the user (a deal step that needs the user's approval first). Inspect the exit code, not only a result object.
 Verification lists passed/not-performed checks instead of calling all evidence valid.
 
 Only `store init` calls CLL `Init` and provisions selected library schemas.

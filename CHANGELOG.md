@@ -7,6 +7,43 @@
   discards a module's render when the page grows a classic scrollbar
   (capsule-viewer#113; every deal page was shown as a refused presentation in
   Linux Chrome CI, evidencebook-deal#40).
+- **Removed:** the core names no company plugin (capsule-cli#428). Gone: the
+  transitional aliases (`close`, `reconcile`, `request`, `respond`, `compose`,
+  `report`, `backfill`, `result open`, `store migrate`), which moved to the
+  plugins and were due in v0.2.0 (use `capsulectl book ...` and `capsulectl
+  deal ...`); the `book` and `deal` placeholders that said what to install; the
+  `--deal`, `--share` and `--to` flags of `bundle`, `disclose` and `permalink`
+  (the deal plugin adds them with `cli.ExtendBundle`); `canary` (now `capsulectl
+  deal canary run|watch`, with its guide and workflow templates in the deal
+  plugin's repository); and, from the host package, `BookPluginName`,
+  `DealPluginName`, `AliasRemovedIn`, `SetBookBackend`, `BookBackend`,
+  `BookLog`, `BookBundleRequest`, `RemoteBookCommand`, `ErrBookProfile`,
+  `Target.Book`, `DealBundleRun`, `DealCommandGroup`, `DealTickCommand`,
+  `OpenDealTarget`, `DealStoreWriter`, `ErrDealProfileWrite`, `IsBook`,
+  `IsShelf` and `LogBook` (use `RegisterLogBackend`, `LogBackend`, `OwnedLog`,
+  `LogBundleRequest`, `RemoteCommand`, `ErrPluginLogProfile`, `Target.Owned`,
+  `OpenOwnedTarget`, `PluginStoreWriter`, `ErrPluginStoreWrite`, `ExtendBundle`
+  and `GraftCommand`).
+- **Changed:** a jsonl profile with a `log_id` must say who keeps its log
+  (`profile create --log cll|<plugin>`); the core no longer reads one that
+  says nothing as a book. A profile saved without one stops its log commands
+  with `capsulectl profile update --profile NAME --log <cll or the plugin>`,
+  which is accepted once. A deal profile saved without `log:` is no longer read
+  as the deal plugin's: `profile update --profile NAME --log deal` declares it
+  (accepted while the store carries only the older deal marker).
+  `cll checkpoint cadence` runs in the plugin that keeps the selected profile's
+  log, healing a loosened per-user plugin root for that plugin's launcher as it
+  did for the deal plugin's; on a profile the core keeps it says it has none.
+  A plugin's version is checked only when it declares `core_version` (its own
+  `version` is no longer read as a core version), and `plugin install` has no
+  first-party special case. `doctor --install-check` looks for the skill named
+  like the plugin that keeps the profile's log (for a deal profile, `deal`,
+  as before), reports it under `skills` and `skill_name` instead of
+  `deal_skills`, and checks that plugin's version. `bundle` on a store a
+  plugin owns says its bundles come from that plugin. `profile retire
+  --move-data` is refused for a profile whose log a plugin keeps, and the
+  running-command check no longer looks at a book's `book/log.jsonl`. The exit
+  class `ErrAlarm` (code 6) is named "alarm".
 - **Added:** `cli.MarkStoreOwned`, `Target.MarkOwned` on a sqlite handle the
   plugin already holds (capsule-cli#428), for a plugin session that writes
   without ever opening a target. Same rules: the writer lock, one owner, no

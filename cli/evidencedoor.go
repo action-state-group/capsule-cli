@@ -394,7 +394,7 @@ func askPartyFor(c *cobra.Command, request evidenceRequest) (evidenceAnswer, err
 // Deprecated: the name goes with the plugin names in capsule-cli#428.
 func RemoteBookCommand() *cobra.Command { return RemoteCommand() }
 
-// RemoteCommand is `remote ...` for a plugin to mount (`capsulectl book
+// RemoteCommand is `remote ...` for a plugin to mount (`capsulectl <plugin>
 // remote ...`): reading another party's log through a remote profile's
 // transport. It opens no log of its own.
 func RemoteCommand() *cobra.Command {

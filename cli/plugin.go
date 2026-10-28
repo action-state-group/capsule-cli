@@ -406,9 +406,11 @@ func checkTrustedComponent(p string, uid int, allowSticky bool) error {
 	return nil
 }
 
-// coreVersion is the capsulectl release a first-party plugin embeds, which
-// the first-party version check compares with this core's.
-func (i pluginInfo) coreVersion() string { return FirstNonEmpty(i.CoreVersion, i.Version) }
+// coreVersion is the capsulectl release a plugin declares it embeds
+// (core_version), which the version check compares with this core's; "" for a
+// plugin that declares none, which is then not checked (its own version is
+// never read as a core version).
+func (i pluginInfo) coreVersion() string { return i.CoreVersion }
 
 type pluginInfo struct {
 	Name      string `json:"name"`
@@ -772,21 +774,13 @@ func addPluginCommands(root *cobra.Command) {
 	// A refused launcher still answers its name, with why and the fix, when
 	// the name is one an accepted plugin could have: whoever could write the
 	// refused one chose its filename, which must not reach help or errors
-	// unchecked. Any other stays in `plugin ls` only. A first-party one
-	// answers through its placeholder below.
+	// unchecked. Any other stays in `plugin ls` only.
 	for _, r := range refused {
 		name := strings.TrimPrefix(filepath.Base(r.Path), pluginLauncherPrefix)
-		if !pluginNameGrammar.MatchString(name) || reserved[name] || name == BookPluginName || name == DealPluginName {
+		if !pluginNameGrammar.MatchString(name) || reserved[name] {
 			continue
 		}
 		root.AddCommand(refusedPluginPlaceholder(name, refused))
 		reserved[name] = true
-	}
-	// A first-party plugin that is not installed still answers its name, to
-	// say what to install.
-	for name, short := range map[string]string{BookPluginName: "Evidence books: close, reconcile, request, respond, remote, result, report, backfill, migrate", DealPluginName: "Deals: open, check, close, report, request, respond, compose, ..."} {
-		if !reserved[name] {
-			root.AddCommand(firstPartyPlaceholder(name, short, refused))
-		}
 	}
 }

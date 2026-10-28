@@ -149,11 +149,11 @@ func doctorCommand() *cobra.Command {
 			profileReport["type"] = p.Type
 			profileReport["signing_key"] = signingKeySummary(p.Signing)
 			report["profile"] = profileReport
-			// A deal profile's materiality predicate: which of the agent's own
+			// The materiality predicate of a profile a plugin owns: which of the agent's own
 			// picks pause a check. None is a notice, not an issue: checks fail
 			// safe. One that cannot be read refuses every check: an issue.
 			unreadablePredicate := false
-			if p.Namespace == "deal" {
+			if p.HasOwnedStore() || p.Materiality.Predicate != "" || p.Materiality.Digest != "" {
 				materiality := map[string]any{"configured": p.Materiality.Predicate != ""}
 				switch predicate, err := PinnedMateriality(p); {
 				case p.Materiality.Predicate == "" && p.Materiality.Digest == "":

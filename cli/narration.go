@@ -327,7 +327,7 @@ func stdoutFile(w io.Writer) io.Writer {
 var errPluginNotStarted = errors.New("plugin not started")
 
 // NarrationExempt, on a command's Annotations, marks an operator command no
-// agent runs (canary): its failure keeps its own plain line and no object.
+// agent runs (a monitor): its failure keeps its own plain line and no object.
 const NarrationExempt = "narration-exempt"
 
 // ErrorPhase tells, for a failed command, whether the user's step had

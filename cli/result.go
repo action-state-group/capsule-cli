@@ -544,11 +544,6 @@ func resultBuildCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		// A book profile's log is its evidence book: there this is still the
-		// old alias of `book result build`, which seals book form.
-		if p.IsBook() && backendFor(p) == nil {
-			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: on a book profile this runs `capsulectl book result build`, which needs --out; run that directly (this forward will be removed in %s)\n", AliasRemovedIn)
-		}
 		if done, e := delegateLog(c, p, nil); done {
 			return e
 		}
@@ -662,18 +657,14 @@ func resultBuildCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("result", "", "Evidence Result v0 document to seal (JSON)")
 	cmd.Flags().String("contract", "", "The <contract_id>@<version> every claim must name; default: the one contract the claims name, if they name one")
-	cmd.Flags().String("out", "", "Also write the Result in its canonical (JCS) form, the bytes the Capsule's payload digest covers (required on a book profile)")
+	cmd.Flags().String("out", "", "Also write the Result in its canonical (JCS) form, the bytes the Capsule's payload digest covers (required on a profile whose log a plugin keeps)")
 	cmd.Flags().String("capsule-out", "", "Also write the sealed Capsule as an artifact.Record for `verify --capsule`")
 	return cmd
 }
 
-// resultCommand is `capsulectl result`: `build` is the core's; `open` is
-// still the book plugin's, reached through its transitional alias.
+// resultCommand is `capsulectl result`: `build` is the core's.
 func resultCommand() *cobra.Command {
-	group := &cobra.Command{Use: "result", Short: "Seal an Evidence Result v0 as the root of a Result page (open: use capsulectl book result open)"}
-	open := aliasCommand("open", aliasShort("book result open"), func([]string) (string, []string, error) {
-		return BookPluginName, []string{"result", "open"}, nil
-	})
-	group.AddCommand(resultBuildCommand(), open)
+	group := &cobra.Command{Use: "result", Short: "Seal an Evidence Result v0 as the root of a Result page"}
+	group.AddCommand(resultBuildCommand())
 	return group
 }

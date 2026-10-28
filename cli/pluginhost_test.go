@@ -29,8 +29,8 @@ echo "ran capsulectl-` + name + `: $* | profile=$CAPSULECTL_PROFILE"
 func firstPartyPlugins(t *testing.T) {
 	t.Helper()
 	root := pluginRoot(t)
-	writeLauncher(t, root, "capsulectl-"+BookPluginName, firstPartyLauncher(BookPluginName), 0o755)
-	writeLauncher(t, root, "capsulectl-"+DealPluginName, firstPartyLauncher(DealPluginName), 0o755)
+	writeLauncher(t, root, "capsulectl-"+"book", firstPartyLauncher("book"), 0o755)
+	writeLauncher(t, root, "capsulectl-"+"deal", firstPartyLauncher("deal"), 0o755)
 }
 
 // A plain profile needs no plugin: publish, a checkpoint, a bundle and its
@@ -72,7 +72,8 @@ func TestBookProfileNeedsTheBookPlugin(t *testing.T) {
 	p.Type = "jsonl"
 	p.Connection.Database = filepath.Join(t.TempDir(), "store")
 	require.NoError(t, SaveProfile(p, false))
-	require.True(t, p.IsBook(), "a jsonl profile with a log_id is a book unless it says cll")
+	p.Log = "book"
+	require.NoError(t, SaveProfile(p, true))
 	for _, args := range [][]string{
 		{"store", "init"},
 		{"publish", "--request", "unread.json"},
@@ -89,106 +90,6 @@ func TestBookProfileNeedsTheBookPlugin(t *testing.T) {
 		})
 	}
 	assert.NoDirExists(t, p.Connection.Database, "nothing was written")
-}
-
-// The two first-party plugins answer their names even when they are not
-// installed, to say what to install.
-func TestAMissingFirstPartyPluginSaysWhatToInstall(t *testing.T) {
-	pluginRoot(t)
-	for _, name := range []string{BookPluginName, DealPluginName} {
-		_, err := invoke(t, "", name, "list")
-		require.ErrorIs(t, err, ErrInput)
-		assert.Contains(t, SafeError(err), "needs the capsulectl-"+name+" plugin, which is not installed")
-	}
-	_, err := invoke(t, "", "close", "--profile", "x")
-	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "capsulectl-book")
-}
-
-// Every old entry point of a command that moved into a plugin
-// (capsule-cli#238) forwards with its arguments unchanged, to the plugin
-// that has it now, and says on stderr what replaced it.
-func TestTransitionalAliasesForwardAndSaySo(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	firstPartyPlugins(t)
-	book, _ := profileFixture(t)
-	book.Name, book.Type = "book", "jsonl"
-	book.Connection.Database = t.TempDir()
-	require.NoError(t, SaveProfile(book, false))
-	deal, _ := profileFixture(t)
-	deal.Name, deal.Type, deal.Namespace = "deal", "sqlite", "deal"
-	deal.Connection.Database = filepath.Join(t.TempDir(), "deal.db")
-	require.NoError(t, SaveProfile(deal, false))
-	for _, tc := range []struct {
-		args        []string
-		ran, notice string
-	}{
-		{[]string{"close", "--profile", "book", "--period", "day"}, "capsulectl-book: close --profile book --period day", "use `capsulectl book close`"},
-		{[]string{"reconcile", "--profile", "book"}, "capsulectl-book: reconcile --profile book", "use `capsulectl book reconcile`"},
-		{[]string{"request", "--profile", "book", "--request", "r.json"}, "capsulectl-book: request --profile book --request r.json", "use `capsulectl book request"},
-		{[]string{"request", "--profile", "deal", "--request", "r.json"}, "capsulectl-deal: request --profile deal --request r.json", "use `capsulectl deal request`"},
-		{[]string{"respond", "--profile", "book"}, "capsulectl-book: respond --profile book", "use `capsulectl book respond"},
-		{[]string{"respond", "--profile", "deal"}, "capsulectl-deal: respond --profile deal", "use `capsulectl deal respond`"},
-		{[]string{"compose", "--deal", "d"}, "capsulectl-deal: compose --deal d", "use `capsulectl deal compose`"},
-		{[]string{"result", "open", "r.json"}, "capsulectl-book: result open r.json", "use `capsulectl book result open`"},
-		{[]string{"report", "build"}, "capsulectl-book: report build", "use `capsulectl book report`"},
-		{[]string{"backfill", "run"}, "capsulectl-book: backfill run", "use `capsulectl book backfill`"},
-		{[]string{"store", "migrate", "--profile", "book", "--log-id", "b2"}, "capsulectl-book: migrate --profile book --log-id b2", "use `capsulectl book migrate"},
-	} {
-		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
-			out, err := invoke(t, "", tc.args...)
-			require.NoError(t, err, out)
-			assert.Contains(t, out, "ran "+tc.ran)
-			assert.Contains(t, out, "is deprecated; "+tc.notice)
-			assert.Contains(t, out, "the alias is removed in "+AliasRemovedIn)
-		})
-	}
-}
-
-// Each alias's help, and its line in the root help, say it is deprecated,
-// name the replacement and the release that removes it.
-func TestTransitionalAliasesHelpSaysDeprecated(t *testing.T) {
-	firstPartyPlugins(t)
-	root, err := invoke(t, "", "--help")
-	require.NoError(t, err)
-	for _, alias := range []struct{ name, replacement string }{
-		{"close", "book close"}, {"reconcile", "book reconcile"}, {"request", "book request"},
-		{"respond", "book respond"}, {"compose", "deal compose"},
-		{"report", "book report"}, {"backfill", "book backfill"},
-	} {
-		want := "Deprecated: use `capsulectl " + alias.replacement
-		assert.Contains(t, root, want, "the root help's %s line", alias.name)
-		help, err := invoke(t, "", alias.name, "--help")
-		require.NoError(t, err)
-		assert.Contains(t, help, want, "%s --help", alias.name)
-		assert.Contains(t, help, "removed in "+AliasRemovedIn)
-	}
-	help, err := invoke(t, "", "store", "migrate", "--help")
-	require.NoError(t, err)
-	assert.Contains(t, help, "Deprecated: use `capsulectl book migrate`")
-	// `result build` is the core's (capsule-cli#324); only `result open`
-	// still forwards.
-	help, err = invoke(t, "", "result", "open", "--help")
-	require.NoError(t, err)
-	assert.Contains(t, help, "Deprecated: use `capsulectl book result open`")
-	assert.Contains(t, root, "Seal an Evidence Result v0")
-}
-
-// On a book profile, whose log is its evidence book, the core's `result
-// build` is still the old alias of `book result build`: it says so and
-// forwards with its flags, and the book seals book form.
-func TestResultBuildOnABookProfileForwardsToTheBook(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	firstPartyPlugins(t)
-	book, _ := profileFixture(t)
-	book.Name, book.Type = "book", "jsonl"
-	book.Connection.Database = t.TempDir()
-	require.NoError(t, SaveProfile(book, false))
-	out, err := invoke(t, "", "result", "build", "--profile", "book", "--result", "r.json", "--out", "o.json")
-	require.NoError(t, err, out)
-	assert.Contains(t, out, "ran capsulectl-book: result build --out=o.json --profile=book --result=r.json")
-	assert.Contains(t, out, "on a book profile this runs `capsulectl book result build`, which needs --out")
-	assert.Contains(t, out, "removed in "+AliasRemovedIn)
 }
 
 // --profile reaches a plugin wherever it is written: before the plugin's
@@ -294,7 +195,7 @@ func TestCommandLineRebuildsTheInvocation(t *testing.T) {
 // plugin said; it reads as the error class of its code.
 func TestAPluginsExitIsCapsulectls(t *testing.T) {
 	root := pluginRoot(t)
-	writeLauncher(t, root, "capsulectl-"+DealPluginName, `#!/bin/sh
+	writeLauncher(t, root, "capsulectl-"+"deal", `#!/bin/sh
 if [ "$1" = "cli-plugin-metadata" ]; then
   echo '{"name":"deal","vendor":"v","version":"1","plugin_api":"cli-plugin/v1"}'
   exit 0
@@ -311,7 +212,7 @@ exit 2
 
 func TestAPluginKilledBySignalSaysSo(t *testing.T) {
 	root := pluginRoot(t)
-	writeLauncher(t, root, "capsulectl-"+DealPluginName, `#!/bin/sh
+	writeLauncher(t, root, "capsulectl-"+"deal", `#!/bin/sh
 if [ "$1" = "cli-plugin-metadata" ]; then
   echo '{"name":"deal","vendor":"v","version":"1","plugin_api":"cli-plugin/v1"}'
   exit 0
@@ -327,10 +228,10 @@ kill -9 $$
 
 func TestAPluginThatCannotStartIsNamed(t *testing.T) {
 	root := pluginRoot(t)
-	path := writeLauncher(t, root, "capsulectl-"+DealPluginName, "#!/nonexistent/interpreter\n", 0o755)
+	path := writeLauncher(t, root, "capsulectl-"+"deal", "#!/nonexistent/interpreter\n", 0o755)
 	c := &cobra.Command{}
 	c.SetContext(t.Context())
-	err := execPlugin(c, pluginInfo{Name: DealPluginName, path: path}, []string{"list"})
+	err := execPlugin(c, pluginInfo{Name: "deal", path: path}, []string{"list"})
 	require.Error(t, err)
 	assert.Equal(t, 1, ExitCode(err))
 	assert.Contains(t, SafeError(err), "plugin deal could not be started")

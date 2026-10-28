@@ -226,7 +226,7 @@ bundle.setdefault('extensions', {})['outcome-report/v1'] = {
 }
 json.dump(bundle, open('bundle-with-report.json', 'w'))
 "
-$ capsulectl report build --profile tau2 --bundle bundle-with-report.json \
+$ capsulectl book report build --profile tau2 --bundle bundle-with-report.json \
     --card outcome --permalink --out report.html
 ```
 

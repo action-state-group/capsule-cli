@@ -10,14 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A jsonl profile with a log_id is an evidence book: every record it seals
-// carries the profile's operator, the one party the record names. Such a
-// profile is refused without one, at create, at update and at seal time.
+// A jsonl profile whose log a plugin keeps carries the profile's operator in
+// every record the plugin seals, the one party a record names. Such a profile
+// is refused without one, at create and at update.
 
 func createBook(t *testing.T, name string, extra ...string) error {
 	t.Helper()
 	args := append([]string{"profile", "create", "--name", name, "--type", "jsonl",
-		"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log-id", "log-" + name}, extra...)
+		"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log-id", "log-" + name, "--log", "ledger"}, extra...)
 	_, err := invoke(t, "", args...)
 	return err
 }
@@ -38,7 +38,7 @@ func TestProfileCreateRefusesABookWithoutOperator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := createBook(t, "b-"+tc.name, tc.args...)
 			require.ErrorIs(t, err, ErrInput)
-			assert.Contains(t, SafeError(err), "--operator is required for a jsonl profile with a log_id")
+			assert.Contains(t, SafeError(err), "--operator is required for a profile whose log a plugin keeps")
 			_, err = LoadProfile("b-" + tc.name)
 			assert.Error(t, err, "a refused profile is not saved")
 		})
@@ -55,7 +55,7 @@ func TestProfileUpdateRefusesBlankingABooksOperator(t *testing.T) {
 	for _, blank := range []string{"", "  ", "\u200b", "\ufeff"} {
 		_, err := invoke(t, "", "profile", "update", "--profile", "book", "--operator", blank)
 		require.ErrorIs(t, err, ErrInput)
-		assert.Contains(t, SafeError(err), "--operator is required for a jsonl profile with a log_id")
+		assert.Contains(t, SafeError(err), "--operator is required for a profile whose log a plugin keeps")
 	}
 	// An update that leaves the operator alone keeps it.
 	_, err := invoke(t, "", "profile", "update", "--profile", "book", "--clock-tolerance", "2m")
@@ -65,14 +65,14 @@ func TestProfileUpdateRefusesBlankingABooksOperator(t *testing.T) {
 	assert.Equal(t, "Example Operator", p.Operator)
 	assert.Equal(t, "2m", p.ClockTolerance)
 
-	// Turning an artifact-only jsonl profile into a book needs an operator too.
+	// Turning an artifact-only jsonl profile into a plugin-kept log needs an operator too.
 	_, err = invoke(t, "", "profile", "create", "--name", "artifacts", "--type", "jsonl",
 		"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log-id", "")
 	require.NoError(t, err)
-	_, err = invoke(t, "", "profile", "update", "--profile", "artifacts", "--log-id", "now-a-book")
+	_, err = invoke(t, "", "profile", "update", "--profile", "artifacts", "--log-id", "now-a-book", "--log", "ledger")
 	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "--operator is required for a jsonl profile with a log_id")
-	_, err = invoke(t, "", "profile", "update", "--profile", "artifacts", "--log-id", "now-a-book", "--operator", "Example Operator")
+	assert.Contains(t, SafeError(err), "--operator is required for a profile whose log a plugin keeps")
+	_, err = invoke(t, "", "profile", "update", "--profile", "artifacts", "--log-id", "now-a-book", "--log", "ledger", "--operator", "Example Operator")
 	require.NoError(t, err)
 }
 
@@ -91,12 +91,12 @@ func TestProfileCreateWithoutOperatorWhereNothingSealsIt(t *testing.T) {
 	}
 }
 
-// --interactive asks for the operator once the answers make the profile a book.
+// --interactive asks for the operator once the answers make the profile one whose log a plugin keeps.
 func TestProfileCreateInteractiveAsksABookForItsOperator(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	args := func(name string) []string {
 		return []string{"profile", "create", "--interactive", "--name", name, "--type", "jsonl",
-			"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo"}
+			"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log", "ledger"}
 	}
 	_, err := invoke(t, "asked-log\nExample Operator\n", args("asked")...)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestProfileCreateInteractiveAsksABookForItsOperator(t *testing.T) {
 	for i, answer := range []string{"", "\u200b", "\ufeff"} {
 		_, err = invoke(t, "blank-log\n"+answer+"\n", args(fmt.Sprintf("blank%d", i))...)
 		require.ErrorIs(t, err, ErrInput, "answer %q", answer)
-		assert.Contains(t, SafeError(err), "--operator is required for a jsonl profile with a log_id")
+		assert.Contains(t, SafeError(err), "--operator is required for a profile whose log a plugin keeps")
 	}
 }
 
@@ -131,7 +131,7 @@ func TestProfileOperatorIsStoredTrimmed(t *testing.T) {
 	}
 
 	_, err := invoke(t, "asked-log\n  Example Operator \u200b\n", "profile", "create", "--interactive", "--name", "asked",
-		"--type", "jsonl", "--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo")
+		"--type", "jsonl", "--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log", "ledger")
 	require.NoError(t, err)
 	p, err := LoadProfile("asked")
 	require.NoError(t, err)

@@ -52,9 +52,9 @@ That keeps a witness from learning how many deals there are, and it means the
 witness can show that an install is alive, but never whether a given deal took
 place. Per-deal logs (`deal/<id>`) are never published.
 
-**Liveness, from the witness.** `capsulectl canary watch` per account, against
+**Liveness, from the witness.** `capsulectl deal canary watch` (or the deal plugin's own binary, `capsulectl-deal canary watch`) per account, against
 the account's cadence log id (`cll checkpoint cadence` prints it as `cadence_log`). A
-scheduled GitHub Actions job (`examples/deal-harness-watch.yml`, no secrets)
+scheduled GitHub Actions job (`examples/deal-harness-watch.yml` in the deal plugin's repository, no secrets)
 runs it for every account, prints one verdict per account in the run summary,
 and fails the run when any log stopped advancing or was rewritten. It catches
 whatever stops an install from ticking or publishing: a missing timer, a

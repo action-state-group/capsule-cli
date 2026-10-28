@@ -57,11 +57,22 @@ func dealLauncher(marker, body string) string {
 	return fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then echo '{\"name\":\"deal\",\"vendor\":\"t\",\"version\":\"1\",\"plugin_api\":\"cli-plugin/v1\"}'; exit 0; fi\necho ran >> %s\necho \"ran deal: $*\"\n%s\n", marker, body)
 }
 
+// saveDealProfile saves the profile "deal", whose log the deal plugin keeps.
+func saveDealProfile(t *testing.T) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Name, p.Type, p.Namespace, p.LogID, p.Log = "deal", "sqlite", "deal", "", "deal"
+	p.Connection.Database = filepath.Join(t.TempDir(), "deal.db")
+	require.NoError(t, SaveProfile(p, false))
+}
+
 // dealHome is a private HOME with capsulectl-deal hand-installed in its
 // per-user root. It returns HOME resolved, the root, and the run marker.
 func dealHome(t *testing.T, body string) (string, string, string) {
 	t.Helper()
 	home, root := installHome(t)
+	saveDealProfile(t)
 	require.NoError(t, os.MkdirAll(root, 0o755))
 	for p := root; p != home; p = filepath.Dir(p) {
 		require.NoError(t, os.Chmod(p, 0o755))
@@ -89,7 +100,7 @@ func seam[T any](t *testing.T, v *T, with T) {
 // its output by state, and the rest of the output.
 func cadenceLines(t *testing.T) (map[string]map[string]any, string, error) {
 	t.Helper()
-	out, err := invoke(t, "", "cll", "checkpoint", "cadence")
+	out, err := invoke(t, "", "cll", "checkpoint", "cadence", "--profile", "deal")
 	lines := map[string]map[string]any{}
 	var rest []string
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
@@ -285,7 +296,7 @@ func TestCadenceHealsAWritablePluginRootThenTicks(t *testing.T) {
 	require.NotNil(t, healed, rest)
 	assert.Equal(t, []any{root}, healed["chmod_go_w"])
 	assert.Contains(t, healed["reason"], "VM replacement")
-	assert.Contains(t, rest, "ran deal: tick")
+	assert.Contains(t, rest, "ran deal: cll checkpoint cadence")
 	assert.True(t, ran(marker))
 	assert.Equal(t, uint32(0o2750), modeOf(t, root))
 	assert.Equal(t, uint32(0o755), modeOf(t, home))
@@ -349,7 +360,7 @@ func TestCadenceLeavesAValidSystemPluginAlone(t *testing.T) {
 func TestOtherForwardsNeverHeal(t *testing.T) {
 	home, _, _ := dealHome(t, "")
 	require.NoError(t, os.Chmod(home, 0o775))
-	out, err := invoke(t, "", "compose")
+	out, err := invoke(t, "", "bundle", "--profile", "deal", "--root", "abc")
 	require.Error(t, err)
 	assert.NotContains(t, out, "plugin_root_healed")
 	assert.NotContains(t, out, "plugin_unavailable")
@@ -359,6 +370,7 @@ func TestOtherForwardsNeverHeal(t *testing.T) {
 func TestCadenceSaysWhyThePluginDidNotRun(t *testing.T) {
 	t.Run("not installed", func(t *testing.T) {
 		installHome(t)
+		saveDealProfile(t)
 		lines, rest, err := cadenceLines(t)
 		require.ErrorIs(t, err, ErrInput)
 		require.NotNil(t, lines["plugin_unavailable"], rest)

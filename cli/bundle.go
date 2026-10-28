@@ -534,11 +534,19 @@ const disclosureActionID = "capsulectl-disclosure"
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
 // bundleLog picks the log a bundle is read from: --log-id names any log,
-// else the profile's log_id. A deal profile's log_id is its cadence log,
-// which holds no records, and each deal is its own log: those go through
-// --deal (dealBundleRun). disclose appends a disclosure record to the log it
-// read, so it refuses a deal's log named by --log-id.
+// else the profile's log_id. A store a plugin owns is not bundled here: its
+// logs have rules of their own about what a copy may carry, which only the
+// owner applies (disclose would also append a disclosure record to the log it
+// read).
 func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
+	if p.HasOwnedStore() {
+		return p, InputError("this profile's store is owned by the " + p.LogOwner() + " plugin: its bundles come from that plugin")
+	}
+	if m, err := storeOwnerMarker(c.Context(), p); err != nil {
+		return p, err
+	} else if m.found || m.legacy {
+		return p, InputError("this store is owned by a plugin: its bundles come from that plugin")
+	}
 	logID, _ := c.Flags().GetString("log-id")
 	switch {
 	case logID != "":
@@ -546,14 +554,9 @@ func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
 			return p, InputError("--log-id must be lowercase letters, digits and ._:/-, such as a profile's log_id")
 		}
 	case p.LogID == "":
-		return p, InputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
-	case p.Namespace == "deal" && strings.HasPrefix(p.LogID, "deal-cadence/"):
-		return p, InputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
+		return p, InputError("the profile has no log_id: name the log with --log-id")
 	default:
 		return p, nil
-	}
-	if strings.HasPrefix(logID, "deal/") {
-		return p, InputError("a deal's logs are read with --deal DEAL_ID, which applies the deal's share rules; --log-id does not")
 	}
 	if root == "" {
 		return p, InputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
@@ -581,18 +584,6 @@ func bundleCommands() []*cobra.Command {
 			htmlPath, _ := c.Flags().GetString("html")
 			if htmlPath != "" && permalink {
 				return InputError("--html writes a page holding the bundle; a permalink carries the bundle in its link. Use `bundle --html FILE` or `disclose --html FILE` for a page")
-			}
-			if dealID, _ := c.Flags().GetString("deal"); dealID != "" {
-				if htmlPath != "" {
-					return InputError("a deal's page is its receipt: `deal report --deal ID --html FILE` (or `--share ... --html FILE` for someone else)")
-				}
-				if DealBundleRun == nil {
-					return ForwardToPlugin(c, DealPluginName, CommandLine(c, nil))
-				}
-				return DealBundleRun(c, use)
-			}
-			if c.Flags().Changed("share") || c.Flags().Changed("to") {
-				return InputError("--share and --to go with --deal: they choose what a deal's shared copy withholds")
 			}
 			profile, err := Selected(c)
 			if err != nil {
@@ -714,9 +705,6 @@ func bundleCommands() []*cobra.Command {
 			return errors.Join(err, pageErr)
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
-		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose also needs --share and --to; a deal is not shared as a link)")
-		command.Flags().String("share", DealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (disclose only: a shared copy, put on record first)")
-		command.Flags().String("to", "", "With --deal and --share: who the shared copy is for, as sealed in the disclosure record")
 		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)

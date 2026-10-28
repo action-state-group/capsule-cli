@@ -35,8 +35,6 @@ func isReleaseCore() bool { return releaseTagPolicy.MatchString(CLIVersion) }
 // token, so capsulectl-<name> is always a direct child of the root.
 var pluginNameGrammar = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 
-func isFirstParty(name string) bool { return name == BookPluginName || name == DealPluginName }
-
 const pluginInstallPrefix = ".install-"
 
 var errPluginDurability = errors.New("durability not confirmed")
@@ -359,17 +357,17 @@ func finishInstall(r *os.Root, root, staged string, allowMismatch bool) (pluginI
 		return pluginInstallResult{}, InputError(fmt.Sprintf("not installed: %q is a core command, which a plugin can never replace", name))
 	}
 	checks := []string{"handshake (cli-plugin-metadata)"}
-	result := pluginInstallResult{Name: name, Version: info.Version, Path: filepath.Join(root, pluginLauncherPrefix+name), Checks: checks, VersionCheck: "not applicable (not a first-party plugin)"}
-	if isFirstParty(name) {
+	result := pluginInstallResult{Name: name, Version: info.Version, Path: filepath.Join(root, pluginLauncherPrefix+name), Checks: checks, VersionCheck: "not applicable (the plugin declares no core_version)"}
+	if info.coreVersion() != "" {
 		switch {
 		case !isReleaseCore():
 			result.VersionCheck = "not checked: this capsulectl is a development build (" + CLIVersion + ")"
 		case info.coreVersion() == CLIVersion:
 			result.VersionCheck = "matches capsulectl " + CLIVersion
 		case allowMismatch:
-			result.VersionCheck = "mismatch allowed: plugin built for " + FirstNonEmpty(info.coreVersion(), "unversioned") + ", capsulectl " + CLIVersion
+			result.VersionCheck = "mismatch allowed: plugin built for " + info.coreVersion() + ", capsulectl " + CLIVersion
 		default:
-			return pluginInstallResult{}, Hint(ErrConflict, fmt.Sprintf("not installed: capsulectl-%s is built for capsulectl %s but this capsulectl is %s; install the matching release, or pass --allow-version-mismatch", name, FirstNonEmpty(info.coreVersion(), "unversioned"), CLIVersion))
+			return pluginInstallResult{}, Hint(ErrConflict, fmt.Sprintf("not installed: capsulectl-%s is built for capsulectl %s but this capsulectl is %s; install the matching release, or pass --allow-version-mismatch", name, info.coreVersion(), CLIVersion))
 		}
 	}
 	before, _ := otherRoots(root)
@@ -425,8 +423,8 @@ func pluginInstallCommand() *cobra.Command {
 		Use:   "install ./PATH",
 		Short: "Install a plugin launcher file (a path containing /) into ~/.local/lib/capsulectl/plugins",
 		Long: "Install a plugin on the per-user plugin root, ~/.local/lib/capsulectl/plugins.\n\n" +
-			"The operand is a launcher file, a path containing / (./capsulectl-deal downloaded from its release and checked, or one you built). Install runs its cli-plugin-metadata handshake and installs it under the name it gives.\n\n" +
-			"Install never runs through sudo, and refuses a plugin root on a path another user could change. A first-party plugin (book, deal) must be built for this capsulectl's release unless --allow-version-mismatch is given. The output lists the checks that ran.",
+			"The operand is a launcher file, a path containing / (./capsulectl-ledger downloaded from its release and checked, or one you built). Install runs its cli-plugin-metadata handshake and installs it under the name it gives.\n\n" +
+			"Install never runs through sudo, and refuses a plugin root on a path another user could change. A plugin that declares the capsulectl release it is built for (core_version) must match this capsulectl's release unless --allow-version-mismatch is given. The output lists the checks that ran.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			home, err := requireOwnInstall()
@@ -435,17 +433,14 @@ func pluginInstallCommand() *cobra.Command {
 			}
 			operand := args[0]
 			allow, _ := c.Flags().GetBool("allow-version-mismatch")
-			if isFirstParty(operand) {
-				// The first-party plugins ship from their own releases
-				// (capsule-cli#326), which this capsulectl does not name.
-				return InputError(fmt.Sprintf("capsulectl-%s ships from its own release, not capsulectl's: install the plugin file from its release, then run capsulectl plugin install ./capsulectl-%s", operand, operand))
-			}
 			if !strings.Contains(operand, "/") {
 				hint := ""
 				if strings.HasPrefix(operand, pluginLauncherPrefix) {
 					hint = "; to install that file, give it as ./" + operand
+				} else if pluginNameGrammar.MatchString(operand) {
+					hint = "; to install capsulectl-" + operand + ", give its launcher file from its release, such as ./capsulectl-" + operand
 				}
-				return InputError("plugin install takes a launcher file path containing / (such as ./capsulectl-deal)" + hint)
+				return InputError("plugin install takes a launcher file path containing / (such as ./capsulectl-ledger): a plugin ships from its own release, not capsulectl's" + hint)
 			}
 			if st, err := os.Stat(operand); err != nil || !st.Mode().IsRegular() {
 				return InputError(operand + " is not a readable regular file")
@@ -461,7 +456,7 @@ func pluginInstallCommand() *cobra.Command {
 			return heal.explain(c, Output(c, result))
 		},
 	}
-	cmd.Flags().Bool("allow-version-mismatch", false, "Install a first-party plugin built for another capsulectl release")
+	cmd.Flags().Bool("allow-version-mismatch", false, "Install a plugin built for another capsulectl release than this one")
 	return cmd
 }
 
@@ -571,7 +566,7 @@ func isPluginManagement(root *cobra.Command, args []string) bool {
 // driftWarning is the stderr line for a first-party plugin whose version
 // differs from a release core's, or "".
 func driftWarning(info pluginInfo) string {
-	if !isFirstParty(info.Name) || !isReleaseCore() || info.coreVersion() == CLIVersion {
+	if info.coreVersion() == "" || !isReleaseCore() || info.coreVersion() == CLIVersion {
 		return ""
 	}
 	advice := "its owner must update it"

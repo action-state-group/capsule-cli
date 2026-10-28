@@ -54,7 +54,7 @@ func TestInputErrorsNameTheProblem(t *testing.T) {
 // already a shown reason (an inputError, a hint, or an error type SafeError
 // prints), so the join only fixes the exit code.
 var joinAllowed = map[string]string{
-	"Selected":        "LoadProfile returns InputError reasons",
+	"selectedProfile": "LoadProfile returns InputError reasons",
 	"profileCommands": "profile show: LoadProfile returns InputError reasons",
 }
 
@@ -62,8 +62,7 @@ var joinAllowed = map[string]string{
 // target in a list, to keep another command's error class while showing that
 // command's own reason.
 var classifyAllowed = map[string]string{
-	"canaryStep": "keeps a deal verb's error class; the shown reason is the verb's own SafeError text",
-	"Unwrap":     "PluginExit reads a plugin's exit code as its error class; the plugin printed the reason itself",
+	"Unwrap": "PluginExit reads a plugin's exit code as its error class; the plugin printed the reason itself",
 }
 
 // shownTypes are the error values SafeError prints in their own words.

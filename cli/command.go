@@ -63,7 +63,22 @@ func keyCommands() *cobra.Command {
 	return key
 }
 
+// Selected is the profile the command line selects, for a command that works
+// on its log: one whose owner it does not declare is refused with the fix.
 func Selected(c *cobra.Command) (Profile, error) {
+	p, err := selectedProfile(c)
+	if err != nil {
+		return p, err
+	}
+	if p.OwnerUndeclared() {
+		return p, InputError("profile " + p.Name + " has no declared log owner: capsulectl profile update --profile " + p.Name + " --log <cll or the plugin that keeps its log>")
+	}
+	return p, nil
+}
+
+// selectedProfile is Selected without the owner check, for the command that
+// declares the owner.
+func selectedProfile(c *cobra.Command) (Profile, error) {
 	name, _ := c.Flags().GetString("profile")
 	if name == "" {
 		// A plugin, and a command a plugin runs back in the core, inherit
@@ -305,6 +320,11 @@ func ExitCode(err error) int {
 	}
 }
 
+// ErrAlarm is the exit class of a monitor that found what it watches for gone
+// wrong (a stale log, a rewritten history): exit code 6. A plugin's alarm is a
+// Hint on a class of its own that wraps it.
+var ErrAlarm = errors.New("alarm")
+
 // CLIVersion and CLICommit are reported by both --version and `doctor`, so the
 // two can never silently drift apart. Release builds set them with
 // -ldflags "-X github.com/action-state-group/capsule-cli/cli.CLIVersion=<tag>
@@ -325,9 +345,8 @@ var (
 )
 
 // NewCommand returns a fresh tree: no shared flag/config state across
-// invocations. It holds the core commands, the transitional aliases of the
-// commands that moved into the capsulectl-book and capsulectl-deal plugins,
-// and every plugin discovered on the trusted roots.
+// invocations. It holds the core commands and every plugin discovered on the
+// trusted roots.
 func NewCommand() *cobra.Command {
 	return newCommand(true, nil)
 }
@@ -347,8 +366,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.AddCommand(contractCommands())
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
-	root.AddCommand(canaryCommands())
-	root.AddCommand(transitionalAliases()...)
+	root.AddCommand(resultCommand())
 	root.AddCommand(settlementCommands())
 	root.AddCommand(presentationCommands())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
@@ -368,9 +386,6 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		return Output(c, map[string]string{"log_id": p.LogID, "status": "initialized"})
 	}}
 	store.AddCommand(init)
-	store.AddCommand(aliasCommand("migrate", aliasShort("book migrate"), func([]string) (string, []string, error) {
-		return BookPluginName, []string{"migrate"}, nil
-	}))
 	root.AddCommand(store)
 	root.AddCommand(sealToFileCommand("seal", "output", "Seal to an explicit private artifact file; no database connection"))
 	// `emit` is the v4 verb name for the same operation `seal` already performs
@@ -396,8 +411,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		}
 		defer func() { err = errors.Join(err, t.Close()) }()
 		r, e := t.Artifacts.Get(c.Context(), id)
-		if errors.Is(e, artifact.ErrNotFound) && p.IsBook() {
-			return Hint(ErrInput, "the artifact store holds no capsule "+id+"; a capsule published on a book profile has its record's id, not the one `seal` gives (publish reports both, as capsule_id and sealed_id, and `cll list` lists the record ids)")
+		if errors.Is(e, artifact.ErrNotFound) && p.HasPluginLog() {
+			return Hint(ErrInput, "the artifact store holds no capsule "+id+"; a capsule published on a profile whose log a plugin keeps has its record's id, not the one `seal` gives (publish reports both, as capsule_id and sealed_id, and `cll list` lists the record ids)")
 		}
 		if e != nil {
 			return e

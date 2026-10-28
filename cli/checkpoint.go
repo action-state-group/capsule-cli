@@ -369,19 +369,12 @@ func addCheckpointCommands(logs *cobra.Command) {
 	logs.AddCommand(verify)
 	group := &cobra.Command{Use: "checkpoint", Short: "Create signed checkpoints over the log"}
 	logs.AddCommand(group)
-	// A deal profile's checkpoint cadence, under the CLI's checkpoint verbs:
-	// the same command as `deal tick`, which stays callable. Where the deal
-	// commands are not built in, it runs `tick` in the capsulectl-deal plugin.
-	var cadence *cobra.Command
-	if DealTickCommand != nil {
-		cadence = DealTickCommand()
-		cadence.Use = "cadence"
-	} else {
-		cadence = &cobra.Command{Use: "cadence", Short: "A deal profile's checkpoint cadence: `capsulectl deal tick` (plugin capsulectl-deal)", DisableFlagParsing: true, RunE: func(c *cobra.Command, args []string) error {
-			return forwardCadence(c, args)
-		}}
-	}
-	group.AddCommand(cadence)
+	// A plugin's checkpoint cadence, under the CLI's checkpoint verbs: the
+	// command runs in the plugin that keeps the selected profile's log, which
+	// grafts its own over this one (GraftCommand) in its process.
+	group.AddCommand(&cobra.Command{Use: "cadence", Short: "A plugin's checkpoint cadence on a profile whose log it keeps: runs in that plugin", DisableFlagParsing: true, RunE: func(c *cobra.Command, args []string) error {
+		return forwardCadence(c, args)
+	}})
 	create := &cobra.Command{Use: "create", Short: "Cut a signed checkpoint at the current log tip", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := Selected(c)
 		if e != nil {

@@ -105,24 +105,14 @@ type Target struct {
 	Artifacts ArtifactStore
 	// Log is the CLL of a plain profile. A profile whose log a plugin keeps
 	// has no such log: its one log is the plugin's (Owned), and Log stays nil.
-	Log   cll.Backend
-	Owned OwnedLog
-	// Book is Owned.
-	//
-	// Deprecated: the name goes with the plugin names in capsule-cli#428. It
-	// is set with Owned and released with it.
-	Book    OwnedLog
+	Log     cll.Backend
+	Owned   OwnedLog
 	Profile Profile
 }
 
 // ErrPluginLogProfile refuses a CLL-only operation on a profile whose log a
 // plugin keeps, rather than reaching for a second log.
 var ErrPluginLogProfile = InputError("not available on a profile whose log a plugin keeps: that log is the profile's one log")
-
-// ErrBookProfile is ErrPluginLogProfile.
-//
-// Deprecated: the name goes with the plugin names in capsule-cli#428.
-var ErrBookProfile = ErrPluginLogProfile
 
 // targetUse names the actual dependencies instead of inferring artifact access
 // from whether a command also needs a log. CLL-only commands never build SDK
@@ -246,11 +236,6 @@ func missingLogIDReason(p Profile) string {
 // store's index and the cadence's live set) whole.
 var ErrPluginStoreWrite = InputError("a store owned by a plugin is written by that plugin only; this command would write to it. Read it with `cll list` or `get`, or use the owner plugin's verbs")
 
-// ErrDealProfileWrite is ErrPluginStoreWrite.
-//
-// Deprecated: the name goes with the plugin names in capsule-cli#428.
-var ErrDealProfileWrite = ErrPluginStoreWrite
-
 // writes reports whether a target opened for use can write.
 func (use TargetUse) writes() bool {
 	return use == UseCLL || use == UsePublication || use == UseInitialization
@@ -268,27 +253,11 @@ type PluginStoreWriter interface {
 	PluginStoreOwner() string
 }
 
-// DealStoreWriter is a PluginStoreWriter under its old method name.
-//
-// Deprecated: implement PluginStoreWriter.
-type DealStoreWriter interface {
-	// HoldsDealStore reports whether the writer lock is still held.
-	HoldsDealStore() bool
-}
-
-type dealWriter struct{ DealStoreWriter }
-
-func (w dealWriter) HoldsPluginStore() bool { return w.HoldsDealStore() }
-
-// PluginStoreOwner is empty: the older interface names no plugin, so the
-// marker is checked only when the plugin marks the store.
-func (dealWriter) PluginStoreOwner() string { return "" }
-
 // OpenTarget opens p for use. A store a plugin owns is never opened for
 // writing here (ErrPluginStoreWrite): its owner opens it with OpenOwnedTarget.
 func OpenTarget(ctx context.Context, p Profile, use TargetUse) (*Target, error) {
 	if use.writes() {
-		if p.IsShelf() || p.HasOwnedStore() {
+		if p.HasOwnedStore() {
 			return nil, ErrPluginStoreWrite
 		}
 		// The profile's fields can be edited (profile update --namespace), so
@@ -375,16 +344,6 @@ func OpenOwnedTarget(ctx context.Context, p Profile, use TargetUse, w PluginStor
 	return openTarget(ctx, p, use)
 }
 
-// OpenDealTarget is OpenOwnedTarget for the older writer interface.
-//
-// Deprecated: use OpenOwnedTarget.
-func OpenDealTarget(ctx context.Context, p Profile, use TargetUse, w DealStoreWriter) (*Target, error) {
-	if w == nil {
-		return OpenOwnedTarget(ctx, p, use, nil)
-	}
-	return OpenOwnedTarget(ctx, p, use, dealWriter{w})
-}
-
 // MarkOwned records, in the target's sqlite store, that the plugin owner owns
 // it (the plugin_owned marker), so the core refuses to write it whatever a
 // profile says. The owner calls it while it holds the writer lock (w), on its
@@ -434,6 +393,17 @@ func MarkStoreOwned(ctx context.Context, db *sql.DB, owner string, w PluginStore
 		return InputError("this store is marked as owned by the " + current + " plugin, not " + owner)
 	}
 	return nil
+}
+
+// legacyUnowned reports whether p is a profile with no owner over a store only
+// the older, owner-less marker covers: the one case where the user names the
+// owner, since nothing in the store does.
+func legacyUnowned(ctx context.Context, p Profile) bool {
+	if p.LogOwner() != "" {
+		return false
+	}
+	m, err := storeOwnerMarker(ctx, p)
+	return err == nil && m.legacy && !m.found
 }
 
 // storeRecordsOwner reports whether p's sqlite store records p's log owner as
@@ -535,7 +505,7 @@ func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err e
 		if err != nil {
 			return nil, err
 		}
-		t.Owned, t.Book = book, book
+		t.Owned = book
 	} else if needsCLL {
 		if use == UseInitialization {
 			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
