@@ -177,12 +177,13 @@ func doctorCommand() *cobra.Command {
 				}
 				profileReport["rules_checker"] = checker
 			}
-			// The wording pack the profile speaks with. A pinned pack that
-			// cannot be used is an issue: the whole built-in pack speaks
-			// instead (narration.go).
+			// The wording pack the profile speaks with, checked against the
+			// core's keys and those of the plugin that keeps its log. A pinned
+			// pack that cannot be used is an issue: the whole built-in pack
+			// speaks instead (narration.go).
 			if p.Wording.Path != "" {
 				wording := map[string]any{"pinned": p.Wording.Path, "sha256": p.Wording.SHA256}
-				if w, problem := ActiveWording(p); problem != "" {
+				if w, problem := profileWording(p); problem != "" {
 					wording["used"], wording["issue"] = w.Source, problem
 				} else {
 					wording["used"], wording["id"] = w.Source, w.ID

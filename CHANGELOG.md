@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Changed:** the deal words leave the core's built-in wording pack for the
+  deal plugin's own pack (capsule-cli#428). The core's pack keeps the 24 keys
+  core commands speak (`say.verify.*`, `say.settlement.*`, `say.error.*`,
+  `say.doctor.issues.*` and the card frame `cli.AskText` prints); key names
+  do not change. A plugin adds its pack to its process with
+  `cli.RegisterWording`, and its `cli-plugin/v1` handshake carries it as the
+  optional `wording` member. A pinned pack must hold the core's keys and,
+  for a profile whose log a plugin keeps, that plugin's: `profile update
+  --wording` and `doctor` read the plugin's pack from its handshake, and a
+  pack whose `card.terms.*` entries could hide a term is still refused,
+  whichever pack holds the term. A pack made from the core's pack alone is
+  refused with a line naming the plugin whose keys it lacks. A pack pinned
+  before this change holds every key and is still used.
+  `profile update --wording` on a profile whose plugin is not installed is
+  refused. `BuiltinWordingBytes` is now the core's pack alone.
 - **Fixed:** the vendored page runtime and `capsule-viewer/go` move to capsule-viewer
   389c1bac (a pseudo-version, no release): the banner integrity check no longer
   discards a module's render when the page grows a classic scrollbar

@@ -128,10 +128,12 @@ type Wording struct {
 	Source  string
 }
 
-// BuiltinWording is the neutral pack that ships with this binary.
+// BuiltinWording is the built-in pack this process speaks with: the neutral
+// pack that ships with the core, plus the pack a plugin registered
+// (RegisterWording) when this process is that plugin.
 func BuiltinWording() Wording { return builtinWording() }
 
-var builtinWording = sync.OnceValue(func() Wording {
+var coreWording = sync.OnceValue(func() Wording {
 	w, err := parseWording(builtinWordingBytes)
 	if err != nil {
 		// The pack is embedded and tested: a broken one is a build defect.
@@ -141,7 +143,63 @@ var builtinWording = sync.OnceValue(func() Wording {
 	return w
 })
 
-// BuiltinWordingBytes is the built-in pack as distributed.
+var builtinWording = sync.OnceValue(func() Wording {
+	wordingFrozen.Store(true)
+	w := coreWording()
+	if own := registeredWording; own != nil {
+		w.Entries = maps.Clone(w.Entries)
+		maps.Copy(w.Entries, own.Entries)
+	}
+	return w
+})
+
+// registeredWording is the built-in pack a plugin added to its own process,
+// and registeredWordingBytes that pack as the plugin ships it: its
+// cli-plugin-metadata handshake carries it (pluginInfo.Wording), so the core
+// process checks a pinned pack against the plugin's keys too.
+var (
+	registeredWording      *Wording
+	registeredWordingBytes []byte
+	wordingFrozen          atomic.Bool
+)
+
+// RegisterWording adds a plugin's own built-in wording pack to this process,
+// beside the core's: the keys its commands speak that the core's pack does
+// not hold. A plugin calls it once, before anything speaks (from init or at
+// the top of main). A pack that is not valid, is in another locale, or holds
+// a key of the core's pack is a build defect and panics, as a late or second
+// call does.
+func RegisterWording(raw []byte) {
+	if wordingFrozen.Load() || registeredWording != nil {
+		panic("RegisterWording: call it once, before anything speaks")
+	}
+	w, err := pluginPack(raw)
+	if err != nil {
+		panic("RegisterWording: " + err.Error())
+	}
+	registeredWording, registeredWordingBytes = &w, slices.Clone(raw)
+}
+
+// pluginPack parses a plugin's built-in pack: a valid pack in the core's
+// locale that adds keys and redefines none of the core's.
+func pluginPack(raw []byte) (Wording, error) {
+	w, err := parseWording(raw)
+	if err != nil {
+		return Wording{}, errors.New("the plugin's wording pack is " + err.Error())
+	}
+	core := coreWording()
+	if w.Locale != core.Locale {
+		return Wording{}, fmt.Errorf("the plugin's wording pack is in locale %s, the core's in %s", w.Locale, core.Locale)
+	}
+	for _, k := range slices.Sorted(maps.Keys(w.Entries)) {
+		if _, ok := core.Entries[k]; ok {
+			return Wording{}, errors.New("the plugin's wording pack redefines the core's key " + k)
+		}
+	}
+	return w, nil
+}
+
+// BuiltinWordingBytes is the core's built-in pack as distributed.
 func BuiltinWordingBytes() []byte { return slices.Clone(builtinWordingBytes) }
 
 func parseWording(raw []byte) (Wording, error) {
@@ -167,26 +225,81 @@ func parseWording(raw []byte) (Wording, error) {
 	return Wording{ID: pack.ID, Locale: pack.Locale, Entries: pack.Entries}, nil
 }
 
-// missingKeys are the built-in pack's keys w lacks: a pack must be complete,
-// as one pack is never mixed with another.
-func (w Wording) missingKeys() []string {
-	var missing []string
-	for k := range BuiltinWording().Entries {
-		if _, ok := w.Entries[k]; !ok {
-			missing = append(missing, k)
-		}
+// builtinPacks is what a pinned pack must cover: the core's built-in pack
+// and, for the plugin it also speaks for, that plugin's (Plugin names it,
+// capsulectl-<Plugin>; empty when there is none). One pack is never mixed
+// with another, so a pinned pack holds every key of both.
+type builtinPacks struct {
+	Plugin string
+	Core   map[string]string
+	Own    map[string]string
+}
+
+// processPacks are the packs this process speaks with.
+func processPacks() builtinPacks {
+	b := builtinPacks{Core: coreWording().Entries}
+	if registeredWording != nil {
+		b.Plugin, b.Own = runningPlugin, registeredWording.Entries
 	}
-	sort.Strings(missing)
-	return missing
+	return b
+}
+
+// profilePacks are the packs the commands of p speak with across processes:
+// the core's, plus the built-in pack of the plugin that keeps p's log, from
+// its handshake when that plugin is not this process. A plugin whose
+// handshake carries no pack speaks with the core's words alone. A plugin
+// that is not installed, or whose pack is not one, is an error: its keys
+// cannot be checked.
+func profilePacks(p Profile) (builtinPacks, error) {
+	owner := p.LogOwner()
+	if owner == "" {
+		return builtinPacks{Core: coreWording().Entries}, nil
+	}
+	if owner == runningPlugin {
+		return processPacks(), nil
+	}
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, info := range plugins {
+		if info.Name != owner {
+			continue
+		}
+		b := builtinPacks{Plugin: owner, Core: coreWording().Entries}
+		if len(info.Wording) > 0 {
+			w, err := pluginPack(info.Wording)
+			if err != nil {
+				return builtinPacks{}, fmt.Errorf("capsulectl-%s: %w", owner, err)
+			}
+			b.Own = w.Entries
+		}
+		return b, nil
+	}
+	return builtinPacks{}, missingPluginError(owner, refused)
+}
+
+// missing are the keys of b w lacks, the core's and the plugin's apart.
+func (b builtinPacks) missing(w Wording) (core, own []string) {
+	lacks := func(ref map[string]string) []string {
+		var out []string
+		for k := range ref {
+			if _, ok := w.Entries[k]; !ok {
+				out = append(out, k)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	return lacks(b.Core), lacks(b.Own)
 }
 
 // hidingTerms is the first card.terms entry of w that could hide a term
 // from the card's terms line, or "": an approval adopts exactly the terms
 // that line names (capsule-cli#380), so each entry must say something and
-// use exactly the built-in entry's placeholders. One missing drops a term;
-// one extra is never filled, and Line then says nothing at all.
-func (w Wording) hidingTerms() string {
-	builtin := BuiltinWording().Entries
+// use exactly the built-in entry's placeholders, whichever of b's packs
+// holds it. One missing drops a term; one extra is never filled, and Line
+// then says nothing at all.
+func (b builtinPacks) hidingTerms(w Wording) string {
+	builtin := maps.Clone(b.Core)
+	maps.Copy(builtin, b.Own)
 	placeholders := func(text string) []string {
 		return slices.Compact(slices.Sorted(slices.Values(placeholder.FindAllString(text, -1))))
 	}
@@ -202,6 +315,13 @@ func (w Wording) hidingTerms() string {
 	return ""
 }
 
+// lacksOwn is the line for a pack that holds the core's keys but not the
+// plugin's: a pack made from the core's pack alone, as one was before the
+// plugin's words left the core.
+func (b builtinPacks) lacksOwn(own []string) string {
+	return fmt.Sprintf("lacks %d of the capsulectl-%s plugin's keys, first %s: a pack for this profile holds the core's keys and that plugin's", len(own), b.Plugin, own[0])
+}
+
 func packDigest(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
@@ -214,7 +334,8 @@ type ProfileWording struct {
 }
 
 // pinWording pins the pack at path on p, or removes the pin for "". A pack
-// that is not valid or not complete is refused.
+// that is not valid, or not complete for the core and the plugin that keeps
+// p's log, is refused.
 func pinWording(p *Profile, path string) error {
 	if path == "" {
 		p.Wording = ProfileWording{}
@@ -232,22 +353,45 @@ func pinWording(p *Profile, path string) error {
 	if err != nil {
 		return InputError("--wording " + path + " is " + err.Error())
 	}
-	if missing := w.missingKeys(); len(missing) > 0 {
-		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(missing), missing[0]))
+	b, err := profilePacks(*p)
+	if err != nil {
+		return fmt.Errorf("--wording %s cannot be checked against the words of the plugin that keeps this profile's log: %w", path, err)
 	}
-	if k := w.hidingTerms(); k != "" {
+	core, own := b.missing(w)
+	switch {
+	case len(core) > 0:
+		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(core), core[0]))
+	case len(own) > 0:
+		return InputError(fmt.Sprintf("--wording %s is not complete: it %s", path, b.lacksOwn(own)))
+	}
+	if k := b.hidingTerms(w); k != "" {
 		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and use exactly the built-in entry's placeholders", path, k))
 	}
 	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
 	return nil
 }
 
-// ActiveWording is the pack p speaks with, and why the pinned one is not
-// used when it is not: missing, changed since it was pinned, lacking a key
-// a later release added, or wording the card's terms line so it could hide
-// a term a yes agrees to (hidingTerms). Then the whole built-in pack is
-// used, never a mix of the two.
+// ActiveWording is the pack p speaks with in this process, and why the
+// pinned one is not used when it is not: missing, changed since it was
+// pinned, lacking a key this process speaks (a later release's, or a
+// plugin's), or wording the card's terms line so it could hide a term a yes
+// agrees to (hidingTerms). Then the whole built-in pack is used, never a mix
+// of the two.
 func ActiveWording(p Profile) (Wording, string) {
+	return activeWording(p, processPacks())
+}
+
+// profileWording is ActiveWording checked against every pack p's commands
+// speak with, in this process or the plugin's (doctor).
+func profileWording(p Profile) (Wording, string) {
+	b, err := profilePacks(p)
+	if err != nil {
+		return BuiltinWording(), "the pinned wording pack cannot be checked against the words of the plugin that keeps this profile's log: " + err.Error()
+	}
+	return activeWording(p, b)
+}
+
+func activeWording(p Profile, b builtinPacks) (Wording, string) {
 	if p.Wording.Path == "" {
 		return BuiltinWording(), ""
 	}
@@ -262,10 +406,14 @@ func ActiveWording(p Profile) (Wording, string) {
 	if err != nil {
 		return BuiltinWording(), "the pinned wording pack is " + err.Error()
 	}
-	if missing := w.missingKeys(); len(missing) > 0 {
-		return BuiltinWording(), "the pinned wording pack lacks keys this release uses: " + strings.Join(missing, ", ")
+	core, own := b.missing(w)
+	switch {
+	case len(core) > 0:
+		return BuiltinWording(), "the pinned wording pack lacks keys this release uses: " + strings.Join(core, ", ")
+	case len(own) > 0:
+		return BuiltinWording(), "the pinned wording pack " + b.lacksOwn(own)
 	}
-	if k := w.hidingTerms(); k != "" {
+	if k := b.hidingTerms(w); k != "" {
 		return BuiltinWording(), "the pinned wording pack could hide a term a yes agrees to: " + k
 	}
 	w.Source = "pinned"
