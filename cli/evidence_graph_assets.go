@@ -7,21 +7,14 @@ import (
 // The browser runtime is capsule-viewer's page code (the views, the
 // presentation mount, the outcome and EU report cards) bundled with
 // agent-action-capsule's verifier, vendored as built and rebuilt
-// reproducibly by scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section: a
-// presentation module (capsulectl.deal-view/v0, deal-view.manifest.json) the
-// page builder inlines in the emitter's module slot, pinned by its digest like
-// the runtime, with its stylesheet pinned by the manifest's style_sha256.
+// reproducibly by scripts/build-evidence-graph-iife.sh. A plugin's
+// presentation module (plugin_presentations.go) runs beside it in the
+// emitter's module slot.
 var (
 	//go:embed assets/evidence-graph.iife.js
 	EvidenceGraphIIFE []byte
 	//go:embed assets/evidence-graph.iife.js.sha256
 	EvidenceGraphIIFESHA256 string
-	//go:embed assets/deal-view.js
-	DealViewJS string
-	//go:embed assets/deal-view.js.sha256
-	DealViewJSSHA256 string
-	//go:embed assets/deal-view.manifest.json
-	DealViewManifestJSON []byte
 )
 
 // A plugin's `report build` verb renders a held,

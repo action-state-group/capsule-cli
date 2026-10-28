@@ -5,8 +5,8 @@
 //
 //	go run ./scripts/gradestrings > grade-strings.tsv
 //
-// It reads the non-test Go files under cli and cmd (git ls-files)
-// and the page script cli/assets/deal-view.js, and writes one
+// It reads the non-test Go files under cli and cmd (git ls-files) and
+// writes one
 // tab-separated row per matching literal: file:line, class, the literal
 // (newlines, carriage returns and tabs escaped). On stderr it prints the
 // counts, the SHA-256 of the rows, and a cross-check: a second, independent
@@ -43,10 +43,9 @@ var (
 	rungLine = regexp.MustCompile(`view\.Rung = "|"rung": "|\["rung"\] = "|assuranceLadder = |timeRung|time_rung|\bRung:\s*"`)
 	timeRung = regexp.MustCompile(`timeRung|time_rung`)
 	escape   = strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`)
-	// goToken and jsLiteral are the independent tokenizer and the page
-	// script's literals: comments are consumed so their quotes do not count.
-	goToken   = regexp.MustCompile("(?s)//[^\\n]*|/\\*.*?\\*/|'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"|`[^`]*`")
-	jsLiteral = regexp.MustCompile("(?s)'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"|`(?:[^`\\\\]|\\\\.)*`")
+	// goToken is the independent tokenizer: comments are consumed so their
+	// quotes do not count.
+	goToken = regexp.MustCompile("(?s)//[^\\n]*|/\\*.*?\\*/|'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"|`[^`]*`")
 )
 
 func main() {
@@ -103,29 +102,6 @@ func main() {
 			}
 		}
 	}
-	goRows := len(rows)
-	const page = "cli/assets/deal-view.js"
-	js, err := os.ReadFile(page)
-	if err != nil {
-		fail(err)
-	}
-	jsLines := strings.Split(string(js), "\n")
-	for _, loc := range jsLiteral.FindAllStringIndex(string(js), -1) {
-		v := string(js[loc[0]+1 : loc[1]-1])
-		if !vocabulary.MatchString(v) {
-			continue
-		}
-		line := strings.Count(string(js[:loc[0]]), "\n") + 1
-		class := "receipt-copy"
-		switch {
-		case regexp.MustCompile(`rung\s*(?::|===|!==)\s*"` + regexp.QuoteMeta(v) + `"`).MatchString(jsLines[line-1]):
-			class = "rung-value"
-		case !strings.Contains(strings.TrimSpace(v), " "):
-			class = "identifier"
-		}
-		rows = append(rows, fmt.Sprintf("%s:%d\t%s\t%s", page, line, class, strings.ReplaceAll(v, "\n", `\n`)))
-	}
-
 	body := strings.Join(rows, "\n") + "\n"
 	fmt.Print(body)
 	sum := sha256.Sum256([]byte(body))
@@ -133,10 +109,10 @@ func main() {
 	for _, r := range rows {
 		classes[strings.Split(r, "\t")[1]]++
 	}
-	fmt.Fprintf(os.Stderr, "Go literals %d (independent %d); matching %d (independent %d); page script %d; rows %d\n",
-		literals, independentLiterals, goRows, independentMatches, len(rows)-goRows, len(rows))
+	fmt.Fprintf(os.Stderr, "Go literals %d (independent %d); matching %d (independent %d)\n",
+		literals, independentLiterals, len(rows), independentMatches)
 	fmt.Fprintf(os.Stderr, "classes %v\nsha256 %s\n", classes, hex.EncodeToString(sum[:]))
-	if literals != independentLiterals || goRows != independentMatches {
+	if literals != independentLiterals || len(rows) != independentMatches {
 		fail(fmt.Errorf("the two tokenizers disagree: a literal was dropped"))
 	}
 }

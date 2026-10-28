@@ -11,14 +11,14 @@ own repositories since #326.) It bundles two sources:
 - **the verifier** from agent-action-capsule's `ts/src` (bundle and
   result-root verification, the producer and disclosure envelopes,
   countersignatures, fragments). The global keeps every name aac's browser
-  entry exports, so the deal page's calls (`verifyProducerEnvelope`,
-  `verifyDisclosureEnvelope`, `verifiedPayload`, `disclosureOf`,
-  `ed25519Available`) still resolve; where both define a name,
-  capsule-viewer's wins.
+  entry exports, so a plugin module's calls, such as the deal plugin's
+  deal view (`verifyProducerEnvelope`, `verifyDisclosureEnvelope`,
+  `verifiedPayload`, `disclosureOf`, `ed25519Available`), still resolve;
+  where both define a name, capsule-viewer's wins.
 
 `scripts/build-report-runtime.mjs` does the bundling: capsule-viewer's own
 build resolves the aac package to a released npm copy, and this one resolves
-it to the pinned aac source instead, so the views and the deal page share one
+it to the pinned aac source instead, so the views and the plugins' modules share one
 verifier no older than the aac commit pinned here. The file is vendored
 because the pinned capsule-viewer Go module ships the emitter shell
 (`go/emitter/shell.html`) but not this file, and no release of either

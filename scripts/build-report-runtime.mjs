@@ -11,8 +11,8 @@
 // bundle and result-root verification, the producer and disclosure envelopes,
 // countersignatures, fragments. capsule-viewer's own build resolves that
 // package to a released npm copy (its browser export); here the package
-// resolves to the pinned aac source instead, so the views and the
-// deal page (assets/deal-view.js, which calls EvidenceGraph.verifyProducerEnvelope,
+// resolves to the pinned aac source instead, so the views and the plugins'
+// modules (the deal plugin's deal view calls EvidenceGraph.verifyProducerEnvelope,
 // verifyDisclosureEnvelope, verifiedPayload, disclosureOf and ed25519Available)
 // share one verifier, and capsulectl's pages never verify with an older one
 // than the aac commit pinned here.
