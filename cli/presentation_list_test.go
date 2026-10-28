@@ -48,8 +48,8 @@ func listedModule(t *testing.T, l listOutput, id string) map[string]any {
 	return nil
 }
 
-// genericPluginFixture is a plugin's module that stands beside the built-ins
-// and the deal view: it forbids what each specific one requires, so it is
+// genericPluginFixture is a plugin's module that stands beside the built-ins:
+// it forbids what each specific one requires, and x-deal-v0, so it is
 // selected for a bundle only the fallback matches.
 func genericPluginFixture(t *testing.T) presentationFixture {
 	p := exampleDealFixture(t)

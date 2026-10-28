@@ -326,7 +326,7 @@ func moduleLine(m presentationListModule) string {
 }
 
 func presentationListCommand() *cobra.Command {
-	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins, the deal view and the plugins' modules, and which packagings `presentation build` writes for it", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins and the plugins' modules, and which packagings `presentation build` writes for it", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
 		format, _ := c.Flags().GetString("format")
 		text, _ := c.Flags().GetBool("text")
