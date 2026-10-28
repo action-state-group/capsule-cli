@@ -355,7 +355,8 @@ func pinWording(p *Profile, path string) error {
 	}
 	b, err := profilePacks(*p)
 	if err != nil {
-		return fmt.Errorf("--wording %s cannot be checked against the words of the plugin that keeps this profile's log: %w", path, err)
+		// err names a plugin and a key or locale, never a secret.
+		return InputError(fmt.Sprintf("--wording %s cannot be checked against the words of the plugin that keeps this profile's log: %v", path, err))
 	}
 	core, own := b.missing(w)
 	switch {

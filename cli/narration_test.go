@@ -243,7 +243,9 @@ func TestPinningRefusesAPluginPackItCannotCheck(t *testing.T) {
 	pack := writePack(t, acmeWording, func(map[string]string) {})
 	p := acmeProfile(t, acmePackJSON(t))
 	require.NoError(t, os.Remove(filepath.Join(os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme")))
-	assert.ErrorContains(t, pinWording(&p, pack), "the capsulectl-acme plugin, which is not installed")
+	err := pinWording(&p, pack)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "cannot be checked against the words of the plugin that keeps this profile's log: this needs the capsulectl-acme plugin, which is not installed")
 
 	for name, edit := range map[string]func(doc map[string]any){
 		"redefines the core's key say.verify.unchanged": func(doc map[string]any) {
@@ -258,7 +260,9 @@ func TestPinningRefusesAPluginPackItCannotCheck(t *testing.T) {
 		raw, err := json.Marshal(doc)
 		require.NoError(t, err)
 		p := acmeProfile(t, raw)
-		assert.ErrorContains(t, pinWording(&p, pack), "capsulectl-acme: the plugin's wording pack "+name, name)
+		err = pinWording(&p, pack)
+		require.ErrorIs(t, err, ErrInput, name)
+		assert.Contains(t, SafeError(err), "capsulectl-acme: the plugin's wording pack "+name, name)
 	}
 
 	// A plugin whose handshake carries no pack speaks with the core's words.
@@ -288,6 +292,28 @@ func TestTheHandshakeCarriesTheRegisteredPack(t *testing.T) {
 	assert.Equal(t, builtinPacks{Plugin: "acme", Core: coreWording().Entries, Own: acmeWording}, processPacks())
 
 	assert.PanicsWithValue(t, "RegisterWording: call it once, before anything speaks", func() { RegisterWording(acmePackJSON(t)) })
+}
+
+// RegisterWording is called once, before anything speaks, with a pack that
+// adds keys: anything else is a build defect.
+func TestRegisterWordingRefusesALateCallOrABadPack(t *testing.T) {
+	saved, savedBytes, frozen := registeredWording, registeredWordingBytes, wordingFrozen.Load()
+	t.Cleanup(func() {
+		registeredWording, registeredWordingBytes = saved, savedBytes
+		wordingFrozen.Store(frozen)
+	})
+	registeredWording, registeredWordingBytes = nil, nil
+	wordingFrozen.Store(true)
+	assert.PanicsWithValue(t, "RegisterWording: call it once, before anything speaks", func() { RegisterWording(acmePackJSON(t)) }, "after the built-in pack was read")
+
+	wordingFrozen.Store(false)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(acmePackJSON(t), &doc))
+	doc["entries"].(map[string]any)["say.verify.unchanged"] = "Mine."
+	raw, err := json.Marshal(doc)
+	require.NoError(t, err)
+	assert.PanicsWithValue(t, "RegisterWording: the plugin's wording pack redefines the core's key say.verify.unchanged", func() { RegisterWording(raw) })
+	assert.Nil(t, registeredWording, "a refused pack is not registered")
 }
 
 // A pinned pack that cannot be used is not used at all: the whole built-in
