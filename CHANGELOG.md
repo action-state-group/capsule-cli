@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Added:** `cli.MarkStoreOwned`, `Target.MarkOwned` on a sqlite handle the
+  plugin already holds (capsule-cli#428), for a plugin session that writes
+  without ever opening a target. Same rules: the writer lock, one owner, no
+  write to a store that already records it.
 - **Changed:** `cli.GraftCommand` takes a function that builds the command
   (capsule-cli#428), not the command: the core calls it for each command tree
   it builds, because a cobra command keeps the flag values of its last run and

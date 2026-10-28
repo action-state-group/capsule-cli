@@ -181,3 +181,20 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "records its owner as the ledger plugin")
 }
+
+// A plugin session that holds its own sqlite handle marks the store without a
+// target, with the same rules as Target.MarkOwned.
+func TestMarkStoreOwnedOnTheSessionsOwnHandle(t *testing.T) {
+	p := sqliteStoreProfile(t)
+	db, _, err := SqliteConnection(p)
+	require.NoError(t, err)
+	defer db.Close()
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(false)), ErrPluginStoreWrite)
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), nil, "ledger", heldStore(true)), ErrInput)
+	require.NoError(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(true)))
+	require.NoError(t, MarkStoreOwned(t.Context(), db, "ledger", heldStore(true)), "idempotent")
+	require.ErrorIs(t, MarkStoreOwned(t.Context(), db, "other", otherOwner{}), ErrInput, "another owner is refused")
+	m, err := storeOwnerMarker(t.Context(), p)
+	require.NoError(t, err)
+	assert.Equal(t, ownerMarker{found: true, owner: "ledger"}, m)
+}
