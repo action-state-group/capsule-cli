@@ -16,7 +16,7 @@
 # build artifact.
 #
 # Node is needed here, at build time of this repository, never at render
-# time: `capsulectl report build` embeds the bytes this script vendored.
+# time: `capsulectl book report build` embeds the bytes this script vendored.
 set -euo pipefail
 
 cv="${1:-}"

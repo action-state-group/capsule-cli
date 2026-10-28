@@ -101,7 +101,7 @@ func ReportRowsShown(value map[string]interface{}) (shown, total int, ok bool) {
 	return shown, len(rows), true
 }
 
-// errJSONLPage refuses a page on a book profile: its bundles carry the
-// evidence book's own records (closes, disclosures, index roots) beside the
-// capsules, and discloses headers, none of which a page shows.
-var errJSONLPage = Hint(ErrInput, "no page written: a book profile's bundle carries its evidence book's own records and their headers, which a page cannot show; publish on a plain profile for a page (the README's self-checking report example), or write the bundle with --out")
+// errJSONLPage refuses a page on a profile whose log a plugin keeps: its
+// bundles carry the plugin's own records (closes, disclosures, index roots)
+// beside the capsules, and discloses headers, none of which a page shows.
+var errJSONLPage = Hint(ErrInput, "no page written: a bundle of a log a plugin keeps carries that log's own records and their headers, which a page cannot show; publish on a plain profile for a page (the README's self-checking report example), or write the bundle with --out")

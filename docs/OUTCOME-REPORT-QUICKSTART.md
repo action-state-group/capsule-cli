@@ -131,7 +131,7 @@ Still inside `evidencebook-skills`; every path below is relative to it.
 $ capsulectl key generate --output producer.seed > producer.json
 $ capsulectl key generate --output checkpoint.seed > checkpoint.json
 $ capsulectl profile create --name tau2 --type jsonl --jsonl-path ./store \
-    --namespace tau2 --log-id tau2-airline --operator tau2-demo \
+    --namespace tau2 --log-id tau2-airline --log book --operator tau2-demo \
     --signing-key-file producer.seed --trusted-key "$(jq -r .public_key producer.json)" \
     --checkpoint-signing-key-file checkpoint.seed --checkpoint-trusted-key "$(jq -r .public_key checkpoint.json)"
 $ capsulectl store init --profile tau2
@@ -226,7 +226,7 @@ bundle.setdefault('extensions', {})['outcome-report/v1'] = {
 }
 json.dump(bundle, open('bundle-with-report.json', 'w'))
 "
-$ capsulectl report build --profile tau2 --bundle bundle-with-report.json \
+$ capsulectl book report build --profile tau2 --bundle bundle-with-report.json \
     --card outcome --permalink --out report.html
 ```
 

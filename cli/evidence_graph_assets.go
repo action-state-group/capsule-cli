@@ -24,7 +24,7 @@ var (
 	DealViewManifestJSON []byte
 )
 
-// `capsulectl book report build` (the capsulectl-book plugin) renders a held,
+// A plugin's `report build` verb renders a held,
 // disclosed Evidence Bundle whose root is a sealed Evidence Result v0 into an
 // offline report.html (2026-09-26:
 // one bundle plus the presentation profile; Go twin, no Node at render

@@ -116,17 +116,6 @@ func TestAnotherOwnerIsRefusedBeforeAnythingIsWritten(t *testing.T) {
 	assert.Equal(t, before, after, "the database is untouched")
 }
 
-func TestOpenDealTargetStillWorksForTheOldWriter(t *testing.T) {
-	p := sqliteStoreProfile(t)
-	_, err := OpenDealTarget(t.Context(), p, UseInitialization, nil)
-	require.ErrorIs(t, err, ErrDealProfileWrite)
-	_, err = OpenDealTarget(t.Context(), p, UseInitialization, heldDealStore(false))
-	require.ErrorIs(t, err, ErrPluginStoreWrite)
-	tg, err := OpenDealTarget(t.Context(), p, UseInitialization, heldDealStore(true))
-	require.NoError(t, err)
-	require.NoError(t, tg.Close())
-}
-
 // profile update cannot disguise a marked store: a log owner that disagrees
 // with the recorded one, or cll over an owner-less legacy marker, is refused
 // before anything is saved.

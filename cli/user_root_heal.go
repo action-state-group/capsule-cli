@@ -309,14 +309,34 @@ func userRootIsTrusted(home string) bool {
 	return false
 }
 
-// forwardCadence is `cll checkpoint cadence` in a core without the deal
-// commands: `tick` in capsulectl-deal. Its output is the scheduled run's log,
-// so it heals a per-user root a host loosened, and says on stdout what it
-// healed and why the plugin did not run; stderr and the exit code are as
-// ForwardToPlugin leaves them.
+// forwardCadence is `cll checkpoint cadence` in a core, which has no cadence
+// of its own: it runs in the plugin that keeps the selected profile's log. Its
+// output is the scheduled run's log, so it heals a per-user root a host
+// loosened, and says on stdout what it healed and why the plugin did not run;
+// stderr and the exit code are as ForwardToPlugin leaves them.
 func forwardCadence(c *cobra.Command, args []string) error {
+	if helpRequested(args) {
+		return c.Help()
+	}
+	name := selectedProfileName(c, args)
+	if name == "" {
+		return InputError(c.CommandPath() + " needs --profile NAME (see `capsulectl profile list`)")
+	}
+	p, err := LoadProfile(name)
+	if err != nil {
+		return Hint(ErrInput, err.Error())
+	}
+	owner := p.LogOwner()
+	switch {
+	case p.OwnerUndeclared() || legacyUnowned(c.Context(), p):
+		return InputError("profile " + name + " has no declared log owner: capsulectl profile update --profile " + name + " --log <cll or the plugin that keeps its log>")
+	case owner == "":
+		return InputError("profile " + name + "'s log is kept by the core: it has no checkpoint cadence")
+	case owner == runningPlugin:
+		return InputError("capsulectl-" + owner + " keeps the log of profile " + name + " but has no checkpoint cadence command")
+	}
 	plugins, refused := discoverPluginsAndRefusals()
-	if home, err := os.UserHomeDir(); err == nil && home != "" && userDealRefused(home, plugins, refused) {
+	if home, err := os.UserHomeDir(); err == nil && home != "" && userPluginRefused(home, owner, plugins, refused) {
 		h := healUserRoot(home)
 		if len(h.ChmodGoW)+len(h.Failed) > 0 {
 			// The cadence log's states name what they are about.
@@ -335,7 +355,7 @@ func forwardCadence(c *cobra.Command, args []string) error {
 			plugins, refused = discoverPluginsAndRefusals()
 		}
 	}
-	err := forwardDiscovered(c, DealPluginName, append([]string{"tick"}, args...), plugins, refused)
+	err = forwardDiscovered(c, owner, append(commandPath(c), args...), plugins, refused)
 	if err == nil {
 		return nil
 	}
@@ -353,11 +373,12 @@ func forwardCadence(c *cobra.Command, args []string) error {
 	return err
 }
 
-// userDealRefused: no deal plugin was accepted, and the per-user root's deal
-// launcher was refused. A valid deal plugin in another root needs no heal.
-func userDealRefused(home string, plugins []pluginInfo, refused []refusedPlugin) bool {
+// userPluginRefused: no plugin of that name was accepted, and the per-user
+// root's launcher for it was refused. A valid plugin in another root needs no
+// heal.
+func userPluginRefused(home, name string, plugins []pluginInfo, refused []refusedPlugin) bool {
 	for _, p := range plugins {
-		if p.Name == DealPluginName {
+		if p.Name == name {
 			return false
 		}
 	}
@@ -366,7 +387,7 @@ func userDealRefused(home string, plugins []pluginInfo, refused []refusedPlugin)
 		return false
 	}
 	for _, r := range refused {
-		if filepath.Base(r.Path) != pluginLauncherPrefix+DealPluginName {
+		if filepath.Base(r.Path) != pluginLauncherPrefix+name {
 			continue
 		}
 		if dir, _, _, err := canonicalPath(filepath.Dir(r.Path)); err == nil && dir == userRoot {

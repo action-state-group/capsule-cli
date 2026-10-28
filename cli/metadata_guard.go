@@ -8,7 +8,7 @@ import (
 
 // Host-supplied records (an agent host's execution and approval records,
 // backfilled history) carry identifiers, never content. GuardMetadata is the
-// one check both first-party plugins apply to them.
+// one check the plugins apply to them.
 var (
 	metadataToken = regexp.MustCompile(`^[A-Za-z0-9._:/+-]{1,200}$`)
 	metadataHost  = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)

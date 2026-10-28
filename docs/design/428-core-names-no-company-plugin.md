@@ -69,7 +69,7 @@ Forwarding is by owner and command path, on the raw argv before core flag
 parsing (`CommandLine` rebuilds only parsed flags; it is not enough). Every
 site that calls `delegateBook` today forwards by owner: `store init`, `publish`,
 `cll append|list`, `checkpoint create|status|publish`, `bundle|disclose|permalink`,
-`result open`, `profile retire --move-data`. Inside the owner's own process a
+`result open`. (`profile retire --move-data` is refused for a plugin-kept log instead: the core holds only its own journal's lock.) Inside the owner's own process a
 missing capability is an error and never a second forward.
 
 Two kinds of non-core owner, told apart by the store, not by registration (the

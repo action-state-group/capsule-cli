@@ -58,9 +58,12 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if moveTo != "" && p.HasPluginLog() && !p.IsBook() {
-		// The locks below are the book's; a plugin that keeps the log in other
-		// files could be written to while its directory moves.
+	if moveTo != "" && p.OwnerUndeclared() {
+		return nil, InputError("profile " + p.Name + " has no declared log owner, so its data cannot be moved safely: capsulectl profile update --profile " + p.Name + " --log <cll or the plugin that keeps its log>")
+	}
+	if moveTo != "" && p.HasPluginLog() {
+		// The locks below are the core's own journal's; a plugin that keeps the
+		// log in files of its own could be written to while its directory moves.
 		return nil, InputError("--move-data is not supported for a profile whose log the capsulectl-" + p.LogOwner() + " plugin keeps")
 	}
 	// A store a running command has open is not retired. The locks are held
@@ -183,13 +186,14 @@ func checkDataMove(p Profile, moveTo string) (string, error) {
 	return target, nil
 }
 
-// holdJSONLStore takes, without waiting, the writer lock each journal of a
-// jsonl profile's store holds while a command writes it (the book's
-// log.jsonl, and a pre-book cll.jsonl), and returns a release. A lock that is
-// already held means a running command has the store open: refused.
+// holdJSONLStore takes, without waiting, the writer lock the core's journal
+// (cll.jsonl) of a jsonl profile's store holds while a command writes it, and
+// returns a release. A lock that is already held means a running command has
+// the store open: refused. A log a plugin keeps has locks of its own, which the
+// core does not know.
 func holdJSONLStore(p Profile) (func() error, error) {
 	release := func() error { return nil }
-	if p.Type != "jsonl" {
+	if p.Type != "jsonl" || p.HasPluginLog() {
 		return release, nil
 	}
 	var held []*os.File
@@ -200,7 +204,7 @@ func holdJSONLStore(p Profile) (func() error, error) {
 		}
 		return errors.Join(errs...)
 	}
-	for _, journal := range []string{filepath.Join(p.Connection.Database, "book", "log.jsonl"), filepath.Join(p.Connection.Database, JSONLLogFile)} {
+	for _, journal := range []string{filepath.Join(p.Connection.Database, JSONLLogFile)} {
 		f, err := os.Open(journal)
 		if errors.Is(err, os.ErrNotExist) {
 			continue

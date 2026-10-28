@@ -35,20 +35,6 @@ func TestBundleRoutesItsRawLineToTheLogOwner(t *testing.T) {
 	}
 }
 
-// A saved deal profile (no owner declared, namespace deal) goes to the deal
-// plugin, with the flags the core no longer needs to know.
-func TestBundleRoutesALegacyDealProfileToTheDealPlugin(t *testing.T) {
-	firstPartyPlugins(t)
-	p, _ := profileFixture(t)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	p.Type, p.Namespace, p.LogID, p.Log = "sqlite", "deal", "", ""
-	p.Connection.Database = filepath.Join(t.TempDir(), "deal.db")
-	require.NoError(t, SaveProfile(p, false))
-	out, err := invoke(t, "", "disclose", "--profile", p.Name, "--deal", "d1", "--share", "counterparty", "--to", "x")
-	require.NoError(t, err, out)
-	assert.Contains(t, out, "ran capsulectl-deal: disclose --profile "+p.Name+" --deal d1 --share counterparty --to x")
-}
-
 func TestBundleKeepsCoreOwnedProfilesAndHelpInTheCore(t *testing.T) {
 	pluginRoot(t)
 	p := ownedProfile(t, "jsonl", LogCLL)

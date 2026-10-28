@@ -9,8 +9,7 @@ import (
 )
 
 // `request` and `respond` carry draft-mih-agent-evidence-request-00 for a
-// profile's own log: capsulectl-book over an evidence book, capsulectl-deal
-// over a deal store. Each plugin does its own work with what was asked; the
+// profile's own log: the plugin that keeps the log runs them. Each plugin does its own work with what was asked; the
 // verbs' flags, the checks on what they read, and the shape of what they
 // print are here, once, so the two cannot drift apart.
 

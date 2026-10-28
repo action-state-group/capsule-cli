@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"unicode"
 
@@ -17,24 +16,12 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// The core keeps no evidence book (capsule-cli#236). A book profile's log is
-// kept by the capsulectl-book plugin, and the deal commands are the
-// capsulectl-deal plugin's. Both plugins are capsulectl binaries in their own
-// right: the core command tree plus their own commands, built with
-// NewPluginCommand. When the core meets a book profile, or a deal-only
-// option, it runs the same command line in the plugin, which runs it with the
-// backend the core lacks.
-
-// The first-party plugins' names: the launcher capsulectl-<name> and the
-// command it adds (`capsulectl book ...`, `capsulectl deal ...`).
-const (
-	BookPluginName = "book"
-	DealPluginName = "deal"
-)
-
-// AliasRemovedIn is the release that removes the transitional aliases of
-// commands that moved into the plugins (capsule-cli#238).
-const AliasRemovedIn = "v0.2.0"
+// The core keeps no plugin's log (capsule-cli#236, #428). A profile names the
+// plugin that keeps its log (Profile.LogOwner); a plugin is a capsulectl binary
+// in its own right: the core command tree plus its own commands, built with
+// NewPluginCommand. When the core meets a profile whose log a plugin keeps and
+// cannot serve it, it runs the same command line in that plugin, which runs it
+// with the backend the core lacks.
 
 // ProfileEnv carries the selected profile into a plugin and into every
 // command a plugin runs back in the core: `--profile` given anywhere on the
@@ -52,17 +39,12 @@ type LogBackend interface {
 	// Open opens the profile's book for writing and holds its writer lock
 	// until Release. artifacts is the profile's artifact store, which holds
 	// every published capsule and every record's originals.
-	Open(ctx context.Context, p Profile, artifacts ArtifactStore) (BookLog, error)
+	Open(ctx context.Context, p Profile, artifacts ArtifactStore) (OwnedLog, error)
 	// List is `cll list` on a book profile: read-only, no lock.
 	List(ctx context.Context, p Profile, after, through uint64, limit int, all bool) (entries any, next uint64, err error)
 	// WitnessStore keeps the delivery state of the book's checkpoints.
 	WitnessStore(p Profile) cll.WitnessStateStore
 }
-
-// BookBackend is the backend of the book plugin's logs.
-//
-// Deprecated: the name goes with the plugin names in capsule-cli#428; use LogBackend.
-type BookBackend = LogBackend
 
 // OwnedLog is one open log of a plugin-kept profile.
 type OwnedLog interface {
@@ -79,16 +61,6 @@ type OwnedLog interface {
 	Bundle(ctx context.Context, req LogBundleRequest) ([]byte, error)
 	Release() error
 }
-
-// BookLog is one open book.
-//
-// Deprecated: use OwnedLog.
-type BookLog = OwnedLog
-
-// BookBundleRequest is LogBundleRequest.
-//
-// Deprecated: the name goes with the plugin names in capsule-cli#428.
-type BookBundleRequest = LogBundleRequest
 
 // LogBundleRequest is `bundle`, `disclose` or `permalink` on a plugin-kept
 // profile.
@@ -110,12 +82,6 @@ var logBackends = map[string]LogBackend{}
 // the plugin name keeps, in this binary.
 func RegisterLogBackend(name string, b LogBackend) { logBackends[name] = b }
 
-// SetBookBackend installs the backend that serves book profiles in this
-// binary. The capsulectl-book plugin calls it before building its tree.
-//
-// Deprecated: use RegisterLogBackend(BookPluginName, b).
-func SetBookBackend(b BookBackend) { RegisterLogBackend(BookPluginName, b) }
-
 // backendFor is the backend serving p's log in this process, or nil when p's
 // log is the core's or its owner's plugin runs elsewhere.
 func backendFor(p Profile) LogBackend {
@@ -125,20 +91,6 @@ func backendFor(p Profile) LogBackend {
 	}
 	return logBackends[owner]
 }
-
-// DealBundleRun builds `bundle`, `disclose` or `permalink` with --deal. The
-// capsulectl-deal plugin sets it; while it is unset the command runs there.
-var DealBundleRun func(c *cobra.Command, use string) error
-
-// DealCommandGroup is the `deal` command group. The capsulectl-deal plugin
-// sets it, so commands that run deal verbs themselves (`canary run`) run
-// them in this process; while it is unset they run in that plugin.
-var DealCommandGroup func() *cobra.Command
-
-// DealTickCommand is `deal tick`, also mounted as `cll checkpoint cadence`.
-// The capsulectl-deal plugin sets it; while it is unset the core mounts a
-// command that runs `tick` there.
-var DealTickCommand func() *cobra.Command
 
 // errLogNeedsPlugin is reached only when a plugin-kept profile gets past the
 // delegation below without a backend, which a command must never allow.
@@ -189,7 +141,7 @@ func CommandLine(c *cobra.Command, args []string) []string {
 	return path
 }
 
-// ForwardToPlugin runs the first-party plugin name with args, or says it is
+// ForwardToPlugin runs the plugin name with args, or says it is
 // not installed and where to install it.
 func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 	plugins, refused := discoverPluginsAndRefusals()
@@ -218,7 +170,7 @@ func forwardDiscovered(c *cobra.Command, name string, args []string, plugins []p
 	return missingPluginError(name, refused)
 }
 
-// missingPluginError says a first-party plugin is refused, with why, when
+// missingPluginError says a plugin is refused, with why, when
 // discovery refused it (refused is that discovery's, so no launcher is run
 // again), and otherwise that it is not installed and how to install it.
 func missingPluginError(name string, refused []refusedPlugin) error {
@@ -258,94 +210,6 @@ func inheritedProfile() string {
 		return ""
 	}
 	return os.Getenv(ProfileEnv)
-}
-
-// aliasCommand is a transitional alias (capsule-cli#238): an old top-level
-// name that now lives in a plugin. It prints a one-line notice naming the
-// replacement on stderr and runs the replacement with the arguments
-// unchanged; stdout and the exit code are the replacement's. pick, when
-// set, chooses the plugin from the selected profile.
-func aliasCommand(use, short string, target func(args []string) (plugin string, path []string, err error)) *cobra.Command {
-	return &cobra.Command{
-		Use:                use,
-		Short:              short,
-		DisableFlagParsing: true,
-		RunE: func(c *cobra.Command, args []string) error {
-			if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
-				return c.Help()
-			}
-			plugin, path, err := target(args)
-			if err != nil {
-				return err
-			}
-			replacement := "capsulectl " + plugin + " " + strings.Join(path, " ")
-			old := strings.TrimPrefix(c.CommandPath(), c.Root().CommandPath()+" ")
-			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: `capsulectl %s` is deprecated; use `%s` (the alias is removed in %s)\n", old, replacement, AliasRemovedIn)
-			return ForwardToPlugin(c, plugin, append(path, args...))
-		},
-	}
-}
-
-// aliasShort is an alias's help line: deprecated, its replacement, and the
-// release that removes it.
-func aliasShort(replacement string) string {
-	return fmt.Sprintf("Deprecated: use `capsulectl %s`; removed in %s", replacement, AliasRemovedIn)
-}
-
-// transitionalAliases are the old entry points of commands that moved into
-// the plugins, each forwarding with its arguments unchanged.
-func transitionalAliases() []*cobra.Command {
-	fixed := func(plugin string, path ...string) func([]string) (string, []string, error) {
-		return func([]string) (string, []string, error) { return plugin, path, nil }
-	}
-	// request and respond go where they did before: a sqlite (deal)
-	// profile's to capsulectl-deal, any other profile's to capsulectl-book.
-	byProfile := func(verb string) func([]string) (string, []string, error) {
-		return func(args []string) (string, []string, error) {
-			name := profileInArgs(args)
-			if name == "" {
-				return BookPluginName, []string{verb}, nil
-			}
-			p, err := LoadProfile(name)
-			if err != nil {
-				return "", nil, Hint(ErrInput, err.Error())
-			}
-			if p.Type == "sqlite" {
-				return DealPluginName, []string{verb}, nil
-			}
-			return BookPluginName, []string{verb}, nil
-		}
-	}
-	return []*cobra.Command{
-		aliasCommand("close", aliasShort("book close"), fixed(BookPluginName, "close")),
-		aliasCommand("reconcile", aliasShort("book reconcile"), fixed(BookPluginName, "reconcile")),
-		aliasCommand("request", aliasShort("book request (a deal profile: capsulectl deal request)"), byProfile("request")),
-		aliasCommand("respond", aliasShort("book respond (a deal profile: capsulectl deal respond)"), byProfile("respond")),
-		aliasCommand("compose", aliasShort("deal compose"), fixed(DealPluginName, "compose")),
-		// `result build` is the core's now (capsule-cli#324); only `result
-		// open` still forwards.
-		resultCommand(),
-		aliasCommand("report", aliasShort("book report"), fixed(BookPluginName, "report")),
-		aliasCommand("backfill", aliasShort("book backfill"), fixed(BookPluginName, "backfill")),
-	}
-}
-
-// firstPartyPlaceholder stands in for a first-party plugin that is not
-// installed, or that discovery refused, so `capsulectl book ...` says what to
-// install or why it is refused instead of reporting an unknown command.
-func firstPartyPlaceholder(name, short string, refused []refusedPlugin) *cobra.Command {
-	state := "not installed"
-	if refusedPluginError(name, refused) != nil {
-		state = "refused: see capsulectl plugin ls"
-	}
-	return &cobra.Command{
-		Use:                name,
-		Short:              short + " (plugin capsulectl-" + name + ", " + state + ")",
-		DisableFlagParsing: true,
-		RunE: func(*cobra.Command, []string) error {
-			return missingPluginError(name, refused)
-		},
-	}
 }
 
 // refusedPluginError is the refusal of a capsulectl-<name> launcher that
@@ -398,7 +262,7 @@ func refusedPluginPlaceholder(name string, refused []refusedPlugin) *cobra.Comma
 	}
 }
 
-// PluginMetadata is what a first-party plugin binary answers to the
+// PluginMetadata is what a plugin binary answers to the
 // cli-plugin-metadata handshake.
 type PluginMetadata struct {
 	Name        string
@@ -414,14 +278,14 @@ func NewCommandWith(cmds ...*cobra.Command) *cobra.Command {
 	return newCommand(false, cmds)
 }
 
-// NewPluginCommand is a first-party plugin binary's tree: NewCommandWith,
+// NewPluginCommand is a plugin binary's tree: NewCommandWith,
 // named capsulectl-<name>, answering the cli-plugin-metadata handshake.
 func NewPluginCommand(meta PluginMetadata, cmds ...*cobra.Command) *cobra.Command {
 	runningPlugin = meta.Name
 	root := newCommand(false, cmds)
 	root.Use = pluginLauncherPrefix + meta.Name
 	// It is reached as `capsulectl <name>`, so its help and its messages
-	// name its commands that way: `capsulectl deal history`.
+	// name its commands that way: `capsulectl ledger history`.
 	root.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "capsulectl " + meta.Name}
 	root.Version = FirstNonEmpty(PluginVersion, CLIVersion)
 	root.SetVersionTemplate(root.Use + " {{.Version}} (commit " + FirstNonEmpty(PluginCommit, CLICommit) + ")\n")

@@ -18,21 +18,20 @@ func TestLogOwner(t *testing.T) {
 		p    Profile
 		want string
 	}{
-		{"jsonl with a log_id and no log reads as a book", Profile{Type: "jsonl", LogID: "l"}, LogBook},
-		{"jsonl declared book", Profile{Type: "jsonl", LogID: "l", Log: "book"}, "book"},
+		{"jsonl with a log_id and no log has no declared owner", Profile{Type: "jsonl", LogID: "l"}, ""},
 		{"jsonl declared cll", Profile{Type: "jsonl", LogID: "l", Log: LogCLL}, ""},
 		{"jsonl naming another plugin", Profile{Type: "jsonl", LogID: "l", Log: "ledger"}, "ledger"},
 		{"jsonl with no log_id", Profile{Type: "jsonl"}, ""},
 		{"sqlite", Profile{Type: "sqlite", LogID: "l"}, ""},
-		{"sqlite deal namespace saved before the field reads as the deal plugin", Profile{Type: "sqlite", Namespace: "deal"}, DealPluginName},
+		{"sqlite namespace with no log", Profile{Type: "sqlite", Namespace: "ns"}, ""},
 		{"sqlite namespace naming a plugin", Profile{Type: "sqlite", Namespace: "ns", Log: "ledger"}, "ledger"},
-		{"sqlite namespace declared cll", Profile{Type: "sqlite", Namespace: "deal", Log: LogCLL}, ""},
+		{"sqlite namespace declared cll", Profile{Type: "sqlite", Namespace: "ns", Log: LogCLL}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, tc.p.LogOwner())
 			assert.Equal(t, tc.want != "" && tc.p.Type == "jsonl", tc.p.HasPluginLog())
 			assert.Equal(t, tc.want != "" && tc.p.Type == "sqlite", tc.p.HasOwnedStore())
-			assert.Equal(t, tc.want == LogBook && tc.p.Type == "jsonl", tc.p.IsBook())
+			assert.Equal(t, tc.p.Type == "jsonl" && tc.p.LogID != "" && tc.p.Log == "", tc.p.OwnerUndeclared())
 		})
 	}
 }
@@ -45,7 +44,7 @@ func TestLogOwnerIsValidated(t *testing.T) {
 		p.Connection.Database = filepath.Join(t.TempDir(), "store")
 		return p
 	}
-	for _, log := range []string{"ledger", "book", LogCLL} {
+	for _, log := range []string{"ledger", "other", LogCLL} {
 		p := base()
 		p.Log = log
 		require.NoError(t, p.validate(), log)
@@ -109,17 +108,16 @@ func TestARegisteredBackendServesItsOwnersProfiles(t *testing.T) {
 
 type fakeBackend struct{ LogBackend }
 
-// IsBook means the book plugin, and only it: the book plugin's own checks use
-// it, so another plugin's profile is not one.
-func TestIsBookNamesTheBookOnly(t *testing.T) {
-	ledger := Profile{Type: "jsonl", LogID: "l", Log: "ledger"}
-	assert.True(t, ledger.HasPluginLog())
-	assert.False(t, ledger.IsBook())
-	assert.False(t, ledger.OperatorMissing(), "the operator is the book's")
-	book := Profile{Type: "jsonl", LogID: "l", Log: LogBook}
-	assert.True(t, book.IsBook())
-	assert.True(t, book.OperatorMissing())
-	assert.True(t, Profile{Type: "jsonl", LogID: "l"}.IsBook(), "a legacy profile still reads as a book")
+// A jsonl profile with a log_id that says nothing about its log is not guessed
+// to be anyone's; one that names its owner, or says cll, is.
+func TestOwnerUndeclaredIsNotGuessed(t *testing.T) {
+	assert.True(t, Profile{Type: "jsonl", LogID: "l"}.OwnerUndeclared())
+	assert.False(t, Profile{Type: "jsonl", LogID: "l", Log: LogCLL}.OwnerUndeclared())
+	assert.False(t, Profile{Type: "jsonl", LogID: "l", Log: "ledger"}.OwnerUndeclared())
+	assert.False(t, Profile{Type: "jsonl"}.OwnerUndeclared())
+	assert.False(t, Profile{Type: "sqlite", Namespace: "ns"}.OwnerUndeclared())
+	assert.True(t, Profile{Type: "jsonl", LogID: "l", Log: "ledger"}.OperatorMissing())
+	assert.False(t, Profile{Type: "jsonl", LogID: "l", Log: LogCLL}.OperatorMissing())
 }
 
 // In the owner's own process, a missing backend is an error and never another
@@ -141,26 +139,34 @@ func TestOwnerProcessWithoutBackendDoesNotForwardToItself(t *testing.T) {
 func TestLogOwnerCannotBeSwappedByUpdate(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	p.Type, p.Log, p.Operator = "jsonl", LogBook, "op"
+	p.Type, p.Log, p.Operator = "jsonl", "ledger", "op"
 	p.Connection.Database = filepath.Join(t.TempDir(), "store")
 	require.NoError(t, SaveProfile(p, false))
-	for _, log := range []string{"ledger", LogCLL} {
+	for _, log := range []string{"other", LogCLL} {
 		_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--log", log)
 		require.ErrorIs(t, err, ErrInput, log)
-		assert.Contains(t, SafeError(err), "stays with the owner it was made with (log: book)")
+		assert.Contains(t, SafeError(err), "stays with the owner it was made with (log: ledger)")
 	}
-	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--log", LogBook)
+	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--log", "ledger")
 	require.NoError(t, err, "restating the owner is accepted")
 
 	legacy := p
-	legacy.Name, legacy.Log = "legacy-book", ""
+	legacy.Name, legacy.Log = "legacy", ""
 	require.NoError(t, SaveProfile(legacy, false))
-	_, err = invoke(t, "", "profile", "update", "--profile", legacy.Name, "--log", LogBook)
+	_, err = invoke(t, "", "profile", "show", legacy.Name)
+	require.NoError(t, err, "a profile saved without an owner still loads, so it can be fixed")
+	_, err = invoke(t, "", "cll", "list", "--profile", legacy.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner: capsulectl profile update --profile legacy --log")
+	_, err = invoke(t, "", "profile", "update", "--profile", legacy.Name, "--log", "ledger")
 	require.NoError(t, err, "the fix line for a profile saved without an owner")
+	fixed, err := LoadProfile(legacy.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "ledger", fixed.Log)
 }
 
 // A plugin that keeps a log in its own files is not retired with --move-data:
-// the core holds only the book's locks.
+// the core holds only its own journal's lock.
 func TestRetireMoveDataRefusesAnotherPluginsLog(t *testing.T) {
 	retireOn(t, "2026-10-07")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -176,15 +182,6 @@ func TestRetireMoveDataRefusesAnotherPluginsLog(t *testing.T) {
 	assert.DirExists(t, p.Connection.Database)
 }
 
-// The names that went generic keep their old spelling for the plugins that
-// have not moved yet.
-func TestGenericNamesKeepTheirOldSpelling(t *testing.T) {
-	assert.Same(t, ErrPluginLogProfile, ErrBookProfile)
-	var request BookBundleRequest = LogBundleRequest{Root: "r"}
-	assert.Equal(t, "r", request.Root)
-	assert.Equal(t, RemoteCommand().Use, RemoteBookCommand().Use)
-}
-
 // countersign request builds a bundle from the core's own log; on a profile
 // whose log a plugin keeps it says so and names the way out.
 func TestCountersignRequestOnAPluginKeptProfileNamesTheWayOut(t *testing.T) {
@@ -193,4 +190,85 @@ func TestCountersignRequestOnAPluginKeptProfileNamesTheWayOut(t *testing.T) {
 	_, err := invoke(t, "", "countersign", "request", "--profile", p.Name, "--service", "https://countersign.example/v1", "--window", "2026-Q3", "--root", strings.Repeat("ab", 32))
 	require.ErrorIs(t, err, ErrPluginLogProfile)
 	assert.Contains(t, SafeError(err), "pass --bundle")
+}
+
+// A profile with no declared owner has its data kept in place and its cadence
+// refused with the fix, not told the core keeps its log.
+func TestUndeclaredOwnerIsNotMovedOrTakenForTheCores(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Type, p.Log = "jsonl", ""
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, os.MkdirAll(p.Connection.Database, 0o700))
+	require.NoError(t, SaveProfile(p, false))
+	_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", filepath.Join(t.TempDir(), "x"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner")
+	assert.DirExists(t, p.Connection.Database)
+	assert.Contains(t, profileNames(t), p.Name)
+
+	_, err = invoke(t, "", "cll", "checkpoint", "cadence", "--profile", p.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner: capsulectl profile update --profile "+p.Name)
+
+	// A sqlite store only the older marker covers is no more the core's.
+	q := sqliteStoreProfile(t)
+	execSQL(t, q, `CREATE TABLE deal_shelf (id INTEGER PRIMARY KEY)`)
+	_, err = invoke(t, "", "cll", "checkpoint", "cadence", "--profile", q.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner")
+}
+
+// The install check finds the skill named like the plugin, or capsulectl-<plugin>.
+func TestSkillsNamedLikeThePlugin(t *testing.T) {
+	dir := t.TempDir()
+	for name, skill := range map[string]string{"a": "ledger", "b": "capsulectl-ledger", "c": "other"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, name), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name, "SKILL.md"), []byte("---\nname: "+skill+"\n---\n"), 0o644))
+	}
+	found, err := skillsNamed(dir, "ledger", "capsulectl-ledger")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a/SKILL.md", "b/SKILL.md"}, found)
+	found, err = skillsNamed(dir, "ledger")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a/SKILL.md"}, found)
+}
+
+func TestNewRefusalsOfOwnerlessAndCoreKeptProfiles(t *testing.T) {
+	pluginRoot(t)
+	// A cadence on a profile the core keeps says it has none.
+	core := ownedProfile(t, "jsonl", LogCLL)
+	_, err := invoke(t, "", "cll", "checkpoint", "cadence", "--profile", core.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "kept by the core: it has no checkpoint cadence")
+
+	// profile create names its owner, or is refused.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, err = invoke(t, "", "profile", "create", "--name", "nolog", "--type", "jsonl",
+		"--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo", "--log-id", "l", "--operator", "op")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--log is required for a jsonl profile with a log_id")
+
+	// A sqlite store only the older marker covers is declared once, by the user.
+	q := sqliteStoreProfile(t)
+	execSQL(t, q, `CREATE TABLE deal_shelf (id INTEGER PRIMARY KEY)`)
+	_, err = invoke(t, "", "profile", "update", "--profile", q.Name, "--log", "ledger")
+	require.NoError(t, err, "the owner of a store the older marker covers is named once")
+	declared, err := LoadProfile(q.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "ledger", declared.LogOwner())
+	_, err = invoke(t, "", "profile", "update", "--profile", q.Name, "--log", "other")
+	require.ErrorIs(t, err, ErrInput, "and then it stays")
+
+	// A store a plugin owns is not bundled by the core; inside that plugin the
+	// message points at its own flags.
+	_, err = invoke(t, "", "bundle", "--profile", q.Name, "--root", strings.Repeat("ab", 32))
+	require.Error(t, err)
+	previous := runningPlugin
+	runningPlugin = "ledger"
+	t.Cleanup(func() { runningPlugin = previous })
+	_, err = invoke(t, "", "bundle", "--profile", q.Name, "--root", strings.Repeat("ab", 32))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "owned by this plugin")
 }

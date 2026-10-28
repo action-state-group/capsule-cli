@@ -114,13 +114,13 @@ func serveVectors(t *testing.T) func([]byte) (int, []byte) {
 // plugin mounts it: the core's RemoteCommand under `book`.
 func invokeRemote(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	book := &cobra.Command{Use: BookPluginName}
+	book := &cobra.Command{Use: "book"}
 	book.AddCommand(RemoteCommand())
 	c := NewCommandWith(book)
 	var out bytes.Buffer
 	c.SetOut(&out)
 	c.SetErr(&out)
-	c.SetArgs(append([]string{BookPluginName, "remote"}, args...))
+	c.SetArgs(append([]string{"book", "remote"}, args...))
 	e := c.ExecuteContext(t.Context())
 	return out.String(), e
 }
@@ -550,9 +550,6 @@ func TestStorageVerbsRejectARemoteProfile(t *testing.T) {
 		{"cll", "checkpoint", "status"},
 		{"bundle", "--root", root},
 		{"disclose", "--root", root, "--out", filepath.Join(t.TempDir(), "b.json")},
-		{"close", "--counterparty", "peer-a", "--period", "day"},
-		{"reconcile", "--counterparty", "peer-a"},
-		{"respond", "--output", filepath.Join(t.TempDir(), "r.json")},
 	} {
 		_, e := invoke(t, "", append(args, "--profile", "node")...)
 		require.ErrorIs(t, e, ErrInput, "%v", args)

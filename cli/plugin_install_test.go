@@ -55,7 +55,7 @@ func launcherScript(name, version, marker string) string {
 	if marker != "" {
 		record = "echo ran >> " + marker + "\n"
 	}
-	return fmt.Sprintf("#!/bin/sh\n%sif [ \"$1\" = cli-plugin-metadata ]; then echo '{\"name\":%q,\"vendor\":\"t\",\"version\":%q,\"plugin_api\":\"cli-plugin/v1\"}'; exit 0; fi\necho \"ran %s: $*\"\n", record, name, version, name)
+	return fmt.Sprintf("#!/bin/sh\n%sif [ \"$1\" = cli-plugin-metadata ]; then echo '{\"name\":%q,\"vendor\":\"t\",\"version\":%q,\"core_version\":%q,\"plugin_api\":\"cli-plugin/v1\"}'; exit 0; fi\necho \"ran %s: $*\"\n", record, name, version, version, name)
 }
 
 func launcherFile(t *testing.T, name, version, marker string) string {
@@ -154,7 +154,7 @@ func TestPluginInstallOperands(t *testing.T) {
 	t.Chdir(dir)
 	_, err = invoke(t, "", "plugin", "install", "deal")
 	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-deal")
+	assert.Contains(t, SafeError(err), "./capsulectl-deal")
 	out, err := invoke(t, "", "plugin", "install", "./deal")
 	require.NoError(t, err, out)
 	assert.Equal(t, "deal", installOut(t, out).Name)
@@ -1008,8 +1008,8 @@ func TestPluginInstallListsEveryUnsafeComponent(t *testing.T) {
 	assert.Regexp(t, `chmod go-w \S+ \S+\.local \S+\.local/lib`, msg, "one combined fix")
 }
 
-// A hand-over (here the transitional `compose` alias, through
-// ForwardToPlugin) warns on drift too.
+// A hand-over (here a bundle command routed to the plugin that keeps the
+// profile's log) warns on drift too.
 func TestHandOverWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
 	_, root := installHome(t)
 	old := CLIVersion
@@ -1017,18 +1017,20 @@ func TestHandOverWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
 	CLIVersion = "v0.2.0"
 	require.NoError(t, os.MkdirAll(root, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-deal"), []byte(launcherScript("deal", "v0.1.0", "")), 0o755))
-	out, err := invoke(t, "", "compose")
+	p := ownedProfile(t, "sqlite", "deal")
+	out, err := invoke(t, "", "bundle", "--profile", p.Name, "--root", "abc")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "warning:")
-	assert.Contains(t, out, "ran deal: compose")
+	assert.Contains(t, out, "ran deal: bundle")
 }
 
 func TestProfilePlugin(t *testing.T) {
-	assert.Equal(t, DealPluginName, profilePlugin(Profile{Type: "sqlite", Namespace: "deal"}))
+	assert.Equal(t, "deal", profilePlugin(Profile{Type: "sqlite", Namespace: "deal", Log: "deal"}))
+	assert.Equal(t, "", profilePlugin(Profile{Type: "sqlite", Namespace: "deal"}), "no declared owner is not guessed")
 	assert.Equal(t, "ledger", profilePlugin(Profile{Type: "sqlite", Namespace: "ns", Log: "ledger"}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "sqlite", Namespace: "capsule"}), "a plain sqlite profile needs no plugin")
 	assert.Equal(t, "", profilePlugin(Profile{Type: "sqlite"}))
-	assert.Equal(t, BookPluginName, profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogBook}))
+	assert.Equal(t, "book", profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: "book"}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogCLL}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "mysql"}))
 }
@@ -1066,7 +1068,7 @@ func TestARefusedUserRootNamesItsFixInLsAndAtDispatch(t *testing.T) {
 // not that it is not installed.
 func TestARefusedFirstPartyPluginIsNotCalledMissing(t *testing.T) {
 	home, _ := installHome(t)
-	_, err := invoke(t, "", "plugin", "install", launcherFile(t, DealPluginName, "1", ""))
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "deal", "1", ""))
 	require.NoError(t, err)
 	local := filepath.Join(home, ".local")
 	require.NoError(t, os.Chmod(local, 0o775))
@@ -1115,7 +1117,7 @@ func TestRefusedLaunchersNeverRunOrShadow(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "refused-ran")
 	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", marker))
 	require.NoError(t, err)
-	for _, name := range []string{"verify", BookPluginName} {
+	for _, name := range []string{"verify", "book"} {
 		require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-"+name), []byte(launcherScript(name, "1", marker)), 0o755))
 	}
 	require.NoError(t, os.Remove(marker), "install's own handshake ran it once")
@@ -1164,14 +1166,14 @@ func TestARefusalsPathsAreEscapedAtDispatch(t *testing.T) {
 
 // The command tree holds one command per name: a refused launcher adds none
 // for a name an accepted launcher or a core command holds, and two roots
-// refusing the same name add one. A refused deal reached through an alias
-// (compose) says it is refused, and an error runs no accepted launcher's
+// refusing the same name add one. A refused plugin reached through a profile
+// that names it says it is refused, and an error runs no accepted launcher's
 // handshake again.
 func TestRefusedLaunchersAddOneCommandPerName(t *testing.T) {
 	home, root := installHome(t)
 	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 	require.NoError(t, err)
-	for _, name := range []string{"verify", DealPluginName, "zeta"} {
+	for _, name := range []string{"verify", "deal", "zeta"} {
 		require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-"+name), []byte(launcherScript(name, "1", "")), 0o755))
 	}
 	second := filepath.Join(safeTempDir(t), "second")
@@ -1188,18 +1190,18 @@ func TestRefusedLaunchersAddOneCommandPerName(t *testing.T) {
 	counts := map[string]int{}
 	for _, c := range NewCommand().Commands() {
 		counts[c.Name()]++
-		if c.Name() == DealPluginName {
-			assert.True(t, strings.HasPrefix(c.Short, "Deals:"), "deal keeps its first-party placeholder: %s", c.Short)
+		if c.Name() == "deal" {
 			assert.Contains(t, c.Short, "refused: see capsulectl plugin ls")
 			assert.NotContains(t, c.Short, "not installed")
 		}
 	}
-	for _, name := range []string{"acme", "verify", "zeta", DealPluginName} {
+	for _, name := range []string{"acme", "verify", "zeta", "deal"} {
 		assert.Equal(t, 1, counts[name], name)
 	}
 	require.NoError(t, os.Remove(handshakes), "building the tree ran the accepted acme's handshake")
 
-	_, err = invoke(t, "", "compose", "--member", "x")
+	owned := ownedProfile(t, "sqlite", "deal")
+	_, err = invoke(t, "", "bundle", "--profile", owned.Name, "--root", "abc")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "capsulectl-deal plugin at")
 	assert.Contains(t, SafeError(err), "chmod go-w ")
@@ -1288,8 +1290,10 @@ func TestPluginInstallFirstPartyCoreVersion(t *testing.T) {
 }
 
 func TestPluginHandshakeReportsCoreVersion(t *testing.T) {
-	oldVersion, oldPlugin, oldCommit := CLIVersion, PluginVersion, PluginCommit
-	t.Cleanup(func() { CLIVersion, PluginVersion, PluginCommit = oldVersion, oldPlugin, oldCommit })
+	oldVersion, oldPlugin, oldCommit, oldRunning := CLIVersion, PluginVersion, PluginCommit, runningPlugin
+	t.Cleanup(func() {
+		CLIVersion, PluginVersion, PluginCommit, runningPlugin = oldVersion, oldPlugin, oldCommit, oldRunning
+	})
 	handshake := func() pluginInfo {
 		root := NewPluginCommand(PluginMetadata{Name: "deal", Vendor: "t"})
 		var buf bytes.Buffer
@@ -1323,7 +1327,7 @@ func TestDriftWarningAndDoctorCompareCoreVersion(t *testing.T) {
 	CLIVersion = "v0.2.0"
 
 	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.2.0", path: "/x/capsulectl-deal"}))
-	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v0.2.0", path: "/x/capsulectl-deal"}), "no core_version: version is the core's")
+	assert.Empty(t, driftWarning(pluginInfo{Name: "deal", Version: "v0.2.0", path: "/x/capsulectl-deal"}), "no core_version: not checked, whatever its version")
 	assert.Contains(t, driftWarning(pluginInfo{Name: "deal", Version: "v1.4.0", CoreVersion: "v0.1.9", path: "/x/capsulectl-deal"}), "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
 
 	root := pluginRoot(t)
@@ -1343,8 +1347,8 @@ func TestDriftWarningAndDoctorCompareCoreVersion(t *testing.T) {
 	assert.Contains(t, issue, "is built for capsulectl v0.1.9, this capsulectl is v0.2.0")
 }
 
-// The first-party plugins ship from their own releases (capsule-cli#326):
-// installing one by name is refused, with the file form, on any core.
+// A plugin ships from its own release (capsule-cli#326): installing one by
+// name is refused, with the file form, on any core.
 func TestPluginInstallByNameIsRefused(t *testing.T) {
 	_, root := installHome(t)
 	old := CLIVersion
@@ -1354,7 +1358,7 @@ func TestPluginInstallByNameIsRefused(t *testing.T) {
 		for _, name := range []string{"book", "deal"} {
 			_, err := invoke(t, "", "plugin", "install", name)
 			require.ErrorIs(t, err, ErrInput)
-			assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-"+name)
+			assert.Contains(t, SafeError(err), "./capsulectl-"+name)
 			assert.NotContains(t, SafeError(err), "https://", "the core names no release location")
 		}
 	}
