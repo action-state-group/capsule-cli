@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -77,11 +78,7 @@ func TestEveryWordingKeyTheCodeNamesIsInThePack(t *testing.T) {
 	// Families the code completes at run time.
 	for _, family := range []string{"say.error.before", "say.error.after", "say.error.other",
 		"say.error.cause.input", "say.error.cause.conflict", "say.error.cause.pending", "say.error.cause.partial",
-		"say.error.cause.paused", "say.error.cause.no_answer", "say.error.cause.other",
-		"say.approval.proceed.pay", "say.approval.proceed.share_contact", "say.approval.proceed.share_credentials",
-		"say.approval.proceed.commit", "say.approval.proceed.sign", "say.approval.proceed.cancel", "say.approval.proceed.represent",
-		"say.approval.not_applied.answered", "say.approval.not_applied.changed", "say.approval.not_applied.replaced",
-		"say.approval.not_applied.confirmed", "say.approval.not_applied.other"} {
+		"say.error.cause.paused", "say.error.cause.no_answer", "say.error.cause.other"} {
 		assert.Contains(t, w.Entries, family)
 	}
 }
@@ -95,14 +92,18 @@ func TestALineFillsItsPlaceholders(t *testing.T) {
 	assert.Equal(t, "one\nthree", Lines("one", "", "three"))
 }
 
-// writePack writes a pack with the built-in keys, changed by edit.
-func writePack(t *testing.T, edit func(entries map[string]string)) string {
+// writePack writes a pack with the core's built-in keys and those of extra,
+// changed by edit.
+func writePack(t *testing.T, extra map[string]string, edit func(entries map[string]string)) string {
 	t.Helper()
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(BuiltinWordingBytes(), &doc))
 	entries := map[string]string{}
 	for k, v := range doc["entries"].(map[string]any) {
 		entries[k] = v.(string)
+	}
+	for k, v := range extra {
+		entries[k] = v
 	}
 	edit(entries)
 	doc["id"], doc["entries"] = "org.example.product.wording/v0", entries
@@ -113,34 +114,59 @@ func writePack(t *testing.T, edit func(entries map[string]string)) string {
 	return path
 }
 
+// acmeWording is a plugin's own built-in pack, holding the terms line an
+// approval binds to: the core's pack holds no card.terms key of its own.
+var acmeWording = map[string]string{
+	"card.terms.label":          "Saying yes also agrees to {terms}.",
+	"card.terms.price":          "a price of {value}",
+	"card.terms.was":            "(was {value})",
+	"card.terms.not_refundable": "no refunds",
+	"card.terms.condition":      "{name}: {value}",
+	"say.acme.done":             "Done.",
+}
+
+func acmePackJSON(t *testing.T) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"wording_pack_version": "aac.wording-pack/v0", "id": "org.example.acme.wording/v0", "locale": "en", "entries": acmeWording})
+	require.NoError(t, err)
+	return raw
+}
+
+// acmeLauncher is a capsulectl-acme launcher whose handshake carries pack.
+func acmeLauncher(pack []byte) string {
+	handshake := map[string]any{"name": "acme", "vendor": "ACME", "version": "1.0.0", "plugin_api": PluginAPI}
+	if pack != nil {
+		handshake["wording"] = json.RawMessage(pack)
+	}
+	info, _ := json.Marshal(handshake)
+	return "#!/bin/sh\nif [ \"$1\" = \"cli-plugin-metadata\" ]; then\n  cat <<'JSON'\n" + string(info) + "\nJSON\n  exit 0\nfi\nexit 3\n"
+}
+
+// acmeProfile is a profile whose log capsulectl-acme keeps, with that
+// launcher installed in a trusted root.
+func acmeProfile(t *testing.T, pack []byte) Profile {
+	t.Helper()
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-acme", acmeLauncher(pack), 0o755)
+	p := ownedProfile(t, "jsonl", "acme")
+	p.Operator = "op"
+	require.NoError(t, SaveProfile(p, true))
+	return p
+}
+
 func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	var p Profile
-	complete := writePack(t, func(e map[string]string) { e["say.open.first"] = "Product words." })
+	complete := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })
 	require.NoError(t, pinWording(&p, complete))
 	assert.Equal(t, complete, p.Wording.Path)
 	assert.Regexp(t, `^[0-9a-f]{64}$`, p.Wording.SHA256)
 	w, problem := ActiveWording(p)
 	assert.Empty(t, problem)
 	assert.Equal(t, "pinned", w.Source)
-	assert.Equal(t, "Product words.", w.Line("say.open.first", nil))
+	assert.Equal(t, "Product words.", w.Line("say.verify.unchanged", nil))
 
-	incomplete := writePack(t, func(e map[string]string) { delete(e, "say.open.first") })
-	assert.ErrorContains(t, pinWording(&p, incomplete), "is not complete")
-	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
-
-	// The terms line is what an approval binds to: a pack can't hide it.
-	for key, text := range map[string]string{
-		"card.terms.label":          "Saying yes also agrees.",
-		"card.terms.price":          "a new price",
-		"card.terms.was":            "(was)",
-		"card.terms.not_refundable": " ",
-		"card.terms.condition":      "{name}: {value} {extra}",
-	} {
-		hiding := writePack(t, func(e map[string]string) { e[key] = text })
-		assert.ErrorContains(t, pinWording(&p, hiding), "could hide a term a yes agrees to: "+key, key)
-	}
-	extra := writePack(t, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" })
-	assert.ErrorContains(t, pinWording(&p, extra), "could hide a term a yes agrees to: card.terms.label")
+	incomplete := writePack(t, nil, func(e map[string]string) { delete(e, "say.verify.unchanged") })
+	assert.ErrorContains(t, pinWording(&p, incomplete), "is not complete: it lacks 1 of the built-in pack's keys, first say.verify.unchanged")
 	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
 
 	invalid := filepath.Join(t.TempDir(), "bad.json")
@@ -152,10 +178,160 @@ func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	assert.Equal(t, ProfileWording{}, p.Wording)
 }
 
+// The merge gate of capsule-cli#428 step 3 (Steven's door (c) ruling): the
+// terms line lives in a plugin's pack, and a pinned pack that could hide a
+// term from it is still refused by the core, which reads the plugin's pack
+// from its handshake in another process. A pack made from the core's pack
+// alone is refused with a line naming the plugin whose keys it lacks.
+func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
+	p := acmeProfile(t, acmePackJSON(t))
+
+	coreOnly := writePack(t, nil, func(map[string]string) {})
+	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", coreOnly)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own")
+
+	for key, text := range map[string]string{
+		"card.terms.label":          "Saying yes also agrees.",
+		"card.terms.price":          "a new price",
+		"card.terms.was":            "(was)",
+		"card.terms.not_refundable": " ",
+		"card.terms.condition":      "{name}: {value} {extra}",
+	} {
+		hiding := writePack(t, acmeWording, func(e map[string]string) { e[key] = text })
+		_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", hiding)
+		require.ErrorIs(t, err, ErrInput, key)
+		assert.Contains(t, SafeError(err), "could hide a term a yes agrees to: "+key, key)
+	}
+	extra := writePack(t, acmeWording, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" })
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", extra)
+	assert.Contains(t, SafeError(err), "could hide a term a yes agrees to: card.terms.label")
+	saved, err := LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Empty(t, saved.Wording.Path, "a refused pin pins nothing")
+
+	complete := writePack(t, acmeWording, func(e map[string]string) { e["say.acme.done"] = "All set." })
+	out, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", complete)
+	require.NoError(t, err, out)
+	saved, err = LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Equal(t, complete, saved.Wording.Path)
+
+	// doctor checks the pin the same way: a plugin release whose pack adds
+	// a key leaves the pinned pack incomplete for that plugin's commands.
+	out, err = invoke(t, "", "--profile", p.Name, "doctor")
+	require.NoError(t, err, out)
+	var report map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	assert.Equal(t, "pinned", report["profile"].(map[string]any)["wording"].(map[string]any)["used"])
+	newer := maps.Clone(acmeWording)
+	newer["card.terms.deposit"] = "a deposit of {value}"
+	raw, err := json.Marshal(map[string]any{"wording_pack_version": "aac.wording-pack/v0", "id": "org.example.acme.wording/v0", "locale": "en", "entries": newer})
+	require.NoError(t, err)
+	writeLauncher(t, os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme", acmeLauncher(raw), 0o755)
+	out, err = invoke(t, "", "--profile", p.Name, "doctor")
+	require.NoError(t, err, out)
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	wording := report["profile"].(map[string]any)["wording"].(map[string]any)
+	assert.Equal(t, "built-in", wording["used"])
+	assert.Contains(t, wording["issue"], "lacks 1 of the capsulectl-acme plugin's keys, first card.terms.deposit")
+
+	// With the plugin gone, doctor says what the core's commands still
+	// speak (the pinned pack) and that the plugin's keys went unchecked.
+	require.NoError(t, os.Remove(filepath.Join(os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme")))
+	out, err = invoke(t, "", "--profile", p.Name, "doctor")
+	require.NoError(t, err, out)
+	report = map[string]any{}
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	wording = report["profile"].(map[string]any)["wording"].(map[string]any)
+	assert.Equal(t, "pinned", wording["used"])
+	assert.Nil(t, wording["issue"])
+	assert.Contains(t, wording["notice"], "was not checked against the words of the plugin that keeps this profile's log: this needs the capsulectl-acme plugin, which is not installed")
+}
+
+// A pin whose plugin's words cannot be read is refused: a missing plugin,
+// or a pack that is not one, redefines a core key or is in another locale.
+func TestPinningRefusesAPluginPackItCannotCheck(t *testing.T) {
+	pack := writePack(t, acmeWording, func(map[string]string) {})
+	p := acmeProfile(t, acmePackJSON(t))
+	require.NoError(t, os.Remove(filepath.Join(os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme")))
+	err := pinWording(&p, pack)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "cannot be checked against the words of the plugin that keeps this profile's log: this needs the capsulectl-acme plugin, which is not installed")
+
+	for name, edit := range map[string]func(doc map[string]any){
+		"redefines the core's key say.verify.unchanged": func(doc map[string]any) {
+			doc["entries"].(map[string]any)["say.verify.unchanged"] = "Mine."
+		},
+		"is in locale fr, the core's in en":  func(doc map[string]any) { doc["locale"] = "fr" },
+		"is not a valid aac.wording-pack/v0": func(doc map[string]any) { delete(doc, "id") },
+	} {
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal(acmePackJSON(t), &doc))
+		edit(doc)
+		raw, err := json.Marshal(doc)
+		require.NoError(t, err)
+		p := acmeProfile(t, raw)
+		err = pinWording(&p, pack)
+		require.ErrorIs(t, err, ErrInput, name)
+		assert.Contains(t, SafeError(err), "capsulectl-acme: the plugin's wording pack "+name, name)
+	}
+
+	// A plugin whose handshake carries no pack speaks with the core's words.
+	p = acmeProfile(t, nil)
+	require.NoError(t, pinWording(&p, writePack(t, nil, func(map[string]string) {})))
+}
+
+// The handshake carries the pack a plugin registered, as that plugin's
+// process checks a pinned pack against it.
+func TestTheHandshakeCarriesTheRegisteredPack(t *testing.T) {
+	saved, savedBytes := registeredWording, registeredWordingBytes
+	t.Cleanup(func() { registeredWording, registeredWordingBytes = saved, savedBytes })
+	w, err := pluginPack(acmePackJSON(t))
+	require.NoError(t, err)
+	registeredWording, registeredWordingBytes = &w, acmePackJSON(t)
+	root := NewPluginCommand(PluginMetadata{Name: "acme", Vendor: "ACME"})
+	t.Cleanup(func() { runningPlugin = "" })
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"cli-plugin-metadata"})
+	require.NoError(t, root.Execute())
+	var info pluginInfo
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &info))
+	got, err := pluginPack(info.Wording)
+	require.NoError(t, err)
+	assert.Equal(t, acmeWording, got.Entries)
+	assert.Equal(t, builtinPacks{Plugin: "acme", Core: coreWording().Entries, Own: acmeWording}, processPacks())
+
+	assert.PanicsWithValue(t, "RegisterWording: call it once, before anything speaks", func() { RegisterWording(acmePackJSON(t)) })
+}
+
+// RegisterWording is called once, before anything speaks, with a pack that
+// adds keys: anything else is a build defect.
+func TestRegisterWordingRefusesALateCallOrABadPack(t *testing.T) {
+	saved, savedBytes, frozen := registeredWording, registeredWordingBytes, wordingFrozen.Load()
+	t.Cleanup(func() {
+		registeredWording, registeredWordingBytes = saved, savedBytes
+		wordingFrozen.Store(frozen)
+	})
+	registeredWording, registeredWordingBytes = nil, nil
+	wordingFrozen.Store(true)
+	assert.PanicsWithValue(t, "RegisterWording: call it once, before anything speaks", func() { RegisterWording(acmePackJSON(t)) }, "after the built-in pack was read")
+
+	wordingFrozen.Store(false)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(acmePackJSON(t), &doc))
+	doc["entries"].(map[string]any)["say.verify.unchanged"] = "Mine."
+	raw, err := json.Marshal(doc)
+	require.NoError(t, err)
+	assert.PanicsWithValue(t, "RegisterWording: the plugin's wording pack redefines the core's key say.verify.unchanged", func() { RegisterWording(raw) })
+	assert.Nil(t, registeredWording, "a refused pack is not registered")
+}
+
 // A pinned pack that cannot be used is not used at all: the whole built-in
 // pack speaks, never a mix, and the reason is given.
 func TestAnUnusablePinnedPackFallsBackToTheWholeBuiltInPack(t *testing.T) {
-	path := writePack(t, func(e map[string]string) { e["say.open.first"] = "Product words." })
+	path := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })
 	var p Profile
 	require.NoError(t, pinWording(&p, path))
 
@@ -172,26 +348,32 @@ func TestAnUnusablePinnedPackFallsBackToTheWholeBuiltInPack(t *testing.T) {
 	assert.Contains(t, problem, "cannot be read")
 
 	// A release that adds a key leaves an older pack incomplete.
-	older := writePack(t, func(e map[string]string) { delete(e, "say.delivered") })
-	raw, err := os.ReadFile(older)
-	require.NoError(t, err)
-	stale := Profile{Wording: ProfileWording{Path: older, SHA256: packDigest(raw)}}
+	pinned := func(path string) Profile {
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		return Profile{Wording: ProfileWording{Path: path, SHA256: packDigest(raw)}}
+	}
+	stale := pinned(writePack(t, nil, func(e map[string]string) { delete(e, "say.verify.changed") }))
 	w, problem = ActiveWording(stale)
 	assert.Equal(t, "built-in", w.Source)
-	assert.Contains(t, problem, "say.delivered")
-	assert.Equal(t, BuiltinWording().Entries["say.open.first"], w.Line("say.open.first", nil))
+	assert.Contains(t, problem, "say.verify.changed")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.unchanged"], w.Line("say.verify.unchanged", nil))
 
-	// A pack pinned before this release could word the terms line away:
-	// it is not used.
-	hiding := writePack(t, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" })
-	raw, err = os.ReadFile(hiding)
-	require.NoError(t, err)
-	w, problem = ActiveWording(Profile{Wording: ProfileWording{Path: hiding, SHA256: packDigest(raw)}})
+	// In a plugin's process the plugin's keys count too. A pack pinned
+	// before this release could word the terms line away: it is not used.
+	acme := builtinPacks{Plugin: "acme", Core: coreWording().Entries, Own: acmeWording}
+	hiding := pinned(writePack(t, acmeWording, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" }))
+	w, problem = activeWording(hiding, acme)
 	assert.Equal(t, "built-in", w.Source)
 	assert.Contains(t, problem, "could hide a term a yes agrees to: card.terms.label")
-	assert.Equal(t, "Saying yes also agrees to x.", w.Line("card.terms.label", V{"terms": "x"}))
+	w, problem = activeWording(pinned(writePack(t, nil, func(map[string]string) {})), acme)
+	assert.Equal(t, "built-in", w.Source)
+	assert.Equal(t, "the pinned wording pack lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own", problem)
+	w, problem = activeWording(pinned(writePack(t, acmeWording, func(e map[string]string) { e["say.acme.done"] = "All set." })), acme)
+	assert.Empty(t, problem)
+	assert.Equal(t, "All set.", w.Line("say.acme.done", nil))
 
-	out := Speak(map[string]any{}, stale, func(w Wording) Narration { return Narration{Voice: VoiceLine, Say: w.Line("say.delivered", nil)} })
+	out := Speak(map[string]any{}, stale, func(w Wording) Narration { return Narration{Voice: VoiceLine, Say: w.Line("say.verify.changed", nil)} })
 	assert.Equal(t, "built-in", out["wording"], "the result says the built-in pack spoke")
 	assert.Equal(t, VoiceLine, out["voice"])
 }
@@ -356,7 +538,7 @@ func TestDoctorNamesAPinnedPackItCannotUse(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, e := invoke(t, "", "profile", "create", "--name", "one", "--type", "mysql", "--mysql-host", "localhost", "--mysql-database", "local", "--mysql-tls", "false", "--log-id", "log-a")
 	require.NoError(t, e)
-	pack := writePack(t, func(e map[string]string) { e["say.open.first"] = "Product words." })
+	pack := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })
 	out, e := invoke(t, "", "profile", "update", "--profile", "one", "--wording", pack)
 	require.NoError(t, e, out)
 	p, e := LoadProfile("one")
@@ -439,7 +621,7 @@ func TestEveryFallbackIsMarked(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, e := invoke(t, "", "profile", "create", "--name", "one", "--type", "mysql", "--mysql-host", "localhost", "--mysql-database", "local", "--mysql-tls", "false", "--log-id", "log-a")
 	require.NoError(t, e)
-	pack := writePack(t, func(map[string]string) {})
+	pack := writePack(t, nil, func(map[string]string) {})
 	_, e = invoke(t, "", "profile", "update", "--profile", "one", "--wording", pack)
 	require.NoError(t, e)
 	require.NoError(t, os.Remove(pack))

@@ -110,6 +110,7 @@ and expects exactly one line of JSON on stdout:
 | `core_version` | no      | Free text. The capsulectl release a plugin that embeds the core's code was built against, which the version check below compares. A plugin without it is not checked, and its `version` is never read as one. |
 | `plugin_api`  | yes      | Must be exactly `"cli-plugin/v1"`. Any other value (including a newer or older version string) is a handshake failure -- there is no negotiation. |
 | `subcommands` | no       | Free text list, shown in the command's `--help` as a hint; `capsulectl` does not parse or validate it. |
+| `wording`     | no       | The plugin's own built-in wording pack, an `aac.wording-pack/v0` object in the core's locale that holds no key of the core's pack. `profile update --wording` and `doctor` read it for a profile whose log the plugin keeps (see below); discovery and dispatch ignore it. A plugin built on the host package gets it from `cli.RegisterWording`. |
 
 A launcher that does not exit zero, does not answer within the timeout,
 does not print valid JSON, prints a `plugin_api` other than
@@ -151,13 +152,22 @@ through and adds nothing to it.
 - `say`: one string, lines joined by `\n`, spoken verbatim. It never holds
   an id, a digest, a rule id, a flag or a UTC time.
 - Words come from a wording pack in the published `aac.wording-pack/v0`
-  format: the built-in neutral pack, or the complete pack a profile pins
-  with `profile update --wording FILE`. A pinned pack that is missing,
-  changed or incomplete, or whose `card.terms.*` entries are blank or don't
-  use exactly the built-in placeholders (so a card could hide a term a yes
-  agrees to), is not used: the whole built-in pack speaks, the result
-  carries `"wording": "built-in"` and `doctor` names the problem.
-  `profile update --wording` refuses such a pack up front.
+  format: the built-in packs, or the complete pack a profile pins with
+  `profile update --wording FILE`. The built-in words are the core's neutral
+  pack plus the plugin's own pack, which a plugin adds to its process with
+  `cli.RegisterWording` (once, before anything speaks) and which its
+  handshake carries as `wording`. A pinned pack holds every key of the
+  core's pack and, for a profile whose log a plugin keeps, every key of that
+  plugin's pack: one pack is never mixed with another. A pinned pack that is
+  missing, changed or incomplete, or whose `card.terms.*` entries are blank
+  or don't use exactly the built-in placeholders (so a card could hide a term
+  a yes agrees to), whichever pack holds them, is not used: the whole
+  built-in pack speaks, the result carries `"wording": "built-in"` and
+  `doctor` names the problem. `profile update --wording` refuses such a pack
+  up front, checking the plugin's keys from its handshake, and refuses to
+  pin when that plugin is not installed. `doctor` checks a pin the same way;
+  with the plugin gone it reports the pack the core's commands still speak
+  and a `notice` that the plugin's keys were not checked.
 - A failed command that printed nothing gets one error object on stdout
   from the binary that ran it, after the usual stderr line, with the same
   exit code. `capsulectl` never writes one for a launcher that ran. A

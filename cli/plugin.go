@@ -424,7 +424,12 @@ type pluginInfo struct {
 	// Presentations are the modules the plugin offers a page builder
 	// (plugin_presentations.go). An older capsulectl ignores the member.
 	Presentations []PluginPresentation `json:"presentations,omitempty"`
-	path          string
+	// Wording is the plugin's own built-in wording pack (RegisterWording),
+	// an aac.wording-pack/v0 document, so a pinned pack is checked against
+	// the plugin's keys in the core's process too (narration.go
+	// profilePacks). An older capsulectl ignores the member.
+	Wording json.RawMessage `json:"wording,omitempty"`
+	path    string
 	// checked is the path the handshake executed. For a discovered plugin
 	// that is the resolved path the trust walk judged, and presentations
 	// load beside it; install's handshake on a file it staged itself sets it
