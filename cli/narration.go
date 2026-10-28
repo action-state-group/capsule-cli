@@ -319,7 +319,7 @@ func (b builtinPacks) hidingTerms(w Wording) string {
 // plugin's: a pack made from the core's pack alone, as one was before the
 // plugin's words left the core.
 func (b builtinPacks) lacksOwn(own []string) string {
-	return fmt.Sprintf("lacks %d of the capsulectl-%s plugin's keys, first %s: a pack for this profile holds the core's keys and that plugin's", len(own), b.Plugin, own[0])
+	return fmt.Sprintf("lacks %d of the capsulectl-%s plugin's keys, first %s: a pack that plugin speaks with holds the core's keys and its own", len(own), b.Plugin, own[0])
 }
 
 func packDigest(raw []byte) string {

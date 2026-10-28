@@ -189,7 +189,7 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	coreOnly := writePack(t, nil, func(map[string]string) {})
 	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", coreOnly)
 	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack for this profile holds the core's keys and that plugin's")
+	assert.Contains(t, SafeError(err), "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own")
 
 	for key, text := range map[string]string{
 		"card.terms.label":          "Saying yes also agrees.",
@@ -330,7 +330,7 @@ func TestAnUnusablePinnedPackFallsBackToTheWholeBuiltInPack(t *testing.T) {
 	assert.Contains(t, problem, "could hide a term a yes agrees to: card.terms.label")
 	w, problem = activeWording(pinned(writePack(t, nil, func(map[string]string) {})), acme)
 	assert.Equal(t, "built-in", w.Source)
-	assert.Equal(t, "the pinned wording pack lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack for this profile holds the core's keys and that plugin's", problem)
+	assert.Equal(t, "the pinned wording pack lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own", problem)
 	w, problem = activeWording(pinned(writePack(t, acmeWording, func(e map[string]string) { e["say.acme.done"] = "All set." })), acme)
 	assert.Empty(t, problem)
 	assert.Equal(t, "All set.", w.Line("say.acme.done", nil))
