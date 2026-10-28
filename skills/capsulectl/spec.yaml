@@ -29,7 +29,7 @@
 # list.
 #
 # The ruling also settled a scope question the first draft left open:
-# capsule emission is for CONSEQUENTIAL actions only. `result open` and
+# capsule emission is for CONSEQUENTIAL actions only. `verify` and
 # local validation generally get no capsule.
 # Applied here as `emission_mode: not-consequential` on every verb in this
 # surface that only reads, checks or validates rather than durably writing

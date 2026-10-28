@@ -77,7 +77,7 @@ func verbTable(verbs []Verb) string {
 
 func emissionSection() string {
 	return `**Capsules are for consequential actions only** (see Evidence policy
-under Guardrails, above). A capsule is never manufactured for ` + "`result open`" + `
+under Guardrails, above). A capsule is never manufactured for ` + "`verify`" + `
 or any other local validation — reading, checking, validating or opening
 something is not a consequential action, and this skill produces no capsule
 for it. The ` + "`emission_mode`" + ` column above says which of the two real
