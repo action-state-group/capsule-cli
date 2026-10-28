@@ -8,6 +8,15 @@
   Failed checks (exit 1) and checks that could not be made (exit 3) are listed
   apart, each by sequence and capsule id (capsule-cli#477, step 4 of moving
   off the ledger).
+- **Moved:** the deal view (`capsulectl.deal-view/v0`) is the deal plugin's own
+  presentation module (capsule-cli#428 step 4): `cli/assets/deal-view.*` and the
+  `DealViewJS`, `DealViewJSSHA256` and `DealViewManifestJSON` exports are gone.
+  `presentation list` no longer offers a deal view of its own, and drops the rule
+  that yielded it to an installed module: a deal bundle resolves among the
+  built-ins and the installed plugins' modules like any other, so with no plugin
+  module installed it falls back to `aac.builtin.no-aggregate/v0`. A plugin
+  binary states its modules in the `cli-plugin-metadata` handshake through
+  `PluginMetadata.Presentations` (capsule-cli#478).
 - **Fixed:** the vendored page runtime and `capsule-viewer/go` move to capsule-viewer
   389c1bac (a pseudo-version, no release): the banner integrity check no longer
   discards a module's render when the page grows a classic scrollbar
