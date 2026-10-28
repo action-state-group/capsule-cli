@@ -436,7 +436,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify; field openings (opening.* originals, which the capsule does not bind) are left out of either view")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or check an Evidence Bundle or a History offline", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, check an Evidence Bundle or a History offline, or, with no file, verify the profile's store", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		holderKeys, _ := c.Flags().GetStringArray("holder-key")
 		historyPath, _ := c.Flags().GetString("history")
 		given := 0
@@ -465,6 +465,12 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			return e
 		}
 		path, _ := c.Flags().GetString("capsule")
+		if path == "" {
+			if c.Flags().Changed("witness-directory") {
+				return InputError("--witness-directory goes with --bundle; a store carries no witness receipt to check")
+			}
+			return verifyStore(c, p)
+		}
 		raw, e := ReadInput(path)
 		if e != nil {
 			return e
