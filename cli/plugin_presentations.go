@@ -96,6 +96,9 @@ type PluginPresentation struct {
 	Files    []PluginPresentationFile `json:"files"`
 }
 
+// PluginPresentationFile is one file of a module: its Role (script, style or
+// wording), its Path relative to the launcher's directory and inside it, and
+// its SHA256 as 64 lowercase hex characters.
 type PluginPresentationFile struct {
 	Role   string `json:"role"`
 	Path   string `json:"path"`
