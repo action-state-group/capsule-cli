@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fixed:** the vendored page runtime and `capsule-viewer/go` move to capsule-viewer
+  389c1bac (a pseudo-version, no release): the banner integrity check no longer
+  discards a module's render when the page grows a classic scrollbar
+  (capsule-viewer#113; every deal page was shown as a refused presentation in
+  Linux Chrome CI, evidencebook-deal#40).
 - **Added:** `cli.MarkStoreOwned`, `Target.MarkOwned` on a sqlite handle the
   plugin already holds (capsule-cli#428), for a plugin session that writes
   without ever opening a target. Same rules: the writer lock, one owner, no

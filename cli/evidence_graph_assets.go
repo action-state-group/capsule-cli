@@ -51,14 +51,14 @@ var (
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	EvidenceGraphIIFEDigest = "b8dbf296b2bcf0786f618ffdc97bbe26c5834098febe23ed31dfbf96208682eb"
+	EvidenceGraphIIFEDigest = "01f0425c28228a109469290108c1cf9bf503386fd51cac138a2b91711a752621"
 	// evidenceGraphIIFESource names the commits and build the vendored IIFE
 	// came from: capsule-viewer's page code, and agent-action-capsule's
 	// verifier using released CLL 0.2.1 from its registry lock. Both must be
 	// merged on their repository's main (CI checks). They are pinned apart
 	// from go.mod: the aac Go module may move to a release tag while the
 	// browser verifier stays at this build.
-	evidenceGraphIIFESource = "capsule-viewer main@cdc83dca57930f642cd34a90c7d9264d11a35617 ts/src with verifier agent-action-capsule main@9d653f41419d2d2bac4714137b763315947ec754 ts/src: scripts/build-report-runtime.mjs (esbuild 0.28.2)"
+	evidenceGraphIIFESource = "capsule-viewer main@389c1bacb86d07d4ed663cac46f8aabc5f8774a7 ts/src with verifier agent-action-capsule main@9d653f41419d2d2bac4714137b763315947ec754 ts/src: scripts/build-report-runtime.mjs (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,
