@@ -11651,7 +11651,7 @@ ${s} .check .steps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:
   }
   function builtCommit() {
     if (false) return void 0;
-    return commitPrefix("cdc83dca57930f642cd34a90c7d9264d11a35617");
+    return commitPrefix("389c1bacb86d07d4ed663cac46f8aabc5f8774a7");
   }
   var commit = builtCommit();
   var VIEWER_BUILD = {
@@ -18774,6 +18774,9 @@ ${pad.repeat(depth)}`;
       if (active.size === 0) checkingRenders.delete(root);
     }
   }
+  var SIDE_MARGINS = ["margin-left", "margin-right"];
+  var SIDE_MARGIN_SLACK = 9;
+  var sameLook = (a, b) => a.look === b.look && a.margins.length === b.margins.length && a.margins.every((m, i) => Math.abs(m - b.margins[i]) <= SIDE_MARGIN_SLACK);
   var FRAME_LOOK = [
     "display",
     "visibility",
@@ -18794,9 +18797,7 @@ ${pad.repeat(depth)}`;
     "rotate",
     "zoom",
     "margin-top",
-    "margin-right",
     "margin-bottom",
-    "margin-left",
     "font-family",
     "-webkit-text-fill-color",
     "clip",
@@ -18911,7 +18912,7 @@ ${pad.repeat(depth)}`;
     const snapshot = (parts) => JSON.stringify(parts.map((part) => part.outerHTML));
     const looks = (parts, chromed) => {
       const view = root.ownerDocument.defaultView;
-      if (!root.isConnected || view === null) return "";
+      if (!root.isConnected || view === null) return { look: "", margins: [] };
       const had = root.classList.contains("cv-shell-chrome");
       root.classList.toggle("cv-shell-chrome", chromed);
       const elements = [
@@ -18919,19 +18920,26 @@ ${pad.repeat(depth)}`;
         ...parts.flatMap((part) => [part, ...part.querySelectorAll("*")])
       ];
       const pseudos = view.navigator.userAgent.includes("jsdom") ? [null] : [null, "::before", "::after"];
+      const margins = [];
       const seen = JSON.stringify(
         elements.flatMap(
           (element7) => pseudos.map((pseudo) => {
             const style = view.getComputedStyle(element7, pseudo);
             return [
               ...FRAME_LOOK.map((name) => style.getPropertyValue(name)),
+              ...SIDE_MARGINS.flatMap((name) => {
+                const value = style.getPropertyValue(name);
+                const px = Number.parseFloat(value);
+                margins.push(Number.isNaN(px) ? 0 : px);
+                return Number.isNaN(px) ? [value] : [];
+              }),
               ...pseudo === null ? [] : [style.getPropertyValue("content")]
             ];
           })
         )
       );
       root.classList.toggle("cv-shell-chrome", had);
-      return seen;
+      return { look: seen, margins };
     };
     const frameOf = () => {
       const detail = bar.nextElementSibling;
@@ -18959,7 +18967,10 @@ ${pad.repeat(depth)}`;
       const expected = [pill, ...detail === void 0 ? [] : [detail]];
       if (pill === null || banners.length !== expected.length || expected.some((part, i) => banners[i] !== part) || // Nodes, not elements: a bare text node before the banner is words
       // too. The core draws no text node at the root.
-      root.firstChild !== (frame.header ?? top) || top.previousSibling !== frame.header || frame.header !== null && frame.header.parentNode !== root || detail !== void 0 && detail.previousElementSibling !== top || top.parentNode !== root || top.hidden || snapshot(frame.parts) !== frame.words || looks(frame.parts, root.classList.contains("cv-shell-chrome")) !== (root.classList.contains("cv-shell-chrome") ? frame.looks.chrome : frame.looks.plain))
+      root.firstChild !== (frame.header ?? top) || top.previousSibling !== frame.header || frame.header !== null && frame.header.parentNode !== root || detail !== void 0 && detail.previousElementSibling !== top || top.parentNode !== root || top.hidden || snapshot(frame.parts) !== frame.words || !sameLook(
+        looks(frame.parts, root.classList.contains("cv-shell-chrome")),
+        root.classList.contains("cv-shell-chrome") ? frame.looks.chrome : frame.looks.plain
+      ))
         throw new Error("a module altered the verification banner");
     };
     if (refused.length > 0)

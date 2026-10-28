@@ -27,10 +27,10 @@ file, never to render a report.
 
 | | |
 |---|---|
-| page code | capsule-viewer main @ `cdc83dca57930f642cd34a90c7d9264d11a35617`, a merged commit (the one `go.mod`'s `capsule-viewer/go v0.2.0` tags) |
+| page code | capsule-viewer main @ `389c1bacb86d07d4ed663cac46f8aabc5f8774a7`, a merged commit (after `capsule-viewer/go v0.2.0`: it carries the banner-frame margin fix, capsule-viewer#113) |
 | verifier | agent-action-capsule main @ `9d653f41419d2d2bac4714137b763315947ec754`, a merged commit (the one `ts/v0.8.0` tags), pinned apart from `go.mod`; registry `@action-state-group/cll` `0.2.1` |
 | build | `npm ci` in both `ts/` directories, then `node scripts/build-report-runtime.mjs <cv> <aac> <out>`, esbuild 0.28.2 (capsule-viewer's); the output opens with `"use strict";`, as both repositories build under `"strict": true`, and defines `__CAPSULE_VIEWER_COMMIT__` as the page-code commit, so the page's "Verified by" line names it (#363) |
-| sha256 | `b8dbf296b2bcf0786f618ffdc97bbe26c5834098febe23ed31dfbf96208682eb` |
+| sha256 | `01f0425c28228a109469290108c1cf9bf503386fd51cac138a2b91711a752621` |
 
 The digest is pinned again in `evidence_graph_assets.go` (`evidenceGraphIIFEDigest`) and
 checked by `TestIIFEIsPinned`, and again in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the two commits `evidenceGraphIIFESource` records; `scripts/iife-sync.sh <cv checkout> <aac checkout>` rebuilds
