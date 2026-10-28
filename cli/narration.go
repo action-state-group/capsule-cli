@@ -383,13 +383,17 @@ func ActiveWording(p Profile) (Wording, string) {
 }
 
 // profileWording is ActiveWording checked against every pack p's commands
-// speak with, in this process or the plugin's (doctor).
-func profileWording(p Profile) (Wording, string) {
+// speak with, in this process or the plugin's (doctor). When the plugin's
+// pack cannot be read, the pack is checked as this process's commands use
+// it, and notice says the plugin's keys were not checked.
+func profileWording(p Profile) (w Wording, problem, notice string) {
 	b, err := profilePacks(p)
 	if err != nil {
-		return BuiltinWording(), "the pinned wording pack cannot be checked against the words of the plugin that keeps this profile's log: " + err.Error()
+		w, problem = ActiveWording(p)
+		return w, problem, "the pinned wording pack was not checked against the words of the plugin that keeps this profile's log: " + err.Error()
 	}
-	return activeWording(p, b)
+	w, problem = activeWording(p, b)
+	return w, problem, ""
 }
 
 func activeWording(p Profile, b builtinPacks) (Wording, string) {

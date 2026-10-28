@@ -183,10 +183,14 @@ func doctorCommand() *cobra.Command {
 			// speaks instead (narration.go).
 			if p.Wording.Path != "" {
 				wording := map[string]any{"pinned": p.Wording.Path, "sha256": p.Wording.SHA256}
-				if w, problem := profileWording(p); problem != "" {
+				w, problem, notice := profileWording(p)
+				if problem != "" {
 					wording["used"], wording["issue"] = w.Source, problem
 				} else {
 					wording["used"], wording["id"] = w.Source, w.ID
+				}
+				if notice != "" {
+					wording["notice"] = notice
 				}
 				profileReport["wording"] = wording
 			}

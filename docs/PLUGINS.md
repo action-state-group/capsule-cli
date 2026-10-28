@@ -165,7 +165,9 @@ through and adds nothing to it.
   built-in pack speaks, the result carries `"wording": "built-in"` and
   `doctor` names the problem. `profile update --wording` refuses such a pack
   up front, checking the plugin's keys from its handshake, and refuses to
-  pin when that plugin is not installed.
+  pin when that plugin is not installed. `doctor` checks a pin the same way;
+  with the plugin gone it reports the pack the core's commands still speak
+  and a `notice` that the plugin's keys were not checked.
 - A failed command that printed nothing gets one error object on stdout
   from the binary that ran it, after the usual stderr line, with the same
   exit code. `capsulectl` never writes one for a launcher that ran. A

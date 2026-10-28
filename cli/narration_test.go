@@ -235,6 +235,18 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	wording := report["profile"].(map[string]any)["wording"].(map[string]any)
 	assert.Equal(t, "built-in", wording["used"])
 	assert.Contains(t, wording["issue"], "lacks 1 of the capsulectl-acme plugin's keys, first card.terms.deposit")
+
+	// With the plugin gone, doctor says what the core's commands still
+	// speak (the pinned pack) and that the plugin's keys went unchecked.
+	require.NoError(t, os.Remove(filepath.Join(os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme")))
+	out, err = invoke(t, "", "--profile", p.Name, "doctor")
+	require.NoError(t, err, out)
+	report = map[string]any{}
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	wording = report["profile"].(map[string]any)["wording"].(map[string]any)
+	assert.Equal(t, "pinned", wording["used"])
+	assert.Nil(t, wording["issue"])
+	assert.Contains(t, wording["notice"], "was not checked against the words of the plugin that keeps this profile's log: this needs the capsulectl-acme plugin, which is not installed")
 }
 
 // A pin whose plugin's words cannot be read is refused: a missing plugin,
