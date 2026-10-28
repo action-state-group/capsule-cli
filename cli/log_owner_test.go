@@ -191,3 +191,46 @@ func TestCountersignRequestOnAPluginKeptProfileNamesTheWayOut(t *testing.T) {
 	require.ErrorIs(t, err, ErrPluginLogProfile)
 	assert.Contains(t, SafeError(err), "pass --bundle")
 }
+
+// A profile with no declared owner has its data kept in place and its cadence
+// refused with the fix, not told the core keeps its log.
+func TestUndeclaredOwnerIsNotMovedOrTakenForTheCores(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Type, p.Log = "jsonl", ""
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, os.MkdirAll(p.Connection.Database, 0o700))
+	require.NoError(t, SaveProfile(p, false))
+	_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", filepath.Join(t.TempDir(), "x"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner")
+	assert.DirExists(t, p.Connection.Database)
+	assert.Contains(t, profileNames(t), p.Name)
+
+	_, err = invoke(t, "", "cll", "checkpoint", "cadence", "--profile", p.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner: capsulectl profile update --profile "+p.Name)
+
+	// A sqlite store only the older marker covers is no more the core's.
+	q := sqliteStoreProfile(t)
+	execSQL(t, q, `CREATE TABLE deal_shelf (id INTEGER PRIMARY KEY)`)
+	_, err = invoke(t, "", "cll", "checkpoint", "cadence", "--profile", q.Name)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no declared log owner")
+}
+
+// The install check finds the skill named like the plugin, or capsulectl-<plugin>.
+func TestSkillsNamedLikeThePlugin(t *testing.T) {
+	dir := t.TempDir()
+	for name, skill := range map[string]string{"a": "ledger", "b": "capsulectl-ledger", "c": "other"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, name), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name, "SKILL.md"), []byte("---\nname: "+skill+"\n---\n"), 0o644))
+	}
+	found, err := skillsNamed(dir, "ledger", "capsulectl-ledger")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a/SKILL.md", "b/SKILL.md"}, found)
+	found, err = skillsNamed(dir, "ledger")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a/SKILL.md"}, found)
+}

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,8 +20,8 @@ import (
 // before its first deal, as one JSON object an agent can seal as evidence.
 //
 //   - the binary is the expected release (version, and commit when given);
-//   - exactly one skill named like the plugin that keeps the profile's log is
-//     visible under the skills directory (and, when given, it is the expected
+//   - exactly one skill named like the plugin that keeps the profile's log (or
+//     capsulectl-<plugin>) is visible under the skills directory (and, when given, it is the expected
 //     release's SKILL.md by sha256): a backup copy left beside it
 //     (deal.bak-*/SKILL.md) is a second one, and an agent may load either;
 //   - the profile names both a witness endpoint and that witness's public
@@ -57,7 +58,7 @@ func installCheck(c *cobra.Command) error {
 	// one must be visible. A profile whose log the core keeps has none to check.
 	if loadErr == nil {
 		if skillName := profilePlugin(p); skillName != "" {
-			skills, err := skillsNamed(skillsDir, skillName)
+			skills, err := skillsNamed(skillsDir, skillName, "capsulectl-"+skillName)
 			switch {
 			case err != nil:
 				issues = append(issues, "skills directory "+skillsDir+" cannot be read")
@@ -138,9 +139,9 @@ func installCheck(c *cobra.Command) error {
 }
 
 // skillsNamed lists, relative to dir, every SKILL.md whose front matter names
-// the skill name, at most three directories down. Symbolic links are not
+// the skill one of names, at most three directories down. Symbolic links are not
 // followed.
-func skillsNamed(dir, name string) ([]string, error) {
+func skillsNamed(dir string, names ...string) ([]string, error) {
 	root := filepath.Clean(dir)
 	if info, err := os.Stat(root); err != nil || !info.IsDir() {
 		return nil, errors.New("not a directory")
@@ -157,7 +158,7 @@ func skillsNamed(dir, name string) ([]string, error) {
 		if !d.Type().IsRegular() || d.Name() != "SKILL.md" {
 			return nil
 		}
-		if SkillName(path) == name {
+		if slices.Contains(names, SkillName(path)) {
 			found = append(found, rel)
 		}
 		return nil

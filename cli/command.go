@@ -335,7 +335,7 @@ var (
 	CLICommit  = "unknown"
 )
 
-// PluginVersion and PluginCommit are a first-party plugin's own release tag
+// PluginVersion and PluginCommit are a plugin's own release tag
 // and commit, set with -X by the plugin's release build. In a plugin binary
 // CLIVersion and CLICommit stay the capsule-cli release it embeds. Both are
 // empty in capsulectl itself and in plugins built inside this repository.
@@ -352,8 +352,8 @@ func NewCommand() *cobra.Command {
 }
 
 // newCommand builds the tree. With discover, it adds the discovered plugins
-// (and a placeholder for each first-party plugin that is missing); extra
-// commands are added in process, each replacing a command of the same name.
+// extra commands are added in process, each replacing a command of the same
+// name.
 func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: CLIVersion, SilenceUsage: true, SilenceErrors: true}
 	root.SetVersionTemplate("capsulectl {{.Version}} (commit " + CLICommit + ")\n")

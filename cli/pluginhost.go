@@ -141,7 +141,7 @@ func CommandLine(c *cobra.Command, args []string) []string {
 	return path
 }
 
-// ForwardToPlugin runs the first-party plugin name with args, or says it is
+// ForwardToPlugin runs the plugin name with args, or says it is
 // not installed and where to install it.
 func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 	plugins, refused := discoverPluginsAndRefusals()
@@ -170,7 +170,7 @@ func forwardDiscovered(c *cobra.Command, name string, args []string, plugins []p
 	return missingPluginError(name, refused)
 }
 
-// missingPluginError says a first-party plugin is refused, with why, when
+// missingPluginError says a plugin is refused, with why, when
 // discovery refused it (refused is that discovery's, so no launcher is run
 // again), and otherwise that it is not installed and how to install it.
 func missingPluginError(name string, refused []refusedPlugin) error {
@@ -262,7 +262,7 @@ func refusedPluginPlaceholder(name string, refused []refusedPlugin) *cobra.Comma
 	}
 }
 
-// PluginMetadata is what a first-party plugin binary answers to the
+// PluginMetadata is what a plugin binary answers to the
 // cli-plugin-metadata handshake.
 type PluginMetadata struct {
 	Name        string
@@ -278,7 +278,7 @@ func NewCommandWith(cmds ...*cobra.Command) *cobra.Command {
 	return newCommand(false, cmds)
 }
 
-// NewPluginCommand is a first-party plugin binary's tree: NewCommandWith,
+// NewPluginCommand is a plugin binary's tree: NewCommandWith,
 // named capsulectl-<name>, answering the cli-plugin-metadata handshake.
 func NewPluginCommand(meta PluginMetadata, cmds ...*cobra.Command) *cobra.Command {
 	runningPlugin = meta.Name

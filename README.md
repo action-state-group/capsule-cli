@@ -220,7 +220,7 @@ branch's `capsulectl` (outputs with keys, IDs and the statement elided):
 
 ```console
 $ capsulectl profile create --name demo --type jsonl --jsonl-path /work/store \
-    --namespace demo --log-id demo-log --operator example-operator \
+    --namespace demo --log-id demo-log --log book --operator example-operator \
     --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
     --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
 {"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved","voice":"silent"}
@@ -598,7 +598,7 @@ selects one with `--type`:
   capsule; `--all` also lists the book's internal records. `cll list` and
   `cll checkpoint status` read the book's files without opening it, so a
   read-only profile needs no signing secret. A JSONL store made by an earlier
-  capsulectl keeps its log in `cll.jsonl`; `store migrate` moves those entries
+  capsulectl keeps its log in `cll.jsonl`; `book migrate` moves those entries
   into the book once, in order, always under a new `--log-id`, and every other
   command refuses the profile until it has.
 - SQLite uses WAL transactions and supports multiple handles in one process.

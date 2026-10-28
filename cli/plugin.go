@@ -417,7 +417,7 @@ type pluginInfo struct {
 	Vendor    string `json:"vendor"`
 	Version   string `json:"version"`
 	PluginAPI string `json:"plugin_api"`
-	// CoreVersion is the capsulectl release a first-party plugin embeds
+	// CoreVersion is the capsulectl release a plugin that embeds the core embeds
 	// (its CLIVersion). Plugins built before it existed carry the same value
 	// in Version; coreVersion falls back to that.
 	CoreVersion string   `json:"core_version,omitempty"`

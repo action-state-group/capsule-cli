@@ -18,8 +18,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// `plugin install` and `plugin remove` place first-party and third-party
-// launchers on the per-user plugin root (docs/PLUGINS.md, "Installing
+// `plugin install` and `plugin remove` place plugin launchers on the per-user
+// plugin root (docs/PLUGINS.md, "Installing
 // plugins"). Install runs the trust walk's per-user root ancestry check
 // and is stricter still: before it writes or executes anything it resolves
 // the path once, checks every component of the resolved path from / down,
@@ -563,7 +563,7 @@ func isPluginManagement(root *cobra.Command, args []string) bool {
 	return found.Parent().Name() == "plugin" && (found.Name() == "install" || found.Name() == "remove")
 }
 
-// driftWarning is the stderr line for a first-party plugin whose version
+// driftWarning is the stderr line for a plugin whose declared core version
 // differs from a release core's, or "".
 func driftWarning(info pluginInfo) string {
 	if info.coreVersion() == "" || !isReleaseCore() || info.coreVersion() == CLIVersion {

@@ -328,6 +328,8 @@ func forwardCadence(c *cobra.Command, args []string) error {
 	}
 	owner := p.LogOwner()
 	switch {
+	case p.OwnerUndeclared() || legacyUnowned(c.Context(), p):
+		return InputError("profile " + name + " has no declared log owner: capsulectl profile update --profile " + name + " --log <cll or the plugin that keeps its log>")
 	case owner == "":
 		return InputError("profile " + name + "'s log is kept by the core: it has no checkpoint cadence")
 	case owner == runningPlugin:

@@ -58,6 +58,9 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if moveTo != "" && p.OwnerUndeclared() {
+		return nil, InputError("profile " + p.Name + " has no declared log owner, so its data cannot be moved safely: capsulectl profile update --profile " + p.Name + " --log <cll or the plugin that keeps its log>")
+	}
 	if moveTo != "" && p.HasPluginLog() {
 		// The locks below are the core's own journal's; a plugin that keeps the
 		// log in files of its own could be written to while its directory moves.
