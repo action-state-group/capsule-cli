@@ -88,12 +88,18 @@ func asRefusal(err error) *presentationRefusal {
 	return &presentationRefusal{Reason: "unreadable", Detail: err.Error()}
 }
 
-type pluginPresentation struct {
+// PluginPresentation is one module a plugin offers, as its handshake states
+// it (PluginMetadata.Presentations): the manifest, and each file's role, path
+// beside the launcher and digest.
+type PluginPresentation struct {
 	Manifest json.RawMessage          `json:"manifest"`
-	Files    []pluginPresentationFile `json:"files"`
+	Files    []PluginPresentationFile `json:"files"`
 }
 
-type pluginPresentationFile struct {
+// PluginPresentationFile is one file of a module: its Role (script, style or
+// wording), its Path relative to the launcher's directory and inside it, and
+// its SHA256 as 64 lowercase hex characters.
+type PluginPresentationFile struct {
 	Role   string `json:"role"`
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
@@ -197,7 +203,7 @@ func rootOf(path string, roots []string) string {
 	return ""
 }
 
-func loadPresentation(dir string, p pluginPresentation) (presentationModule, error) {
+func loadPresentation(dir string, p PluginPresentation) (presentationModule, error) {
 	var m presentationModule
 	schema, err := PresentationSchema("manifest")
 	if err != nil {
@@ -233,7 +239,7 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 		decl, _ := m.Manifest["declarative"].(map[string]interface{})
 		wording, _ = decl["wording_sha256"].(string)
 	}
-	byRole := map[string][]pluginPresentationFile{}
+	byRole := map[string][]PluginPresentationFile{}
 	for _, f := range p.Files {
 		byRole[f.Role] = append(byRole[f.Role], f)
 	}
@@ -242,7 +248,7 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 			return m, refuse("invalid_files", "", "%s: unknown file role %q", m.ID, role)
 		}
 	}
-	read := func(f pluginPresentationFile) (presentationFile, error) {
+	read := func(f PluginPresentationFile) (presentationFile, error) {
 		if !lowerHexDigest.MatchString(f.SHA256) {
 			return presentationFile{}, refuse("invalid_files", f.Path, "%s: %s's sha256 is not 64 lowercase hex", m.ID, f.Path)
 		}

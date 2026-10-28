@@ -1317,6 +1317,24 @@ func TestPluginHandshakeReportsCoreVersion(t *testing.T) {
 	assert.Equal(t, "v1.4.0", info.Version)
 	assert.Equal(t, "v0.2.0", info.CoreVersion)
 	assert.Equal(t, "v0.2.0", info.coreVersion())
+	assert.Empty(t, info.Presentations, "a plugin that offers no module states none")
+}
+
+func TestPluginHandshakeStatesItsPresentations(t *testing.T) {
+	oldRunning := runningPlugin
+	t.Cleanup(func() { runningPlugin = oldRunning })
+	module := PluginPresentation{
+		Manifest: json.RawMessage(`{"id":"org.example.view/v0"}`),
+		Files:    []PluginPresentationFile{{Role: "script", Path: "view.js", SHA256: strings.Repeat("a", 64)}},
+	}
+	root := NewPluginCommand(PluginMetadata{Name: "acme", Vendor: "t", Presentations: []PluginPresentation{module}})
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"cli-plugin-metadata"})
+	require.NoError(t, root.Execute())
+	var info pluginInfo
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &info), buf.String())
+	assert.Equal(t, []PluginPresentation{module}, info.Presentations, "the handshake carries the modules as given")
 }
 
 // The dispatch warning and doctor's plugin check compare core_version too,

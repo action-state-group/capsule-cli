@@ -423,7 +423,7 @@ type pluginInfo struct {
 	Subcommands []string `json:"subcommands,omitempty"`
 	// Presentations are the modules the plugin offers a page builder
 	// (plugin_presentations.go). An older capsulectl ignores the member.
-	Presentations []pluginPresentation `json:"presentations,omitempty"`
+	Presentations []PluginPresentation `json:"presentations,omitempty"`
 	// Wording is the plugin's own built-in wording pack (RegisterWording),
 	// an aac.wording-pack/v0 document, so a pinned pack is checked against
 	// the plugin's keys in the core's process too (narration.go
