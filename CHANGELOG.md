@@ -5,8 +5,8 @@
 - **Changed:** `cli.GraftCommand` takes a function that builds the command
   (capsule-cli#428), not the command: the core calls it for each command tree
   it builds, because a cobra command keeps the flag values of its last run and
-  a shared one printed help after any earlier `--help`. It shipped a day ago
-  with no caller outside tests.
+  a shared one printed help after any earlier `--help`. It landed in #463
+  (unreleased) with no caller outside tests.
 - **Changed:** names the host package gave a plugin go generic
   (capsule-cli#428): `LogBundleRequest`, `RemoteCommand`, `ErrPluginLogProfile`
   and the `Target.Owned` field replace `BookBundleRequest`, `RemoteBookCommand`,
