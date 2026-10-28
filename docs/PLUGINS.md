@@ -346,7 +346,9 @@ added, so the core can hand it a core command it cannot run itself:
   move to the extension), because defining one twice panics. Its `Run` runs
   after the flags are parsed and before the command's own checks, and the
   first extension that reports the command handled ends it. `GraftCommand`
-  replaces a child of the same name, needs a non-empty path of core commands,
+  takes a function that builds the command, called for each tree the process
+  builds (a command keeps the flag values of its last run), replaces a child
+  of the same name, needs a non-empty path of core commands,
   and panics on a path that names none. `bundle --profile <p> --help` shows
   the core's help, without a plugin's flags.
 

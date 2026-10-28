@@ -113,16 +113,24 @@ func TestBundleExtensionAddsFlagsAndMayHandleTheRun(t *testing.T) {
 func TestGraftCommandReplacesAChildAndRefusesAnUnknownPath(t *testing.T) {
 	previous := grafts
 	t.Cleanup(func() { grafts = previous })
-	grafted := &cobra.Command{Use: "cadence", Short: "grafted", RunE: func(c *cobra.Command, _ []string) error { return nil }}
-	GraftCommand([]string{"cll", "checkpoint"}, grafted)
+	built := 0
+	GraftCommand([]string{"cll", "checkpoint"}, func() *cobra.Command {
+		built++
+		return &cobra.Command{Use: "cadence", Short: "grafted", RunE: func(c *cobra.Command, _ []string) error { return nil }}
+	})
 	root := NewCommandWith()
 	found, _, err := root.Find([]string{"cll", "checkpoint", "cadence"})
 	require.NoError(t, err)
 	assert.Equal(t, "grafted", found.Short)
-	assert.Same(t, grafted, found)
+	// Each tree gets a command of its own: one that kept the flags of a run
+	// (a --help, say) would print help the next time.
+	other, _, err := NewCommandWith().Find([]string{"cll", "checkpoint", "cadence"})
+	require.NoError(t, err)
+	assert.NotSame(t, found, other)
+	assert.Equal(t, 2, built)
 
 	grafts = nil
-	GraftCommand([]string{"cll", "nowhere"}, &cobra.Command{Use: "x"})
+	GraftCommand([]string{"cll", "nowhere"}, func() *cobra.Command { return &cobra.Command{Use: "x"} })
 	assert.PanicsWithValue(t, `GraftCommand: no core command "nowhere" on the path cll nowhere`, func() { NewCommandWith() })
 }
 
@@ -225,6 +233,6 @@ func TestRoutingToAPluginThatIsNotInstalledSaysSo(t *testing.T) {
 
 func TestGraftNeedsAPath(t *testing.T) {
 	assert.PanicsWithValue(t, "GraftCommand: a path names the core command to graft under", func() {
-		GraftCommand(nil, &cobra.Command{Use: "x"})
+		GraftCommand(nil, func() *cobra.Command { return &cobra.Command{Use: "x"} })
 	})
 }

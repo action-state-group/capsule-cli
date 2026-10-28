@@ -146,21 +146,22 @@ var bundleExtensions []BundleExtension
 func ExtendBundle(ext BundleExtension) { bundleExtensions = append(bundleExtensions, ext) }
 
 type graft struct {
-	path []string
-	cmd  *cobra.Command
+	path  []string
+	build func() *cobra.Command
 }
 
 var grafts []graft
 
-// GraftCommand puts cmd under the core command at path (such as "cll",
-// "checkpoint"), replacing a child of the same name. A plugin calls it before
-// building its tree; cmd is used by the one tree the process builds. A path
+// GraftCommand puts the command build returns under the core command at path
+// (such as "cll", "checkpoint"), replacing a child of the same name. A plugin
+// calls it before building its tree. build runs once for each tree the
+// process builds, since a command keeps the flag values of its last run. A path
 // that names no core command is a programming error.
-func GraftCommand(path []string, cmd *cobra.Command) {
+func GraftCommand(path []string, build func() *cobra.Command) {
 	if len(path) == 0 {
 		panic("GraftCommand: a path names the core command to graft under")
 	}
-	grafts = append(grafts, graft{append([]string(nil), path...), cmd})
+	grafts = append(grafts, graft{append([]string(nil), path...), build})
 }
 
 // applyGrafts mounts the registered grafts on root.
@@ -179,6 +180,6 @@ func applyGrafts(root *cobra.Command) {
 			}
 			parent = next
 		}
-		replaceCommands(parent, []*cobra.Command{g.cmd})
+		replaceCommands(parent, []*cobra.Command{g.build()})
 	}
 }
