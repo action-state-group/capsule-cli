@@ -714,17 +714,28 @@ output says so.
 
 `verify --profile NAME`, with none of `--capsule`, `--bundle` and `--history`,
 verifies what the profile's store holds. It reads the whole CLL in sequence
-order and, for each entry, the artifact record it names, which gets the
-`--capsule` checks: its `capsule_id` (which must match the entry's), its
-producer signature against the profile's trusted keys, and its retained
-originals. It then runs agent-action-capsule's store checks once over every
-capsule in the log, such as each chain parent being present. The output gives
-`entries`, `records_passed` and `store_checks`, and two lists whose items each
-name the entry's `sequence` and `capsule_id`, the `check` and the `reason`:
-`failed` (exit 1: a missing record, an edited record, an untrusted signer, a
-failed store check) and `could_not_check` (exit 3: an original that is not
-retained or not verified). Exit 0 means every check passed. It does not verify
-checkpoints (use `cll verify`), and refuses a profile whose log a plugin keeps.
+order and, for each entry, the artifact record it names. The store authenticates
+each record as it reads it: the record's `capsule_id` is the entry's, its
+producer signature verifies under the profile's trusted keys, and its retained
+originals match the capsule's digests. It then runs agent-action-capsule's
+store checks once over every capsule in the log, such as each chain parent
+being present; an entry whose record could not be read still counts as present,
+so its children do not read as orphans.
+
+The output gives `log_id`, `entries`, `records_passed`, `store_checks` and two
+lists whose items each name the entry's `sequence` and `capsule_id`, the `check`
+(`record`, `originals` or `store_checks`) and the `reason`:
+
+- `failed` (exit 1): a missing record, an edited record, an untrusted signer, a
+  failed store check;
+- `could_not_check` (exit 3): an original that is not retained or not verified,
+  or store checks the verifier could not run.
+
+`store_checks` is `passed`, `failed`, or `incomplete` when some capsules could
+not be checked (a record that could not be read, or the verifier could not run).
+Exit 0 means every check passed. `checkpoint` and `business_truth` are always
+`not_performed`: this does not verify checkpoints (use `cll verify`) or whether
+what a capsule says is true. It refuses a profile whose log a plugin keeps.
 With `verify --capsule` and `verify --bundle`, this covers single capsules,
 bundles and stores, so no agent-action-capsule CLI is needed on this path.
 

@@ -28,11 +28,10 @@ type storeCheck struct {
 }
 
 // verifyStore verifies what a profile's store holds: every CLL entry in
-// sequence order, the artifact record each names (artifact.Verify against the
-// profile's trusted keys), and then every capsule together with AAC's
-// VerifyStore. VerifyStore treats its list as the complete store, so it is
-// called once on the whole log: called per page, a parent on an earlier page
-// would read as missing.
+// sequence order, the artifact record each names, and then every capsule
+// together with AAC's VerifyStore. VerifyStore treats its list as the complete
+// store, so it is called once on the whole log: called per page, a parent on an
+// earlier page would read as missing.
 //
 // A check that failed (exit 1) and one that could not be made (exit 3) are
 // kept in separate lists, so a missing original never reads as a forgery.
@@ -50,9 +49,14 @@ func verifyStore(c *cobra.Command, p Profile) (err error) {
 		return err
 	}
 	failed, unchecked := []storeCheck{}, []storeCheck{}
+	// capsules is the store VerifyStore checks, in CLL order. An entry whose
+	// record could not be read joins it as its bare capsule_id, which
+	// VerifyStore counts as present, so its children do not read as orphans;
+	// only the entries with a read record (read) have results to report.
 	var capsules []any
-	var owners []storeCheck // the entry each of capsules came from
-	entries, passed := 0, 0
+	var owners []storeCheck
+	var read []bool
+	entries, passed, unread := 0, 0, 0
 	for after := uint64(0); ; {
 		page, err := t.Log.ScanEntries(c.Context(), after, storeScanPage)
 		if err != nil {
@@ -68,36 +72,36 @@ func verifyStore(c *cobra.Command, p Profile) (err error) {
 			fail := func(check, reason string) {
 				at.Check, at.Reason = check, reason
 				failed = append(failed, at)
+				capsules, owners, read = append(capsules, at.CapsuleID), append(owners, at), append(read, false)
+				unread++
 			}
+			// The store authenticates a record as it reads it (artifact.Verify
+			// with the profile's trusted keys, the record's capsule_id against
+			// the one asked for), so a record it refuses is this entry's failure.
 			r, err := t.Artifacts.Get(c.Context(), at.CapsuleID)
-			if errors.Is(err, artifact.ErrNotFound) {
+			switch {
+			case errors.Is(err, artifact.ErrNotFound):
 				fail("record", "the artifact store holds no record for this entry")
 				continue
-			}
-			// The store checks a record as it reads it; a record it refuses
-			// is this entry's failure, not a reason to stop.
-			if errors.Is(err, artifact.ErrInvalid) || errors.Is(err, artifact.ErrUntrustedSigner) || errors.Is(err, artifact.ErrCorrupt) || errors.Is(err, artifact.ErrDigestMismatch) {
+			case errors.Is(err, artifact.ErrInvalid), errors.Is(err, artifact.ErrUntrustedSigner), errors.Is(err, artifact.ErrCorrupt), errors.Is(err, artifact.ErrDigestMismatch):
 				fail("record", err.Error())
 				continue
-			}
-			if err != nil {
+			case err != nil:
 				return err
 			}
-			if r.CapsuleID != at.CapsuleID {
-				fail("record", "the record's capsule_id is "+r.CapsuleID+", not the entry's")
-				continue
-			}
-			// The capsule joins the store-wide checks even when its record
-			// fails, so its children do not also read as orphans.
-			if capsule, err := aacbundle.Decode(r.Capsule); err == nil {
-				capsules = append(capsules, capsule)
-				owners = append(owners, at)
-			}
+			// Verify again for its per-original results, which Get does not
+			// return; it fails only if the store did not verify on read.
 			checks, err := artifact.Verify(r, keys)
 			if err != nil {
 				fail("record", err.Error())
 				continue
 			}
+			capsule, err := aacbundle.Decode(r.Capsule)
+			if err != nil {
+				fail("record", "the capsule is not valid JSON: "+err.Error())
+				continue
+			}
+			capsules, owners, read = append(capsules, capsule), append(owners, at), append(read, true)
 			ok := true
 			for _, name := range MissingBindings(r) {
 				at.Check, at.Reason = "originals", "original not retained: "+name
@@ -122,19 +126,28 @@ func verifyStore(c *cobra.Command, p Profile) (err error) {
 		}
 	}
 	storeChecks := "passed"
+	if unread > 0 {
+		storeChecks = "incomplete"
+	}
+	storeFailed := false
 	for i, result := range aacverify.VerifyStore(capsules, nil) {
-		if result.OK {
+		if !read[i] || result.OK {
 			continue
 		}
-		var codes []string
-		for _, f := range result.Findings {
-			if f.Severity == "error" {
-				codes = append(codes, f.Code)
-			}
-		}
+		reason, internal := storeFindings(result)
 		at := owners[i]
-		at.Check, at.Reason = "store_checks", strings.Join(codes, ", ")
+		at.Check, at.Reason = "store_checks", reason
+		// The verifier itself could not run: nothing was checked, so
+		// nothing failed.
+		if internal {
+			unchecked = append(unchecked, at)
+			storeChecks = "incomplete"
+			continue
+		}
 		failed = append(failed, at)
+		storeFailed = true
+	}
+	if storeFailed {
 		storeChecks = "failed"
 	}
 	out := map[string]any{
@@ -152,4 +165,19 @@ func verifyStore(c *cobra.Command, p Profile) (err error) {
 		return ErrPartial
 	}
 	return nil
+}
+
+// storeFindings joins a failed VerifyStore result's error codes, and reports
+// whether every one is verifier_internal_error: the verifier could not run,
+// so the capsule was not checked rather than found wanting.
+func storeFindings(result aacverify.VerificationResult) (string, bool) {
+	var codes []string
+	internal := true
+	for _, f := range result.Findings {
+		if f.Severity == "error" {
+			codes = append(codes, f.Code)
+			internal = internal && f.Code == "verifier_internal_error"
+		}
+	}
+	return strings.Join(codes, ", "), internal && len(codes) > 0
 }

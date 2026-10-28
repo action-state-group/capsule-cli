@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	aacverify "github.com/action-state-group/agent-action-capsule/go/verify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -109,7 +110,54 @@ func TestVerifyProfileStoreUntrustedProducer(t *testing.T) {
 	require.Len(t, failed, 1)
 	assert.Equal(t, id, failed[0].(map[string]any)["capsule_id"])
 	assert.Equal(t, "record", failed[0].(map[string]any)["check"])
-	assert.Equal(t, "passed", v["store_checks"], "the record's own check failed, not the store-wide ones")
+	assert.Equal(t, "incomplete", v["store_checks"], "the refused record's capsule was not checked")
+}
+
+// A refused parent stays in the log, so its intact child is no orphan.
+func TestVerifyProfileStoreRefusedParentIntactChild(t *testing.T) {
+	d := newDisclosureProfile(t)
+	parent := d.publish("parent", `{"n":1}`)
+	p, err := LoadProfile("rep")
+	require.NoError(t, err)
+	oldKey := p.TrustedKeys[0]
+	seed := filepath.Join(d.dir, "seed2")
+	newKey := d.run("key", "generate", "--output", seed)["public_key"].(string)
+	d.run("profile", "update", "--profile", "rep", "--signing-key-file", seed, "--trusted-key", oldKey+","+newKey)
+	publishChild(d, "child", parent)
+	d.run("profile", "update", "--profile", "rep", "--trusted-key", newKey)
+	v, err := verifyProfileStore(t)
+	require.Error(t, err)
+	failed := v["failed"].([]any)
+	require.Len(t, failed, 1, "only the parent's record fails, not the child's store checks")
+	assert.Equal(t, parent, failed[0].(map[string]any)["capsule_id"])
+	assert.Equal(t, "record", failed[0].(map[string]any)["check"])
+	assert.EqualValues(t, 1, v["records_passed"])
+	assert.Equal(t, "incomplete", v["store_checks"])
+}
+
+// An edited capsule in the store is a failed record, exit 1.
+func TestVerifyProfileStoreEditedRecord(t *testing.T) {
+	d := newDisclosureProfile(t)
+	id := d.publish("edited", `{"n":1}`)
+	target := openRep(t, UseArtifacts)
+	_, err := target.db.ExecContext(t.Context(), `UPDATE capsule_store_capsules SET capsule_bytes = CAST(REPLACE(CAST(capsule_bytes AS TEXT), 'edited', 'editeD') AS BLOB) WHERE capsule_id = ?`, id)
+	require.NoError(t, err)
+	v, err := verifyProfileStore(t)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrPartial)
+	failed := v["failed"].([]any)
+	require.Len(t, failed, 1)
+	assert.Equal(t, id, failed[0].(map[string]any)["capsule_id"])
+	assert.Equal(t, "record", failed[0].(map[string]any)["check"])
+}
+
+func TestStoreFindingsSeparatesVerifierErrors(t *testing.T) {
+	reason, internal := storeFindings(aacverify.VerificationResult{Findings: []aacverify.Finding{{Code: "verifier_internal_error", Severity: "error"}}})
+	assert.True(t, internal)
+	assert.Equal(t, "verifier_internal_error", reason)
+	reason, internal = storeFindings(aacverify.VerificationResult{Findings: []aacverify.Finding{{Code: "verifier_internal_error", Severity: "error"}, {Code: "chain_parent_missing", Severity: "error"}, {Code: "note", Severity: "info"}}})
+	assert.False(t, internal, "a real failure beside an internal error is a failure")
+	assert.Equal(t, "verifier_internal_error, chain_parent_missing", reason)
 }
 
 func TestVerifyProfileStorePurgedOriginalsCouldNotCheck(t *testing.T) {
