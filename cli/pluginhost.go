@@ -268,6 +268,9 @@ type PluginMetadata struct {
 	Name        string
 	Vendor      string
 	Subcommands []string
+	// Presentations are the modules the plugin ships beside its launcher
+	// (plugin_presentations.go); none for most plugins.
+	Presentations []PluginPresentation
 }
 
 // NewCommandWith is the capsulectl tree with cmds added at the top level, in
@@ -290,7 +293,7 @@ func NewPluginCommand(meta PluginMetadata, cmds ...*cobra.Command) *cobra.Comman
 	root.Version = FirstNonEmpty(PluginVersion, CLIVersion)
 	root.SetVersionTemplate(root.Use + " {{.Version}} (commit " + FirstNonEmpty(PluginCommit, CLICommit) + ")\n")
 	handshake := &cobra.Command{Use: "cli-plugin-metadata", Hidden: true, Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
-		return writePlainJSON(c, pluginInfo{Name: meta.Name, Vendor: meta.Vendor, Version: root.Version, CoreVersion: CLIVersion, PluginAPI: PluginAPI, Subcommands: meta.Subcommands})
+		return writePlainJSON(c, pluginInfo{Name: meta.Name, Vendor: meta.Vendor, Version: root.Version, CoreVersion: CLIVersion, PluginAPI: PluginAPI, Subcommands: meta.Subcommands, Presentations: meta.Presentations})
 	}}
 	root.AddCommand(handshake)
 	return root

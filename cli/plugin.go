@@ -423,7 +423,7 @@ type pluginInfo struct {
 	Subcommands []string `json:"subcommands,omitempty"`
 	// Presentations are the modules the plugin offers a page builder
 	// (plugin_presentations.go). An older capsulectl ignores the member.
-	Presentations []pluginPresentation `json:"presentations,omitempty"`
+	Presentations []PluginPresentation `json:"presentations,omitempty"`
 	path          string
 	// checked is the path the handshake executed. For a discovered plugin
 	// that is the resolved path the trust walk judged, and presentations
