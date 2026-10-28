@@ -682,9 +682,9 @@ func profileCommands() *cobra.Command {
 				return InputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
 			}
 			// The store is read only when the profile is new or now names another
-			// owner or file: an update of anything else (a witness endpoint, say)
+			// owner, type or file: an update of anything else (a witness endpoint, say)
 			// opens no database, and the write guard covers the rest.
-			if !update || before.LogOwner() != p.LogOwner() || before.Connection.Database != p.Connection.Database {
+			if !update || before.LogOwner() != p.LogOwner() || before.Type != p.Type || before.Connection.Database != p.Connection.Database {
 				if e := checkOwnerAgainstStore(c.Context(), p); e != nil {
 					return e
 				}

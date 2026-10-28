@@ -171,4 +171,13 @@ func TestProfileUpdateCannotDisguiseAStore(t *testing.T) {
 	execSQL(t, plain, `CREATE TABLE plugin_owned (owner TEXT NOT NULL, version INTEGER NOT NULL); INSERT INTO plugin_owned VALUES ('ledger', 1)`)
 	_, err = invoke(t, "", "profile", "update", "--profile", plain.Name, "--checkpoint-endpoint", "https://witness.example/v1", "--checkpoint-public-key", strings.Repeat("ab", 32))
 	require.NoError(t, err, "no owner or file change: the store is not read")
+
+	// Switching a profile's type onto a marked file is a change too.
+	mysqlish := plain
+	mysqlish.Name, mysqlish.Type = "was-mysql", "mysql"
+	mysqlish.Connection.Host, mysqlish.Connection.TLS = "localhost", "false"
+	require.NoError(t, SaveProfile(mysqlish, false))
+	_, err = invoke(t, "", "profile", "update", "--profile", mysqlish.Name, "--type", "sqlite")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "records its owner as the ledger plugin")
 }
