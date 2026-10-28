@@ -123,7 +123,7 @@ What `presentation build` shows, against these goldens (built through other comm
 | Fixture | Golden reproduced? | Why not |
 | --- | --- | --- |
 | `1-rules-comparison` | yes | |
-| `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`), the deal plugin's presentation module. Without that module installed, `presentation list` and `presentation build` resolve the bundle to `aac.builtin.no-aggregate/v0`, so the page falls back. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
+| `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`), the deal plugin's presentation module. With no plugin module installed, `presentation list` and `presentation build` resolve the bundle to `aac.builtin.no-aggregate/v0` (`TestPresentationPassADealWithoutTheDealView`), so the page falls back. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
 | `3-bilateral-composed` | yes | |
 | `4-monthly-outcome` | yes, less the card | `book report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
 | `5-monthly-compliance` | yes, less the card | As fixture 4. |
@@ -133,11 +133,8 @@ What `presentation build` shows, against these goldens (built through other comm
 | `8-seller-buyer-copy` | no: `build-snapshot.json` | As fixture 2. |
 | `9-seller-later-evidence` | no: `build-snapshot.json` | As fixture 2. |
 
-Two gaps are pinned so they fail once they close:
+One gap is pinned so it fails once it closes:
 
-- **The deal view.** It is the deal plugin's module (capsule-cli#428), so a core without the
-  plugin's module installed neither lists nor carries it (`TestPresentationPassDealViewNotCarried`
-  until the plugin's pin moves past capsule-cli#428 step 4).
 - **A record signed by another key than the one it names.** `verify --bundle` calls it INVALID
   (`producer_signature_invalid`), so build writes no page. The page's own gate (the
   vendored viewer, and agent-action-capsule's Go resolver that `list` uses) checks each record's
