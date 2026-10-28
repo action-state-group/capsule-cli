@@ -294,6 +294,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
+capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl publish --profile NAME --request INPUT.json
@@ -710,6 +711,22 @@ bare capsule gets the same checks: its `capsule_id` recomputed, its signature
 under its `key_id`, and that key held to the profile's trusted keys. It carries
 no retained originals, so its committed digests are not rehashed, and the
 output says so.
+
+`verify --profile NAME`, with none of `--capsule`, `--bundle` and `--history`,
+verifies what the profile's store holds. It reads the whole CLL in sequence
+order and, for each entry, the artifact record it names, which gets the
+`--capsule` checks: its `capsule_id` (which must match the entry's), its
+producer signature against the profile's trusted keys, and its retained
+originals. It then runs agent-action-capsule's store checks once over every
+capsule in the log, such as each chain parent being present. The output gives
+`entries`, `records_passed` and `store_checks`, and two lists whose items each
+name the entry's `sequence` and `capsule_id`, the `check` and the `reason`:
+`failed` (exit 1: a missing record, an edited record, an untrusted signer, a
+failed store check) and `could_not_check` (exit 3: an original that is not
+retained or not verified). Exit 0 means every check passed. It does not verify
+checkpoints (use `cll verify`), and refuses a profile whose log a plugin keeps.
+With `verify --capsule` and `verify --bundle`, this covers single capsules,
+bundles and stores, so no agent-action-capsule CLI is needed on this path.
 
 `get` uses the SDK directly, including signature trust, inventory integrity and
 bound-original verification. Reading artifacts requires only read access to the store (SELECT on the artifact SDK tables for MySQL; read permission on the file or directory for SQLite and JSONL).

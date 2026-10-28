@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Added:** `verify --profile NAME` with no file flag verifies the profile's
+  store: every CLL entry, the artifact record it names (the `--capsule`
+  checks), and agent-action-capsule's store checks once over the whole log.
+  Failed checks (exit 1) and checks that could not be made (exit 3) are listed
+  apart, each by sequence and capsule id (capsule-cli#477, step 4 of moving
+  off the ledger).
 - **Fixed:** the vendored page runtime and `capsule-viewer/go` move to capsule-viewer
   389c1bac (a pseudo-version, no release): the banner integrity check no longer
   discards a module's render when the page grows a classic scrollbar
