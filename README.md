@@ -425,9 +425,12 @@ unresolved signer, and the command exits partial (3).
 of no return (pay, commit, sign, share) against it. The check is advisory: it
 holds an action only where the host runs it from a pre-action hook. A deal
 profile is witnessed by default on a fixed schedule, its checkpoint cadence:
-one checkpoint of hashes per tick (every 5m, give or take 1m, by default),
-never on activity. `cll checkpoint cadence --wait-up-to 5m`, scheduled every
-5 minutes, is its poll: a run with no tick due publishes nothing.
+one checkpoint of hashes per tick, at the profile's `cadence.interval` (the
+deal plugin sets its default; see [Witness cadence](https://github.com/action-state-group/evidencebook-deal/blob/main/skills/deal/README.md#witness-cadence)
+in the deal skill), whether or not anything happened, never on activity.
+`cll checkpoint cadence --wait-up-to D`, scheduled every D (D is a duration
+you choose, not a protocol value), is its poll: a run with no tick due
+publishes nothing.
 `deal audit-host` reads the host's execution records afterwards and lists
 consequential actions that have no deal record; see the deal skill, in the
 deal plugin's repository.
