@@ -145,7 +145,7 @@ func TestWitnessRefusedDeliveryIsRetried(t *testing.T) {
 	assert.NotContains(t, saved.LastError, "the witness answered")
 	reason, text := WitnessPendingReason(saved, DealDefaultWitness)
 	assert.Equal(t, "refused", reason)
-	assert.Equal(t, "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; it is retried at every tick. "+WitnessGrantText(DealDefaultWitness), text)
+	assert.Equal(t, "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; "+WitnessRetryText()+" "+WitnessGrantText(DealDefaultWitness), text)
 
 	// Once the host grants the site, the next attempt after the backoff
 	// delivers it.
@@ -253,4 +253,17 @@ func TestWitnessProxyAuthIsNotReached(t *testing.T) {
 	require.NoError(t, e)
 	reason, _ = WitnessPendingReason(saved, DealDefaultWitness)
 	assert.Equal(t, "network_consent_needed", reason, "a transport error did not reach the witness")
+}
+
+// The pending texts quote the retry cap of the delivery configuration the CLI
+// runs with, so a change to the library's backoff changes the text with it.
+func TestWitnessRetryTextFollowsBackoffCap(t *testing.T) {
+	config := witness.DefaultDeliveryConfig()
+	require.Equal(t, time.Hour, config.MaxBackoff, "the text says an hour; update WitnessRetryText with the cap")
+	assert.Contains(t, WitnessRetryText(), "growing up to an hour")
+	assert.NotContains(t, WitnessRetryText(), "every tick")
+	for _, state := range []cll.WitnessState{{Attempts: 1, LastError: "boom"}, {Attempts: 1, LastError: "witness answered 500"}} {
+		_, text := WitnessPendingReason(state, DealDefaultWitness)
+		assert.Contains(t, text, WitnessRetryText())
+	}
 }

@@ -249,6 +249,20 @@ func WitnessConsentReached(endpoint string) string {
 // not pending, since it is never retried.
 const WitnessNotDelivered = "not delivered: "
 
+// WitnessRetryText is the retry sentence of the pending texts. A tick only
+// attempts a delivery whose next-attempt time has passed, and the library
+// backs that time off up to its MaxBackoff, so a failing witness is not tried
+// at every tick. The cap is read from the delivery configuration the CLI runs
+// with, so the text cannot drift from it.
+func WitnessRetryText() string {
+	max := witness.DefaultDeliveryConfig().MaxBackoff
+	span := max.String()
+	if max == time.Hour {
+		span = "an hour"
+	}
+	return "it is tried again later while capsulectl runs, with the wait growing up to " + span + "."
+}
+
 // witnessPendingReason classifies a pending delivery from its stored error.
 func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
 	if strings.Contains(state.LastError, WitnessNotReached) {
@@ -261,7 +275,7 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 	if status == "403" {
 		// A refused delivery stored as failed for good is re-armed at the
 		// next tick (RearmRefused), so it is retried either way.
-		return "refused", "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; it is retried at every tick. " + WitnessGrantText(endpoint)
+		return "refused", "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; " + WitnessRetryText() + " " + WitnessGrantText(endpoint)
 	}
 	if state.Permanent {
 		if status != "" {
@@ -270,9 +284,9 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 		return "witness_error", WitnessNotDelivered + "the delivery failed; it is not retried."
 	}
 	if status != "" {
-		return "witness_error", "pending: the witness answered with an error (HTTP " + status + "); it is retried at every tick."
+		return "witness_error", "pending: the witness answered with an error (HTTP " + status + "); " + WitnessRetryText()
 	}
-	return "witness_error", "pending: the witness answered with an error; it is retried at every tick."
+	return "witness_error", "pending: the witness answered with an error; " + WitnessRetryText()
 }
 
 // A scoped view prevents one command from delivering unrelated checkpoint rows.

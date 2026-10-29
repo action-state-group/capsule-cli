@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fixed:** the "pending" texts of a witness delivery that failed or was refused
+  said it is "retried at every tick". A tick only attempts a delivery whose wait
+  has passed, and that wait grows up to an hour. The texts now say it is tried
+  again later while capsulectl runs, with the wait growing up to an hour, and a
+  test ties that to the library's backoff cap (capsule-cli#397).
 - **Changed:** the pages capsulectl writes (`presentation build`, and `bundle` or
   `disclose --html`) embed capsule-viewer's released page runtime, `go/pageruntime`
   in capsule-viewer/go v0.3.0, pinned by its digest `0758f29b…`. capsule-cli's own
