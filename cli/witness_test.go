@@ -260,10 +260,12 @@ func TestWitnessProxyAuthIsNotReached(t *testing.T) {
 func TestWitnessRetryTextFollowsBackoffCap(t *testing.T) {
 	config := witness.DefaultDeliveryConfig()
 	require.Equal(t, time.Hour, config.MaxBackoff, "the text says an hour; update WitnessRetryText with the cap")
-	assert.Contains(t, WitnessRetryText(), "growing up to an hour")
+	assert.Contains(t, WitnessRetryText(), "a wait that grows up to an hour")
 	assert.NotContains(t, WitnessRetryText(), "every tick")
-	for _, state := range []cll.WitnessState{{Attempts: 1, LastError: "boom"}, {Attempts: 1, LastError: "witness answered 500"}} {
+	for _, state := range []cll.WitnessState{{Attempts: 1, LastError: "boom"}, {Attempts: 1, LastError: WitnessFailureBody(500)}} {
 		_, text := WitnessPendingReason(state, DealDefaultWitness)
 		assert.Contains(t, text, WitnessRetryText())
 	}
+	_, text := WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: WitnessFailureBody(500)}, DealDefaultWitness)
+	assert.Contains(t, text, "HTTP 500")
 }

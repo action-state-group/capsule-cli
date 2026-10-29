@@ -260,7 +260,7 @@ func WitnessRetryText() string {
 	if max == time.Hour {
 		span = "an hour"
 	}
-	return "it is tried again later while capsulectl runs, with the wait growing up to " + span + "."
+	return "it is tried again on a later capsulectl run, after a wait that grows up to " + span + "."
 }
 
 // witnessPendingReason classifies a pending delivery from its stored error.
