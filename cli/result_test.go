@@ -336,6 +336,45 @@ func TestResultSchemaCompilesAtItsPin(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// plan_ref and dataset_ref (aac spec section 7.3) pass together, as digest
+// refs; either alone, an inline plan in place of the digest, and any other
+// unknown member are still refused.
+func TestResultSchemaAdmitsPlanAndDatasetRefs(t *testing.T) {
+	ref := func(digest string) map[string]any {
+		return map[string]any{"digest_alg": "SHA-256", "digest": strings.Repeat(digest, 64)}
+	}
+	check := func(mutate func(map[string]any)) error {
+		doc := resultTestDoc(resultTestClaim("claim-1", "met", strings.Repeat("a", 64)))
+		mutate(doc)
+		raw, err := json.Marshal(doc)
+		require.NoError(t, err)
+		decoded, err := DecodeResult(raw)
+		require.NoError(t, err)
+		return CheckResultSchema(decoded)
+	}
+	require.NoError(t, check(func(map[string]any) {}))
+	require.NoError(t, check(func(doc map[string]any) { doc["plan_ref"], doc["dataset_ref"] = ref("b"), ref("c") }))
+	for name, mutate := range map[string]func(map[string]any){
+		"plan_ref alone":    func(doc map[string]any) { doc["plan_ref"] = ref("b") },
+		"dataset_ref alone": func(doc map[string]any) { doc["dataset_ref"] = ref("c") },
+		"an inline plan": func(doc map[string]any) {
+			doc["plan_ref"], doc["dataset_ref"] = map[string]any{"header": map[string]any{}, "nodes": []any{}}, ref("c")
+		},
+		"another digest_alg": func(doc map[string]any) {
+			doc["plan_ref"], doc["dataset_ref"] = map[string]any{"digest_alg": "SHA-512", "digest": strings.Repeat("b", 64)}, ref("c")
+		},
+		"an unknown member": func(doc map[string]any) {
+			doc["plan_ref"], doc["dataset_ref"], doc["dataset"] = ref("b"), ref("c"), []any{}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := check(mutate)
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
+}
+
 func errorsJoinClose(err error, t *Target) error {
 	if closeErr := t.Close(); err == nil {
 		return closeErr

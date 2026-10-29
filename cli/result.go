@@ -43,7 +43,13 @@ import (
 // document and on a claim (spec section 8a, aac #297) and the optional
 // document member coverage_report (aac #157), the PROPOSED aggregate member
 // coverage_declaration (aac #312), and a claim's evidence[]
-// holding at least one record (aac #353); the pinned aac Go module does
+// holding at least one record (aac #353), plus one later hunk: the optional
+// document members plan_ref and dataset_ref, which appear together or not
+// at all (spec section 7.3, aac #443 at 8c673d1, for evidencebook#107). Only
+// that hunk is taken from 8c673d1: the rest of that commit's schema
+// (out_of_scope, applicability, requirements_covered) needs cross-checks
+// this gate does not have, and arrives with aac's own gate
+// (capsule-cli#473). The pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's
@@ -57,9 +63,9 @@ const (
 	ResultVersion  = "evidence-result-v0"
 	resultSchemaID = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
-	ResultSchemaDigest = "288d17a659ee416670819d5517c7f6824d1638c6eaf75dcc76a37c868fa8b85f"
+	ResultSchemaDigest = "f34d146909ae9dd4a36e10ebf5dcc1b5b6ce4b58e7f97f9a763bcaa37e43d4da"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"

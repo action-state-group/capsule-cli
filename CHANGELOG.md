@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Added:** the Result gate admits the optional document members `plan_ref`
+  and `dataset_ref` (agent-action-capsule spec `evidence-result-v0.md` §7.3,
+  aac #443). Each is a `{digest_alg: "SHA-256", digest}` ref, and a Result
+  carries both or neither. `result build`, `book result build` and
+  `deal terms-result` accept them. The core `result build` seals them as
+  stated, because it cannot run a plan; `book result build --plan` sets and
+  checks them (evidencebook#107). Only that hunk of aac 8c673d1's schema is
+  vendored, so every other member is still refused as before. The rest of
+  that schema arrives with aac's own gate (capsule-cli#473).
+
 - **Fixed:** the "pending" texts of a witness delivery that failed or was refused
   said it is "retried at every tick". A tick only attempts a delivery whose wait
   has passed, and that wait grows up to an hour. The texts now say it is tried
