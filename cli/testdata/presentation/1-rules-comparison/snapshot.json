@@ -1,9 +1,11 @@
 {
   "verification": {
     "verify": [
-      "verified"
+      "incomplete"
     ],
-    "verdict": [],
+    "verdict": [
+      "incomplete"
+    ],
     "sealed": [],
     "unchecked": []
   },
@@ -24,9 +26,10 @@
     "eecd39aef42e6f231ea49a3baf3be894afa1b7eb5add2c8805e27efffab15191"
   ],
   "text": [
-    "Contents checked",
-    "10 of 10 checks passed · 4 records · signatures not checked here",
+    "None of the bundle's checks failed, but some were not run: see \"Not checked on this page\" below",
+    "10 of 10 checks passed · 4 records · checkpoint signature not checked here",
     "How this page was checked",
+    "This page did not check the checkpoint signature, which this page cannot check (checkpoint_verifier_unavailable). Interval coverage and per-record membership are checkpoint_unverified: relative to a producer-asserted checkpoint this page could not authenticate.",
     "Example rules: September against October",
     "Spend limit per order",
     "same",
@@ -50,7 +53,7 @@
     "leaf",
     "3",
     "How this page was checked",
-    "· 10 of 10 checks passed · 4 records · signatures not checked here",
+    "· 10 of 10 checks passed · 4 records · checkpoint signature not checked here",
     "Verification",
     "bundle digest",
     "\"8a4bacd7586b0f3d0b9e06e11d723d204815f93170b1cf5564e684d01909c3e3\"",
@@ -119,9 +122,9 @@
     "That no record is missing from the stretch of the log this file covers.",
     "That each record bound to a log position sits at that position.",
     "Each disclosed value against the digest its record committed to.",
+    "The producer signature on every record.",
     "Not checked on this page",
     "The signature on the log's checkpoint, and the fields it signs. This page could not check it, so the range and membership checks rest on a checkpoint the producer asserted.",
-    "The producer signature on every record.",
     "To run these checks, verify the bundle with a full verifier.",
     "None of these checks says who produced the records, or that this file is the most recent copy.",
     "verify independently at verify.agentactioncapsule.org or with a full verifier"

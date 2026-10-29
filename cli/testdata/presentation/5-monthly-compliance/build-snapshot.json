@@ -1,9 +1,11 @@
 {
   "verification": {
     "verify": [
-      "verified"
+      "incomplete"
     ],
-    "verdict": [],
+    "verdict": [
+      "incomplete"
+    ],
     "sealed": [],
     "unchecked": []
   },
@@ -48,9 +50,10 @@
     "f9d9d3f05d0a340885f9e0082fb7f7156ed2c774ff18ec7eba657c071b8fa1ae"
   ],
   "text": [
-    "Contents checked",
-    "10 of 10 checks passed · 17 records · signatures not checked here",
+    "None of the bundle's checks failed, but some were not run: see \"Not checked on this page\" below",
+    "10 of 10 checks passed · 17 records · checkpoint signature not checked here",
     "How this page was checked",
+    "This page did not check the checkpoint signature, which this page cannot check (checkpoint_verifier_unavailable). Interval coverage and per-record membership are checkpoint_unverified: relative to a producer-asserted checkpoint this page could not authenticate.",
     "EU AI Act obligations report",
     "Pack example-ai-act-obligations/v1 v0.1.0 · 3 obligations · 4 sessions · judged 2026-09-03 – 2026-09-24",
     "16 evaluations of 4 requirements",
@@ -70,7 +73,7 @@
     "Witnessed by",
     "not stated in this bundle: it carries no witness receipt for its checkpoint. The checkpoint: log \"example-log\", size 32, root aec893838e0c…; this page did not check its signature.",
     "Verified by",
-    "this page's code: @action-state-group/capsule-viewer 0.1.0 at 4b08aad14182, verifier @action-state-group/agent-action-capsule 0.6.1 with cll 0.2.1. The bundle's own report, which this page does not check, names the tool that built it as \"capsulectl\", version not stated.",
+    "this page's code: @action-state-group/capsule-viewer 0.3.0 at 3fe9ad7b0737, verifier @action-state-group/agent-action-capsule 0.8.0 with cll 0.2.1. The bundle's own report, which this page does not check, names the tool that built it as \"capsulectl\", version not stated.",
     "Regulation (EU) 2024/1689 (the EU AI Act)",
     "What was checked and what we found",
     "Each session (one conversation with the agent) was checked against 4 tests under 3 obligations. Results are counts of sessions: there is no overall score. Open a test to read the sessions behind its exceptions.",
@@ -109,7 +112,7 @@
     "2 could not be decided",
     "Every count and result is read from the sealed claims and reports in this bundle, or marked \"not stated\". The regulation named above, obligation titles, test names, the article, the plain-language summary, applicability, method, finding ids, severities, recommendations and the notes on undecided tests and quality checks are the producer's mapping, set in italics: carried beside the signed records, not in them.",
     "How this page was checked",
-    "· 10 of 10 checks passed · 17 records · signatures not checked here",
+    "· 10 of 10 checks passed · 17 records · checkpoint signature not checked here",
     "Verification",
     "bundle digest",
     "\"12a0f272e1c7fe86ecc1bde7c87ac74dbdc338a52fbc7152cb96fe947c9e5ccc\"",
@@ -207,9 +210,9 @@
     "That no record is missing from the stretch of the log this file covers.",
     "That each record bound to a log position sits at that position.",
     "Each disclosed value against the digest its record committed to.",
+    "The producer signature on every record.",
     "Not checked on this page",
     "The signature on the log's checkpoint, and the fields it signs. This page could not check it, so the range and membership checks rest on a checkpoint the producer asserted.",
-    "The producer signature on every record.",
     "To run these checks, verify the bundle with a full verifier.",
     "None of these checks says who produced the records, or that this file is the most recent copy.",
     "verify independently at verify.agentactioncapsule.org or with a full verifier",

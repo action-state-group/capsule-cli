@@ -3,7 +3,9 @@
     "verify": [
       "failed"
     ],
-    "verdict": [],
+    "verdict": [
+      "invalid"
+    ],
     "sealed": [],
     "unchecked": []
   },
@@ -20,12 +22,12 @@
     "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b"
   ],
   "text": [
-    "Check failed",
-    "3 of 10 checks failed · 1 check on this page failed · 1 record · signatures not checked here",
+    "✗ This bundle did not verify: do not rely on it",
+    "3 of 10 checks failed · 2 checks on this page failed · 1 record · checkpoint signature not checked here",
     "How this page was checked",
     "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed.",
     "How this page was checked",
-    "· 3 of 10 checks failed · 1 check on this page failed · 1 record · signatures not checked here",
+    "· 3 of 10 checks failed · 2 checks on this page failed · 1 record · checkpoint signature not checked here",
     "Verification",
     "bundle digest",
     "\"0da963e89819051b3c04326b2e50109e4bb994f8456e0e7e684436f84abb9747\"",
@@ -90,9 +92,9 @@
     "That every record the root cites, to the stated depth, is in this file or listed as missing.",
     "That each record bound to a log position sits at that position.",
     "Each disclosed value against the digest its record committed to.",
+    "The producer signature on every record.",
     "Not checked on this page",
     "The signature on the log's checkpoint, and the fields it signs.",
-    "The producer signature on every record.",
     "To run these checks, verify the bundle with a full verifier.",
     "None of these checks says who produced the records, or that this file is the most recent copy.",
     "verify independently at verify.agentactioncapsule.org or with a full verifier"
