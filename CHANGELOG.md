@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc24
+
 - **Added:** the Result gate admits the optional document members `plan_ref`
   and `dataset_ref` (agent-action-capsule spec `evidence-result-v0.md` §7.3,
   aac #443). Each is a `{digest_alg: "SHA-256", digest}` ref, and a Result
