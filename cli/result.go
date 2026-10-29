@@ -46,10 +46,12 @@ import (
 // holding at least one record (aac #353), plus one later hunk: the optional
 // document members plan_ref and dataset_ref, which appear together or not
 // at all (spec section 7.3, aac #443 at 8c673d1, for evidencebook#107). Only
-// that hunk is taken from 8c673d1: the rest of that commit's schema
-// (out_of_scope, applicability, requirements_covered) needs cross-checks
-// this gate does not have, and arrives with aac's own gate
-// (capsule-cli#473). The pinned aac Go module does
+// that hunk is taken from 8c673d1. The rules aac added between the two
+// commits (#363, #368, #402, #436: coverage per evaluation, out_of_scope and
+// applicability, requirements_covered, ECMA-262 patterns) are deliberately
+// not vendored: they need cross-checks this gate does not have, and arrive
+// with aac's own gate (capsule-cli#473). testdata/evidence-result holds
+// 8c673d1's vectors for the hunk. The pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's

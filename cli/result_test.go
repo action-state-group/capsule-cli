@@ -375,6 +375,31 @@ func TestResultSchemaAdmitsPlanAndDatasetRefs(t *testing.T) {
 	}
 }
 
+// aac 8c673d1's plan_ref/dataset_ref vectors (vectors/evidence-result,
+// copied to testdata/evidence-result): the positive passes the whole gate,
+// and each negative fails the schema.
+func TestResultGateRunsThePlanAndDatasetRefVectors(t *testing.T) {
+	for name, valid := range map[string]bool{
+		"pos-example-org-dataset-result.json":   true,
+		"neg-dataset-ref-without-plan-ref.json": false,
+		"neg-plan-ref-inline-plan.json":         false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", name))
+			require.NoError(t, err)
+			doc, err := DecodeResult(raw)
+			require.NoError(t, err)
+			_, err = CheckResult(doc, "")
+			if valid {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
+}
+
 func errorsJoinClose(err error, t *Target) error {
 	if closeErr := t.Close(); err == nil {
 		return closeErr
