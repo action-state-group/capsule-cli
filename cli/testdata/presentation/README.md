@@ -2,10 +2,9 @@
 
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`. The pages and snapshots
-are those of capsule-viewer `4b08aad`, an earlier viewer than the page runtime `go.mod`'s
-capsule-viewer/go now carries (v0.3.0, `go/pageruntime`; since `d100e32` its banner reads a
-bundle with unsigned records as incomplete): evidencebook-deal rebuilds them for the new viewer
-and they are copied here then.
+are those of capsule-viewer v0.3.0 (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
+carries; its banner reads a bundle with unsigned records as incomplete). evidencebook-deal
+rebuilds them for each new viewer and they are copied here then.
 
 **Here, in the core,** they are committed test data: `TestPresentationGoldensCiteWhatTheyCarry`
 and `TestPresentationFixturesVerifyOffline` (`cli/presentation_fixtures_test.go`) check what

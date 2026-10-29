@@ -1,9 +1,11 @@
 {
   "verification": {
     "verify": [
-      "verified"
+      "incomplete"
     ],
-    "verdict": [],
+    "verdict": [
+      "incomplete"
+    ],
     "sealed": [
       "x-deal-v0"
     ],
@@ -38,9 +40,10 @@
     "d34894a759a36e20218fdb036ea663a619ec217c57c1fdc15cb31bccd9f07332"
   ],
   "text": [
-    "Contents checked",
-    "10 of 10 checks passed · 17 records · signatures not checked here",
+    "None of the bundle's checks failed, but some were not run: see \"Not checked on this page\" below",
+    "10 of 10 checks passed · 17 records · checkpoint signature not checked here",
     "How this page was checked",
+    "This page did not check the checkpoint signature, which this page cannot check (checkpoint_verifier_unavailable). Interval coverage and per-record membership are checkpoint_unverified: relative to a producer-asserted checkpoint this page could not authenticate.",
     "Deal report",
     "What you asked",
     "Withheld from this copy.",
@@ -81,7 +84,7 @@
     "Open: waiting for the merchant's receipt. It is expected to close by 2026-11-04.",
     "Records can be linked to this deal after this receipt was made (a merchant's confirmation, a shipping notice, a refund). This receipt shows those sealed when it was made; to see later ones, make a new report with `capsulectl deal report`. (as of Oct 21, 2026, 4:53 AM)",
     "This report states the deal as of its checkpoint at Oct 21, 2026, 4:53 AM (the producer's time).",
-    "Not part of the report, worked out by this page when you opened it: today is Oct 23, 2026.",
+    "Not part of the report, worked out by this page when you opened it: today is Oct 29, 2026.",
     "The text on this page was written by capsulectl when the page was made and sealed as a record in this file: this page checked that it has not changed since. It is capsulectl's summary of the steps, not the steps themselves.",
     "This receipt covers this one deal. It is not a record of everything the agent did.",
     "Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt this file carries.",
@@ -118,7 +121,7 @@
     "Claim recorded (withheld)",
     "This page checked each step's sealed record and its place in this deal's log; the verification below says what was and was not checked. The records carry fingerprints, not names or numbers; the words shown come from this device. Steps marked contents withheld are proven present and unchanged; what they say is not in this copy. The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. It covers this skill's own records only, never the agent host's own store.",
     "How this page was checked",
-    "· 10 of 10 checks passed · 17 records · signatures not checked here",
+    "· 10 of 10 checks passed · 17 records · checkpoint signature not checked here",
     "Verification",
     "bundle digest",
     "\"1e4fbf123edec01273fb26b63723805c516e50d7b2e14d72f3589edd1f235d30\"",
@@ -222,9 +225,9 @@
     "That no record is missing from the stretch of the log this file covers.",
     "That each record bound to a log position sits at that position.",
     "Each disclosed value against the digest its record committed to.",
+    "The producer signature on every record.",
     "Not checked on this page",
     "The signature on the log's checkpoint, and the fields it signs. This page could not check it, so the range and membership checks rest on a checkpoint the producer asserted.",
-    "The producer signature on every record.",
     "To run these checks, verify the bundle with a full verifier.",
     "None of these checks says who produced the records, or that this file is the most recent copy.",
     "verify independently at verify.agentactioncapsule.org or with a full verifier"
