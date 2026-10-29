@@ -11,7 +11,6 @@
   checks them (evidencebook#107). Only that hunk of aac 8c673d1's schema is
   vendored, so every other member is still refused as before. The rest of
   that schema arrives with aac's own gate (capsule-cli#473).
-
 - **Fixed:** the "pending" texts of a witness delivery that failed or was refused
   said it is "retried at every tick". A tick only attempts a delivery whose wait
   has passed, and that wait grows up to an hour. The texts now say it is tried
