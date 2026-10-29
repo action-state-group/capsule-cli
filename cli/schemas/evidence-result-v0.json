@@ -471,7 +471,19 @@
         },
         "aggregate": { "$ref": "#/$defs/Aggregate" },
         "view": { "$ref": "#/$defs/View" },
-        "coverage_report": { "$ref": "#/$defs/CoverageReport" }
+        "coverage_report": { "$ref": "#/$defs/CoverageReport" },
+        "plan_ref": {
+          "description": "spec section 7.3: the digest of the dataset plan (spec/evidence-plan-ir-v0.md section 5.1) this Result's population was selected by. A digest only, never the plan.",
+          "$ref": "#/$defs/DigestRef"
+        },
+        "dataset_ref": {
+          "description": "spec section 7.3: the digest of the dataset document (spec/evidence-plan-ir-v0.md section 6.2) the plan produced. A digest only, never the rows.",
+          "$ref": "#/$defs/DigestRef"
+        }
+      },
+      "dependentRequired": {
+        "plan_ref": ["dataset_ref"],
+        "dataset_ref": ["plan_ref"]
       }
     }
   }
