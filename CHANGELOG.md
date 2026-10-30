@@ -8,7 +8,7 @@
   stores it as `rules_checker.roles`, and `ProfileRulesChecker.ForRole(role)`
   gives the pin a check acting as that role runs under. A role not listed falls
   back to the flat digests, so a profile without `roles` is unchanged.
-  `doctor --install-check` names each role with no pin. Swapping one role's
+  `doctor --install-check` names each role with no definition digest pinned. Swapping one role's
   pack is a profile update, with no code change (capsule-cli#323, Steven's
   SEAMS ruling 4). The deal plugin's use of `ForRole` is a companion change.
 

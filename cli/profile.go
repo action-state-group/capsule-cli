@@ -236,16 +236,17 @@ func (r ProfileRulesChecker) ForRole(role string) ProfileRulesRole {
 	return rp
 }
 
-// MissingRoles are the deal roles with no pin at all: no entry in Roles and
-// no flat default. Only a profile that uses Roles can have one; the flat
-// pin's own absence stays the notice it always was.
+// MissingRoles are the deal roles with no definition digest pinned: no entry
+// in Roles and no flat default, or an entry with a pack
+// alone. Only a profile that uses Roles can have one; the flat pin's own
+// absence stays the notice it always was.
 func (r ProfileRulesChecker) MissingRoles() []string {
 	if len(r.Roles) == 0 {
 		return nil
 	}
 	var missing []string
 	for _, role := range RulesRoles {
-		if rp := r.ForRole(role); rp.Pack == "" && len(rp.PinnedDigests()) == 0 {
+		if len(r.ForRole(role).PinnedDigests()) == 0 {
 			missing = append(missing, role)
 		}
 	}

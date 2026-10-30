@@ -97,7 +97,7 @@ func TestInstallCheckReportsAMissingPinPerRole(t *testing.T) {
 
 	check, err := installCheckOf(t, owned.Name, t.TempDir())
 	require.ErrorIs(t, err, ErrPartial)
-	assert.Contains(t, check["issues"], "profile "+owned.Name+" pins no rules pack for the seller role: rerun capsulectl profile update --profile "+owned.Name+" --rules-checker FILE, with FILE's roles.seller holding a pack and a definition_digest and restating every other role (the flag replaces the whole pin)")
+	assert.Contains(t, check["issues"], "profile "+owned.Name+" pins no definition digest for the seller role: rerun capsulectl profile update --profile "+owned.Name+" --rules-checker FILE, with FILE's roles.seller holding a pack and a definition_digest and restating every other role (the flag replaces the whole pin)")
 	for _, issue := range check["issues"].([]any) {
 		assert.NotContains(t, issue, "buyer role")
 	}
@@ -150,7 +150,28 @@ func TestDoctorReportsPerRolePins(t *testing.T) {
 	assert.NotContains(t, roles["buyer"], "notice")
 	assert.Equal(t, "asg/seller", roles["seller"].(map[string]any)["pack"])
 	assert.Contains(t, roles["seller"], "notice")
-	assert.NotContains(t, checker, "missing_roles")
+	assert.Equal(t, []any{"seller"}, checker["missing_roles"])
+}
+
+// A role pinned by pack alone, with no flat digest to inherit, is a missing
+// digest pin for install-check.
+func TestInstallCheckFlagsAPackOnlyRoleWithoutDigests(t *testing.T) {
+	root := pluginRoot(t)
+	owned := ownedProfile(t, "jsonl", "ledger")
+	pin := pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"},"seller":{"pack":"asg/seller"}}}`)
+	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pin)
+	require.NoError(t, err, out)
+	check, err := installCheckOf(t, owned.Name, t.TempDir())
+	require.ErrorIs(t, err, ErrPartial)
+	assert.Contains(t, strings.Join(anyStrings(check["issues"]), "\n"), "pins no definition digest for the seller role")
+}
+
+func anyStrings(v any) []string {
+	var out []string
+	for _, e := range v.([]any) {
+		out = append(out, e.(string))
+	}
+	return out
 }
 
 // Install-check says nothing about roles for a checker pinned without them.
