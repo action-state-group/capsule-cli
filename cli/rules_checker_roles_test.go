@@ -102,3 +102,65 @@ func TestInstallCheckReportsAMissingPinPerRole(t *testing.T) {
 		assert.NotContains(t, issue, "buyer role")
 	}
 }
+
+// A role that names a pack but no digest keeps the flat digests, so naming a
+// pack never loosens the digest check.
+func TestRolePackWithoutDigestKeepsTheFlatDigests(t *testing.T) {
+	root := pluginRoot(t)
+	var p Profile
+	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestA+`","roles":{"buyer":{"pack":"asg/x"}}}`)))
+	buyer := p.RulesChecker.ForRole("buyer")
+	assert.Equal(t, "asg/x", buyer.Pack)
+	assert.Equal(t, []string{digestA}, buyer.PinnedDigests())
+}
+
+func TestProfileValidationRefusesBadRoleEntries(t *testing.T) {
+	good := ProfileRulesRole{Pack: "asg/x", DefinitionDigest: digestA}
+	for name, roles := range map[string]map[string]ProfileRulesRole{
+		"unknown role":    {"broker": good},
+		"empty entry":     {"buyer": {}},
+		"both digests":    {"buyer": {DefinitionDigest: digestA, DefinitionDigests: []string{digestB, digestC}}},
+		"bad digest":      {"buyer": {DefinitionDigest: "nope"}},
+		"bad digest list": {"buyer": {DefinitionDigests: []string{digestA, "nope"}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, _ := profileFixture(t)
+			p.RulesChecker = ProfileRulesChecker{Command: []string{"/x"}, DefinitionDigest: digestA, Roles: roles}
+			assert.Error(t, p.validate())
+		})
+	}
+	p, _ := profileFixture(t)
+	p.RulesChecker = ProfileRulesChecker{Command: []string{"/x"}, Roles: map[string]ProfileRulesRole{"buyer": good}}
+	assert.NoError(t, p.validate())
+}
+
+// Plain doctor reports each role's pin, and its no-digest notice follows the
+// role's effective pin, not only the flat default.
+func TestDoctorReportsPerRolePins(t *testing.T) {
+	root := pluginRoot(t)
+	owned := ownedProfile(t, "jsonl", "ledger")
+	pin := pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"},"seller":{"pack":"asg/seller"}}}`)
+	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pin)
+	require.NoError(t, err, out)
+
+	checker := doctorReport(t, "--profile", owned.Name)["profile"].(map[string]any)["rules_checker"].(map[string]any)
+	assert.NotContains(t, checker, "notice", "every role has a pack; the flat notice would mislead")
+	roles := checker["roles"].(map[string]any)
+	assert.Equal(t, []any{digestA}, roles["buyer"].(map[string]any)["definition_digests"])
+	assert.NotContains(t, roles["buyer"], "notice")
+	assert.Equal(t, "asg/seller", roles["seller"].(map[string]any)["pack"])
+	assert.Contains(t, roles["seller"], "notice")
+	assert.NotContains(t, checker, "missing_roles")
+}
+
+// Install-check says nothing about roles for a checker pinned without them.
+func TestInstallCheckIgnoresRolesWhenNoneArePinned(t *testing.T) {
+	root := pluginRoot(t)
+	owned := ownedProfile(t, "jsonl", "ledger")
+	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pinFile(t, root, `{"command":["CHECKER"]}`))
+	require.NoError(t, err, out)
+	check, _ := installCheckOf(t, owned.Name, t.TempDir())
+	for _, issue := range check["issues"].([]any) {
+		assert.NotContains(t, issue, "rules pack")
+	}
+}

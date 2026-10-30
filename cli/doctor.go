@@ -171,7 +171,7 @@ func doctorCommand() *cobra.Command {
 			if pin := p.RulesChecker; len(pin.Command) > 0 {
 				digests := pin.PinnedDigests()
 				checker := map[string]any{"sha256": pin.SHA256, "definition_digests": digests}
-				if len(digests) == 0 {
+				if len(digests) == 0 && len(pin.Roles) == 0 {
 					checker["definition_digests"] = []string{}
 					checker["notice"] = "no definition digest pinned: whatever ruleset the checker reports is evaluated"
 				}
@@ -179,9 +179,16 @@ func doctorCommand() *cobra.Command {
 					roles := map[string]any{}
 					for _, role := range RulesRoles {
 						rp := pin.ForRole(role)
-						roles[role] = map[string]any{"pack": rp.Pack, "definition_digests": append([]string{}, rp.PinnedDigests()...)}
+						entry := map[string]any{"pack": rp.Pack, "definition_digests": append([]string{}, rp.PinnedDigests()...)}
+						if len(rp.PinnedDigests()) == 0 {
+							entry["notice"] = "no definition digest pinned: whatever ruleset the checker reports for this role is evaluated"
+						}
+						roles[role] = entry
 					}
 					checker["roles"] = roles
+					if len(digests) == 0 {
+						checker["definition_digests"] = []string{}
+					}
 					if missing := pin.MissingRoles(); len(missing) > 0 {
 						checker["missing_roles"] = missing
 					}

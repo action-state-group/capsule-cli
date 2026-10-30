@@ -220,14 +220,20 @@ func (r ProfileRulesRole) withDigests(digests []string) ProfileRulesRole {
 }
 
 // ForRole is the pin a check acting as role runs under: the role's own entry
-// in Roles when there is one, else the flat pin (a pack-less default). The
-// deal plugin sends the checker only this pin and checks its answer against
-// PinnedDigests of it.
+// in Roles when there is one, else the flat pin (a pack-less default). A role
+// entry that names a pack but no digest keeps the flat digests, so naming a
+// pack never loosens the digest check. The deal plugin sends the checker only
+// this pin and checks its answer against PinnedDigests of it.
 func (r ProfileRulesChecker) ForRole(role string) ProfileRulesRole {
-	if rp, ok := r.Roles[role]; ok {
-		return rp
+	flat := ProfileRulesRole{DefinitionDigest: r.DefinitionDigest, DefinitionDigests: r.DefinitionDigests}
+	rp, ok := r.Roles[role]
+	if !ok {
+		return flat
 	}
-	return ProfileRulesRole{DefinitionDigest: r.DefinitionDigest, DefinitionDigests: r.DefinitionDigests}
+	if len(rp.PinnedDigests()) == 0 {
+		rp.DefinitionDigest, rp.DefinitionDigests = flat.DefinitionDigest, flat.DefinitionDigests
+	}
+	return rp
 }
 
 // MissingRoles are the deal roles with no pin at all: no entry in Roles and
@@ -385,6 +391,8 @@ func (p Profile) validate() error {
 		switch {
 		case !slices.Contains(RulesRoles, role):
 			return InputError("rules_checker roles keys must be " + strings.Join(RulesRoles, " or ") + ", not " + role + ": edit the profile file")
+		case rp.Pack == "" && len(rp.PinnedDigests()) == 0:
+			return InputError("rules_checker roles." + role + " pins neither a pack nor a definition digest: edit the profile file to pin one or remove the entry")
 		case len(rp.DefinitionDigests) > 0 && rp.DefinitionDigest != "":
 			return InputError("rules_checker roles." + role + " holds definition_digest or definition_digests, not both: edit the profile file to keep one")
 		}
