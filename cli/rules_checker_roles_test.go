@@ -28,7 +28,7 @@ func pinFile(t *testing.T, root, body string) string {
 func TestRulesCheckerPinsAPackPerRole(t *testing.T) {
 	root := pluginRoot(t)
 	var p Profile
-	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"roles":{
+	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestC+`","roles":{
 		"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"},
 		"seller":{"pack":"asg/seller","definition_digests":["`+digestB+`","`+digestC+`"]}}}`)))
 
@@ -44,7 +44,7 @@ func TestRulesCheckerPinsAPackPerRole(t *testing.T) {
 // role's pin is untouched and no code changes.
 func TestSwappingOneRolesPinNeedsOnlyAProfileUpdate(t *testing.T) {
 	root := pluginRoot(t)
-	before := `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"` + digestA + `"},"seller":{"pack":"asg/seller","definition_digest":"` + digestB + `"}}}`
+	before := `{"command":["CHECKER"],"definition_digest":"` + digestC + `","roles":{"buyer":{"pack":"asg/everyday","definition_digest":"` + digestA + `"},"seller":{"pack":"asg/seller","definition_digest":"` + digestB + `"}}}`
 	after := strings.Replace(before, `"asg/seller","definition_digest":"`+digestB, `"asg/seller-next","definition_digest":"`+digestC, 1)
 
 	var p Profile
@@ -91,9 +91,7 @@ func TestRulesCheckerRolesAreValidated(t *testing.T) {
 func TestInstallCheckReportsAMissingPinPerRole(t *testing.T) {
 	root := pluginRoot(t)
 	owned := ownedProfile(t, "jsonl", "ledger")
-	pin := pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"}}}`)
-	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pin)
-	require.NoError(t, err, out)
+	handEditedRoles(t, root, owned, map[string]ProfileRulesRole{"buyer": {Pack: "asg/everyday", DefinitionDigest: digestA}})
 
 	check, err := installCheckOf(t, owned.Name, t.TempDir())
 	require.ErrorIs(t, err, ErrPartial)
@@ -139,9 +137,7 @@ func TestProfileValidationRefusesBadRoleEntries(t *testing.T) {
 func TestDoctorReportsPerRolePins(t *testing.T) {
 	root := pluginRoot(t)
 	owned := ownedProfile(t, "jsonl", "ledger")
-	pin := pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"},"seller":{"pack":"asg/seller"}}}`)
-	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pin)
-	require.NoError(t, err, out)
+	handEditedRoles(t, root, owned, map[string]ProfileRulesRole{"buyer": {Pack: "asg/everyday", DefinitionDigest: digestA}, "seller": {Pack: "asg/seller"}})
 
 	checker := doctorReport(t, "--profile", owned.Name)["profile"].(map[string]any)["rules_checker"].(map[string]any)
 	assert.NotContains(t, checker, "notice", "every role has a pack; the flat notice would mislead")
@@ -158,9 +154,7 @@ func TestDoctorReportsPerRolePins(t *testing.T) {
 func TestInstallCheckFlagsAPackOnlyRoleWithoutDigests(t *testing.T) {
 	root := pluginRoot(t)
 	owned := ownedProfile(t, "jsonl", "ledger")
-	pin := pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/everyday","definition_digest":"`+digestA+`"},"seller":{"pack":"asg/seller"}}}`)
-	out, err := invoke(t, "", "profile", "update", "--profile", owned.Name, "--rules-checker", pin)
-	require.NoError(t, err, out)
+	handEditedRoles(t, root, owned, map[string]ProfileRulesRole{"buyer": {Pack: "asg/everyday", DefinitionDigest: digestA}, "seller": {Pack: "asg/seller"}})
 	check, err := installCheckOf(t, owned.Name, t.TempDir())
 	require.ErrorIs(t, err, ErrPartial)
 	assert.Contains(t, strings.Join(anyStrings(check["issues"]), "\n"), "pins no definition digest for the seller role")
@@ -184,4 +178,22 @@ func TestInstallCheckIgnoresRolesWhenNoneArePinned(t *testing.T) {
 	for _, issue := range check["issues"].([]any) {
 		assert.NotContains(t, issue, "rules pack")
 	}
+}
+
+// handEditedRoles saves a profile whose rules_checker holds roles but no flat
+// default, which only a hand edit can make: profile update refuses it.
+func handEditedRoles(t *testing.T, root string, p Profile, roles map[string]ProfileRulesRole) {
+	t.Helper()
+	p.RulesChecker = ProfileRulesChecker{Command: []string{writeLauncher(t, root, "checker", "#!/bin/sh\n", 0o755)}, Roles: roles}
+	require.NoError(t, SaveProfile(p, true))
+}
+
+// Until the deal plugin checks per role, roles without a flat default would
+// run unpinned, so the pin file is refused (remove with evidencebook-deal#66).
+func TestRolesNeedAFlatDefaultUntilTheDealPluginChecksPerRole(t *testing.T) {
+	root := pluginRoot(t)
+	var p Profile
+	err := pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/x","definition_digest":"`+digestA+`"}}}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "evidencebook-deal#66")
 }
