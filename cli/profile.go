@@ -177,6 +177,80 @@ type ProfileRulesChecker struct {
 	// a set of two or more here and one digest in DefinitionDigest alone, as
 	// before the set.
 	DefinitionDigests []string `yaml:"definition_digests,omitempty" mapstructure:"definition_digests" json:",omitempty"`
+	// Roles pins a pack and its definition digests per deal role (RulesRoles).
+	// A role listed here is checked against its own pin alone; a role not
+	// listed falls back to the flat digests above, so a profile without roles
+	// reads and checks as it did before. Swapping one role's pack is a
+	// profile update of this map: no code changes.
+	Roles map[string]ProfileRulesRole `yaml:"roles,omitempty" mapstructure:"roles" json:",omitempty"`
+}
+
+// RulesRoles are the deal roles a rules checker may be pinned for.
+var RulesRoles = []string{"buyer", "seller"}
+
+// ProfileRulesRole is one role's pinned pack: its id as the checker names
+// it, and the definition digests its ruleset may report.
+type ProfileRulesRole struct {
+	Pack              string   `yaml:"pack,omitempty" mapstructure:"pack"`
+	DefinitionDigest  string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
+	DefinitionDigests []string `yaml:"definition_digests,omitempty" mapstructure:"definition_digests" json:",omitempty"`
+}
+
+// PinnedDigests is the set of definition digests this role's ruleset must
+// report one of; none pins no ruleset.
+func (r ProfileRulesRole) PinnedDigests() []string {
+	if len(r.DefinitionDigests) > 0 {
+		return r.DefinitionDigests
+	}
+	if r.DefinitionDigest != "" {
+		return []string{r.DefinitionDigest}
+	}
+	return nil
+}
+
+// withDigests stores a set the way the flat pin does: one digest alone in
+// DefinitionDigest, two or more in DefinitionDigests.
+func (r ProfileRulesRole) withDigests(digests []string) ProfileRulesRole {
+	if len(digests) == 1 {
+		r.DefinitionDigest = digests[0]
+	} else {
+		r.DefinitionDigests = digests
+	}
+	return r
+}
+
+// ForRole is the pin a check acting as role runs under: the role's own entry
+// in Roles when there is one, else the flat pin (a pack-less default). A role
+// entry that names a pack but no digest keeps the flat digests, so naming a
+// pack never loosens the digest check. The deal plugin sends the checker only
+// this pin and checks its answer against PinnedDigests of it.
+func (r ProfileRulesChecker) ForRole(role string) ProfileRulesRole {
+	flat := ProfileRulesRole{DefinitionDigest: r.DefinitionDigest, DefinitionDigests: r.DefinitionDigests}
+	rp, ok := r.Roles[role]
+	if !ok {
+		return flat
+	}
+	if len(rp.PinnedDigests()) == 0 {
+		rp.DefinitionDigest, rp.DefinitionDigests = flat.DefinitionDigest, flat.DefinitionDigests
+	}
+	return rp
+}
+
+// MissingRoles are the deal roles with no definition digest pinned: no entry
+// in Roles and no flat default, or an entry with a pack
+// alone. Only a profile that uses Roles can have one; the flat pin's own
+// absence stays the notice it always was.
+func (r ProfileRulesChecker) MissingRoles() []string {
+	if len(r.Roles) == 0 {
+		return nil
+	}
+	var missing []string
+	for _, role := range RulesRoles {
+		if len(r.ForRole(role).PinnedDigests()) == 0 {
+			missing = append(missing, role)
+		}
+	}
+	return missing
 }
 
 // pinnedDigests is the set of definition digests a checker's ruleset must
@@ -312,6 +386,21 @@ func (p Profile) validate() error {
 	for _, d := range p.RulesChecker.DefinitionDigests {
 		if !Hex64.MatchString(d) {
 			return InputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
+		}
+	}
+	for role, rp := range p.RulesChecker.Roles {
+		switch {
+		case !slices.Contains(RulesRoles, role):
+			return InputError("rules_checker roles keys must be " + strings.Join(RulesRoles, " or ") + ", not " + role + ": edit the profile file")
+		case rp.Pack == "" && len(rp.PinnedDigests()) == 0:
+			return InputError("rules_checker roles." + role + " pins neither a pack nor a definition digest: edit the profile file to pin one or remove the entry")
+		case len(rp.DefinitionDigests) > 0 && rp.DefinitionDigest != "":
+			return InputError("rules_checker roles." + role + " holds definition_digest or definition_digests, not both: edit the profile file to keep one")
+		}
+		for _, d := range rp.PinnedDigests() {
+			if !Hex64.MatchString(d) {
+				return InputError("rules_checker roles." + role + " definition digests must each be 64 lowercase hex characters: edit the profile file to correct them")
+			}
 		}
 	}
 	return nil
@@ -516,7 +605,7 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
 		f.String("wording", "", "The wording pack this profile speaks with: a complete aac.wording-pack/v0 JSON file holding every key of the core's built-in pack and, on a profile whose log a plugin keeps, of that plugin's pack, pinned by its SHA-256; empty to go back to the built-in neutral pack")
-		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"} (or \"definition_digests\": [\"...\", ...], a set of rulesets any of which it may report), its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
+		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"} (or \"definition_digests\": [\"...\", ...], a set of rulesets any of which it may report; \"roles\": {\"buyer\": {\"pack\": \"...\", \"definition_digest\": \"...\"}, \"seller\": {...}} pins a pack per deal role, the flat digests staying the default for a role not listed; restate every role, since the file replaces the whole pin), its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
 			f.String(flag, "", "Literal secret; prefer file/env reference")

@@ -47,6 +47,16 @@ type rulesCheckerPin struct {
 	// DefinitionDigests pins a set of rulesets: the checker may report any
 	// of them. Together with DefinitionDigest, the set is both.
 	DefinitionDigests []string `json:"definition_digests,omitempty"`
+	// Roles pins a pack and its definition digests per deal role (buyer,
+	// seller); the flat digests above stay the default for a role not listed.
+	Roles map[string]rulesCheckerRolePin `json:"roles,omitempty"`
+}
+
+// rulesCheckerRolePin is one role's pin in the pin file.
+type rulesCheckerRolePin struct {
+	Pack              string   `json:"pack,omitempty"`
+	DefinitionDigest  string   `json:"definition_digest,omitempty"`
+	DefinitionDigests []string `json:"definition_digests,omitempty"`
 }
 
 var Hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -73,27 +83,32 @@ func pinRulesChecker(p *Profile, path string) error {
 	if _, err = RulesTimeout(pin.Timeout); err != nil {
 		return err
 	}
-	if pin.DefinitionDigest != "" && !Hex64.MatchString(pin.DefinitionDigest) {
-		return InputError("--rules-checker definition_digest must be 64 lowercase hex characters")
+	digests, err := pinnedDigestSet("--rules-checker", pin.DefinitionDigest, pin.DefinitionDigests)
+	if err != nil {
+		return err
 	}
-	var digests []string
-	if pin.DefinitionDigest != "" {
-		digests = append(digests, pin.DefinitionDigest)
-	}
-	for _, d := range pin.DefinitionDigests {
-		switch {
-		case slices.Contains(digests, d):
-		case !Hex64.MatchString(d):
-			return InputError("--rules-checker definition_digests must each be 64 lowercase hex characters")
-		default:
-			digests = append(digests, d)
+	var roles map[string]ProfileRulesRole
+	for role, rp := range pin.Roles {
+		if !slices.Contains(RulesRoles, role) {
+			return InputError("--rules-checker roles keys must be " + strings.Join(RulesRoles, " or ") + ", not " + role)
 		}
+		ds, err := pinnedDigestSet("--rules-checker roles."+role, rp.DefinitionDigest, rp.DefinitionDigests)
+		if err != nil {
+			return err
+		}
+		if rp.Pack == "" && len(ds) == 0 {
+			return InputError("--rules-checker roles." + role + " needs a pack or a definition digest")
+		}
+		if roles == nil {
+			roles = map[string]ProfileRulesRole{}
+		}
+		roles[role] = ProfileRulesRole{Pack: rp.Pack}.withDigests(ds)
 	}
 	sum, err := trustedExecutableDigest(pin.Command[0])
 	if err != nil {
 		return err
 	}
-	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout}
+	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, Roles: roles}
 	// One digest is stored as it was before a set could be pinned, so the
 	// profile file reads the same.
 	if len(digests) == 1 {
@@ -102,6 +117,28 @@ func pinRulesChecker(p *Profile, path string) error {
 		p.RulesChecker.DefinitionDigests = digests
 	}
 	return nil
+}
+
+// pinnedDigestSet merges a pin's single digest and digest set into one
+// deduplicated set, refusing anything but 64 lowercase hex characters.
+func pinnedDigestSet(flag, one string, many []string) ([]string, error) {
+	var digests []string
+	if one != "" {
+		if !Hex64.MatchString(one) {
+			return nil, InputError(flag + " definition_digest must be 64 lowercase hex characters")
+		}
+		digests = append(digests, one)
+	}
+	for _, d := range many {
+		switch {
+		case slices.Contains(digests, d):
+		case !Hex64.MatchString(d):
+			return nil, InputError(flag + " definition_digests must each be 64 lowercase hex characters")
+		default:
+			digests = append(digests, d)
+		}
+	}
+	return digests, nil
 }
 
 func RulesTimeout(value string) (time.Duration, error) {
