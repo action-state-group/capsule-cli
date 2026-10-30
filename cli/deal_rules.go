@@ -9,7 +9,3 @@ type DealAttribute struct {
 	// choose: its own, under the user's words, and never a pause.
 	Delegated bool `json:"delegated,omitempty"`
 }
-
-// commercialBoundsKind names the private document a floor lives in: sealed
-// records carry only its salted commitment (bounds_commitment).
-const CommercialBoundsKind = "commercial-bounds/v0"

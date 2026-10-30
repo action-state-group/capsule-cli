@@ -18,20 +18,9 @@ package cli
 // sets commit to the same facts: only the header, the names and the check
 // contract's fields differ.
 
-const (
-	TypeTaskAuthority    = "task-authority/v0"
-	TypeProposedAction   = "proposed-action/v0"
-	TypeActionEvaluation = "action-evaluation/v0"
-	TypeActionApproval   = "action-approval/v0"
-	TypeActionRecord     = "action-record/v0"
-	TypeActionOutcome    = "action-outcome/v0"
-	TypeActionReport     = "action-report/v0"
-	TypeCheckRequest     = "check-request/v0"
-	TypeCheckResponse    = "check-response/v0"
-	TypeCommercialBounds = CommercialBoundsKind
-	TypedRecordRef       = "record"
-	TypedFPAlg           = "hmac-sha256-chain-key"
-)
+// TypeTaskAuthority is the one typed record type verify reads (a sale's
+// thread registration); the profile's full set is EvidenceBook's dealprofile.
+const TypeTaskAuthority = "task-authority/v0"
 
 // Materiality modes an evaluation states, so that no predicate is told apart
 // from a missing field.

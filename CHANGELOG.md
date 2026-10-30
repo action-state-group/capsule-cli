@@ -11,6 +11,12 @@
   `doctor --install-check` names each role with no definition digest pinned. Swapping one role's
   pack is a profile update, with no code change (capsule-cli#323, Steven's
   SEAMS ruling 4). The deal plugin's use of `ForRole` is a companion change (evidencebook-deal#66); until it ships, `--rules-checker` refuses `roles` without a flat `definition_digest` default.
+- **Removed:** the `cli` package's x-deal-v0 names that `verify` does not read:
+  `DealFPAlg`, `DealRecordRef`, the typed record type names other than
+  `TypeTaskAuthority`, `TypedRecordRef`, `TypedFPAlg` and
+  `CommercialBoundsKind`. The x-deal-v0 profile is EvidenceBook's `dealprofile`
+  package (evidencebook v0.10.0, evidencebook#93), which defines them; the core
+  keeps only what its verifier reads, since it may not depend on EvidenceBook.
 
 ## v0.1.0-rc24
 
