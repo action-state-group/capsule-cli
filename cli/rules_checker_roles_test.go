@@ -97,7 +97,7 @@ func TestInstallCheckReportsAMissingPinPerRole(t *testing.T) {
 
 	check, err := installCheckOf(t, owned.Name, t.TempDir())
 	require.ErrorIs(t, err, ErrPartial)
-	assert.Contains(t, check["issues"], "profile "+owned.Name+" pins no rules pack for the seller role: capsulectl profile update --profile "+owned.Name+" --rules-checker FILE with roles.seller")
+	assert.Contains(t, check["issues"], "profile "+owned.Name+" pins no rules pack for the seller role: rerun capsulectl profile update --profile "+owned.Name+" --rules-checker FILE, with FILE's roles.seller holding a pack and a definition_digest and restating every other role (the flag replaces the whole pin)")
 	for _, issue := range check["issues"].([]any) {
 		assert.NotContains(t, issue, "buyer role")
 	}
