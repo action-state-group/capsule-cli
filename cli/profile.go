@@ -388,6 +388,13 @@ func (p Profile) validate() error {
 			return InputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
 		}
 	}
+	// Until the deal plugin checks a role's answer against ForRole's digests
+	// (evidencebook-deal#66), check time still enforces the flat digests alone,
+	// so roles without a flat default would run unpinned. Remove this refusal
+	// when evidencebook-deal#66 ships.
+	if len(p.RulesChecker.Roles) > 0 && len(p.RulesChecker.PinnedDigests()) == 0 {
+		return InputError("rules_checker roles need a flat definition_digest (or definition_digests) as the default until the deal plugin checks per role (evidencebook-deal#66): edit the profile file to add one")
+	}
 	for role, rp := range p.RulesChecker.Roles {
 		switch {
 		case !slices.Contains(RulesRoles, role):
