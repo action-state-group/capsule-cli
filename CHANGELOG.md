@@ -10,7 +10,7 @@
   back to the flat digests, so a profile without `roles` is unchanged.
   `doctor --install-check` names each role with no definition digest pinned. Swapping one role's
   pack is a profile update, with no code change (capsule-cli#323, Steven's
-  SEAMS ruling 4). The deal plugin's use of `ForRole` is a companion change.
+  SEAMS ruling 4). The deal plugin's use of `ForRole` is a companion change (evidencebook-deal#66); until it ships, `--rules-checker` refuses `roles` without a flat `definition_digest` default.
 
 ## v0.1.0-rc24
 

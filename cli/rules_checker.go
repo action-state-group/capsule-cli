@@ -87,6 +87,13 @@ func pinRulesChecker(p *Profile, path string) error {
 	if err != nil {
 		return err
 	}
+	// Until the deal plugin checks a role's answer against ForRole's digests
+	// (evidencebook-deal#66), check time still enforces the flat digests alone,
+	// so roles without a flat default would run unpinned. Remove this refusal
+	// when evidencebook-deal#66 ships.
+	if len(pin.Roles) > 0 && len(digests) == 0 {
+		return InputError("--rules-checker roles need a flat definition_digest (or definition_digests) as the default until the deal plugin checks per role (evidencebook-deal#66)")
+	}
 	var roles map[string]ProfileRulesRole
 	for role, rp := range pin.Roles {
 		if !slices.Contains(RulesRoles, role) {
