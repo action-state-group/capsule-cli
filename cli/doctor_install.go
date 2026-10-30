@@ -101,6 +101,11 @@ func installCheck(c *cobra.Command) error {
 		default:
 			witness["public_key_ok"] = true
 		}
+		if len(p.RulesChecker.Command) > 0 {
+			for _, role := range p.RulesChecker.MissingRoles() {
+				issues = append(issues, "profile "+name+" pins no rules pack for the "+role+" role: capsulectl profile update --profile "+name+" --rules-checker FILE with roles."+role)
+			}
+		}
 		if plugin := profilePlugin(p); plugin != "" {
 			check, issue := pluginInstallCheck(plugin)
 			report["plugin"] = check

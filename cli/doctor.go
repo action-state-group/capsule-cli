@@ -175,6 +175,17 @@ func doctorCommand() *cobra.Command {
 					checker["definition_digests"] = []string{}
 					checker["notice"] = "no definition digest pinned: whatever ruleset the checker reports is evaluated"
 				}
+				if len(pin.Roles) > 0 {
+					roles := map[string]any{}
+					for _, role := range RulesRoles {
+						rp := pin.ForRole(role)
+						roles[role] = map[string]any{"pack": rp.Pack, "definition_digests": append([]string{}, rp.PinnedDigests()...)}
+					}
+					checker["roles"] = roles
+					if missing := pin.MissingRoles(); len(missing) > 0 {
+						checker["missing_roles"] = missing
+					}
+				}
 				profileReport["rules_checker"] = checker
 			}
 			// The wording pack the profile speaks with, checked against the
