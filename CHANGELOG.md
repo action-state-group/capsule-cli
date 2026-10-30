@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Changed (docs):** `book request --response` takes `--witness-directory` on
+  a book profile too, not only on a deal profile. Since evidencebook#221 a book
+  passes it as the requester's witness directory and prints the answer's
+  `witness` standing (`witnessed` or `unwitnessed`). The README's synopsis and
+  `EvidenceRequestInput.WitnessDirectory`'s comment now say so. The rc entries
+  that say a book refuses the flag were true when they were written.
 - **Added:** a deal profile's `rules_checker` may pin a rules pack per deal role.
   `profile update --rules-checker FILE` reads a `roles` map (`buyer` and `seller`,
   each a `pack` and a `definition_digest` or `definition_digests`), the profile
