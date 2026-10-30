@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Changed (docs):** a book accepts `--witness-directory` with
+  `book request --response` once a capsulectl-book release carries
+  evidencebook#221; it then passes it as the requester's witness directory and
+  prints the answer's `witness` standing (`witnessed` or `unwitnessed`). The
+  README's synopsis says so, and `EvidenceRequestInput.WitnessDirectory`'s
+  comment describes both profiles. capsulectl-book rc24 and earlier refuse the
+  flag on a book, as the rc entries below say.
 - **Added:** a deal profile's `rules_checker` may pin a rules pack per deal role.
   `profile update --rules-checker FILE` reads a `roles` map (`buyer` and `seller`,
   each a `pack` and a `definition_digest` or `definition_digests`), the profile

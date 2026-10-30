@@ -323,7 +323,7 @@ capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] 
 capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
 capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
 capsulectl book request --profile NAME --request FILE --responder NAME --output FILE
-capsulectl book request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE (deal profile)] | --absent-until TIME)
+capsulectl book request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE] | --absent-until TIME)   # --witness-directory: a deal profile; a book from the first capsulectl-book release after rc24 (evidencebook#221)
 capsulectl book respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
 capsulectl book close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
 capsulectl book reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
