@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## v0.1.0-rc25
+
 - **Changed (breaking for saved pages):** the capsule-viewer pin moves to
-  `capsule-viewer/go` v0.4.0, whose pages carry the Evidence Bundle in a
+  `capsule-viewer/go` v0.5.0 (0.4.0's page form, and `buildVerifiedBundleContext`
+  back on the EvidenceGraph global for modules that verify a carried bundle,
+  capsule-viewer#167), whose pages carry the Evidence Bundle in a
   `<script type="application/json">` element (capsule-viewer#109) and verify
   with CLL's browser checkpoint verifier (#474). `verify --bundle PAGE` reads
   that element, as data, so a `"__proto__"` member stays a member (#485). It
