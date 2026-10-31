@@ -5,7 +5,7 @@
 ## v0.1.0-rc28
 
 - **Added:** `verify --bundle` accepts an evidence-interop envelope (`evidence-interop/0`
-  and `/1`) as a `composed/v1` member's carried `response` (#505, #507). The signature is
+  and `/1`) as a `composed/v1` member's carried `response` (#507, closing #505). The signature is
   checked under `responder` over `Envelope.SigningBody`; `responder` must equal the member's
   observer, and `anchor.digest` must equal the SHA-256 of the member bundle's `checkpoint.cose`.
   A carried `artifact`, or a `key_id` beside `responder`, reads invalid. Pins
