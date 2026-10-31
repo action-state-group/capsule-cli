@@ -4,7 +4,7 @@
 
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.7.0, whose
   page runtime carries the frames merged since 0.6.0 (capsule-viewer#186, #187,
-  #188, #189, #190, #192; see capsule-viewer's CHANGELOG for 0.7.0). The
+  #188, #189, #190, #192, #193; see capsule-viewer's CHANGELOG for 0.7.0). The
   Adjudications module's bundle ships with that release as a separate plugin
   module. The presentation fixtures are rebuilt with evidencebook-deal's
   `build-fixtures.sh` and copied here in a follow-up once evidencebook-deal has
