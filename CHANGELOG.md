@@ -5,10 +5,13 @@
 ## v0.1.0-rc26
 
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.6.0, whose
-  pages carry the outcome report's new headline and tile wording, the History
-  card as a standard module, and the receipt scripts' kit pill fix. The
-  `4-monthly-outcome` and `5-monthly-compliance` presentation fixtures are
-  rebuilt from evidencebook-deal and copied here.
+  page runtime carries the outcome report's new headline and tile wording (for
+  example "Could not decide" for "Not evaluable"). The History card module and
+  the receipt scripts' kit pill fix are separate plugin modules, not part of
+  this module. The `4-monthly-outcome` and `5-monthly-compliance` presentation
+  fixtures are rebuilt with evidencebook-deal's `build-fixtures.sh` and copied
+  here; the other fixtures stay as they were until evidencebook-deal's own
+  rebuild is copied.
 
 ## v0.1.0-rc25
 
