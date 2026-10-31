@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Changed:** the `4-monthly-outcome` and `5-monthly-compliance` presentation
+  fixtures are rebuilt for `capsule-viewer/go` v0.7.0 with evidencebook-deal's
+  `build-fixtures.sh` (evidencebook-deal#87) and copied here.
+
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.7.0, whose
   page runtime carries the frames merged since 0.6.0 (capsule-viewer#186, #187,
   #188, #189, #190, #192, #193; see capsule-viewer's CHANGELOG for 0.7.0). The

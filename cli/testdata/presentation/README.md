@@ -2,7 +2,7 @@
 
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`. The pages and snapshots
-are those of capsule-viewer v0.3.0 (fixtures 4 and 5: v0.6.0) (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
+are those of capsule-viewer v0.3.0 (fixtures 4 and 5: v0.7.0) (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
 carries; its banner reads a bundle with unsigned records as incomplete). evidencebook-deal
 rebuilds them for each new viewer and they are copied here then.
 
