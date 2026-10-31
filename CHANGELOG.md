@@ -2,17 +2,39 @@
 
 ## Unreleased
 
-- **Changed:** the `4-monthly-outcome` and `5-monthly-compliance` presentation
-  fixtures are rebuilt for `capsule-viewer/go` v0.7.0 with evidencebook-deal's
-  `build-fixtures.sh` (evidencebook-deal#87) and copied here.
+## v0.1.0-rc28
+
+- **Added:** `verify --bundle` accepts an evidence-interop envelope (`evidence-interop/0`
+  and `/1`) as a `composed/v1` member's carried `response` (#505, #507). The signature is
+  checked under `responder` over `Envelope.SigningBody`; `responder` must equal the member's
+  observer, and `anchor.digest` must equal the SHA-256 of the member bundle's `checkpoint.cose`.
+  A carried `artifact`, or a `key_id` beside `responder`, reads invalid. Pins
+  `agent-action-capsule/go` v0.18.0.
+
+- **Added:** a `checkpoint.endpoint` of `scrapi+https://host` names a SCITT Transparency
+  Service as the checkpoint witness (#506). `publish` registers the signed checkpoint
+  statement through the Go SCRAPI client and stores the COSE Receipt; verification and
+  `status` check it under `--checkpoint-public-key`. capsulectl ships no default SCRAPI
+  witness. `checkpointed-local-log/go` moves to v0.3.0, which checks checkpoint signatures
+  and `cll` receipts under strict Ed25519 and applies the receipt profile that
+  agent-action-capsule's `VerifyReceipts` uses (see CLL's CHANGELOG for `go/v0.2.0` and
+  `go/v0.3.0`).
+
+- **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.8.0, whose page runtime
+  carries Outcomes frames 5 to 7, the compiled Evidence Contract as a builder setting and rows
+  drawn by requirement tier (capsule-viewer#196, #197, #200, #201; see capsule-viewer's
+  CHANGELOG for 0.8.0).
 
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.7.0, whose
   page runtime carries the frames merged since 0.6.0 (capsule-viewer#186, #187,
   #188, #189, #190, #192, #193; see capsule-viewer's CHANGELOG for 0.7.0). The
   Adjudications module's bundle ships with that release as a separate plugin
-  module. The presentation fixtures are rebuilt with evidencebook-deal's
-  `build-fixtures.sh` and copied here in a follow-up once evidencebook-deal has
-  rebuilt them against this pin.
+  module.
+
+- **Changed:** the `4-monthly-outcome` and `5-monthly-compliance` presentation
+  fixtures are rebuilt for `capsule-viewer/go` v0.7.0 with evidencebook-deal's
+  `build-fixtures.sh` (evidencebook-deal#87) and copied here. They are not rebuilt for
+  v0.8.0 in this release; that follows once evidencebook-deal rebuilds against this pin.
 
 ## v0.1.0-rc27
 
