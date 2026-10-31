@@ -2,7 +2,7 @@
 
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`. The pages and snapshots
-are those of capsule-viewer v0.3.0 (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
+are those of capsule-viewer v0.3.0 (fixtures 4 and 5: v0.6.0) (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
 carries; its banner reads a bundle with unsigned records as incomplete). evidencebook-deal
 rebuilds them for each new viewer and they are copied here then.
 
@@ -125,10 +125,10 @@ What `presentation build` shows, against these goldens (built through other comm
 | `1-rules-comparison` | yes | |
 | `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`), the deal plugin's presentation module. With no plugin module installed, `presentation list` and `presentation build` resolve the bundle to `aac.builtin.no-aggregate/v0` (`TestPresentationPassADealWithoutTheDealView`), so the page falls back. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
 | `3-bilateral-composed` | yes | |
-| `4-monthly-outcome` | yes, less the card | `book report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
+| `4-monthly-outcome` | yes, less the card | `book report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Covered by the file's fingerprint; not interpreted by this page's checks`). The test derives build's snapshot from the golden by exactly those two changes. |
 | `5-monthly-compliance` | yes, less the card | As fixture 4. |
 | `6-generic-fallback` | yes | |
-| `6-generic-fallback-unknown-extension` | yes | The extension row reads "Integrity verified; meaning not interpreted by this viewer", which the test asserts. |
+| `6-generic-fallback-unknown-extension` | yes | The extension row reads "Covered by the file's fingerprint; not interpreted by this page's checks", which the test asserts. |
 | `7-receipt-declared-rules` | no: `build-snapshot.json` | As fixture 2. |
 | `8-seller-buyer-copy` | no: `build-snapshot.json` | As fixture 2. |
 | `9-seller-later-evidence` | no: `build-snapshot.json` | As fixture 2. |
