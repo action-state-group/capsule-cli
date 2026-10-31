@@ -527,6 +527,29 @@ func TestPresentationBuildLeavesOutAModuleForAnotherAudience(t *testing.T) {
 	assert.Contains(t, string(page), string(script))
 }
 
+// A plugin whose two manifests share one script puts the script in the page
+// once: a second inline copy redeclares its top-level bindings and throws.
+func TestPresentationBuildInlinesAScriptSharedByTwoManifestsOnce(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	first := exampleDealFixture(t)
+	// The second manifest takes the profile the first forbids, so the two
+	// can never match one bundle, and shares the first's script.
+	second := exampleDealFixture(t)
+	second.manifest["id"] = "org.example.deal-view-other/v0"
+	second.manifest["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "profiles": []any{"spec_version:example-other/v1"}}
+	first.manifest["forbids"] = map[string]any{"profiles": append(first.manifest["forbids"].(map[string]any)["profiles"].([]any), "spec_version:example-other/v1")}
+	presentationPlugins(t, root, "dealview", first, second)
+	out := presentationOut(t)
+	stdout, err := invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", out)
+	require.NoError(t, err, stdout)
+	b := decodeBuild(t, stdout)
+	assert.Len(t, b.Modules, 2, "the result still names each manifest")
+	page, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(page), string(first.files["view.js"])))
+}
+
 // A module for every audience ("*"), or one that names the page's, stays
 // on a page built for one.
 func TestPresentationBuildCarriesAModuleForEveryAudienceOnACounterpartyPage(t *testing.T) {

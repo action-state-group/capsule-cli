@@ -60,6 +60,29 @@ func moduleSlotFixture() presentationFixture {
 // it.
 func presentationPlugin(t *testing.T, root, name string, p presentationFixture) {
 	t.Helper()
+	presentationPlugins(t, root, name, p)
+}
+
+// presentationPlugins is presentationPlugin for a plugin that declares
+// several presentations; fixtures may share files.
+func presentationPlugins(t *testing.T, root, name string, fixtures ...presentationFixture) {
+	t.Helper()
+	declared := []any{}
+	for _, p := range fixtures {
+		writeFixtureFiles(t, root, p)
+		declared = append(declared, map[string]any{"manifest": p.manifest, "files": p.entries})
+	}
+	meta, err := json.Marshal(map[string]any{
+		"name": name, "vendor": "Example", "version": "1.0.0", "plugin_api": PluginAPI, "subcommands": []any{"decide"},
+		"presentations": declared,
+	})
+	require.NoError(t, err)
+	body := "#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then cat <<'JSON'\n" + string(meta) + "\nJSON\nexit 0; fi\necho ran\n"
+	writeLauncher(t, root, "capsulectl-"+name, body, 0o755)
+}
+
+func writeFixtureFiles(t *testing.T, root string, p presentationFixture) {
+	t.Helper()
 	for file, body := range p.files {
 		path := filepath.Join(root, file)
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -69,13 +92,6 @@ func presentationPlugin(t *testing.T, root, name string, p presentationFixture) 
 		require.NoError(t, os.WriteFile(path, body, 0o644))
 		require.NoError(t, os.Chmod(path, 0o644))
 	}
-	meta, err := json.Marshal(map[string]any{
-		"name": name, "vendor": "Example", "version": "1.0.0", "plugin_api": PluginAPI, "subcommands": []any{"decide"},
-		"presentations": []any{map[string]any{"manifest": p.manifest, "files": p.entries}},
-	})
-	require.NoError(t, err)
-	body := "#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then cat <<'JSON'\n" + string(meta) + "\nJSON\nexit 0; fi\necho ran\n"
-	writeLauncher(t, root, "capsulectl-"+name, body, 0o755)
 }
 
 // trustPresentationsIn makes root a presentation root for the test, as the
