@@ -6,7 +6,7 @@ require (
 	github.com/action-state-group/agent-action-capsule/go v0.18.0
 	github.com/action-state-group/capsule-emit/go v0.3.0
 	github.com/action-state-group/capsule-viewer/go v0.7.0
-	github.com/action-state-group/checkpointed-local-log/go v0.1.0
+	github.com/action-state-group/checkpointed-local-log/go v0.3.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
