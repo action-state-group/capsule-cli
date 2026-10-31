@@ -81,7 +81,11 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
-	if embedded, ok := receiptBundleJSON(raw); ok {
+	embedded, ok, err := receiptBundleJSON(raw)
+	if err != nil {
+		return err
+	}
+	if ok {
 		raw = embedded
 	}
 	value, err := DecodeBundleJSON(raw)
@@ -298,22 +302,47 @@ func verdictClaim(verdict string) aacbundle.ClaimResult {
 	}
 }
 
+// bundleElementStart is the start tag of the JSON data element a page built by
+// capsule-viewer 0.4.0 or later carries its bundle in (capsule-viewer#109):
+// the JSON is data, parsed by a fixed script, so a "__proto__" member stays a
+// member. The emitter escapes every "<" in it, so the first "</script>" ends it.
+const bundleElementStart = `<script type="application/json">`
+
+// oldBundleScript is where a page built before capsule-viewer 0.4.0 carried
+// its bundle: a script assigning an object literal to window.__BUNDLE__.
+const oldBundleScript = "window.__BUNDLE__ = "
+
 // receiptBundleJSON returns the Evidence Bundle a self-contained report page
 // (a deal receipt.html) embeds, so the page itself can be handed to
-// `verify --bundle`. The emitter writes it as `window.__BUNDLE__ = <json>;`
-// with every "<" escaped, so the first ";</script>" after it ends the JSON.
-func receiptBundleJSON(raw []byte) ([]byte, bool) {
-	const start = "window.__BUNDLE__ = "
-	i := bytes.Index(raw, []byte(start))
-	if i < 0 || !bytes.HasPrefix(bytes.TrimSpace(raw), []byte("<!")) {
-		return nil, false
+// `verify --bundle`. It reads the page's one JSON data element and refuses
+// rather than guess: a page with two such elements, or one that has none but
+// carries the old window.__BUNDLE__ script (which this no longer reads), is
+// an error that says which. A file that is not an HTML page is not one of
+// these, and returns (nil, false, nil).
+func receiptBundleJSON(raw []byte) ([]byte, bool, error) {
+	if !bytes.HasPrefix(bytes.TrimSpace(raw), []byte("<!")) {
+		return nil, false, nil
+	}
+	start := []byte(bundleElementStart)
+	i := bytes.Index(raw, start)
+	if i < 0 {
+		if bytes.Contains(raw, []byte(oldBundleScript)) {
+			return nil, false, InputError("--bundle is a page in the old format, with its bundle in a window.__BUNDLE__ script, " +
+				"written by capsulectl v0.1.0-rc24 or earlier, or capsule-viewer 0.3.0 or earlier; " +
+				"this capsulectl reads the bundle from the page's JSON element: " +
+				"verify the bundle file the page was made from, or build the page again")
+		}
+		return nil, false, nil
 	}
 	rest := raw[i+len(start):]
-	j := bytes.Index(rest, []byte(";</script>"))
+	j := bytes.Index(rest, []byte("</script>"))
 	if j < 0 {
-		return nil, false
+		return nil, false, InputError("--bundle is a page whose bundle element is never closed")
 	}
-	return rest[:j], true
+	if bytes.Contains(rest[j:], start) {
+		return nil, false, InputError("--bundle is a page with more than one bundle element: not guessing which one is the bundle")
+	}
+	return rest[:j], true, nil
 }
 
 // sameJSONValue is JSON equality with the type kept, as Python's == on the

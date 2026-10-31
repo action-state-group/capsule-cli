@@ -140,7 +140,6 @@ check "zero-rows: no page is written for a report that would show 1 of 2 rows" r
 # runtime itself, once it states a verdict (data-verdict).
 jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
 replace_bundle report.html incomplete.json >incomplete.html
-rehash_bundle_csp report.html incomplete.html
 check "incomplete-bundle: the page carries the changed bundle" differs report.html incomplete.html
 capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$verdict" -eq 3

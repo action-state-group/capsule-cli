@@ -24,6 +24,13 @@ var forbiddenWords = regexp.MustCompile(`(?i)action state plugin|actionstate plu
 // match fails the test.
 const dependencyRegistryLine = "Change controller: **Action State Group, Inc.** (interim)"
 
+// vendoredNotice is the third-party notice block the page runtime carries
+// (capsule-viewer 0.4.0 bundles @noble/curves for CLL's browser checkpoint
+// verifier, and esbuild keeps the library's MIT notice as a "Bundled license
+// information" comment). It is the dependency's own text, which its licence
+// requires to travel with the code, not ours: matches inside it are allowed.
+var vendoredNotice = regexp.MustCompile(`(?s)/\*! Bundled license information:.*?\*/`)
+
 func TestDefaultBinaryCarriesNoCompanyOrLicenceWords(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary")
@@ -42,8 +49,14 @@ func TestDefaultBinaryCarriesNoCompanyOrLicenceWords(t *testing.T) {
 	require.NoError(t, err)
 
 	allowed := bytes.Index(binary, []byte(dependencyRegistryLine))
+	notices := vendoredNotice.FindAllIndex(binary, -1)
+	require.Len(t, notices, 1, "the page runtime carries exactly one vendored notice block")
+	licenceWord := regexp.MustCompile(`(?i)^(licence|license)$`)
 	for _, match := range forbiddenWords.FindAllIndex(binary, -1) {
 		inside := allowed >= 0 && match[0] >= allowed && match[1] <= allowed+len(dependencyRegistryLine)
+		for _, n := range notices {
+			inside = inside || match[0] >= n[0] && match[1] <= n[1] && licenceWord.Match(binary[match[0]:match[1]])
+		}
 		if !inside {
 			start, end := max(0, match[0]-60), min(len(binary), match[1]+60)
 			t.Errorf("default build carries %q in %q", binary[match[0]:match[1]], binary[start:end])

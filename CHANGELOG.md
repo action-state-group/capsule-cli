@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Changed (breaking for saved pages):** the capsule-viewer pin moves to
+  `capsule-viewer/go` v0.4.0, whose pages carry the Evidence Bundle in a
+  `<script type="application/json">` element (capsule-viewer#109) and verify
+  with CLL's browser checkpoint verifier (#474). `verify --bundle PAGE` reads
+  that element, as data, so a `"__proto__"` member stays a member (#485). It
+  refuses, rather than guess, a page with two bundle elements or one that is
+  never closed, and a page in the old format (the bundle in a
+  `window.__BUNDLE__ = ` script, written by capsulectl up to v0.1.0-rc24 and
+  by viewer up to 0.3.0): the error names the old format and says to verify the
+  bundle file the page was made from, or to build the page again. The
+  presentation fixtures are rebuilt in the new form, and the page-check
+  helpers in `scripts/lib/page-checks.sh` read and edit the JSON element.
+
 - **Changed (docs):** a book accepts `--witness-directory` with
   `book request --response` once a capsulectl-book release carries
   evidencebook#221; it then passes it as the requester's witness directory and

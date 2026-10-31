@@ -237,13 +237,10 @@ func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
 // embeddedBundle recovers the bundle the emitter embedded in the page.
 func embeddedBundle(t *testing.T, html string) map[string]interface{} {
 	t.Helper()
-	const start = "window.__BUNDLE__ = "
-	i := strings.Index(html, start)
-	require.GreaterOrEqual(t, i, 0)
-	rest := html[i+len(start):]
-	j := strings.Index(rest, ";</script>")
-	require.GreaterOrEqual(t, j, 0)
-	v, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(rest[:j])))
+	text, ok, err := receiptBundleJSON([]byte(html))
+	require.NoError(t, err)
+	require.True(t, ok, "the page carries its bundle in a JSON element")
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(text))
 	require.NoError(t, err)
 	b, ok := v.(map[string]interface{})
 	require.True(t, ok)
