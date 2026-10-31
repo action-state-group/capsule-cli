@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -80,9 +81,9 @@ func checkWitnessConfig(p Profile) error {
 	if endpoint == "" {
 		return nil
 	}
-	u, e := url.Parse(endpoint)
+	u, e := url.Parse(witnessHTTPS(endpoint))
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return Hint(ErrInput, "checkpoint.endpoint must be an HTTPS URL without credentials, query or fragment")
+		return Hint(ErrInput, "checkpoint.endpoint must be an HTTPS URL, or scrapi+https:// for a SCITT SCRAPI witness, without credentials, query or fragment")
 	}
 	if issue := witnessKeyIssue(p); issue != "" {
 		return Hint(ErrInput, issue)
@@ -124,6 +125,11 @@ type safeSubmitter struct{ client *witness.Client }
 
 func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
 	r, e := s.client.Submit(ctx, b)
+	return r, classifySubmitError(e)
+}
+
+// classifySubmitError is how a delivery records a witness client's error.
+func classifySubmitError(e error) error {
 	if e != nil {
 		// A request that got no answer from the witness at all (refused,
 		// unresolved, timed out, or stopped by a proxy asking for
@@ -132,7 +138,7 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		// what a missing consent looks like from here.
 		var answered *witness.HTTPError
 		if !errors.As(e, &answered) || answered.StatusCode == http.StatusProxyAuthRequired {
-			return r, &witness.HTTPError{StatusCode: 503, Body: WitnessNotReached}
+			return &witness.HTTPError{StatusCode: 503, Body: WitnessNotReached}
 		}
 		// A 403 may come from a network gate on this host rather than the
 		// witness (capsule-cli#335), and such a gate opens once the host
@@ -143,9 +149,9 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		}
 		// The answered status (never the body) is kept, so a pending
 		// delivery can say what came back.
-		return r, &witness.HTTPError{StatusCode: status, Body: WitnessFailureBody(answered.StatusCode)}
+		return &witness.HTTPError{StatusCode: status, Body: WitnessFailureBody(answered.StatusCode)}
 	}
-	return r, nil
+	return nil
 }
 
 // witnessFailureBody is what a delivery answered with an error records: its
@@ -306,7 +312,11 @@ func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ 
 	}
 	return []cll.WitnessState{r}, nil
 }
-func witnessResult(state cll.WitnessState) map[string]any {
+
+// witnessResult is a delivery's state. A verified one also carries its
+// receipt as a checkpoint.witnesses entry, whose ts_url is the profile's
+// witness endpoint and so names its binding.
+func witnessResult(endpoint string, state cll.WitnessState) map[string]any {
 	status := "pending"
 	if state.Permanent {
 		status = "failed"
@@ -314,7 +324,15 @@ func witnessResult(state cll.WitnessState) map[string]any {
 	if state.Receipt != nil {
 		status = "verified"
 	}
-	return map[string]any{"state": status, "attempts": state.Attempts, "next_attempt_at": state.NextAttemptAt, "receipt": state.Receipt}
+	out := map[string]any{"state": status, "attempts": state.Attempts, "next_attempt_at": state.NextAttemptAt, "receipt": state.Receipt}
+	if r := state.Receipt; r != nil && r.LeafIndex != nil && r.TreeSize != nil {
+		out["witness"] = map[string]any{
+			"ts_url": strings.TrimRight(endpoint, "/"), "entry_hash": r.EntryHash,
+			"receipt_b64": base64.StdEncoding.EncodeToString(r.Bytes),
+			"leaf_index":  *r.LeafIndex, "tree_size": *r.TreeSize,
+		}
+	}
+	return out
 }
 
 // Status re-verifies persisted evidence rather than trusting a receipt-shaped
@@ -327,11 +345,7 @@ func VerifyWitness(p Profile, state cll.WitnessState) error {
 	if r.LeafIndex == nil || r.TreeSize == nil {
 		return errors.New("incomplete stored receipt")
 	}
-	keys, err := ParseKeys([]string{p.Checkpoint.PublicKey})
-	if err != nil {
-		return err
-	}
-	v, err := witness.NewReceiptVerifier(keys[0])
+	v, err := witnessVerifier(p)
 	if err != nil {
 		return err
 	}
@@ -487,7 +501,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			if e = VerifyWitness(p, state); e != nil {
 				return e
 			}
-			if e = Output(c, witnessResult(state)); e != nil {
+			if e = Output(c, witnessResult(p.Checkpoint.Endpoint, state)); e != nil {
 				return e
 			}
 			if publish && state.Permanent {
@@ -579,15 +593,7 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	client, e := witness.NewClient(p.Checkpoint.Endpoint, &http.Client{Transport: bearerTransport{token: token}, Timeout: 30 * time.Second}, 0)
-	if e != nil {
-		return cll.WitnessState{}, e
-	}
-	keys, e := ParseKeys([]string{p.Checkpoint.PublicKey})
-	if e != nil {
-		return cll.WitnessState{}, e
-	}
-	verifier, e := witness.NewReceiptVerifier(keys[0])
+	client, verifier, e := witnessBinding(p, token)
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
@@ -599,7 +605,7 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	} else if !errors.Is(e, cll.ErrNotFound) {
 		return cll.WitnessState{}, e
 	}
-	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: client}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}

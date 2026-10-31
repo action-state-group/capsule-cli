@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	aacwitness "github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	"github.com/action-state-group/checkpointed-local-log/go/store/memory"
@@ -63,6 +65,7 @@ func witnessReceiptFixture(t *testing.T) (Profile, *memory.Store, ed25519.Public
 	ws, e := cose.NewSigner(cose.AlgorithmEdDSA, witnessKey)
 	require.NoError(t, e)
 	require.NoError(t, msg.Sign(rand.Reader, nil, ws))
+	msg.Payload = nil // a Receipt's payload, the tree root, is detached
 	receipt, e := msg.MarshalCBOR()
 	require.NoError(t, e)
 	body, e := json.Marshal(map[string]any{"receipt_b64": base64.StdEncoding.EncodeToString(receipt), "entry_hash": hex.EncodeToString(hash), "entry_hash_scheme": "legacy", "leaf_index": 0, "tree_size": 1})
@@ -108,7 +111,20 @@ func TestWitnessHTTPSReceiptAndTampering(t *testing.T) {
 	require.NoError(t, e)
 	require.NotNil(t, saved.Receipt)
 	require.NoError(t, VerifyWitness(p, saved))
-	assert.Equal(t, "verified", witnessResult(saved)["state"])
+	p.Checkpoint.Endpoint = server.URL
+	result := witnessResult(p.Checkpoint.Endpoint, saved)
+	assert.Equal(t, "verified", result["state"])
+	// The printed entry is a checkpoint.witnesses entry the cll binding accepts.
+	raw, e := json.Marshal([]any{result["witness"]})
+	require.NoError(t, e)
+	var entries []interface{}
+	require.NoError(t, json.Unmarshal(raw, &entries))
+	directory, e := aacwitness.ParseDirectory([]byte(`{"witnesses":[{"name":"service-test","endpoint":"` + strings.TrimRight(p.Checkpoint.Endpoint, "/") + `","binding":"cll","key_ids":["` + hex.EncodeToString(public) + `"]}]}`))
+	require.NoError(t, e)
+	signed, e := aacwitness.ParseSignedCheckpoint(saved.Checkpoint)
+	require.NoError(t, e)
+	status, findings, results := aacwitness.VerifyReceipts(entries, &signed, saved.Checkpoint, directory)
+	assert.Equal(t, aacwitness.StatusPass, status, "%v %+v", findings, results)
 	count, e = delivery.RunOnce(t.Context(), time.Now().UTC(), 1)
 	require.NoError(t, e)
 	assert.Zero(t, count)
