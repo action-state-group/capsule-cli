@@ -11,7 +11,6 @@
 #   no_render_errors DOM        the error hook ran and saw nothing
 #   page_bundle PAGE            prints the bundle JSON a page carries
 #   replace_bundle PAGE JSON    prints PAGE with its bundle replaced by JSON's
-#   rehash_bundle_csp ORIG EDIT re-pins EDIT's bundle script in its CSP
 
 find_chrome() {
   chrome="${CHROME:-}"
@@ -63,26 +62,12 @@ no_render_errors() {
   contains "$1" 'data-render-hook="installed"'
 }
 
+# The bundle is the text of the page's <script type="application/json"> element
+# (capsule-viewer 0.4.0): data, not code, so editing it needs no change to the
+# page's CSP, which pins only executable scripts.
 page_bundle() {
-  perl -0ne 'print $1 if /window\.__BUNDLE__ = (.*?);<\/script>/s' "$1"
+  perl -0ne 'print $1 if /<script type="application\/json">(.*?)<\/script>/s' "$1"
 }
 replace_bundle() {
-  perl -0pe 'BEGIN{open my $f,"<",shift @ARGV or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' "$2" "$1"
-}
-
-# rehash_bundle_csp ORIGINAL EDITED: the page's CSP pins the SHA-256 of every
-# inline script, the bundle's included, so a page whose bundle text was edited
-# does not run it at all. Whoever edits the file can edit the policy too: this
-# puts the edited bundle script's hash where the original's was, so a check
-# tests what the page itself says about an edited bundle.
-rehash_bundle_csp() {
-  perl -MDigest::SHA=sha256_base64 -e '
-    sub h { my $b = sha256_base64($_[0]); $b .= "=" while length($b) % 4; return "sha256-$b" }
-    local $/; open my $o, "<", $ARGV[0] or die; my $orig = <$o>; close $o;
-    open my $e, "<", $ARGV[1] or die; my $page = <$e>; close $e;
-    my ($old) = $orig =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
-    my ($new) = $page =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
-    my ($ho, $hn) = (h($old), h($new));
-    $page =~ s/\Q$ho\E/$hn/ or die "the bundle script is not pinned in the CSP";
-    open my $w, ">", $ARGV[1] or die; print $w $page; close $w;' "$1" "$2"
+  perl -0pe 'BEGIN{open my $f,"<",shift @ARGV or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(<script type="application\/json">).*?(<\/script>)/$1$j$2/s' "$2" "$1"
 }
