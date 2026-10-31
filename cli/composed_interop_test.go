@@ -128,6 +128,10 @@ func TestVerifyBundleComposedInteropEnvelopeFailures(t *testing.T) {
 		{"signed member changed", func(r map[string]interface{}) { r["issued_at"] = "2026-10-31T00:00:01Z" }, "invalid", "response_signature_invalid"},
 		{"profile not implemented", func(r map[string]interface{}) { r["profile"] = "evidence-interop/9" }, "invalid", "response_signature_invalid"},
 		{"artifact carried", func(r map[string]interface{}) { r["artifact"] = "" }, "invalid", "response_signature_invalid"},
+		{"verification item swapped", func(r map[string]interface{}) {
+			r["verification_content"] = []interface{}{"AAAA"}
+		}, "invalid", "response_signature_invalid"},
+		{"verification item dropped", func(r map[string]interface{}) { delete(r, "verification_content") }, "invalid", "response_signature_invalid"},
 		{"key_id beside responder", func(r map[string]interface{}) { r["key_id"] = r["responder"] }, "invalid", "response_signature_invalid"},
 		// The anchor is signed, so a wrong anchor that still verifies is one
 		// the responder signed: re-signed below.

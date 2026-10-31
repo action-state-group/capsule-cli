@@ -205,6 +205,17 @@ func verifyInteropResponse(response map[string]interface{}) string {
 	if evidencerequest.VerifySignature(envelope.Responder, body, sig) != nil {
 		return aacbundle.RefusalSignatureInvalid
 	}
+	// The verification items travel beside the signed members, as the
+	// artifact does; each must hash to the digest signed at its position,
+	// as Envelope.Verify requires, or it is unbound bytes.
+	if len(envelope.VerificationContent) != len(envelope.Verification) {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	for i, item := range envelope.VerificationContent {
+		if evidencerequest.Digest(item) != envelope.Verification[i].Digest {
+			return aacbundle.RefusalSignatureInvalid
+		}
+	}
 	return aacbundle.RefusalSignatureVerified
 }
 
@@ -256,7 +267,9 @@ func interopAnchorBound(response, bundle map[string]interface{}) bool {
 // what was asked for was not served, so capsulectl reads the composition as
 // incomplete. A refusal is still no failed claim (Bundle -01), so it alone
 // never makes the verdict INVALID. A carried response signed by a key other
-// than its member's observer fails (INVALID).
+// than its member's observer fails (INVALID), as does an interop response
+// whose anchor.digest is not the member bundle's checkpoint
+// (response_anchor_not_checkpoint).
 func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string) {
 	out := map[string]any{
 		"status":   result.Status,
