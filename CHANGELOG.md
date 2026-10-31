@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Fixed:** `presentation build` puts a module script in the page once, however many
+  of a plugin's manifests register it (#501). It used to inline the script once per
+  manifest, and the second copy threw a SyntaxError that broke the whole page. The
+  manifests that share a script share its slot, with the union of their stylesheets;
+  the result still lists each manifest.
+
 ## v0.1.0-rc26
 
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.6.0, whose

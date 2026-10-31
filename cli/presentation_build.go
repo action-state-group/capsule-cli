@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -532,6 +533,7 @@ func preparePresentationPage(s presentationSettings, readBundle func() (map[stri
 	// none, as the page cannot know before resolving which one renders.
 	var wording *emitter.Wording
 	slots := make([]emitter.Module, 0, len(modules))
+	slotOf := map[string]int{} // script digest -> index in slots
 	for _, m := range modules {
 		row := presentationBuildModule{ID: m.ID, Plugin: m.plugin, ScriptSHA256: m.Script.SHA256, StyleSHA256: []string{}, Wording: "none"}
 		for _, st := range m.Styles {
@@ -545,7 +547,20 @@ func preparePresentationPage(s presentationSettings, readBundle func() (map[stri
 			}
 		}
 		result.Modules = append(result.Modules, row)
-		slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: row.StyleSHA256})
+		// A script is inlined once however many manifests register it: a
+		// second copy would redeclare its top-level bindings and throw.
+		// Manifests that share a script share its slot, with the union of
+		// their stylesheets.
+		if i, ok := slotOf[m.Script.SHA256]; ok {
+			for _, st := range row.StyleSHA256 {
+				if !slices.Contains(slots[i].StyleSHA256, st) {
+					slots[i].StyleSHA256 = append(slots[i].StyleSHA256, st)
+				}
+			}
+			continue
+		}
+		slotOf[m.Script.SHA256] = len(slots)
+		slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: append([]string{}, row.StyleSHA256...)})
 	}
 	return value, emitter.OfflineOptions{
 		Audience: s.audience, Depth: s.depth, Title: s.title, Wording: wording,
