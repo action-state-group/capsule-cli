@@ -219,7 +219,7 @@ func doctorCommand() *cobra.Command {
 			case p.Checkpoint.Endpoint == "":
 				report["witness"] = map[string]any{"checked": false, "reason": "profile has no checkpoint.endpoint configured"}
 			default:
-				witness := checkpointReachability(c.Context(), p.Checkpoint.Endpoint)
+				witness := checkpointReachability(c.Context(), witnessHTTPS(p.Checkpoint.Endpoint))
 				if witness["reachable"] != true {
 					witness["consent"] = WitnessConsentText(p.Checkpoint.Endpoint)
 				} else {

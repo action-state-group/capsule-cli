@@ -108,7 +108,7 @@ func TestWitnessHTTPSReceiptAndTampering(t *testing.T) {
 	require.NoError(t, e)
 	require.NotNil(t, saved.Receipt)
 	require.NoError(t, VerifyWitness(p, saved))
-	assert.Equal(t, "verified", witnessResult(saved)["state"])
+	assert.Equal(t, "verified", witnessResult(p.Checkpoint.Endpoint, saved)["state"])
 	count, e = delivery.RunOnce(t.Context(), time.Now().UTC(), 1)
 	require.NoError(t, e)
 	assert.Zero(t, count)
