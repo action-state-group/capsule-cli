@@ -1173,7 +1173,24 @@ rejection. A read-only profile that carries the endpoint and pinned witness key
 (but no checkpoint signing key) can run `status`; only a profile with checkpoint
 signing can `create` and `publish`. The receipt proves external registration of
 the checkpoint statement; it does not by itself establish trusted time or stream
-continuity.
+continuity. A verified `status` or `publish` result also carries the receipt as
+a `checkpoint.witnesses` entry under `witness` (`ts_url`, `entry_hash`,
+`receipt_b64`, `leaf_index`, `tree_size`), whose `ts_url` is the profile's
+endpoint and so names the binding.
+
+#### A SCITT SCRAPI witness
+
+`--checkpoint-endpoint scrapi+https://host` names a SCITT Transparency Service
+as the witness instead: `publish` registers the signed checkpoint statement,
+byte for byte, with its `POST /entries` route (draft-ietf-scitt-scrapi) and
+keeps the COSE Receipt it returns. That Receipt's leaf is SHA-256 of the
+statement, the checkpoint's anchor digest, so it is the Receipt
+agent-action-capsule interop profile v1 §6.2.2 (`anchor_witnessed`) checks; a
+`cll` witness Receipt covers a different leaf and does not pass that check.
+`publish` and `status` verify the Receipt with that check under
+`--checkpoint-public-key`, the service's Ed25519 key. Registration sends the
+checkpoint statement to that service, so capsulectl registers only with the
+SCRAPI witness the profile names and has no SCRAPI witness of its own.
 
 ## Output and known limitations
 
