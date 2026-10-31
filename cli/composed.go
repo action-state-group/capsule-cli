@@ -3,11 +3,15 @@ package cli
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"regexp"
+	"slices"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
@@ -106,7 +110,7 @@ func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig in
 	return aacbundle.RefusalSignatureVerified
 }
 
-// ResponseSignatureProfile names the one form this CLI checks an artifact
+// ResponseSignatureProfile names the first form this CLI checks an artifact
 // member's carried response in: evidencebook's signed artifact response
 // without its artifact bytes. It carries `key_id` and `sig` (an Ed25519
 // signature, 128 lowercase hex) over the response's signing body, which
@@ -114,11 +118,39 @@ func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig in
 // artifact.
 const ResponseSignatureProfile = "evidencebook-artifact-response"
 
-// verifyResponseSignature checks a carried response under
-// ResponseSignatureProfile. A response carrying neither `key_id` nor `sig`
-// is not in that form (unverified); any other that does not verify is
-// invalid.
+// InteropResponseProfile names the second form: an evidence-interop envelope
+// (interop profile §6.2, evidence-interop/0 or /1) as received, minus its
+// `artifact`. It carries `responder` and `sig` over the envelope's signing
+// body, which names the artifact by artifact_digest only. Its `anchor` is
+// bound to the member bundle's checkpoint in composedOutput.
+const InteropResponseProfile = "evidence-interop-envelope"
+
+// responseProfile is the form a carried response is checked in: one
+// carrying `responder` is an interop envelope.
+func responseProfile(response map[string]interface{}) string {
+	if _, ok := response["responder"]; ok {
+		return InteropResponseProfile
+	}
+	return ResponseSignatureProfile
+}
+
+// responseKey is the key a carried response is signed under, in its form.
+func responseKey(response map[string]interface{}) (string, bool) {
+	if responseProfile(response) == InteropResponseProfile {
+		key, ok := response["responder"].(string)
+		return key, ok
+	}
+	key, ok := response["key_id"].(string)
+	return key, ok
+}
+
+// verifyResponseSignature checks a carried response in its form. A response
+// carrying none of `key_id`, `responder` and `sig` is in neither form
+// (unverified); any other that does not verify is invalid.
 func verifyResponseSignature(response map[string]interface{}) string {
+	if responseProfile(response) == InteropResponseProfile {
+		return verifyInteropResponse(response)
+	}
 	rawKey, hasKey := response["key_id"]
 	rawSig, hasSig := response["sig"]
 	if !hasKey && !hasSig {
@@ -149,6 +181,83 @@ func verifyResponseSignature(response map[string]interface{}) string {
 	return aacbundle.RefusalSignatureVerified
 }
 
+// verifyInteropResponse checks a carried response under
+// InteropResponseProfile. The envelope is read by evidencerequest.ParseReply
+// with an empty `artifact` put back (it is not signed), so its members,
+// signing body and signature follow the profile's own reader. A carried
+// `artifact` or `key_id` is not the envelope minus its artifact, so it is
+// invalid.
+func verifyInteropResponse(response map[string]interface{}) string {
+	_, hasArtifact := response["artifact"]
+	_, hasKeyID := response["key_id"]
+	if hasArtifact || hasKeyID {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	envelope, ok := interopEnvelope(response)
+	if !ok || !slices.Contains(evidencerequest.Profiles, envelope.Profile) || !refusalSignatureRE.MatchString(envelope.Sig) {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	body, err := envelope.SigningBody()
+	if err != nil {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	sig, _ := hex.DecodeString(envelope.Sig)
+	if evidencerequest.VerifySignature(envelope.Responder, body, sig) != nil {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	// The verification items travel beside the signed members, as the
+	// artifact does; each must hash to the digest signed at its position,
+	// as Envelope.Verify requires, or it is unbound bytes.
+	if len(envelope.VerificationContent) != len(envelope.Verification) {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	for i, item := range envelope.VerificationContent {
+		if evidencerequest.Digest(item) != envelope.Verification[i].Digest {
+			return aacbundle.RefusalSignatureInvalid
+		}
+	}
+	return aacbundle.RefusalSignatureVerified
+}
+
+// interopEnvelope reads a carried interop response as an Envelope with no
+// artifact bytes.
+func interopEnvelope(response map[string]interface{}) (evidencerequest.Envelope, bool) {
+	withArtifact := make(map[string]interface{}, len(response)+1)
+	for name, member := range response {
+		withArtifact[name] = member
+	}
+	withArtifact["artifact"] = ""
+	octets, err := json.Marshal(withArtifact)
+	if err != nil {
+		return evidencerequest.Envelope{}, false
+	}
+	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
+	if err != nil || reply.Envelope == nil {
+		return evidencerequest.Envelope{}, false
+	}
+	return *reply.Envelope, true
+}
+
+// interopAnchorBound reports whether an interop response's anchor.digest is
+// the SHA-256 of the member bundle's checkpoint COSE octets as carried
+// (interop profile §6.2.1): the anchor is that checkpoint.
+func interopAnchorBound(response, bundle map[string]interface{}) bool {
+	envelope, ok := interopEnvelope(response)
+	if !ok {
+		return false
+	}
+	checkpoint, _ := bundle["checkpoint"].(map[string]interface{})
+	encoded, ok := checkpoint["cose"].(string)
+	if !ok {
+		return false
+	}
+	cose, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(cose) == 0 {
+		return false
+	}
+	return envelope.Anchor.Digest == evidencerequest.Digest(cose)
+}
+
 // composedOutput renders a verified composed/v1 block for `verify --bundle`:
 // the recomputed composed digest, each member (with a carried member bundle
 // assessed as its own Evidence Bundle), composition closure, each join's
@@ -158,7 +267,9 @@ func verifyResponseSignature(response map[string]interface{}) string {
 // what was asked for was not served, so capsulectl reads the composition as
 // incomplete. A refusal is still no failed claim (Bundle -01), so it alone
 // never makes the verdict INVALID. A carried response signed by a key other
-// than its member's observer fails (INVALID).
+// than its member's observer fails (INVALID), as does an interop response
+// whose anchor.digest is not the member bundle's checkpoint
+// (response_anchor_not_checkpoint).
 func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string) {
 	out := map[string]any{
 		"status":   result.Status,
@@ -192,13 +303,22 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			verdicts = append(verdicts, verdict)
 		}
 		if m.ResponseSignature != "" {
-			member["response_signature"] = map[string]any{"status": m.ResponseSignature, "profile": ResponseSignatureProfile}
-			if response, ok := composedMemberBody(container, m.ID, "response"); ok {
-				if key, ok := response["key_id"].(string); ok && key != m.Observer {
-					member["findings"] = append(nonNilStrings(m.Findings), "response_key_not_observer")
+			response, _ := composedMemberBody(container, m.ID, "response")
+			profile := responseProfile(response)
+			member["response_signature"] = map[string]any{"status": m.ResponseSignature, "profile": profile}
+			findings := nonNilStrings(m.Findings)
+			if key, ok := responseKey(response); ok && key != m.Observer {
+				findings = append(findings, "response_key_not_observer")
+				verdicts = append(verdicts, "INVALID")
+			}
+			if profile == InteropResponseProfile {
+				raw, _ := composedMemberBundle(container, m.ID)
+				if !interopAnchorBound(response, raw) {
+					findings = append(findings, "response_anchor_not_checkpoint")
 					verdicts = append(verdicts, "INVALID")
 				}
 			}
+			member["findings"] = findings
 		}
 		if m.Outcome == "refusal" {
 			member["reads_as"] = "INCOMPLETE"
