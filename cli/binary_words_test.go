@@ -50,10 +50,12 @@ func TestDefaultBinaryCarriesNoCompanyOrLicenceWords(t *testing.T) {
 
 	allowed := bytes.Index(binary, []byte(dependencyRegistryLine))
 	notices := vendoredNotice.FindAllIndex(binary, -1)
+	require.Len(t, notices, 1, "the page runtime carries exactly one vendored notice block")
+	licenceWord := regexp.MustCompile(`(?i)^(licence|license)$`)
 	for _, match := range forbiddenWords.FindAllIndex(binary, -1) {
 		inside := allowed >= 0 && match[0] >= allowed && match[1] <= allowed+len(dependencyRegistryLine)
 		for _, n := range notices {
-			inside = inside || match[0] >= n[0] && match[1] <= n[1]
+			inside = inside || match[0] >= n[0] && match[1] <= n[1] && licenceWord.Match(binary[match[0]:match[1]])
 		}
 		if !inside {
 			start, end := max(0, match[0]-60), min(len(binary), match[1]+60)

@@ -327,8 +327,9 @@ func receiptBundleJSON(raw []byte) ([]byte, bool, error) {
 	i := bytes.Index(raw, start)
 	if i < 0 {
 		if bytes.Contains(raw, []byte(oldBundleScript)) {
-			return nil, false, InputError("--bundle is a page in the old format, with its bundle in a window.__BUNDLE__ script; " +
-				"this capsulectl reads the bundle from the page's JSON element (capsule-viewer 0.4.0): " +
+			return nil, false, InputError("--bundle is a page in the old format, with its bundle in a window.__BUNDLE__ script, " +
+				"written by capsulectl v0.1.0-rc24 or earlier, or capsule-viewer 0.3.0 or earlier; " +
+				"this capsulectl reads the bundle from the page's JSON element: " +
 				"verify the bundle file the page was made from, or build the page again")
 		}
 		return nil, false, nil
