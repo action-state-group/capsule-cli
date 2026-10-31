@@ -539,6 +539,11 @@ func TestPresentationBuildInlinesAScriptSharedByTwoManifestsOnce(t *testing.T) {
 	second.manifest["id"] = "org.example.deal-view-other/v0"
 	second.manifest["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "profiles": []any{"spec_version:example-other/v1"}}
 	first.manifest["forbids"] = map[string]any{"profiles": append(first.manifest["forbids"].(map[string]any)["profiles"].([]any), "spec_version:example-other/v1")}
+	// It also carries a stylesheet the first lacks: the shared slot takes both.
+	extraStyle := []byte(`.other { color: inherit; }`)
+	second.files["other.css"] = extraStyle
+	second.entries = append(second.entries, map[string]any{"role": "style", "path": "other.css", "sha256": hexSHA256(extraStyle)})
+	second.manifest["executable"].(map[string]any)["style_sha256"] = []any{hexSHA256(fixtureStyle), hexSHA256(extraStyle)}
 	presentationPlugins(t, root, "dealview", first, second)
 	out := presentationOut(t)
 	stdout, err := invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", out)
@@ -548,6 +553,9 @@ func TestPresentationBuildInlinesAScriptSharedByTwoManifestsOnce(t *testing.T) {
 	page, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Equal(t, 1, strings.Count(string(page), string(first.files["view.js"])))
+	styles := cspSources(t, string(page), "style-src")
+	assert.Contains(t, styles, sha256CSPSource(fixtureStyle))
+	assert.Contains(t, styles, sha256CSPSource(extraStyle))
 }
 
 // A module for every audience ("*"), or one that names the page's, stays
