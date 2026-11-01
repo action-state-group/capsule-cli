@@ -2,14 +2,14 @@
   "bundle_kind": "evidence-bundle/v2",
   "bundle_version": "2",
   "checkpoint": {
-    "cose": "0oRYZ6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCBGvIvHhgfF3iFRrMgE0bJQ99Hh6u2ZpX_BrBJaDMOkTA-iAWtleGFtcGxlLWxvZwJuZXhhbXBsZS1sb2cjMzKgWLKmZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUYIGlpc3N1ZWRfYXR4GDIwMjYtMTAtMzFUMTk6Mzk6MDUuMjE4WmlwcmV2X3NpemUAamNvbW1pdG1lbnRYRYJYIBGWeIXPeiI8oDEEML1dDx837O79s4xU0lWLOOTxh1rYWCCQoQ_draRFKuBHjLmt8vUgcV_68quFTLRilVHKK0zdgG9wcmV2X2NvbW1pdG1lbnRAWEBJeqXLuVNXmi_roAbteEpXWgxsYpIhA7O9RizCeRmom59W2jlDavIYdBUPYWSyZ06RzbR0nJ5vwwvLjU7f-sIF",
-    "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+    "cose": "0oRYZ6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCBYQEGcrEikqirfbbYsfiPYugG2bLuXRQSu-oA4ebbC6g-iAWtleGFtcGxlLWxvZwJuZXhhbXBsZS1sb2cjMzKgWLKmZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUYIGlpc3N1ZWRfYXR4GDIwMjYtMTEtMDFUMDY6NTU6MTguODY3WmlwcmV2X3NpemUAamNvbW1pdG1lbnRYRYJYIBGWeIXPeiI8oDEEML1dDx837O79s4xU0lWLOOTxh1rYWCCQoQ_draRFKuBHjLmt8vUgcV_68quFTLRilVHKK0zdgG9wcmV2X2NvbW1pdG1lbnRAWED8525U9B4V-8H9EwcsUee7bCsq_lzyGIwv-8E232TrluVoS537PFnIjkMnSa6RXDEaZn_7CBwKaF5OuY_lIfwC",
+    "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
     "log_id": "example-log",
     "mmr_size": 32,
     "prev_root": "",
     "prev_size": 0,
     "root": "aec893838e0c981f6f0745947ae35a9c586aef8c3c65e46ba8a232a7c9574c18",
-    "timestamp": "2026-10-31T19:39:05.218Z"
+    "timestamp": "2026-11-01T06:55:18.867Z"
   },
   "completeness": {
     "closure_depth": 2,
@@ -1110,7 +1110,7 @@
   },
   "extensions": {
     "producer-key/v1": {
-      "public_key": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c"
+      "public_key": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea"
     },
     "eu-ai-act-compliance/v1": {
       "enabled": true,
@@ -1208,14 +1208,14 @@
       "capsule_id": "4cc89a4948acd4b6ade39ead94401c64b8d82fe68c3de05f9b228a7ffe49b780",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "f455d9d18685b318ba04917dbd68b7e0cc3afe465af7c796348455952cce65db"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a058204cc89a4948acd4b6ade39ead94401c64b8d82fe68c3de05f9b228a7ffe49b78058407400602a7956be0b1f91a35e0788fc665e266e052c2cb6bd27efbf5021e68bdde013a8b3f599cbeb733ad667876e6774ed9243b1ff8ec8fdfd4b9e6b4dd48808",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a058204cc89a4948acd4b6ade39ead94401c64b8d82fe68c3de05f9b228a7ffe49b7805840c0771a1f1a664c46830ed666e2e81466ceff14ed91de4556980b49fe94c58fac98082808497a163f8936449abf9f1bfe117a61c4dbc7e6062fc868d4895d5303",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-03T18:00:00Z"
     },
@@ -1231,14 +1231,14 @@
       "capsule_id": "8601dea43f89e15a48ed6ad81839568093edfd805e1c18223c8f635aec0580da",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "0eb36e8cb8a8ee27b31da0d8f85adecdbc3f7d1a2f6028577c4ff7d4ffdef7ea"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a058208601dea43f89e15a48ed6ad81839568093edfd805e1c18223c8f635aec0580da5840222c83dd9cef73331044468995602e12149dbb4dbdc88ff0d064ae747f7e5043d911eaf3a462a691c4d4eba9574be5a36df622e770120a92d33d8508cdcd8f0c",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a058208601dea43f89e15a48ed6ad81839568093edfd805e1c18223c8f635aec0580da584050e2bc7333d364a4ba38ae8f0d9ad332e37c022e3e657c207047f07bcee650c19f46099db1f67be1872cad805e04d8686ad87036b085338922ab294ae6a9350d",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-03T18:00:00Z"
     },
@@ -1254,14 +1254,14 @@
       "capsule_id": "23fdf9f499f66f17ce032252d752e0b5529e4d11d816c7b1663eb6bec6de0f25",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "6718f84bfa3f948411222cbb6171a7e74d918be0c27054f8c77c7879ce2babd4"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a0582023fdf9f499f66f17ce032252d752e0b5529e4d11d816c7b1663eb6bec6de0f255840462aa59639310ad88fb35f96ee587713ac2542382669cff4935ec7ca616b26114a7b0937de3de2f6d2957ebe3c3ce5d29536287fee93de23948f48848b208c03",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a0582023fdf9f499f66f17ce032252d752e0b5529e4d11d816c7b1663eb6bec6de0f255840aa2ccc4e3ea23101898da3683a2c196cf70fef86c997eb1aaab5a3a383366788e01d8b12e106510a816c148a0e5f9e2573e95d00e140099ef365f0235e834b05",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-03T18:00:00Z"
     },
@@ -1277,14 +1277,14 @@
       "capsule_id": "bf678e7a9fb1df836bc34174e1395d6e8aa920d314a16ceb521b588d77a2d90e",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "fd4dade92070afcd9002ddc1cd64433794d62151c552b7d5ce761fc9ec7e2194"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820bf678e7a9fb1df836bc34174e1395d6e8aa920d314a16ceb521b588d77a2d90e5840ac409023d372d34d0130cf03e5847dd18ab48cddaa53d042fa5f69f4eec8369c07f3785671740fb9a49664e6a6775286d93b252e40592654e6c9dd68186c0d0e",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820bf678e7a9fb1df836bc34174e1395d6e8aa920d314a16ceb521b588d77a2d90e5840cdf6e76760e596816a0e4382dcb06c7122ff2c3364d7ff2374dd97334f7c34b8276e2a98c5dd3ccc7dc6ab8e66f7c8cbbffff3f58e2273fca298b8fbc0fe4409",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-03T18:00:00Z"
     },
@@ -1300,14 +1300,14 @@
       "capsule_id": "3cddfbbe1a1157107e4675e8bc599422e852de158ed6de37ec309411232fa632",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "c224e23065e6db4ba9397f477d76551fea4164d1e44432b6c5118998970ed16e"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a058203cddfbbe1a1157107e4675e8bc599422e852de158ed6de37ec309411232fa6325840ae366db4e6fb09aa0d49869b8790ac253d033d882340de55941550f57306a15fe242f2f6fe96aa989511c9dc545329c40be86655fed1b17cf0ce90f7a6cbaf05",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a058203cddfbbe1a1157107e4675e8bc599422e852de158ed6de37ec309411232fa632584007820bef429c7f6881e32b1433bbf033734bb8fba69992a9ac345944b0bd9b7633892db3bff9812cc5bb98d5c5cfc576d8399761beb2b604a1af65683a4a8204",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-10T18:00:00Z"
     },
@@ -1323,14 +1323,14 @@
       "capsule_id": "f5146f8321f7a4516279e608c28675ec8880c71364854d98fef4c4b9dc847243",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "0696631dc3acddc92071e3e6dc3f18d81b61d450da2f9a0a6de41ceaed10763b"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820f5146f8321f7a4516279e608c28675ec8880c71364854d98fef4c4b9dc84724358408e262770a7c039678df6433e10a8f00935b8e6f3b88ec1fefcb4885c7af9883008cd665dc014eabb4b714f3f0c0e41f7ac21fd97b124a7683b38fd6b751ab200",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820f5146f8321f7a4516279e608c28675ec8880c71364854d98fef4c4b9dc84724358401b471eb63dde17884da04ad6d3f472c912a92af6c5e6ed76e9b503c73ee1c530fb9e20ce1b92e9e80ffd49e1e7df97d8c801e155f45d78eb8f4b7b6f90e43508",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-10T18:00:00Z"
     },
@@ -1346,14 +1346,14 @@
       "capsule_id": "6c7f8fd48038261897697664c12b16db97bdff32747341ed669776e6de13c010",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "6c579bbaca1188509476c30a8101838631c8d71e988044f8765a37bdf777dd6b"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a058206c7f8fd48038261897697664c12b16db97bdff32747341ed669776e6de13c0105840f1ed5891c280973236e88cc0485941460812283d29c1ae8a8d640b79c0dbaf2fe5c23cf6b1a2fd48d2504c6c114bbbb4034ab8f12b02f5cc70a8babe684bd405",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a058206c7f8fd48038261897697664c12b16db97bdff32747341ed669776e6de13c0105840f98c909ca0a5ebdaf9d5149fcd8ad270566b78c21d867fe5ff985cc618f3fbb72fa9dfad1fb9fc03460988bbd7cbaeece0fc1fa758ed4a4e670aefa333ea1e04",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-10T18:00:00Z"
     },
@@ -1369,14 +1369,14 @@
       "capsule_id": "9fc6a45e09a8fc1ce5b8cac1065ebcd426256125d5b605481415bf48a06ccb0b",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "7dbf018aea4588847eb32407f470ebac4baa3be8540b6a62bebe4aebce738535"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a058209fc6a45e09a8fc1ce5b8cac1065ebcd426256125d5b605481415bf48a06ccb0b58400c94426f09f7ffff28f5241ec72bfd909c9306560df6b8d72df7965618e2c53f2bc13c2ab6f1e8266d428ac490d2056acc4bc6e0fe626cdf632761d051b3c508",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a058209fc6a45e09a8fc1ce5b8cac1065ebcd426256125d5b605481415bf48a06ccb0b5840f1c4342d44ebbff7ff83e0dead4c95c3d9546ba3527fb2eb62e28984b8a353ac652a896cc2333808f859c4e85d5a80685f9a5fac98c9676a080100d574893c0f",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-10T18:00:00Z"
     },
@@ -1392,14 +1392,14 @@
       "capsule_id": "466b4a074efeae8793253b6cc6d867437e9e953aa91c9aef142e89d08f6e279e",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "8cac4533ffd8b9c05aa489c51da72079052ec24d6a5a277ae1c0fab4ee827ba2"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820466b4a074efeae8793253b6cc6d867437e9e953aa91c9aef142e89d08f6e279e5840be4442ceeb9e6ae0e14f1a802197de573e6ab2e57119061af9e88531aee244967877a3fb11db462c1cfe8a198166cff17e470bf6d1ecd3f43e2828bec637b60f",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820466b4a074efeae8793253b6cc6d867437e9e953aa91c9aef142e89d08f6e279e58402ec06f599fc17e24fc4848d2225000c150fafda420277238d65f88cd517d1902a93b7cb38b6ba533ff7cc3a0eec6bf633da4a9a0d65c121ed3538f1128e02809",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-17T18:00:00Z"
     },
@@ -1415,14 +1415,14 @@
       "capsule_id": "272de96767f4e8ac3849d686990e23385dbc0a340ec6d115c81ba23dffddd5d0",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "c23dc20460ff6ae53a6868e8236031b683cb78144ae941c0a50444e184f40f60"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820272de96767f4e8ac3849d686990e23385dbc0a340ec6d115c81ba23dffddd5d05840f8ab7e5a5438ac0f0e0eaaf7f7b6594abb52a1f2e0304b376c4621bf140917a1f76eac7932e23465d9413912ea7edc6f3ab46e83fd9eee218523a93635e0470d",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820272de96767f4e8ac3849d686990e23385dbc0a340ec6d115c81ba23dffddd5d058409426c691c81fd6fc0f3b4d4bb65ca3d8e4661d383b9d6b946c89577bf20a73e5616f029e61eb13fc08b7c15272a41c5de13b24cf09e519ab700e5e4646c95807",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-17T18:00:00Z"
     },
@@ -1438,14 +1438,14 @@
       "capsule_id": "082dfb922f61767b7fe1138a4a45136b8e0beb1a4e615392ee21b669a45dcfd6",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "750596b2e860607d0ed53f89ab2b565d56dc2fc6b2149f62d71d0348bc5520bf"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820082dfb922f61767b7fe1138a4a45136b8e0beb1a4e615392ee21b669a45dcfd65840f41c92c2b0a8067dc346b8b3af38eaefb4bf98483331a4affbdc96dacfe1081cdae7770162506b924209f87bf62248b4fb4ce3fe24b207970e5d171e71d3ee0b",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820082dfb922f61767b7fe1138a4a45136b8e0beb1a4e615392ee21b669a45dcfd65840acbd8dcd70c5b8759d7bebbb278bfe1efdc6e1005d7218abac9d51ebbde1ad76a678f7c6587646f5bec9c701a37be3d3472d1bd6313f6f7af39fb42acd33740f",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-17T18:00:00Z"
     },
@@ -1461,14 +1461,14 @@
       "capsule_id": "b7f7dc8a1835af1f3d30e35f815ad3a2b7561bdbef55ab53b7c35e0c6bb5f1fa",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "2a8d76553c9e00402a8aa2295b12eff48674d31d9ee910a101727dd24af1da25"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820b7f7dc8a1835af1f3d30e35f815ad3a2b7561bdbef55ab53b7c35e0c6bb5f1fa584097ee726b6df31e23c74f822a8c05815d166ed4c99f394735cf60a0112e6625c95b29fc14121e8d892f1c263dc19c9763691a4aca6a3a77ed6743574b7f8c870b",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820b7f7dc8a1835af1f3d30e35f815ad3a2b7561bdbef55ab53b7c35e0c6bb5f1fa5840661bbbcaea9f42051dba3c494cf4d618872a9f7e71928e3c446bf8486be5340b4ae7d1ea3b15c8ca5d78c819b4580b315beaec174321928b27754b375dbcf10f",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-17T18:00:00Z"
     },
@@ -1484,14 +1484,14 @@
       "capsule_id": "ec89c2813855cb9752ebfaf56e86edabd69e1a8fb5f85d5065fb9760d6144cee",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "1992630b4b67f609da9ba0a21d354e92f60151242ab7d1293dc98b57577f3404"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820ec89c2813855cb9752ebfaf56e86edabd69e1a8fb5f85d5065fb9760d6144cee584012d0f677f5e966c5e7bd4adc3176d9d882cb0e28bd2362248341db004dbcfbe4632534f4c371875dcbd433bdb531967dbe82d9b0f7b4202b665048ab68990502",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820ec89c2813855cb9752ebfaf56e86edabd69e1a8fb5f85d5065fb9760d6144cee5840e1dfe93d2237d4958070560f4780ce3e47d4a0bceb739c5f9baf16e4c652cada002419e1bf36b5e8b5f97d70ebab9c55962d451377a03f4e845449fa6c83710e",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-24T18:00:00Z"
     },
@@ -1507,14 +1507,14 @@
       "capsule_id": "f092fc0d7bb673e8336ebb755384c79619a3e96ac76ed146778ff76569402bc7",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "feb3984d0e2ccfb1be3c3f881ac2f79d5330d501699cd7cb9bce12cc2636e7bc"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820f092fc0d7bb673e8336ebb755384c79619a3e96ac76ed146778ff76569402bc7584003edffe5c9f0c3307be4e5aec53488b4f4a42e6a5da4b61faccc4bd5e3d21cbf923200b2c0c6ff65f5cbdae5ffc9343b6d3896ee0801dfd7ab125522fa2ab509",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820f092fc0d7bb673e8336ebb755384c79619a3e96ac76ed146778ff76569402bc75840140861383a03dfb9af37059e7265f0f8b3f7331ec05bfef7d837d5fdc3f6429bb77b9f8e9ab55e06e09d8dea7eb5cf77c5c9871933e7de27c0271b23bd2f5b07",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-24T18:00:00Z"
     },
@@ -1530,14 +1530,14 @@
       "capsule_id": "bf88249e7c269c8e43d93b4fbd2860063465e8079c86019652e91a4f4c5cb6a1",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "d5b81c11465709636cab05ee8b5998ec4652803056f492a6676931bb846e1467"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820bf88249e7c269c8e43d93b4fbd2860063465e8079c86019652e91a4f4c5cb6a158409470fdbb09e2c562a2534a1fdfb6849227296c21a9dbad8e70c05ffc2f6a31d74ce07b7c6365eedda14fb235382a8201d64b419ecba26a9e35998b384e0a7c0c",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820bf88249e7c269c8e43d93b4fbd2860063465e8079c86019652e91a4f4c5cb6a1584025eecfd1ec6b0eb1539e1da0b5b3508ecbfeebf3c802dea73e59dd34ad0f2b39dc97c84dfc522a9eee5df9453ae40aa3fe8a883d3d68fb1a4bc7061a65cceb07",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-24T18:00:00Z"
     },
@@ -1553,14 +1553,14 @@
       "capsule_id": "c184e0e4587a9a5667267844e1b87d7be80d9c42856bf3e5c4209346a79eb183",
       "developer": "example-judge@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "cd9707e5f807300a27878d66134ca0c437ac9d62abf0a4a09484166247ec9f9c"
         }
       },
       "operator": "example-operator",
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820c184e0e4587a9a5667267844e1b87d7be80d9c42856bf3e5c4209346a79eb1835840cb01c2ccb869ad1e970df678f7c697e7c4ef2229afb94b95f160613dc29fe504d9f802b812ca3eebd3b244cb7f8bda88fe410b1fb84eec7be63e54586c6cc70c",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820c184e0e4587a9a5667267844e1b87d7be80d9c42856bf3e5c4209346a79eb1835840edc6ad6b64bf24178af5ac87218769daf55a78cbb168d9bef6afa84122d1ac471b5eb3e0cd293f473862a42a47966b17d55b962555300c116edce121daecc404",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-24T18:00:00Z"
     },
@@ -1576,7 +1576,7 @@
       "capsule_id": "b0e267de9efe5713eb646850c8b8fa1342b5087ab315bed804bbe998fccb00d3",
       "developer": "example-rollup@1",
       "format_version": "4",
-      "key_id": "46bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c",
+      "key_id": "5840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea",
       "model_attestation": {
         "compute_attestation": {
           "agent_input_digest": "a70294b0de51c1e202c42fe35ac7b261171571a831487de2f78dcd5104696261"
@@ -1681,7 +1681,7 @@
           "type": "agent-action-capsule"
         }
       ],
-      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582046bc8bc78607c5de2151acc804d1b250f7d1e1eaed99a57fc1ac125a0cc3a44c0127a05820b0e267de9efe5713eb646850c8b8fa1342b5087ab315bed804bbe998fccb00d35840088b1b3be5d40008e1eb668630be44233fb4ab7a4bb2b20599a9076842d5e271994dfdc5d6401182eec9cd232918aa0c01834750869f7c967930f7f8ae86e900",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458205840419cac48a4aa2adf6db62c7e23d8ba01b66cbb974504aefa803879b6c2ea0127a05820b0e267de9efe5713eb646850c8b8fa1342b5087ab315bed804bbe998fccb00d35840f2c2c246ba7f5b9bb8608bbf321ea3d4b096065509acaaf5cccc715099c825b7be3d221bff1f63df1632204b79c412113c45be5bcd8223aa3419b6be3cc32407",
       "spec_version": "draft-mih-scitt-agent-action-capsule-05",
       "timestamp": "2026-09-30T23:59:59Z"
     }
