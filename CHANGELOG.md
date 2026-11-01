@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Fixed:** a deal page is written for a `composed/v1` bundle whose only unmet claim is a
+  refusal member signed with the member observer's own key (#511). Such a member still reads
+  INCOMPLETE (what was asked for was not served) and now reports `served_answer: true`;
+  `PageGate` (`bundle --html`, `disclose --html`, `deal report --html`, `presentation build`)
+  treats it as the observer's answer and draws the refused case. A refusal with no signature
+  still blocks the page; one with a bad signature, or verifying under a key other than the
+  member's observer (`refusal_key_not_observer`, as `response_key_not_observer` for a response),
+  is INVALID. `verify --bundle`'s verdict for a refusal signed by the observer is unchanged.
+  Limit: an evidencebook-profile refusal's `key_id` is outside its signed body, so "the
+  observer's own key" is as carried in the composed block, not pinned to a trusted key.
+
 ## v0.1.0-rc28
 
 - **Added:** `verify --bundle` accepts an evidence-interop envelope (`evidence-interop/0`

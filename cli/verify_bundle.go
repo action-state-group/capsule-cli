@@ -118,12 +118,26 @@ func verdictError(verdict string) error {
 // bundleVerdict is `verify --bundle`'s verdict on an Evidence Bundle (VALID,
 // INCOMPLETE or INVALID) and the result it prints, from the bundle's value
 // and an optional witness directory. A page that checks itself is written
-// only after this same verdict is VALID (pageGate), so the page can never
-// claim more than verify --bundle does about the bundle it carries.
+// only when pageVerdict (bundleAssessment) is VALID, which differs from this
+// verdict only for composed/v1 refusals served by the observer's own key (a
+// refused case the page draws), so a page claims no more than verify
+// --bundle does about the bundle it carries.
 func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (string, map[string]any) {
-	result := aacbundle.VerifyBundleWithOptions(value, bundleOptions)
-	report, verdict := assessBundle(value, result, directory)
+	verdict, _, report := bundleAssessment(value, directory)
 	return verdict, report
+}
+
+// bundleAssessment is BundleVerdict plus pageVerdict: the verdict with every
+// composed/v1 refusal member whose signature verifies read as the observer's
+// served answer instead of INCOMPLETE. It is VALID exactly when the only
+// thing keeping the bundle from VALID is such refusals, which a deal page
+// draws as refused cases (PageGate); otherwise it equals verdict. It reads
+// served refusals of the top-level composed block only: a composed member's
+// own bundle is assessed for its verdict alone.
+func bundleAssessment(value map[string]interface{}, directory *witness.Directory) (verdict, pageVerdict string, report map[string]any) {
+	result := aacbundle.VerifyBundleWithOptions(value, bundleOptions)
+	report, verdict, pageVerdict = assessBundle(value, result, directory)
+	return verdict, pageVerdict, report
 }
 
 // bundleOptions are the AAC verifier options verify --bundle uses.
@@ -148,7 +162,7 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // on their member; their claims are never merged into the containing
 // Bundle's, but a failed member or block fails the verdict, and one with
 // something not shown makes it INCOMPLETE.
-func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string) {
+func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string, string) {
 	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
 	result = withSelection(value, result, strict)
 	records := map[string]string{}
@@ -206,6 +220,7 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	if anchored {
 		witnesses, witnessReceipts = cadence, cadenceReceipts
 	}
+	servedRefusals := 0
 	claims := []aacbundle.ClaimResult{result.GraphClosure, signedCheckpoint, result.IntervalCoverage, result.PerRecordMembership, signatures}
 	// The bundle draft defines no witness member: only a failing receipt
 	// changes the verdict, and a file without one is judged as before.
@@ -237,12 +252,13 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			claims = append(claims, claim)
 		}
 		if x.Composed != nil {
-			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
+			composed, memberVerdicts, served := composedOutput(value, x.Composed, directory)
 			entry["composed"] = composed
 			claims = append(claims, aacbundle.ClaimResult{Status: x.Composed.Status, Findings: x.Composed.Findings})
 			for _, memberVerdict := range memberVerdicts {
 				claims = append(claims, verdictClaim(memberVerdict))
 			}
+			servedRefusals += served
 		}
 		extensions = append(extensions, entry)
 	}
@@ -257,16 +273,16 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
 		}
 	}
-	verdict := "VALID"
-	for _, r := range claims {
-		if r.Status == "fail" {
-			verdict = "INVALID"
-		} else if (r.Status != "pass" || len(r.Findings) != 0) && verdict == "VALID" {
-			verdict = "INCOMPLETE"
-		}
+	// The page verdict leaves out the served refusals: each is a withheld
+	// claim for the verdict (what was asked for was not served) that PageGate
+	// does not hold a page back for.
+	pageVerdict := claimsVerdict(claims)
+	for range servedRefusals {
+		claims = append(claims, aacbundle.ClaimResult{Status: "withheld"})
 	}
+	verdict := claimsVerdict(claims)
 	if !identityOK || !disclosuresOK {
-		verdict = "INVALID"
+		verdict, pageVerdict = "INVALID", "INVALID"
 	}
 
 	digest := ""
@@ -287,7 +303,22 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		"producer_signatures":   claim(signatures),
 		"record_signatures":     signatureStates,
 		"witnesses":             map[string]any{"status": witnesses.Status, "findings": nonNilStrings(witnesses.Findings), "receipts": witnessReceipts},
-	}, verdict
+	}, verdict, pageVerdict
+}
+
+// claimsVerdict is the verdict of a set of claims: INVALID if any fails,
+// INCOMPLETE if any is not a clean pass, else VALID.
+func claimsVerdict(claims []aacbundle.ClaimResult) string {
+	verdict := "VALID"
+	for _, r := range claims {
+		if r.Status == "fail" {
+			return "INVALID"
+		}
+		if r.Status != "pass" || len(r.Findings) != 0 {
+			verdict = "INCOMPLETE"
+		}
+	}
+	return verdict
 }
 
 // verdictClaim folds a member bundle's verdict into the containing verdict.

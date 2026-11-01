@@ -642,8 +642,8 @@ func bundleCommands() []*cobra.Command {
 			} else if value, err = AssembleBundle(c.Context(), target.Artifacts, target.Log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
 				return err
 			}
-			// The page's verdict, before anything is put on record. A refused
-			// page is never written. disclose then stops, so no disclosure
+			// The page's verdict (PageGate), before anything is put on record. A
+			// refused page is never written. disclose then stops, so no disclosure
 			// goes on record without its page; bundle still writes the JSON
 			// (verify --bundle states its verdict) and exits with the refusal.
 			var pageErr error

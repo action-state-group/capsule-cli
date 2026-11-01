@@ -1,0 +1,1166 @@
+{
+  "bundle_version": "2",
+  "bundle_kind": "evidence-bundle/v2",
+  "root": "f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e",
+  "records": [
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "capsule_id": "a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/capsule-emit-mesh-integration/6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+      "action_type": "decide",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "m",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "agent_input_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+          "agent_output_digest": "bdf9843613f412a31071754f75ea5cb2a8e990317f0351a15e57c0d17e4d091d",
+          "runtime": {
+            "name": "capsule-emit-mesh/mesh-llm-host-runtime",
+            "runtime_digest": "5ad95354ffd9816d898329d9ef6f711460ebb6d44c3a5a053275c6262d34e39e",
+            "measurement_class": "os_measured",
+            "platform_integrity": {
+              "sip_enabled": true,
+              "source": {
+                "sip_enabled": "os_reported"
+              }
+            }
+          },
+          "attestation_refs": [],
+          "invocation": {
+            "requested_model_id": "m",
+            "resolved_model_id": "m",
+            "source": {
+              "requested_model_id": "self_reported",
+              "resolved_model_id": "self_reported"
+            }
+          },
+          "epistemic_type": "producer_claim",
+          "x-mesh-poc-v1": {
+            "client_nonce": "nonce-1",
+            "client_nonce_source": "client_supplied",
+            "model_name_digest": "62c66a7a5dd70c3146618063c344e531e6d4b59e379808443ce962b3abd63c5a",
+            "serving_provenance": {
+              "served_by_node_id": "unknown",
+              "dispatch_path": null,
+              "requesting_party": "node-a",
+              "exchange_id": "e-1",
+              "quantization": "unknown",
+              "model": {
+                "architecture": null,
+                "context_length": null,
+                "parameter_size": null,
+                "layer_count": null,
+                "identity_hash": null,
+                "weights_digest": null,
+                "canonical_ref": null,
+                "revision": null
+              },
+              "hardware": {
+                "gpu": null,
+                "vram_bytes": null,
+                "device": null,
+                "is_soc": null
+              },
+              "usage": null,
+              "seq": 1,
+              "prev_seq": null,
+              "peer_capsule_id": null,
+              "peer_capsule_id_provenance": null
+            },
+            "role": "served",
+            "observation_point": null,
+            "generation_parameters": {},
+            "latency_ms": "100.000",
+            "evidence_refs": {
+              "statistical_fingerprint": {
+                "type": "statistical_fingerprint",
+                "digest": null,
+                "context": null
+              },
+              "tee_attestation": {
+                "type": "tee_attestation",
+                "measurement_class": null,
+                "digest": null,
+                "context": "no TEE quote measured (no TDX hardware on this host, or the producer leg has not run here); recorded absent, never fabricated"
+              },
+              "binary_attestation": {
+                "type": "binary_attestation",
+                "measurement_class": "os_measured",
+                "digest": "5ad95354ffd9816d898329d9ef6f711460ebb6d44c3a5a053275c6262d34e39e",
+                "digest_alg": "sha256",
+                "binary_path": "capsules-b8b2065d4d29f859",
+                "binary_size_bytes": 90179432,
+                "signature": "3368b652631b44cf3ae7398905c5f85f7035b4b80f9984a5609616a2a4947ed352edf2fcde41690027fb9840832a55d3d3ca287dc582a2bff73f09241c63c50b",
+                "signature_algorithm": "ed25519",
+                "signer_key_id": "e422786c03dca23b",
+                "measured_at": "2026-10-31T22:51:00Z",
+                "code_directory_hash": "549262de0a8a8c2c2587e69b9962a9ac83852b33",
+                "cdhash_source": "csops(CS_OPS_CDHASH)",
+                "kernel_valid": true,
+                "kernel_signed": true,
+                "platform_binary": false,
+                "ad_hoc_signature": true,
+                "signing_authority": "unknown_local_or_ad_hoc",
+                "sip_enabled": true,
+                "context": "os_measured: the KERNEL (AMFI) reported this process's code-directory hash (cdhash) at exec time via csops(2) CS_OPS_CDHASH — an independent measurer beneath the process, so a compromised process cannot repoint this hash at a decoy file the way self-measurement can; the signature also binds this cdhash to the self-measured digest, so tampering with either after signing breaks verification. Trustworthy only up to: SIP enabled, a NON-ROOT attacker (root can disable SIP / bypass AMFI), and this binary's signing strength — signing_authority=unknown_local_or_ad_hoc, ad-hoc signed (no Developer-ID / notarization / library validation). Does NOT prove hardware-rooted measurement: no TEE and no hardware register are involved, so this is NOT tee_measured. A root attacker with SIP disabled is the named residual, closed only by tee_measured (out of scope here)."
+              }
+            }
+          },
+          "store_nonce": "60edd1e959b5069d70fa3d13c8d9294ee14549f57df9be150645a82f174d6d93"
+        }
+      },
+      "effect": {
+        "status": "confirmed",
+        "type": "inference_completion",
+        "effect_attestation": "gate_executed",
+        "request_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+        "response_digest": "bdf9843613f412a31071754f75ea5cb2a8e990317f0351a15e57c0d17e4d091d"
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "confirmed",
+        "ledger_mode": "standalone"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca05820a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336584088d4e25bd1967d4fcf741684d94b206777fa729534770a41d9f7e10c0ea8496d429294abdb82beea947a7313fd454a25b6136b5c0cff0415c42cedb6802d3200",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "capsule_id": "bc3489d0094f491c0658a3459cd85e148701a4f8ed7afadd000ab3d3e2bc3b2b",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/capsule-emit-mesh-integration/6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+      "action_type": "decide",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "m",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "agent_input_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+          "agent_output_digest": "bdf9843613f412a31071754f75ea5cb2a8e990317f0351a15e57c0d17e4d091d",
+          "runtime": {
+            "name": "capsule-emit-mesh/mesh-llm-host-runtime",
+            "runtime_digest": "5ad95354ffd9816d898329d9ef6f711460ebb6d44c3a5a053275c6262d34e39e",
+            "measurement_class": "os_measured",
+            "platform_integrity": {
+              "sip_enabled": true,
+              "source": {
+                "sip_enabled": "os_reported"
+              }
+            }
+          },
+          "attestation_refs": [],
+          "invocation": {
+            "requested_model_id": "m",
+            "resolved_model_id": "m",
+            "source": {
+              "requested_model_id": "self_reported",
+              "resolved_model_id": "self_reported"
+            }
+          },
+          "epistemic_type": "producer_claim",
+          "x-mesh-poc-v1": {
+            "client_nonce": "nonce-1",
+            "client_nonce_source": "client_supplied",
+            "model_name_digest": "62c66a7a5dd70c3146618063c344e531e6d4b59e379808443ce962b3abd63c5a",
+            "serving_provenance": {
+              "served_by_node_id": "unknown",
+              "dispatch_path": null,
+              "requesting_party": "node-b",
+              "exchange_id": "e-1",
+              "quantization": "unknown",
+              "model": {
+                "architecture": null,
+                "context_length": null,
+                "parameter_size": null,
+                "layer_count": null,
+                "identity_hash": null,
+                "weights_digest": null,
+                "canonical_ref": null,
+                "revision": null
+              },
+              "hardware": {
+                "gpu": null,
+                "vram_bytes": null,
+                "device": null,
+                "is_soc": null
+              },
+              "usage": null,
+              "seq": 1,
+              "prev_seq": null,
+              "peer_capsule_id": null,
+              "peer_capsule_id_provenance": null
+            },
+            "role": "served",
+            "observation_point": null,
+            "generation_parameters": {},
+            "latency_ms": "100.000",
+            "evidence_refs": {
+              "statistical_fingerprint": {
+                "type": "statistical_fingerprint",
+                "digest": null,
+                "context": null
+              },
+              "tee_attestation": {
+                "type": "tee_attestation",
+                "measurement_class": null,
+                "digest": null,
+                "context": "no TEE quote measured (no TDX hardware on this host, or the producer leg has not run here); recorded absent, never fabricated"
+              },
+              "binary_attestation": {
+                "type": "binary_attestation",
+                "measurement_class": "os_measured",
+                "digest": "5ad95354ffd9816d898329d9ef6f711460ebb6d44c3a5a053275c6262d34e39e",
+                "digest_alg": "sha256",
+                "binary_path": "capsules-b8b2065d4d29f859",
+                "binary_size_bytes": 90179432,
+                "signature": "3368b652631b44cf3ae7398905c5f85f7035b4b80f9984a5609616a2a4947ed352edf2fcde41690027fb9840832a55d3d3ca287dc582a2bff73f09241c63c50b",
+                "signature_algorithm": "ed25519",
+                "signer_key_id": "e422786c03dca23b",
+                "measured_at": "2026-10-31T22:51:00Z",
+                "code_directory_hash": "549262de0a8a8c2c2587e69b9962a9ac83852b33",
+                "cdhash_source": "csops(CS_OPS_CDHASH)",
+                "kernel_valid": true,
+                "kernel_signed": true,
+                "platform_binary": false,
+                "ad_hoc_signature": true,
+                "signing_authority": "unknown_local_or_ad_hoc",
+                "sip_enabled": true,
+                "context": "os_measured: the KERNEL (AMFI) reported this process's code-directory hash (cdhash) at exec time via csops(2) CS_OPS_CDHASH — an independent measurer beneath the process, so a compromised process cannot repoint this hash at a decoy file the way self-measurement can; the signature also binds this cdhash to the self-measured digest, so tampering with either after signing breaks verification. Trustworthy only up to: SIP enabled, a NON-ROOT attacker (root can disable SIP / bypass AMFI), and this binary's signing strength — signing_authority=unknown_local_or_ad_hoc, ad-hoc signed (no Developer-ID / notarization / library validation). Does NOT prove hardware-rooted measurement: no TEE and no hardware register are involved, so this is NOT tee_measured. A root attacker with SIP disabled is the named residual, closed only by tee_measured (out of scope here)."
+              }
+            }
+          },
+          "store_nonce": "75799a33ffdd1d8008f65a7af561f848877cf359594ccac77379e71fc121c967"
+        }
+      },
+      "effect": {
+        "status": "confirmed",
+        "type": "inference_completion",
+        "effect_attestation": "gate_executed",
+        "request_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+        "response_digest": "bdf9843613f412a31071754f75ea5cb2a8e990317f0351a15e57c0d17e4d091d"
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "confirmed",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca05820bc3489d0094f491c0658a3459cd85e148701a4f8ed7afadd000ab3d3e2bc3b2b5840d9b5a95f33128fa303a04499eaaea176a4be64ee919b6ab2be08132ecaa6bc3dc1b31da006a7eb1387f9a046f4b3692a5ce79fe711a8fef061a199be326e410a",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1/1",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-09-21T14:13:21Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "chained"
+      },
+      "chain": {
+        "parent_capsule_id": "bc3489d0094f491c0658a3459cd85e148701a4f8ed7afadd000ab3d3e2bc3b2b",
+        "relation": "follows"
+      },
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "97604c32534a79975524039f43558ed3be053cc529816388889e2fd2403797c4"
+        }
+      },
+      "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+      "capsule_id": "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7",
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca0582025261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e758400732cd481d262684c2f40263eae6ef1ae6ef3eab524b98c961b2495918d9212673158320b3d7a903591f137dc5d38fd4163895e4de451621da2a97d266272c05",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1/2",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-09-21T14:14:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "chained"
+      },
+      "chain": {
+        "parent_capsule_id": "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7",
+        "relation": "follows"
+      },
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "24f19aba5f57738c91e17fb4330639c3b44cf8b33b401caa29c4fa81ab33fc29"
+        }
+      },
+      "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+      "capsule_id": "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17",
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca0582067c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc1758408f5e927ea45ab5c5a5dbc741b9331b02b47ff8c11d58c49070aa04ad44428477db686ad204db8cf07ffb8fb43ef2e4301fc9f8061ee19af882642f662a0b200c",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1/3",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-09-21T14:14:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "chained"
+      },
+      "chain": {
+        "parent_capsule_id": "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17",
+        "relation": "follows"
+      },
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "664fddb86be90b87656b871bd1e668912f65103e55bf786a0c40a6e8c5acf848"
+        }
+      },
+      "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+      "capsule_id": "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15",
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca058206c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a155840b9a19c2d57b64bc30bdfb5cc5c5ff71cada2f9683db87a3bcfdb255e15c1be9ff6247c18af9efc4ee7a4e1f39cf59c6b44b94ead5630bbedcb87388aa50fb107",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "capsulectl-deal-report",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-09-21T14:14:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "chained"
+      },
+      "chain": {
+        "parent_capsule_id": "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15",
+        "relation": "follows"
+      },
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "33ce341a96d920832db1709140793b7b1005562c722edc66ec165eb3f0c88cd9"
+        }
+      },
+      "capsule_id": "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3",
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca058202cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc35840e213e1ce72ecd30a04e0c3d06c85281bc0e0bf1e9b66d4cb3ff2b3e839d1b22bd4b48abdfad50aeca0926dc23a42112e9bea88576c8dbad69b3681953f5de50c",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "capsule_id": "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/ask-record/169e4afb51a1ffa7f626e071d93bcf5fa69352bf04f2421124cc09b4ce62f2bb",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "n/a-ask-record",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "evidence_book_entry": {
+            "record_type": "evidence_request",
+            "epistemic_type": "observed_event",
+            "links": [],
+            "statement": {
+              "request": {
+                "subject": {
+                  "record": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+                },
+                "coverage": {
+                  "min_freshness": 1
+                },
+                "derivation": "evidence_bundle/1",
+                "audience": "peer-node-with-a-distinct-name",
+                "nonce": "n-1"
+              },
+              "responder_ref": "peer-node-with-a-distinct-name"
+            },
+            "committed_at": "2026-10-29T12:00:00Z"
+          },
+          "store_nonce": "00d6db8252d35cf2057288e99044516fa9095917cd46500435737be937409d11"
+        }
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca05820a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c58400ee97778ff03767086ec63a8ebebb4f43bf7e21b5a0f2002bbd52c585a0bf9ad6eeb6058d6fe8babf50e2511bcaf2b4c75995474b2f2784282726a169c780302",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "capsule_id": "204d3237ff15ce1317adda35a9e34f74675a3cd00754a6749c2fe7a308a8be80",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/ask-record/862d3569d1347bd6f1cab79a90e61a8e5848d0d24d9691409a24ca2fbc368fb0",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "n/a-ask-record",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "evidence_book_entry": {
+            "record_type": "recorded_absence",
+            "epistemic_type": "observed_event",
+            "links": [
+              {
+                "type": "cites",
+                "target": "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c"
+              }
+            ],
+            "statement": {
+              "outcome": "recorded_absence",
+              "request_digest": "d4f6319b9c045b86f32968dfc6adf14ce52a80d973c44bc37ea78e70680442a1",
+              "window": {
+                "opened": "2026-10-29T12:00:00Z",
+                "closed": "2026-10-29T12:01:00Z"
+              },
+              "recorded_at": "2026-10-29T12:02:00Z"
+            },
+            "committed_at": "2026-10-29T12:02:00Z"
+          },
+          "store_nonce": "cd8d88f4aa00690162e2488f47eda00224151b2ab1b65ed23858d206c85f1f0b"
+        }
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca05820204d3237ff15ce1317adda35a9e34f74675a3cd00754a6749c2fe7a308a8be8058401734e5e0b87d054cea3a4af85e7aa0848923285c207edd0e0cf8825a3fa7ef1b8e8cefaef4f3c4ece1c8750306dfa56b95087c2842939c171ae32463e6783a06",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "capsule_id": "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/ask-record/f936ca1b00362a9f9925304b311687bee30b7fe1e386ea722d228d8860e0d588",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "n/a-ask-record",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "evidence_book_entry": {
+            "record_type": "evidence_request",
+            "epistemic_type": "observed_event",
+            "links": [],
+            "statement": {
+              "request": {
+                "subject": {
+                  "record": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+                },
+                "coverage": {
+                  "min_freshness": 1
+                },
+                "derivation": "evidence_bundle/1",
+                "audience": "peer-node-with-a-distinct-name",
+                "nonce": "n-2"
+              },
+              "responder_ref": "peer-node-with-a-distinct-name"
+            },
+            "committed_at": "2026-10-29T12:00:00Z"
+          },
+          "store_nonce": "604f0bb2f9597a37c52d0695bb82d1e2a638b00e327916ce154d62c929bf7bf3"
+        }
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "204d3237ff15ce1317adda35a9e34f74675a3cd00754a6749c2fe7a308a8be80",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca058206d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f35840d40a2cc6bb1f2153dbbcf60d686df7fbedf952dd247d3a7054238558dcb3e742bd38f526c953789155d41c015e84baec70e31bb3a76fb8c0dbab37d110dbc706",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "capsule_id": "4053f9dc37594e59e49c70723abbaa0f9262e904a8523b160c2439231b50a746",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/ask-record/9146aa136672d7c6b0ff770d619bbbf6a7a68cedba3a348bfef3f508148577e4",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-10-31T22:51:00Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "n/a-ask-record",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "evidence_book_entry": {
+            "record_type": "evidence_response",
+            "epistemic_type": "observed_event",
+            "links": [
+              {
+                "type": "cites",
+                "target": "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3"
+              }
+            ],
+            "statement": {
+              "outcome": "refusal",
+              "request_digest": "fae726f20886a3bb6da2ea7cec440118e55687d9667f53bec0ab1006d45c041f",
+              "response_digest": "1ce3071870ee5eecdd90c57b7255ef58121b59881752879538a9d1b8cecdcd2b",
+              "verification": {
+                "state": "refusal",
+                "reason": "not_authorized",
+                "policy_check": {
+                  "status": "NOT_CHECKED",
+                  "why": "no commitment held for the peer"
+                }
+              }
+            },
+            "committed_at": "2026-10-29T12:02:00Z"
+          },
+          "store_nonce": "cd9fd2bc3c3f688201929cab08e96c68ba36a79ffd7bbdfa7d61eb5068916087"
+        }
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca058204053f9dc37594e59e49c70723abbaa0f9262e904a8523b160c2439231b50a74658405698d6245025f6d1c1f974e0eb186d6793357d23cca3ecb46d7a99d05e896ff221d79e5753105617b99b10bfac1730c764100c56e7c414a99dc384ef96e5c909",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_id": "capsulectl-deal-composition",
+      "action_type": "fyi",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.8",
+      "timestamp": "2026-09-21T14:15:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "chained"
+      },
+      "chain": {
+        "parent_capsule_id": "4053f9dc37594e59e49c70723abbaa0f9262e904a8523b160c2439231b50a746",
+        "relation": "follows"
+      },
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "cb503a9b850f7a7e962df9d22b6c6f3a760ea3f0e85d48df18bc8e3cb762f0d7"
+        }
+      },
+      "capsule_id": "f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e",
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458206ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bca05820f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e58406e2347bb08574bb086d87d30b9bc739b12a2486a0d2aa53782bb2820e77052891fa598af71203af16e825db507500aabd550f123a32a0f5f747b3e1bfdd02c0b",
+      "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    }
+  ],
+  "completeness": {
+    "closure_depth": 0,
+    "records_mode": "complete",
+    "payloads_mode": "selected",
+    "suppressed_fields": [],
+    "missing": []
+  },
+  "completeness_certificate": {
+    "log_id": "test-log",
+    "range_root": "fc13f953023c008a67fd499ea6f4d9a8cc9100b945edb7e0d9fd27bfbae02eae",
+    "first_seq": 1,
+    "last_seq": 11,
+    "body_digests": [
+      "a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336",
+      "bc3489d0094f491c0658a3459cd85e148701a4f8ed7afadd000ab3d3e2bc3b2b",
+      "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7",
+      "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17",
+      "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15",
+      "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3",
+      "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c",
+      "204d3237ff15ce1317adda35a9e34f74675a3cd00754a6749c2fe7a308a8be80",
+      "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3",
+      "4053f9dc37594e59e49c70723abbaa0f9262e904a8523b160c2439231b50a746",
+      "f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e"
+    ],
+    "range_proof": {
+      "from_seq": 1,
+      "to_seq": 11,
+      "size": 19,
+      "from_index": 0,
+      "to_index": 10,
+      "witness": []
+    },
+    "memberships": {
+      "a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 1,
+          "leaf_index": 0
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 0,
+          "witness": [
+            "8b1e56567c7eace1243972e600544cba37e8b183d3f3b62b0ec8e26a40f3935e",
+            "39eedc788832a62e2a592d68992fa6d3eac83770ca6465c2cf17a81483e49969",
+            "1fef93f8461d431ee3b45ccf38905557692fb391b4e8cf4683abbcf52dd4975d"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "bc3489d0094f491c0658a3459cd85e148701a4f8ed7afadd000ab3d3e2bc3b2b": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 2,
+          "leaf_index": 1
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 1,
+          "witness": [
+            "c874b02130f075a01018e0fbeda59514bd0702e4b5cbc08c6e47aebb453d473e",
+            "39eedc788832a62e2a592d68992fa6d3eac83770ca6465c2cf17a81483e49969",
+            "1fef93f8461d431ee3b45ccf38905557692fb391b4e8cf4683abbcf52dd4975d"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 3,
+          "leaf_index": 2
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 2,
+          "witness": [
+            "e23d905ec297f7b4a933b9c64d56283fa7dbbbe3fabda4c9c4267724692a8d4d",
+            "82d96e5cdf353da6896e1d7c2ea642ad8cca5586409a88e056b20f7b4a70d9c0",
+            "1fef93f8461d431ee3b45ccf38905557692fb391b4e8cf4683abbcf52dd4975d"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 4,
+          "leaf_index": 3
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 3,
+          "witness": [
+            "cb1a8e40cb96295802f6b100cf109c976c057a276a89f03b999dd8ac574c0057",
+            "82d96e5cdf353da6896e1d7c2ea642ad8cca5586409a88e056b20f7b4a70d9c0",
+            "1fef93f8461d431ee3b45ccf38905557692fb391b4e8cf4683abbcf52dd4975d"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 5,
+          "leaf_index": 4
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 4,
+          "witness": [
+            "2b52b9b48e3e3e12b2e7a1ad9ef8740c56478008b05f744cbee01a6ed9e85e08",
+            "7c3002f68624e84d49e67578cdd036f27e7f108c6b22b5c316646be300e071ba",
+            "7cf66b5dd229a067a931603d9412d6aefc4c4d0cddd84372c52fce4983de157b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 6,
+          "leaf_index": 5
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 5,
+          "witness": [
+            "3fb2298fd312ea9aa76d247f790449ce003e09a94a3ba0a5c551eb4dd3ac85d7",
+            "7c3002f68624e84d49e67578cdd036f27e7f108c6b22b5c316646be300e071ba",
+            "7cf66b5dd229a067a931603d9412d6aefc4c4d0cddd84372c52fce4983de157b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 7,
+          "leaf_index": 6
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 6,
+          "witness": [
+            "9213f50c506e1d55c6992526651a5bd7485b286fbec596237ac372e2098a162b",
+            "8bb942919c357ae139325c6011fc2ced1067b5f311cb9a5f2cc77020255f3afa",
+            "7cf66b5dd229a067a931603d9412d6aefc4c4d0cddd84372c52fce4983de157b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "204d3237ff15ce1317adda35a9e34f74675a3cd00754a6749c2fe7a308a8be80": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 8,
+          "leaf_index": 7
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 7,
+          "witness": [
+            "d836c30073ae2fb46ba010c23ccd5c3d0b45b68ade16b2ba56c59b26f8f12524",
+            "8bb942919c357ae139325c6011fc2ced1067b5f311cb9a5f2cc77020255f3afa",
+            "7cf66b5dd229a067a931603d9412d6aefc4c4d0cddd84372c52fce4983de157b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a",
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 9,
+          "leaf_index": 8
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 8,
+          "witness": [
+            "d901851c5465a1b37e86bfd29ea8de508123b4f5542694f23c73a20eb6037194"
+          ],
+          "peaks_left": [
+            "e6c0ff58bf08f2c51dabc047abeb31f48c055527d605cc560deabae9e3364cbd"
+          ],
+          "peaks_right": [
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "4053f9dc37594e59e49c70723abbaa0f9262e904a8523b160c2439231b50a746": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 10,
+          "leaf_index": 9
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 9,
+          "witness": [
+            "85a11dddd410acd7bf8426db2599f2a1a179811b5d044e86d61ec6460727a7d7"
+          ],
+          "peaks_left": [
+            "e6c0ff58bf08f2c51dabc047abeb31f48c055527d605cc560deabae9e3364cbd"
+          ],
+          "peaks_right": [
+            "68790001957d97a5c4c0d9b5777bbf0f696955ffa39f7caa564e00d483289b7e"
+          ]
+        }
+      },
+      "f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e": {
+        "log_coordinates": {
+          "log_id": "test-log",
+          "seq": 11,
+          "leaf_index": 10
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 19,
+          "leaf_index": 10,
+          "witness": [],
+          "peaks_left": [
+            "e6c0ff58bf08f2c51dabc047abeb31f48c055527d605cc560deabae9e3364cbd",
+            "73bf0fe39b32a0238a8e67ed37237b018278815f64b95ccf29a43088175afc9a"
+          ],
+          "peaks_right": []
+        }
+      }
+    }
+  },
+  "checkpoint": {
+    "log_id": "test-log",
+    "mmr_size": 19,
+    "root": "fc13f953023c008a67fd499ea6f4d9a8cc9100b945edb7e0d9fd27bfbae02eae",
+    "prev_size": 0,
+    "prev_root": "",
+    "key_id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc",
+    "timestamp": "2026-10-31T22:51:00Z",
+    "cose": "0oRYYaQBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCBu0H46m4YCgQ1aUZI7740bxSxaVpYbEdvcT6YxLwBTvA-iAWh0ZXN0LWxvZwJrdGVzdC1sb2cjMTmgWM6mZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUTaWlzc3VlZF9hdHQyMDI2LTEwLTMxVDIyOjUxOjAwWmlwcmV2X3NpemUAamNvbW1pdG1lbnRYZ4NYIObA_1i_CPLFHavAR6vrMfSMBVUn1gXMVg3quunjNky9WCBzvw_jmzKgI4qOZ-03I3sBgniBX2S5XM8ppDCIF1r8mlggaHkAAZV9l6XEwNm1d3u_D2lpVf-jn3yqVk4A1IMom35vcHJldl9jb21taXRtZW50QFhAQalmt5agGwFuUIj9hKCOILOyI673GMdIBSjNCv5PQqs9BHny2pg8dki8AtJkLujpIvV7DzupMAvnHZGpc9O-BA"
+  },
+  "disclosures": {
+    "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7": {
+      "agent_input": {
+        "body": {
+          "deal_type": "service",
+          "intent": {
+            "asked": {
+              "item": "model-x"
+            },
+            "verbatim_commitment": "b5fc13f1e670650ee32b603efb978e6d47d7d87d32df307556c5890d7be631b7"
+          },
+          "recourse": {
+            "rail": "lightning",
+            "refundable": false
+          },
+          "terms": {
+            "item": "model-x"
+          }
+        },
+        "x-deal-v0": {
+          "at": "2026-09-21T14:13:21Z",
+          "canonicalization": "jcs",
+          "channel": "org.mesh.inference",
+          "commit_alg": "sha256-jcs-nonce256",
+          "counterparty": {
+            "fp_alg": "hmac-sha256-deal-key",
+            "ids": {
+              "payee": "a4fd79499fc003fcad5e9e7b7557c497018b2fe8375aee4da0d3644018a0d47f",
+              "profile_id": "939728b30bae9c6c246992302eac1b94c344d679fde91fb686aaaa0acbe43da6"
+            }
+          },
+          "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+          "profile": "x-deal-v0",
+          "record_type": "baseline",
+          "seq": 1
+        }
+      }
+    },
+    "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3": {
+      "agent_input": {
+        "audience": "keep",
+        "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+        "nonce": "9dfc5ae36920df41130873f5f62d5235c85b18f69169aff811d0ba8aa3dd7a52",
+        "profile": "x-deal-v0",
+        "report": {
+          "asked_step": "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7",
+          "audience": "keep",
+          "did": [
+            {
+              "steps": [
+                "a808fe11abb05299676b1efff135aa42e235d9721ef6a5608d26fd611c6e3336"
+              ],
+              "text": "Asked a mesh node for model-x."
+            },
+            {
+              "steps": [
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "text": "Invoiced 1000 msat."
+            },
+            {
+              "steps": [
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              ],
+              "text": "Paid 1000 msat."
+            },
+            {
+              "steps": [
+                "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              ],
+              "text": "Received the response."
+            }
+          ],
+          "lifecycle": {
+            "as_of": "2026-09-21T14:14:00Z",
+            "later": [],
+            "state": "closed",
+            "text": "Every invoice was paid and the response was received."
+          },
+          "scope": "This node's own record of the exchange.",
+          "steps": [
+            {
+              "capsule_id": "25261cc6f31b372818d4b1899a965e92d9e80dd35808a994c1c7798722c181e7"
+            },
+            {
+              "capsule_id": "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17"
+            },
+            {
+              "capsule_id": "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15"
+            }
+          ],
+          "told": []
+        },
+        "type": "deal_report"
+      }
+    },
+    "67c4ed97e7b791b3ed85290004a8c68623f9a658c177da2aae21a1165693fc17": {
+      "agent_input": {
+        "body": {
+          "differences": [],
+          "outcome": "completed",
+          "status": "received"
+        },
+        "x-deal-v0": {
+          "at": "2026-09-21T14:14:00Z",
+          "baseline_ref": {
+            "digest": "97604c32534a79975524039f43558ed3be053cc529816388889e2fd2403797c4",
+            "digest_alg": "SHA-256",
+            "type": "deal-record"
+          },
+          "canonicalization": "jcs",
+          "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+          "prev": {
+            "digest": "97604c32534a79975524039f43558ed3be053cc529816388889e2fd2403797c4",
+            "digest_alg": "SHA-256",
+            "type": "deal-record"
+          },
+          "profile": "x-deal-v0",
+          "record_type": "outcome",
+          "seq": 2
+        }
+      }
+    },
+    "6c56d8f632d8a8034c35e0733de456d07c9b2b5dc477741fd56eeb88d0813a15": {
+      "agent_input": {
+        "body": {
+          "outcome": "completed",
+          "unchecked_actions": 0
+        },
+        "x-deal-v0": {
+          "at": "2026-09-21T14:14:00Z",
+          "baseline_ref": {
+            "digest": "97604c32534a79975524039f43558ed3be053cc529816388889e2fd2403797c4",
+            "digest_alg": "SHA-256",
+            "type": "deal-record"
+          },
+          "canonicalization": "jcs",
+          "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+          "prev": {
+            "digest": "24f19aba5f57738c91e17fb4330639c3b44cf8b33b401caa29c4fa81ab33fc29",
+            "digest_alg": "SHA-256",
+            "type": "deal-record"
+          },
+          "profile": "x-deal-v0",
+          "record_type": "close",
+          "refs": [
+            {
+              "digest": "24f19aba5f57738c91e17fb4330639c3b44cf8b33b401caa29c4fa81ab33fc29",
+              "digest_alg": "SHA-256",
+              "rel": "outcome",
+              "type": "deal-record"
+            }
+          ],
+          "seq": 3
+        }
+      }
+    },
+    "f2e44ba686e6d10654aaedc7424c8c6de6d379284953906b469df899e03c9a0e": {
+      "agent_input": {
+        "composed_digest": "bb1186e2c7cd90d6278a48a49ffe0fd86be104ed78c0026969cc912d43b0fc6f",
+        "deal_id": "deal-9a6d8dad5e0621cd606a66e54a7377f1",
+        "profile": "x-deal-v0",
+        "request_records": [
+          "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3",
+          "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c"
+        ],
+        "type": "deal_composition"
+      }
+    }
+  },
+  "extensions": {
+    "x-deal-v0": {
+      "sealed_report": "2cd740b5f188b658d04e17e0fd4fbaaab25c47119723887e4fe29e697680ccc3"
+    },
+    "producer-key/v1": {
+      "public_key": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+    },
+    "composed/v1": {
+      "members": [
+        {
+          "id": "6d8454da0e7a462a6096814dd7251d9c37954efb8c421714d2ec1a7c2b95b9f3",
+          "observer": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+          "request_digest": "fae726f20886a3bb6da2ea7cec440118e55687d9667f53bec0ab1006d45c041f",
+          "outcome": "refusal",
+          "digest": "cbf861252f1e42555f1967ea53d5a0e57826e489e601428b6da966e09d1a60e1",
+          "refusal": {
+            "issued_at": "2026-10-29T12:02:00Z",
+            "reason": "not_authorized",
+            "request_digest": "fae726f20886a3bb6da2ea7cec440118e55687d9667f53bec0ab1006d45c041f",
+            "key_id": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+            "sig": "f897a1cc13b059d23b3494aa611013139b741c97848e758056a02cd34f04e1c1137b11838f87d3198e495cfcae2376c0a54c4a8f53f09a65d0059696f8906401"
+          }
+        },
+        {
+          "id": "a9fcd021a0918ec5f144d8221b237e8107c810c9d4b90fbebf4f703c52fe992c",
+          "observer": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc",
+          "request_digest": "d4f6319b9c045b86f32968dfc6adf14ce52a80d973c44bc37ea78e70680442a1",
+          "outcome": "absence",
+          "digest": "d26fb46c7bfb9a0f103b9d8c84760f9fbb27f5f3e7a103cc0ab6a42059eb8e13",
+          "absence": {
+            "request_digest": "d4f6319b9c045b86f32968dfc6adf14ce52a80d973c44bc37ea78e70680442a1",
+            "window": {
+              "from": "2026-10-29T12:00:00Z",
+              "to": "2026-10-29T12:01:00Z"
+            }
+          }
+        }
+      ],
+      "observers": [
+        {
+          "id": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc",
+          "role": "party",
+          "custody_domain": "6ed07e3a9b8602810d5a51923bef8d1bc52c5a56961b11dbdc4fa6312f0053bc"
+        },
+        {
+          "id": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+          "role": "party",
+          "custody_domain": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618"
+        }
+      ],
+      "joins": [],
+      "composed_digest": "bb1186e2c7cd90d6278a48a49ffe0fd86be104ed78c0026969cc912d43b0fc6f"
+    }
+  }
+}

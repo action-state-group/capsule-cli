@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -208,6 +209,9 @@ func TestVerifyBundleComposedRefusalMember(t *testing.T) {
 	require.NoError(t, err)
 	refusal["signature"] = hex.EncodeToString(ed25519.Sign(private, message))
 
+	// A refusal is the observer's only when signed by its key.
+	b["observer"] = refusal["key_id"]
+	block["observers"].([]interface{})[1].(map[string]interface{})["id"] = refusal["key_id"]
 	delete(b, "bundle")
 	b["outcome"] = "refusal"
 	b["refusal"] = refusal
@@ -312,4 +316,83 @@ func TestVerifyBundleComposedProducerSelectedMember(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"status": "withheld", "findings": []interface{}{"selection_not_checkable"}}, report["interval_coverage"])
 	assert.Equal(t, "pass", status(report, "per_record_membership"))
 	assert.ErrorIs(t, err, ErrPartial, composed["findings"])
+}
+
+// sampleRefusalBundle loads testdata/composed-refusal-sample.json (the
+// caps-196 deal: a refusal member signed under the evidencebook-refusal
+// profile and an absence member, in a checkpointed bundle) with its refusal
+// edited by mutate and the member and composed digests recomputed, so only the
+// signature state differs.
+func sampleRefusalBundle(t *testing.T, mutate func(refusal map[string]interface{})) map[string]interface{} {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "composed-refusal-sample.json"))
+	require.NoError(t, err)
+	value, err := DecodeBundleJSON(raw)
+	require.NoError(t, err)
+	block := value["extensions"].(map[string]interface{})["composed/v1"].(map[string]interface{})
+	member := block["members"].([]interface{})[0].(map[string]interface{})
+	require.Equal(t, "refusal", member["outcome"])
+	refusal := member["refusal"].(map[string]interface{})
+	mutate(refusal)
+	member["digest"], err = canonical.JSONDigest(refusal)
+	require.NoError(t, err)
+	block["composed_digest"], err = aacbundle.ComposedDigest(block)
+	require.NoError(t, err)
+	return value
+}
+
+// A refusal member whose signature verifies is the observer's served answer
+// (capsule-cli#511): it stays INCOMPLETE for the verdict (Steven, u947 (3):
+// what was asked for was not served) and says served_answer, and the deal
+// page is written; an unsigned refusal draws no page, and a badly signed one
+// is INVALID.
+func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cases := map[string]struct {
+		mutate   func(map[string]interface{})
+		verdict  string
+		served   bool
+		pageable bool
+		other    func(value map[string]interface{})
+	}{
+		"verified": {func(map[string]interface{}) {}, "INCOMPLETE", true, true, nil},
+		"unsigned": {func(r map[string]interface{}) { delete(r, "key_id"); delete(r, "sig") }, "INCOMPLETE", false, false, nil},
+		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false, nil},
+		// A served refusal does not excuse another unmet claim.
+		"verified, no checkpoint": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) { delete(v, "checkpoint") }},
+		// Signed and verifying, but by a key that is not the observer's: INVALID.
+		"other key": {func(r map[string]interface{}) {
+			public, private, err := ed25519.GenerateKey(nil)
+			require.NoError(t, err)
+			message, err := canonical.JCS(map[string]interface{}{"request_digest": r["request_digest"], "reason": r["reason"], "issued_at": r["issued_at"]})
+			require.NoError(t, err)
+			r["key_id"], r["sig"] = hex.EncodeToString(public), hex.EncodeToString(ed25519.Sign(private, message))
+		}, "INVALID", false, false, nil},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			value := sampleRefusalBundle(t, c.mutate)
+			if c.other != nil {
+				c.other(value)
+			}
+			result, err := verifyBundleOutput(t, writeBundle(t, value))
+			assert.Equal(t, c.verdict, result["verdict"])
+			assert.Equal(t, c.verdict == "INVALID", errors.Is(err, ErrBundleInvalid))
+			var composed map[string]interface{}
+			for _, x := range result["extensions"].([]interface{}) {
+				if entry := x.(map[string]interface{}); entry["kind"] == "composed/v1" {
+					composed = entry["composed"].(map[string]interface{})
+				}
+			}
+			require.NotNil(t, composed)
+			member := composed["members"].([]interface{})[0].(map[string]interface{})
+			assert.Equal(t, "INCOMPLETE", member["reads_as"])
+			assert.Equal(t, c.served, member["served_answer"] == true)
+			if c.pageable {
+				assert.NoError(t, PageGate(value))
+			} else {
+				assert.Error(t, PageGate(value))
+			}
+		})
+	}
 }

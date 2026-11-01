@@ -266,18 +266,21 @@ func interopAnchorBound(response, bundle map[string]interface{}) bool {
 // carried member bundle's verdict, and INCOMPLETE for each refusal member:
 // what was asked for was not served, so capsulectl reads the composition as
 // incomplete. A refusal is still no failed claim (Bundle -01), so it alone
-// never makes the verdict INVALID. A carried response signed by a key other
+// never makes the verdict INVALID. A refusal whose signature verifies also
+// reports served_answer and is counted in the third result instead of the
+// verdicts: the caller still reads it INCOMPLETE, but PageGate draws it as a
+// refused case. A carried response signed by a key other
 // than its member's observer fails (INVALID), as does an interop response
 // whose anchor.digest is not the member bundle's checkpoint
 // (response_anchor_not_checkpoint).
-func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string) {
+func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string, int) {
 	out := map[string]any{
 		"status":   result.Status,
 		"findings": nonNilStrings(result.Findings),
 		"scope":    "composition closure covers the declared members only; it is not completeness of participation",
 	}
 	if result.Malformed {
-		return out, nil
+		return out, nil, 0
 	}
 	out["composed_digest"] = map[string]any{
 		"declared":   result.ComposedDigest.Declared,
@@ -286,6 +289,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 	}
 
 	var verdicts []string
+	served := 0
 	members := make([]map[string]any, 0, len(result.Members))
 	for _, m := range result.Members {
 		member := map[string]any{
@@ -298,7 +302,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		}
 		if m.Bundle != nil {
 			raw, _ := composedMemberBundle(container, m.ID)
-			report, verdict := assessBundle(raw, *m.Bundle, directory)
+			report, verdict, _ := assessBundle(raw, *m.Bundle, directory)
 			member["bundle"] = report
 			verdicts = append(verdicts, verdict)
 		}
@@ -321,8 +325,29 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			member["findings"] = findings
 		}
 		if m.Outcome == "refusal" {
+			// What was asked for was not served, so the member reads
+			// INCOMPLETE (Steven, u947 (3)), whatever the refusal's signature.
+			// A refusal whose signature verifies under the observer's own key
+			// is also the observer's answer: served_answer lets the deal page
+			// draw the refused case (PageGate). The signature check binds the
+			// refusal to the key it carries, so, as for a carried response,
+			// any other key fails the member (INVALID). Under the
+			// evidencebook profile key_id is outside the signed body, so the
+			// attribution rests on the composed block as carried (as every
+			// observer comparison here does), not on the signature alone;
+			// trusted keys are deployment policy and are not pinned here.
 			member["reads_as"] = "INCOMPLETE"
-			verdicts = append(verdicts, "INCOMPLETE")
+			key, _ := composedMemberRefusalKey(container, m.ID)
+			switch {
+			case m.RefusalSignature == aacbundle.RefusalSignatureVerified && key != m.Observer:
+				member["findings"] = append(nonNilStrings(m.Findings), "refusal_key_not_observer")
+				verdicts = append(verdicts, "INVALID")
+			case m.RefusalSignature == aacbundle.RefusalSignatureVerified:
+				member["served_answer"] = true
+				served++
+			default:
+				verdicts = append(verdicts, "INCOMPLETE")
+			}
 		}
 		if m.RefusalSignature != "" {
 			profile := RefusalSignatureProfile
@@ -386,12 +411,20 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		corroboration = append(corroboration, pair)
 	}
 	out["corroboration"] = corroboration
-	return out, verdicts
+	return out, verdicts, served
 }
 
 // composedMemberBundle returns the carried bundle of the member with id.
 func composedMemberBundle(container map[string]interface{}, id string) (map[string]interface{}, bool) {
 	return composedMemberBody(container, id, "bundle")
+}
+
+// composedMemberRefusalKey returns the key_id a member's carried refusal
+// names as its signer.
+func composedMemberRefusalKey(container map[string]interface{}, id string) (string, bool) {
+	refusal, _ := composedMemberRefusal(container, id)
+	key, ok := refusal["key_id"].(string)
+	return key, ok
 }
 
 // composedMemberRefusal returns the carried refusal of member id.
