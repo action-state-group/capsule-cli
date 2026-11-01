@@ -146,6 +146,15 @@ type Profile struct {
 		Jitter    string `yaml:"jitter,omitempty" mapstructure:"jitter"`
 		PadBucket uint64 `yaml:"pad_bucket,omitempty" mapstructure:"pad_bucket"`
 	} `yaml:"cadence,omitempty" mapstructure:"cadence"`
+	// Countersign names the one countersigner directory (an HTTPS URL or a
+	// file, as countersign verify --directory takes) a plugin resolves the
+	// signers of the countersignatures it keeps against, so whether a
+	// countersignature counts never depends on who asks. None: no stored
+	// countersignature resolves. Setting it is the user's (profile update
+	// --countersign-directory): no list is privileged.
+	Countersign struct {
+		Directory string `yaml:"directory,omitempty" mapstructure:"directory"`
+	} `yaml:"countersign,omitempty" mapstructure:"countersign"`
 	// Materiality names the materiality predicate (a materiality-predicate/v0
 	// document) a deal check evaluates to decide which of the agent's own
 	// picks pause, pinned by its digest (SHA-256 of its JCS bytes): a check
@@ -599,11 +608,12 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log": "log", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id"}
+		fields := map[string]string{"type": "type", "log": "log", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id", "countersign-directory": "countersign.directory"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
 		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or the name of the plugin that keeps it (capsulectl-<name>; jsonl profiles with a log_id only). A jsonl profile with a log_id must say it. Fixed once set"
+		f.Lookup("countersign-directory").Usage = "Countersigner directory (HTTPS URL or file) used to identify who signed the countersignatures a plugin stores. Unset: those countersignatures show as unchecked and never count. Empty removes it"
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")
@@ -730,6 +740,22 @@ func profileCommands() *cobra.Command {
 			}
 			if e := checkWitnessConfig(p); e != nil {
 				return e
+			}
+			// Only a value given now is checked and made absolute: an update of
+			// another field leaves the stored one exactly as it is.
+			if c.Flags().Changed("countersign-directory") && p.Countersign.Directory != "" {
+				if _, e := validateDirectory(p.Countersign.Directory); e != nil {
+					return Hint(ErrInput, "--countersign-directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
+				}
+				// A file is kept by its absolute path, so the directory never
+				// depends on where a command runs from.
+				if !strings.Contains(p.Countersign.Directory, "://") {
+					abs, e := filepath.Abs(p.Countersign.Directory)
+					if e != nil {
+						return e
+					}
+					p.Countersign.Directory = abs
+				}
 			}
 			if c.Flags().Changed("materiality") {
 				path, _ := c.Flags().GetString("materiality")

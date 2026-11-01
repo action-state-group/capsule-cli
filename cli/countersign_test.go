@@ -839,3 +839,57 @@ func TestDecodeBundleJSONReadsOneObject(t *testing.T) {
 		require.Contains(t, SafeError(err), "the bundle file is not valid JSON", name)
 	}
 }
+
+// TestProfileCountersignDirectory: the profile names one countersigner
+// directory, held to the bar countersign verify --directory is; an update of
+// another field keeps it, and an empty value removes it.
+func TestProfileCountersignDirectory(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	require.NoError(t, SaveProfile(p, false))
+
+	for _, refused := range []string{"http://example.org/list.json", "https://user:pw@example.org/list.json", "https://example.org/list.json#frag"} {
+		_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--countersign-directory", refused)
+		require.ErrorIs(t, err, ErrInput, refused)
+		assert.Contains(t, SafeError(err), "--countersign-directory must be", refused)
+	}
+	stored, err := LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Empty(t, stored.Countersign.Directory, "nothing was written")
+
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--countersign-directory", "https://example.org/countersigners.json")
+	require.NoError(t, err)
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--clock-tolerance", "2m")
+	require.NoError(t, err)
+	stored, err = LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.org/countersigners.json", stored.Countersign.Directory)
+
+	// A file is kept by its absolute path, whatever directory the command
+	// ran from.
+	t.Chdir(t.TempDir())
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--countersign-directory", "countersigners.json")
+	require.NoError(t, err)
+	stored, err = LoadProfile(p.Name)
+	require.NoError(t, err)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(wd, "countersigners.json"), stored.Countersign.Directory)
+
+	// An update of another field leaves a stored value as it is, even one
+	// written by hand.
+	stored.Countersign.Directory = "by-hand.json"
+	require.NoError(t, SaveProfile(stored, true))
+	t.Chdir(t.TempDir())
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--clock-tolerance", "3m")
+	require.NoError(t, err)
+	stored, err = LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "by-hand.json", stored.Countersign.Directory)
+
+	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--countersign-directory", "")
+	require.NoError(t, err)
+	stored, err = LoadProfile(p.Name)
+	require.NoError(t, err)
+	assert.Empty(t, stored.Countersign.Directory)
+}
