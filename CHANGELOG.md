@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Added:** a profile can name one countersigner directory, `countersign.directory` (an HTTPS
+  URL or a file, checked as `countersign verify --directory` checks it; a file is stored by its
+  absolute path), set with `profile update --countersign-directory`; empty removes it. A plugin
+  that stores countersignatures resolves their signers against it, so whether one counts never
+  depends on who asks; with none set, they stay unchecked. Nothing in the core reads it yet
+  (evidencebook-deal#64).
+
 ## v0.1.0-rc30
 
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.10.0, whose page runtime
