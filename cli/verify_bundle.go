@@ -118,8 +118,10 @@ func verdictError(verdict string) error {
 // bundleVerdict is `verify --bundle`'s verdict on an Evidence Bundle (VALID,
 // INCOMPLETE or INVALID) and the result it prints, from the bundle's value
 // and an optional witness directory. A page that checks itself is written
-// only after this same verdict is VALID (pageGate), so the page can never
-// claim more than verify --bundle does about the bundle it carries.
+// only when pageVerdict (bundleAssessment) is VALID, which differs from this
+// verdict only for composed/v1 refusals served by the observer's own key (a
+// refused case the page draws), so a page claims no more than verify
+// --bundle does about the bundle it carries.
 func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (string, map[string]any) {
 	verdict, _, report := bundleAssessment(value, directory)
 	return verdict, report
@@ -129,7 +131,9 @@ func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (
 // composed/v1 refusal member whose signature verifies read as the observer's
 // served answer instead of INCOMPLETE. It is VALID exactly when the only
 // thing keeping the bundle from VALID is such refusals, which a deal page
-// draws as refused cases (PageGate); otherwise it equals verdict.
+// draws as refused cases (PageGate); otherwise it equals verdict. It reads
+// served refusals of the top-level composed block only: a composed member's
+// own bundle is assessed for its verdict alone.
 func bundleAssessment(value map[string]interface{}, directory *witness.Directory) (verdict, pageVerdict string, report map[string]any) {
 	result := aacbundle.VerifyBundleWithOptions(value, bundleOptions)
 	report, verdict, pageVerdict = assessBundle(value, result, directory)

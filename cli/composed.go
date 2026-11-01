@@ -331,7 +331,11 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			// answer: served_answer lets the deal page draw the refused case
 			// (PageGate), which an unsigned one does not.
 			member["reads_as"] = "INCOMPLETE"
-			if m.RefusalSignature == aacbundle.RefusalSignatureVerified {
+			// Only the observer's own key makes the refusal its answer: the
+			// signature check binds the refusal to the key it carries, not to
+			// the member's observer. Any other key stays an INCOMPLETE member
+			// that holds the page back.
+			if key, _ := composedMemberRefusalKey(container, m.ID); m.RefusalSignature == aacbundle.RefusalSignatureVerified && key == m.Observer {
 				member["served_answer"] = true
 				served++
 			} else {
@@ -406,6 +410,14 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 // composedMemberBundle returns the carried bundle of the member with id.
 func composedMemberBundle(container map[string]interface{}, id string) (map[string]interface{}, bool) {
 	return composedMemberBody(container, id, "bundle")
+}
+
+// composedMemberRefusalKey returns the key_id a member's carried refusal
+// names as its signer.
+func composedMemberRefusalKey(container map[string]interface{}, id string) (string, bool) {
+	refusal, _ := composedMemberRefusal(container, id)
+	key, ok := refusal["key_id"].(string)
+	return key, ok
 }
 
 // composedMemberRefusal returns the carried refusal of member id.

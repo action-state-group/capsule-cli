@@ -13,9 +13,10 @@ import (
 // is more than `verify --bundle` may say about the same bundle, and it shows
 // no rows, without failing, when the report the bundle carries cannot be
 // built. So capsulectl writes a page only when it can stand behind what the
-// page shows: the bundle is VALID by `verify --bundle`'s own verdict
-// (bundleVerdict), or INCOMPLETE only for composed/v1 refusal members whose
-// signatures verify (their refused case is what the page draws), and a report/v1 root shows every one of its rows.
+// page shows: the bundle is VALID by `verify --bundle`'s own verdict, or
+// INCOMPLETE only for composed/v1 refusal members the observer signed with its
+// own key (their refused case is what the page draws), and a report/v1 root
+// shows every one of its rows.
 
 // pageGate refuses a page for a bundle that is not VALID, or whose
 // report/v1 root would show fewer rows than it has. The bundle is judged as

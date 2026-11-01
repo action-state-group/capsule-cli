@@ -350,14 +350,28 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 		verdict  string
 		served   bool
 		pageable bool
+		other    func(value map[string]interface{})
 	}{
-		"verified": {func(map[string]interface{}) {}, "INCOMPLETE", true, true},
-		"unsigned": {func(r map[string]interface{}) { delete(r, "key_id"); delete(r, "sig") }, "INCOMPLETE", false, false},
-		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false},
+		"verified": {func(map[string]interface{}) {}, "INCOMPLETE", true, true, nil},
+		"unsigned": {func(r map[string]interface{}) { delete(r, "key_id"); delete(r, "sig") }, "INCOMPLETE", false, false, nil},
+		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false, nil},
+		// A served refusal does not excuse another unmet claim.
+		"verified, no checkpoint": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) { delete(v, "checkpoint") }},
+		// Signed and verifying, but by a key that is not the observer's.
+		"other key": {func(r map[string]interface{}) {
+			public, private, err := ed25519.GenerateKey(nil)
+			require.NoError(t, err)
+			message, err := canonical.JCS(map[string]interface{}{"request_digest": r["request_digest"], "reason": r["reason"], "issued_at": r["issued_at"]})
+			require.NoError(t, err)
+			r["key_id"], r["sig"] = hex.EncodeToString(public), hex.EncodeToString(ed25519.Sign(private, message))
+		}, "INCOMPLETE", false, false, nil},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			value := sampleRefusalBundle(t, c.mutate)
+			if c.other != nil {
+				c.other(value)
+			}
 			result, err := verifyBundleOutput(t, writeBundle(t, value))
 			assert.Equal(t, c.verdict, result["verdict"])
 			assert.Equal(t, c.verdict == "INVALID", errors.Is(err, ErrBundleInvalid))
