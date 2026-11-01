@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.1.0-rc29
+
+- **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.9.0, whose page runtime
+  carries the calibration per clause (capsule-viewer#205), the History card's witness line
+  (#206) and the red mark on a withheld claim (#207); see capsule-viewer's CHANGELOG for 0.9.0.
+  The presentation fixtures 4 and 5 stay at the v0.8.0 build; the rebuild follows from
+  evidencebook-deal.
+
 - **Fixed:** a deal page is written for a `composed/v1` bundle whose only unmet claim is a
   refusal member signed with the member observer's own key (#511). Such a member still reads
   INCOMPLETE (what was asked for was not served) and now reports `served_answer: true`;
