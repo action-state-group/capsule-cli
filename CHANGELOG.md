@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Fixed:** `verify --bundle` no longer reads a `composed/v1` refusal member whose signature
+  verifies as INCOMPLETE (#511). Such a member reports `reads_as: "VALID"` and adds nothing to
+  the verdict, so a deal whose composition carries a refused case verifies VALID and its page is
+  built. A refusal with no signature still reads INCOMPLETE; one with a bad signature or the
+  wrong key reads INVALID, as before.
+
 ## v0.1.0-rc28
 
 - **Added:** `verify --bundle` accepts an evidence-interop envelope (`evidence-interop/0`

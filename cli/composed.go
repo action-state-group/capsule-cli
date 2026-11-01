@@ -263,10 +263,10 @@ func interopAnchorBound(response, bundle map[string]interface{}) bool {
 // assessed as its own Evidence Bundle), composition closure, each join's
 // declared and derived state, and per join whether a derived agreement is
 // redundant or corroborating on declared custody. It also returns each
-// carried member bundle's verdict, and INCOMPLETE for each refusal member:
-// what was asked for was not served, so capsulectl reads the composition as
-// incomplete. A refusal is still no failed claim (Bundle -01), so it alone
-// never makes the verdict INVALID. A carried response signed by a key other
+// carried member bundle's verdict, and for each refusal member how it reads:
+// VALID when its signature verifies (the observer's served answer, which the
+// deal page draws as a refused case), INCOMPLETE when unverified, INVALID
+// when the signature fails. A carried response signed by a key other
 // than its member's observer fails (INVALID), as does an interop response
 // whose anchor.digest is not the member bundle's checkpoint
 // (response_anchor_not_checkpoint).
@@ -321,8 +321,20 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			member["findings"] = findings
 		}
 		if m.Outcome == "refusal" {
-			member["reads_as"] = "INCOMPLETE"
-			verdicts = append(verdicts, "INCOMPLETE")
+			// A refusal whose signature verifies is the observer's served
+			// answer: it reads VALID, adds nothing to the verdict, and the
+			// deal page draws the refused case. An unverified one is not shown
+			// to be the observer's, so it reads INCOMPLETE (the core also
+			// withholds the block); an invalid one fails in the core.
+			switch m.RefusalSignature {
+			case aacbundle.RefusalSignatureVerified:
+				member["reads_as"] = "VALID"
+			case aacbundle.RefusalSignatureInvalid:
+				member["reads_as"] = "INVALID"
+			default:
+				member["reads_as"] = "INCOMPLETE"
+				verdicts = append(verdicts, "INCOMPLETE")
+			}
 		}
 		if m.RefusalSignature != "" {
 			profile := RefusalSignatureProfile
