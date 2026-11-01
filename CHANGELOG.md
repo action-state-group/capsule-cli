@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc31
+
 - **Added:** a profile can name one countersigner directory, `countersign.directory` (an HTTPS
   URL or a file, checked as `countersign verify --directory` checks it; a file is stored by its
   absolute path), set with `profile update --countersign-directory`; empty removes it. A plugin
