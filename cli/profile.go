@@ -154,7 +154,7 @@ type Profile struct {
 	// --countersign-directory): no list is privileged.
 	Countersign struct {
 		Directory string `yaml:"directory,omitempty" mapstructure:"directory"`
-	} `yaml:"countersign,omitempty" mapstructure:"countersign"`
+	} `yaml:"countersign,omitempty" mapstructure:"countersign" json:",omitzero"`
 	// Materiality names the materiality predicate (a materiality-predicate/v0
 	// document) a deal check evaluates to decide which of the agent's own
 	// picks pause, pinned by its digest (SHA-256 of its JCS bytes): a check

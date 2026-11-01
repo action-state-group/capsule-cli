@@ -856,6 +856,10 @@ func TestProfileCountersignDirectory(t *testing.T) {
 	stored, err := LoadProfile(p.Name)
 	require.NoError(t, err)
 	assert.Empty(t, stored.Countersign.Directory, "nothing was written")
+	// A profile that names none shows nothing new.
+	shown, err := invoke(t, "", "profile", "show", p.Name)
+	require.NoError(t, err)
+	assert.NotContains(t, shown, "Countersign")
 
 	_, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--countersign-directory", "https://example.org/countersigners.json")
 	require.NoError(t, err)
