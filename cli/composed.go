@@ -263,21 +263,24 @@ func interopAnchorBound(response, bundle map[string]interface{}) bool {
 // assessed as its own Evidence Bundle), composition closure, each join's
 // declared and derived state, and per join whether a derived agreement is
 // redundant or corroborating on declared custody. It also returns each
-// carried member bundle's verdict, and for each refusal member how it reads:
-// VALID when its signature verifies (the observer's served answer, which the
-// deal page draws as a refused case), INCOMPLETE when unverified, INVALID
-// when the signature fails. A carried response signed by a key other
+// carried member bundle's verdict, and INCOMPLETE for each refusal member:
+// what was asked for was not served, so capsulectl reads the composition as
+// incomplete. A refusal is still no failed claim (Bundle -01), so it alone
+// never makes the verdict INVALID. A refusal whose signature verifies also
+// reports served_answer and is counted in the third result instead of the
+// verdicts: the caller still reads it INCOMPLETE, but PageGate draws it as a
+// refused case. A carried response signed by a key other
 // than its member's observer fails (INVALID), as does an interop response
 // whose anchor.digest is not the member bundle's checkpoint
 // (response_anchor_not_checkpoint).
-func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string) {
+func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string, int) {
 	out := map[string]any{
 		"status":   result.Status,
 		"findings": nonNilStrings(result.Findings),
 		"scope":    "composition closure covers the declared members only; it is not completeness of participation",
 	}
 	if result.Malformed {
-		return out, nil
+		return out, nil, 0
 	}
 	out["composed_digest"] = map[string]any{
 		"declared":   result.ComposedDigest.Declared,
@@ -286,6 +289,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 	}
 
 	var verdicts []string
+	served := 0
 	members := make([]map[string]any, 0, len(result.Members))
 	for _, m := range result.Members {
 		member := map[string]any{
@@ -298,7 +302,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		}
 		if m.Bundle != nil {
 			raw, _ := composedMemberBundle(container, m.ID)
-			report, verdict := assessBundle(raw, *m.Bundle, directory)
+			report, verdict, _ := assessBundle(raw, *m.Bundle, directory)
 			member["bundle"] = report
 			verdicts = append(verdicts, verdict)
 		}
@@ -321,18 +325,16 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			member["findings"] = findings
 		}
 		if m.Outcome == "refusal" {
-			// A refusal whose signature verifies is the observer's served
-			// answer: it reads VALID, adds nothing to the verdict, and the
-			// deal page draws the refused case. An unverified one is not shown
-			// to be the observer's, so it reads INCOMPLETE (the core also
-			// withholds the block); an invalid one fails in the core.
-			switch m.RefusalSignature {
-			case aacbundle.RefusalSignatureVerified:
-				member["reads_as"] = "VALID"
-			case aacbundle.RefusalSignatureInvalid:
-				member["reads_as"] = "INVALID"
-			default:
-				member["reads_as"] = "INCOMPLETE"
+			// What was asked for was not served, so the member reads
+			// INCOMPLETE (Steven, u947 (3)), whatever the refusal's signature.
+			// A refusal whose signature verifies is also the observer's own
+			// answer: served_answer lets the deal page draw the refused case
+			// (PageGate), which an unsigned one does not.
+			member["reads_as"] = "INCOMPLETE"
+			if m.RefusalSignature == aacbundle.RefusalSignatureVerified {
+				member["served_answer"] = true
+				served++
+			} else {
 				verdicts = append(verdicts, "INCOMPLETE")
 			}
 		}
@@ -398,7 +400,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		corroboration = append(corroboration, pair)
 	}
 	out["corroboration"] = corroboration
-	return out, verdicts
+	return out, verdicts, served
 }
 
 // composedMemberBundle returns the carried bundle of the member with id.

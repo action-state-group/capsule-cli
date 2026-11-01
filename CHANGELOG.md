@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- **Fixed:** `verify --bundle` no longer reads a `composed/v1` refusal member whose signature
-  verifies as INCOMPLETE (#511). Such a member reports `reads_as: "VALID"` and adds nothing to
-  the verdict, so a deal whose composition carries a refused case verifies VALID and its page is
-  built. A refusal with no signature still reads INCOMPLETE; one with a bad signature or the
-  wrong key reads INVALID, as before.
+- **Fixed:** a deal page is written for a `composed/v1` bundle whose only unmet claim is a
+  refusal member with a verified signature (#511). Such a member still reads INCOMPLETE (what
+  was asked for was not served) and now reports `served_answer: true`; `PageGate` (`bundle
+  --html`, `deal report --html`, `presentation build`) treats it as the observer's answer and
+  draws the refused case. A refusal with no signature still blocks the page; one with a bad
+  signature or the wrong key is INVALID, as before. `verify --bundle`'s verdict is unchanged.
 
 ## v0.1.0-rc28
 
