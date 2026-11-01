@@ -25,6 +25,7 @@
     "say.settlement.terms_only": "No payment has been reported against these terms yet.",
     "say.settlement.unjoined": "The two sides' payment reports couldn't be matched to each other.",
     "say.verify.changed": "This file was changed after it was locked.",
+    "say.verify.refused": "The other side said no to part of this, so it isn't complete. What they did send checked out.",
     "say.verify.unable": "I couldn't check this file here.",
     "say.verify.unchanged": "Checked: unchanged since it was locked."
   }

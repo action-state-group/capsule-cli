@@ -378,6 +378,16 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 			result, err := verifyBundleOutput(t, writeBundle(t, value))
 			assert.Equal(t, c.verdict, result["verdict"])
 			assert.Equal(t, c.verdict == "INVALID", errors.Is(err, ErrBundleInvalid))
+			// The say line tells a served refusal from a file that could not
+			// be checked (capsule-cli#513); another unmet claim keeps "unable".
+			say := "say.verify.unable"
+			switch {
+			case c.verdict == "INVALID":
+				say = "say.verify.changed"
+			case c.pageable:
+				say = "say.verify.refused"
+			}
+			assert.Equal(t, BuiltinWording().Entries[say], result["say"])
 			var composed map[string]interface{}
 			for _, x := range result["extensions"].([]interface{}) {
 				if entry := x.(map[string]interface{}); entry["kind"] == "composed/v1" {
