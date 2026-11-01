@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc30
+
 - **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.10.0, whose page runtime
   carries the receipt's `paymentPreimageCheck` and `readerCadenceWitness` checks
   (capsule-viewer#215); see capsule-viewer's CHANGELOG for 0.10.0. No cli test golden embeds the
