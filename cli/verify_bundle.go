@@ -95,12 +95,24 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return InputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
-	verdict, report := BundleVerdict(value, directory)
+	verdict, pageVerdict, report := bundleAssessment(value, directory)
 	if err := Output(c, report); err != nil {
 		return err
 	}
+	if verdict == "INCOMPLETE" && pageVerdict == "VALID" {
+		return errServedRefusalsOnly{}
+	}
 	return verdictError(verdict)
 }
+
+// errServedRefusalsOnly is ErrPartial for a bundle that is INCOMPLETE only
+// because composed/v1 refusal members are served answers (pageVerdict VALID,
+// capsule-cli#513): everything else checked, so the say line can tell it from
+// a file that could not be checked. It reads and exits as ErrPartial.
+type errServedRefusalsOnly struct{}
+
+func (errServedRefusalsOnly) Error() string { return ErrPartial.Error() }
+func (errServedRefusalsOnly) Unwrap() error { return ErrPartial }
 
 // verdictError is the exit for a verdict: none for VALID, ErrPartial for
 // INCOMPLETE, ErrBundleInvalid otherwise.

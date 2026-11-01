@@ -621,57 +621,21 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 }
 
 // verifyNarration is verify's report line: unchanged when every check
-// passed, unable when something could not be checked here (exit 3), and
+// passed, unable when something could not be checked here (exit 3), refused
+// when the only gap is a refusal the other side signed (also exit 3), and
 // changed when a check failed.
-func verifyNarration(c *cobra.Command, result map[string]any, err error) Narration {
+func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
 	switch {
 	case err == nil:
+	case errors.As(err, &errServedRefusalsOnly{}):
+		key = "say.verify.refused"
 	case errors.Is(err, ErrPartial):
 		key = "say.verify.unable"
-		if onlyServedRefusals(result) {
-			key = "say.verify.refused"
-		}
 	default:
 		key = "say.verify.changed"
 	}
 	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, nil)} })
-}
-
-// onlyServedRefusals reports whether a verify --bundle report is INCOMPLETE
-// only because composed/v1 members are refusals the observer signed (the
-// other side answered "no"; capsule-cli#513): the file checked, so "I
-// couldn't check" would be wrong. Any other unmet claim keeps the unable line.
-func onlyServedRefusals(result map[string]any) bool {
-	if result["verdict"] != "INCOMPLETE" {
-		return false
-	}
-	for _, name := range []string{"graph_closure", "interval_coverage", "per_record_membership", "checkpoint", "producer_signatures"} {
-		if c, ok := result[name].(map[string]any); !ok || c["status"] != "pass" {
-			return false
-		}
-	}
-	// A witness claim only counts against a bundle when it fails.
-	if w, _ := result["witnesses"].(map[string]any); w["status"] == "fail" {
-		return false
-	}
-	served := false
-	extensions, _ := result["extensions"].([]any)
-	for _, x := range extensions {
-		entry, _ := x.(map[string]any)
-		composed, ok := entry["composed"].(map[string]any)
-		if !ok {
-			continue
-		}
-		members, _ := composed["members"].([]any)
-		for _, m := range members {
-			member, _ := m.(map[string]any)
-			if member["served_answer"] == true {
-				served = true
-			}
-		}
-	}
-	return served
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with
