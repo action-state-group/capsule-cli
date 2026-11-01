@@ -209,6 +209,9 @@ func TestVerifyBundleComposedRefusalMember(t *testing.T) {
 	require.NoError(t, err)
 	refusal["signature"] = hex.EncodeToString(ed25519.Sign(private, message))
 
+	// A refusal is the observer's only when signed by its key.
+	b["observer"] = refusal["key_id"]
+	block["observers"].([]interface{})[1].(map[string]interface{})["id"] = refusal["key_id"]
 	delete(b, "bundle")
 	b["outcome"] = "refusal"
 	b["refusal"] = refusal
@@ -357,14 +360,14 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false, nil},
 		// A served refusal does not excuse another unmet claim.
 		"verified, no checkpoint": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) { delete(v, "checkpoint") }},
-		// Signed and verifying, but by a key that is not the observer's.
+		// Signed and verifying, but by a key that is not the observer's: INVALID.
 		"other key": {func(r map[string]interface{}) {
 			public, private, err := ed25519.GenerateKey(nil)
 			require.NoError(t, err)
 			message, err := canonical.JCS(map[string]interface{}{"request_digest": r["request_digest"], "reason": r["reason"], "issued_at": r["issued_at"]})
 			require.NoError(t, err)
 			r["key_id"], r["sig"] = hex.EncodeToString(public), hex.EncodeToString(ed25519.Sign(private, message))
-		}, "INCOMPLETE", false, false, nil},
+		}, "INVALID", false, false, nil},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

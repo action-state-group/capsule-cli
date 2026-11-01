@@ -327,18 +327,21 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		if m.Outcome == "refusal" {
 			// What was asked for was not served, so the member reads
 			// INCOMPLETE (Steven, u947 (3)), whatever the refusal's signature.
-			// A refusal whose signature verifies is also the observer's own
-			// answer: served_answer lets the deal page draw the refused case
-			// (PageGate), which an unsigned one does not.
+			// A refusal whose signature verifies under the observer's own key
+			// is also the observer's answer: served_answer lets the deal page
+			// draw the refused case (PageGate). The signature check binds the
+			// refusal to the key it carries, so, as for a carried response,
+			// any other key fails the member (INVALID).
 			member["reads_as"] = "INCOMPLETE"
-			// Only the observer's own key makes the refusal its answer: the
-			// signature check binds the refusal to the key it carries, not to
-			// the member's observer. Any other key stays an INCOMPLETE member
-			// that holds the page back.
-			if key, _ := composedMemberRefusalKey(container, m.ID); m.RefusalSignature == aacbundle.RefusalSignatureVerified && key == m.Observer {
+			key, _ := composedMemberRefusalKey(container, m.ID)
+			switch {
+			case m.RefusalSignature == aacbundle.RefusalSignatureVerified && key != m.Observer:
+				member["findings"] = append(nonNilStrings(m.Findings), "refusal_key_not_observer")
+				verdicts = append(verdicts, "INVALID")
+			case m.RefusalSignature == aacbundle.RefusalSignatureVerified:
 				member["served_answer"] = true
 				served++
-			} else {
+			default:
 				verdicts = append(verdicts, "INCOMPLETE")
 			}
 		}

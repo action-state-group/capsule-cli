@@ -6,8 +6,10 @@
   refusal member signed with the member observer's own key (#511). Such a member still reads
   INCOMPLETE (what was asked for was not served) and now reports `served_answer: true`;
   `PageGate` (`bundle --html`, `disclose --html`, `deal report --html`, `presentation build`)
-  treats it as the observer's answer and draws the refused case. A refusal with no signature or
-  signed by another key still blocks the page; one with a bad signature is INVALID, as before. `verify --bundle`'s verdict is unchanged.
+  treats it as the observer's answer and draws the refused case. A refusal with no signature
+  still blocks the page; one with a bad signature, or verifying under a key other than the
+  member's observer (`refusal_key_not_observer`, as `response_key_not_observer` for a response),
+  is INVALID. `verify --bundle`'s verdict for a refusal signed by the observer is unchanged. `verify --bundle`'s verdict is unchanged.
 
 ## v0.1.0-rc28
 
