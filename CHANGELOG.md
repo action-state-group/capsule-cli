@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Changed:** the capsule-viewer pin moves to `capsule-viewer/go` v0.10.0, whose page runtime
+  carries the receipt's `paymentPreimageCheck` and `readerCadenceWitness` checks
+  (capsule-viewer#215); see capsule-viewer's CHANGELOG for 0.10.0. No cli test golden embeds the
+  viewer. The presentation fixtures 4 and 5 stay at the v0.9.0 build; the rebuild follows from
+  evidencebook-deal.
+
 - **Changed:** the `4-monthly-outcome` and `5-monthly-compliance` presentation fixtures are
   rebuilt for `capsule-viewer/go` v0.9.0 with evidencebook-deal's `build-fixtures.sh`
   (evidencebook-deal v0.1.0-rc29, capsulectl-book rc29) and copied here. They carry the pages of
