@@ -331,7 +331,11 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			// is also the observer's answer: served_answer lets the deal page
 			// draw the refused case (PageGate). The signature check binds the
 			// refusal to the key it carries, so, as for a carried response,
-			// any other key fails the member (INVALID).
+			// any other key fails the member (INVALID). Under the
+			// evidencebook profile key_id is outside the signed body, so the
+			// attribution rests on the composed block as carried (as every
+			// observer comparison here does), not on the signature alone;
+			// trusted keys are deployment policy and are not pinned here.
 			member["reads_as"] = "INCOMPLETE"
 			key, _ := composedMemberRefusalKey(container, m.ID)
 			switch {

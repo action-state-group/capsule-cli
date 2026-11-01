@@ -10,6 +10,8 @@
   still blocks the page; one with a bad signature, or verifying under a key other than the
   member's observer (`refusal_key_not_observer`, as `response_key_not_observer` for a response),
   is INVALID. `verify --bundle`'s verdict for a refusal signed by the observer is unchanged.
+  Limit: an evidencebook-profile refusal's `key_id` is outside its signed body, so "the
+  observer's own key" is as carried in the composed block, not pinned to a trusted key.
 
 ## v0.1.0-rc28
 
