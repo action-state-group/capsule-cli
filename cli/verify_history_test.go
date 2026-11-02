@@ -348,7 +348,6 @@ func TestVerifyHistoryRefusesWhatIsNotAHistoryFile(t *testing.T) {
 		"not json":           []byte("not json"),
 		"an array":           []byte("[]"),
 		"duplicate member":   []byte(strings.Replace(string(good), `{"definition"`, `{"history":"x","definition"`, 1)),
-		"another history":    with(func(m map[string]any) { m["history"] = "personal_history_basic/2" }),
 		"an extra member":    with(func(m map[string]any) { m["carrier"] = "x-history-selection/v0" }),
 		"no definition":      with(func(m map[string]any) { delete(m, "definition") }),
 		"exchanges not list": with(func(m map[string]any) { m["exchanges"] = map[string]any{} }),

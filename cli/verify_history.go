@@ -93,6 +93,9 @@ type historyReport struct {
 	Mode           string                `json:"mode"`
 	ModeNote       string                `json:"mode_note"`
 	Limits         []string              `json:"limits"`
+	// AnchorWitnessed is IP v1 §6.2.2 over the receipts beside the History.
+	AnchorWitnessed *anchorWitnessedView `json:"anchor_witnessed,omitempty"`
+	anchor          string
 }
 
 // outputInOrder writes value as Output does, with its members in their
@@ -126,12 +129,19 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 	if err != nil {
 		return err
 	}
+	id, named := historyInstanceOf(raw)
+	if named && id != personalhistory.Name {
+		return verifyOtherInstance(c, id, raw, holderKeys)
+	}
 	file, err := personalhistory.ParseFile(raw)
 	if err != nil {
 		return InputError("--history is not a one-file History (" + personalhistory.Name + ", PH §8.2): " + strings.TrimPrefix(err.Error(), personalhistory.ErrInvalid.Error()+": "))
 	}
 	report, err := HistoryVerdict(file, holderKeys)
 	if err != nil {
+		return err
+	}
+	if err := addAnchorWitnessed(c, &report); err != nil {
 		return err
 	}
 	if err := outputInOrder(c, report); err != nil {
@@ -168,6 +178,7 @@ func HistoryVerdict(file personalhistory.File, holderKeys []string) (historyRepo
 		return r, err
 	}
 	asIfPinned.Verdict = "NOT_ACCEPTED"
+	asIfPinned.anchor = r.anchor
 	for i := range asIfPinned.Exchanges {
 		asIfPinned.Exchanges[i].Accepted = false
 		asIfPinned.Exchanges[i].Properties["responder_trust"] = r.Exchanges[i].Properties["responder_trust"]
@@ -236,6 +247,9 @@ func historyEvaluate(file personalhistory.File, holderKeys []string) (historyRep
 		}
 		if x.Reply.Envelope != nil {
 			view.Responder = x.Reply.Envelope["responder"]
+			if a, ok := x.Reply.Envelope["anchor"].(map[string]any); ok && r.anchor == "" {
+				r.anchor, _ = a["digest"].(string)
+			}
 			if key, ok := view.Responder.(string); ok && !slices.Contains(r.HolderKeys, key) {
 				r.HolderKeys = append(r.HolderKeys, key)
 			}
@@ -277,4 +291,44 @@ func historyDeal(x personalhistory.ExchangeResult, states map[string]string) *hi
 		})
 	}
 	return view
+}
+
+// addAnchorWitnessed sets anchor_witnessed from the first exchange's anchor.
+func addAnchorWitnessed(c *cobra.Command, r *historyReport) error {
+	receipts, policy, err := loadWitnessInputs(c)
+	if err != nil {
+		return err
+	}
+	w := anchorWitnessed(r.anchor, receipts, policy)
+	r.AnchorWitnessed = &w
+	return nil
+}
+
+// verifyOtherInstance is `verify --history` for a file naming an instance
+// other than personal_history_basic/1.
+func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []string) error {
+	inst, known := historyInstances[id]
+	var r frameReport
+	switch {
+	case !known:
+		r = notEvaluable(id, "unknown History instance")
+	case inst.pending != "":
+		r = notEvaluable(id, "no Go reader yet; waits on "+inst.pending)
+	default:
+		var err error
+		if r, err = verifyStandardHistory(c, raw, holderKeys); err != nil {
+			return err
+		}
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(c.OutOrStdout(), "{\"spec_version\":\"capsule-cli-result/v1\",%s\n", data[1:]); err != nil {
+		return err
+	}
+	if r.Verdict == "ACCEPTED" {
+		return nil
+	}
+	return ErrHistoryNotAccepted
 }
