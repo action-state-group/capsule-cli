@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Changelog fragments
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fragments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every fragment in changelog.d is well formed
+        run: python3 .github/changelog_fragments.py check
+      - name: The fold script's own tests
+        run: python3 -m unittest -v test_changelog_fragments
+        working-directory: .github

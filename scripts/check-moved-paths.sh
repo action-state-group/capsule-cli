@@ -20,13 +20,13 @@ done
 # "://", such as https://host/api/plugins/cmd/x) and an absolute path (a word
 # starting with "/", such as an agent host's /path/to/skills/deal/SKILL.md)
 # are not; vendored files and history, which name other repositories' paths,
-# are skipped.
+# are skipped, as are the changelog.d/ fragments that are folded into CHANGELOG.md.
 moved='(skills/deal/|plugins/(cmd|internal|scripts)/)'
 # git grep exits 1 when nothing matches and 128 on an error: only the first
 # is a clean result.
 status=0
 hits=$(git grep -nE "$moved" -- \
-  ':!plugins/' ':!skills/deal/' ':!CHANGELOG.md' ':!docs/design/' \
+  ':!plugins/' ':!skills/deal/' ':!CHANGELOG.md' ':!changelog.d/' ':!docs/design/' \
   ':!cli/testdata/presentation/*/page.html' \
   ':!scripts/check-moved-paths.sh' ':!cli/check_scripts_test.go') || status=$?
 if [ "$status" -gt 1 ]; then
