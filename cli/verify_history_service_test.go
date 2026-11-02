@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -233,6 +234,18 @@ func TestVerifyHistoryServiceReportsWhyAndSnakeCase(t *testing.T) {
 		assert.Contains(t, got["findings"], "envelope responder_trust FAIL")
 		detail, ok := got["detail"].(map[string]any)
 		require.True(t, ok, got)
+		assert.Regexp(t, "^[0-9a-f]{64}$", detail["definition_digest"])
+		keys := func(m any) []string {
+			var out []string
+			for k := range m.(map[string]any) {
+				out = append(out, k)
+			}
+			sort.Strings(out)
+			return out
+		}
+		// The key set is pinned: an AAC field rename shows here, not silently.
+		assert.Equal(t, []string{"declared_kind", "properties", "relative_to"}, keys(detail["coverage"]))
+		assert.Equal(t, []string{"checkpoints", "receipts_counted", "receipts_not_counted"}, keys(detail["witness"]))
 		for key := range detail["coverage"].(map[string]any) {
 			assert.Equal(t, strings.ToLower(key), key, "snake_case member names")
 			assert.NotContains(t, key, "A", "no Go field names")

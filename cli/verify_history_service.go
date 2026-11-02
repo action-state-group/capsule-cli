@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 	"github.com/action-state-group/agent-action-capsule/go/inferencehistory"
 	"github.com/action-state-group/agent-action-capsule/go/personalhistoryoutcome"
@@ -107,6 +108,18 @@ func verifyInferenceHistory(c *cobra.Command, raw []byte, holderKeys []string) (
 		}
 	} else {
 		r.Detail = snakeKeys(map[string]any{"coverage": res.Coverage, "witness": res.Witness, "exchanges": res.Exchanges}).(map[string]any)
+		// The definition is the file's, not the reader's: nothing ties it to the
+		// one the reader holds, so its digest is shown to compare.
+		var plain any
+		dec := json.NewDecoder(bytes.NewReader(f.Definition))
+		dec.UseNumber()
+		if dec.Decode(&plain) == nil {
+			if digest, err := canonical.JSONDigest(plain); err == nil {
+				r.Detail["definition_digest"] = digest
+			} else {
+				r.Findings = append(r.Findings, "the definition has no JCS digest: "+err.Error())
+			}
+		}
 		r.Findings = append(r.Findings, notPassing("envelope", r.Envelope)...)
 		r.Findings = append(r.Findings, notPassing("history", res.Properties)...)
 		if !res.Accepted && len(r.Findings) == 0 {
