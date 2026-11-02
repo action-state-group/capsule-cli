@@ -63,12 +63,7 @@ func TestAnchorWitnessedRunsTheAnchorWitnessVectors(t *testing.T) {
 				receipts = append(receipts, b)
 			}
 			got := anchorWitnessed(tc.Anchor, receipts, policy)
-			want := tc.Expected.Status
-			if want == witness.AnchorNotPresent {
-				// No receipt is NOT_CHECKED here, never PASS (#523).
-				want = witness.AnchorNotChecked
-			}
-			assert.Equal(t, want, got.Status)
+			assert.Equal(t, tc.Expected.Status, got.Status)
 		})
 	}
 }
@@ -92,7 +87,7 @@ func TestVerifyHistoryNamesTheInstanceItCannotEvaluate(t *testing.T) {
 	}
 }
 
-func TestVerifyHistoryReportsAnchorWitnessedNotCheckedWithoutAReceipt(t *testing.T) {
+func TestVerifyHistoryReportsAnchorWitnessedNotPresentWithoutAReceipt(t *testing.T) {
 	c, path := positiveHistory(t)
 	out, err := invoke(t, "", "verify", "--history", path, "--holder-key", c.Pins.TrustPolicy.ResponderKeys[0])
 	require.NoError(t, err, out)
@@ -102,7 +97,7 @@ func TestVerifyHistoryReportsAnchorWitnessedNotCheckedWithoutAReceipt(t *testing
 		} `json:"anchor_witnessed"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
-	assert.Equal(t, "NOT_CHECKED", got.AnchorWitnessed.Status)
+	assert.Equal(t, "NOT_PRESENT", got.AnchorWitnessed.Status)
 }
 
 // signedStandardAnswer builds a served standard_history/1 answer for card,
@@ -180,7 +175,7 @@ func TestVerifyHistoryServedStandardHistory(t *testing.T) {
 				} `json:"anchor_witnessed"`
 			}
 			require.NoError(t, json.Unmarshal([]byte(out), &got), out)
-			assert.Equal(t, "NOT_CHECKED", got.Anchor.Status, id)
+			assert.Equal(t, "NOT_PRESENT", got.Anchor.Status, id)
 			if id == "person-3-months" {
 				require.NoError(t, err, out)
 				assert.Equal(t, "ACCEPTED", got.Verdict)

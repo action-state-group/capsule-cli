@@ -312,6 +312,11 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 	switch {
 	case !known:
 		r = notEvaluable(id, "unknown History instance")
+	case inst.staple:
+		var err error
+		if r, err = verifyStaple(c, raw); err != nil {
+			return err
+		}
 	case inst.pending != "":
 		r = notEvaluable(id, "no Go reader yet; waits on "+inst.pending)
 	default:

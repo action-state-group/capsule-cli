@@ -21,12 +21,18 @@ type historyInstance struct {
 	// pending names the AAC reader the instance waits for, empty when the
 	// instance is evaluable here.
 	pending string
+	// staple marks a stapled history_card/1 (verify_history_staple.go).
+	staple bool
 }
 
 var historyInstances = map[string]historyInstance{
-	"personal_history_basic/1":    {id: "personal_history_basic/1"},
-	"standard_history/1":          {id: "standard_history/1"},
-	"personal_history_outcome/1":  {id: "personal_history_outcome/1", pending: "agent-action-capsule#555"},
+	"personal_history_basic/1":   {id: "personal_history_basic/1"},
+	"standard_history/1":         {id: "standard_history/1"},
+	"personal_history_outcome/1": {id: "personal_history_outcome/1", pending: "agent-action-capsule#555"},
+	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
+	// 71efdf5a): the reader is chosen by the file's own id.
+	stapleCommitment:              {id: stapleCommitment, staple: true},
+	stapleCard:                    {id: stapleCard, staple: true},
 	"inference-service-history/0": {id: "inference-service-history/0", pending: "agent-action-capsule#555"},
 }
 
@@ -50,7 +56,7 @@ func historyInstanceOf(raw []byte) (string, bool) {
 }
 
 // anchorWitnessedView is `anchor_witnessed` as a report member: the status
-// (PASS, FAIL or NOT_CHECKED) and, when receipts were given, AAC's per-
+// (one of IP v1 §7.1's five values) and, when receipts were given, AAC's per-
 // receipt report.
 type anchorWitnessedView struct {
 	Status        string                        `json:"status"`
@@ -86,17 +92,15 @@ func loadWitnessInputs(c *cobra.Command) ([][]byte, witness.AnchorWitnessPolicy,
 }
 
 // anchorWitnessed is IP v1 §6.2.2 over the receipts beside the card. With
-// no receipt there is nothing to check: NOT_CHECKED, never PASS.
+// no receipt there is nothing to check: NOT_PRESENT (§6.2.2 step 2), never
+// PASS. No witness list is built in: an empty policy gives NOT_CHECKED, as
+// IP leaves the choice of witnesses to the relying party.
 func anchorWitnessed(anchor string, receipts [][]byte, policy witness.AnchorWitnessPolicy) anchorWitnessedView {
 	if len(receipts) == 0 {
-		return anchorWitnessedView{Status: witness.AnchorNotChecked, Reason: "no --receipt was given"}
+		return anchorWitnessedView{Status: witness.AnchorNotPresent, Reason: "no --receipt was given"}
 	}
 	r := witness.CheckAnchorWitnessed(anchor, receipts, policy)
-	status := r.Status
-	if status == witness.AnchorNotPresent {
-		status = witness.AnchorNotChecked
-	}
-	return anchorWitnessedView{Status: status, Witness: r.Witness, WitnessedTime: r.WitnessedTime, Receipts: r.Receipts}
+	return anchorWitnessedView{Status: r.Status, Witness: r.Witness, WitnessedTime: r.WitnessedTime, Receipts: r.Receipts}
 }
 
 // frameReport is `verify --history` for an instance other than the Basic
@@ -111,6 +115,7 @@ type frameReport struct {
 	Responder       any                  `json:"responder,omitempty"`
 	AnchorWitnessed *anchorWitnessedView `json:"anchor_witnessed,omitempty"`
 	Findings        []string             `json:"findings"`
+	Staples         []stapleRow          `json:"staples,omitempty"`
 	NotRun          []string             `json:"not_run,omitempty"`
 }
 
