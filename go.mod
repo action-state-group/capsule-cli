@@ -3,7 +3,7 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/agent-action-capsule/go v0.18.0
+	github.com/action-state-group/agent-action-capsule/go v0.19.0
 	github.com/action-state-group/capsule-emit/go v0.3.0
 	github.com/action-state-group/capsule-viewer/go v0.10.0
 	github.com/action-state-group/checkpointed-local-log/go v0.3.0

@@ -451,6 +451,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			return InputError("give one of --capsule, --bundle and --history")
 		case len(holderKeys) > 0 && historyPath == "":
 			return InputError("--holder-key goes with --history")
+		case historyPath == "" && (c.Flags().Changed("receipt") || c.Flags().Changed("anchor-witness-policy") || c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key")):
+			return InputError("--receipt, --anchor-witness-policy, --counterparty-key and --checkpoint-key go with --history")
 		case historyPath != "" && c.Flags().Changed("witness-directory"):
 			return InputError("--witness-directory goes with --bundle; a History carries no witness receipt to check")
 		}
@@ -520,8 +522,12 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output")
 	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
-	verify.Flags().String("history", "", "A one-file History (personal_history_basic/1, the profile's §8.2 form): its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's evidence-interop/0 verifier")
+	verify.Flags().String("history", "", "A History file: a one-file personal_history_basic/1 (the profile's §8.2 form), a served standard_history/1 answer {history, request, reply}, or a stapled history_card/1 (an evidence-commitment/1 or a {history: \"history_card/1\", request, reply} file), chosen by its own id; its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's verifier")
 	verify.Flags().StringArray("holder-key", nil, "With --history: a holder key you accept, as 64 lowercase hex characters, obtained from the holder by another channel (repeat for each); without one no History is accepted")
+	verify.Flags().StringArray("receipt", nil, "With --history: a witness receipt (a COSE Receipt file) over the History's anchor, beside the card (repeat for each); with none, anchor_witnessed is NOT_PRESENT")
+	verify.Flags().String("counterparty-key", "", "With --history on a stapled history_card/1 (a commitment or a {history, request, reply} file): the key you hold for the staple's sender, as 64 lowercase hex characters, from the deal or request you hold, never from the staple; without it the sender is not checked and the staple is not ACCEPTED")
+	verify.Flags().StringArray("checkpoint-key", nil, "With --history on a stapled history_card/1: a log key you accept for the card's checkpoints, as 64 lowercase hex characters (repeat for each); the checkpoint key need not be the sender's; without one the checkpoint key is not checked and the staple is not ACCEPTED")
+	verify.Flags().String("anchor-witness-policy", "", "With --history and --receipt: the witness policy you accept, JSON {\"witnesses\":[{\"name\",\"keys\":[hex DER SubjectPublicKeyInfo]}]}; without it no receipt can pass")
 	root.AddCommand(NarrateByOutcome(verify, verifyNarration))
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := Selected(c)
