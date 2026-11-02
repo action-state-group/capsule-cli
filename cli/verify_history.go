@@ -139,6 +139,9 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 	case staple && len(holderKeys) > 0:
 		return InputError("--holder-key goes with a History; a stapled card takes --counterparty-key")
 	}
+	if err := serviceFlagsFit(c, id, named); err != nil {
+		return err
+	}
 	if named && id != personalhistory.Name {
 		return verifyOtherInstance(c, id, raw, holderKeys)
 	}
@@ -321,13 +324,16 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 	switch {
 	case !known:
 		r = notEvaluable(id, "unknown History instance")
+	case inst.reader != nil:
+		var err error
+		if r, err = inst.reader(c, raw, holderKeys); err != nil {
+			return err
+		}
 	case inst.staple:
 		var err error
 		if r, err = verifyStaple(c, raw); err != nil {
 			return err
 		}
-	case inst.pending != "":
-		r = notEvaluable(id, "no Go reader yet; waits on "+inst.pending)
 	default:
 		var err error
 		if r, err = verifyStandardHistory(c, raw, holderKeys); err != nil {
@@ -341,4 +347,24 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 		return nil
 	}
 	return ErrHistoryNotAccepted
+}
+
+// serviceFlagsFit refuses the keys and policy of one instance given with
+// a file of another: the reader would believe a key was checked.
+func serviceFlagsFit(c *cobra.Command, id string, named bool) error {
+	for _, name := range []string{"log-key", "witness-key", "peer-key"} {
+		if c.Flags().Changed(name) && !(named && id == inferenceInstance) {
+			return InputError("--" + name + " goes with an inference-service-history/0 file")
+		}
+		keys, _ := c.Flags().GetStringArray(name)
+		for _, k := range keys {
+			if !evidencerequest.IsDigest(k) {
+				return InputError("--" + name + " is a raw Ed25519 public key as 64 lowercase hex characters")
+			}
+		}
+	}
+	if c.Flags().Changed("outcome-policy") && !(named && id == outcomeInstance) {
+		return InputError("--outcome-policy goes with a personal_history_outcome/1 file")
+	}
+	return nil
 }
