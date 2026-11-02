@@ -17,22 +17,21 @@ import (
 // frame-v0.md §6.1). It is read from the file's `history` member, never
 // guessed from its shape.
 type historyInstance struct {
-	// pending names the AAC reader the instance waits for, empty when the
-	// instance is evaluable here.
-	pending string
 	// staple marks a stapled history_card/1 (verify_history_staple.go).
 	staple bool
+	// reader evaluates an instance whose inputs and pins are its own flags.
+	reader func(c *cobra.Command, raw []byte, holderKeys []string) (frameReport, error)
 }
 
 var historyInstances = map[string]historyInstance{
-	"personal_history_basic/1":   {},
-	"standard_history/1":         {},
-	"personal_history_outcome/1": {pending: "agent-action-capsule#555"},
+	"personal_history_basic/1": {},
+	"standard_history/1":       {},
+	outcomeInstance:            {reader: verifyOutcomeHistory},
 	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
 	// 71efdf5a): the reader is chosen by the file's own id.
-	stapleCommitment:              {staple: true},
-	stapleCard:                    {staple: true},
-	"inference-service-history/0": {pending: "agent-action-capsule#555"},
+	stapleCommitment:  {staple: true},
+	stapleCard:        {staple: true},
+	inferenceInstance: {reader: verifyInferenceHistory},
 }
 
 // historyInstanceOf reads the instance id of a History file. It is the
@@ -115,7 +114,9 @@ type frameReport struct {
 	AnchorWitnessed *anchorWitnessedView `json:"anchor_witnessed,omitempty"`
 	Findings        []string             `json:"findings"`
 	Staples         []stapleRow          `json:"staples,omitempty"`
-	NotRun          []string             `json:"not_run,omitempty"`
+	// Detail is the instance's own report members (coverage, claims, ...).
+	Detail map[string]any `json:"detail,omitempty"`
+	NotRun []string       `json:"not_run,omitempty"`
 }
 
 // envelopeMustPass are the envelope properties a History answer needs
