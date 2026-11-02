@@ -1327,7 +1327,7 @@ itself; the checkpoint key signs the CLL checkpoint submitted to the witness.
 Public keys are not secret — they are repository *variables*, not secrets;
 only the two seeds are secrets.
 
-**Pinning the witness key.** The default `witness-endpoint` is the free public
+**Pinning the witness key.** For the GitHub Action, the default `witness-endpoint` is the free public
 instance, `https://witness.agentactioncapsule.org`. Its authority key is
 published at [`/.well-known/did.json`](https://witness.agentactioncapsule.org/.well-known/did.json)
 and its `key_id` at [`/health`](https://witness.agentactioncapsule.org/health) —

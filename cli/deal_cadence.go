@@ -31,7 +31,7 @@ import (
 const (
 	// dealCadenceDepth fixes every path at 16 hashes: up to 65535 deals.
 	DealCadenceDepth = 16
-	// The public witness a new deal profile uses unless told otherwise. Its
+	// A public witness a holder may set. No deal profile uses it unless told to. Its
 	// key ships in this binary: a user trusts it as far as they trust the
 	// release they installed.
 	DealDefaultWitness    = "https://witness.agentactioncapsule.org"
