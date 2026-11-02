@@ -261,7 +261,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	// ER §8.1: history_card/1 is the proof-carrying form of the checkpoints
 	// subject, so a staple over another subject (the Goose node asks
 	// full_history) is outside it.
-	if string(e.Subject.Kind) == "checkpoints" {
+	if e.Subject.Kind == evidencerequest.SubjectCheckpoints {
 		row.set("subject_scope", statusPass, "")
 	} else {
 		row.set("subject_scope", statusFail, "a history_card/1 answers the checkpoints subject, not "+string(e.Subject.Kind))

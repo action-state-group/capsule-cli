@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -183,16 +184,7 @@ func TestVerifyHistoryStapledCardAcceptedWithBothKeys(t *testing.T) {
 			"reply":   map[string]any{"media_type": "application/json", "octets_text": v.Reply}})
 		require.NoError(t, err)
 		path := writeHistory(t, file)
-		first := runStaple(t, path, "--counterparty-key", v.Holder)
-		key := first.Staples[0].Findings
-		_ = key
-		var logKey string
-		for _, f := range runStaple(t, path, "--counterparty-key", v.Holder, "--checkpoint-key", gooseNodeKey).Staples[0].Findings {
-			_, after, ok := cutAfter(f, "is signed by ")
-			if ok {
-				logKey = after[:64]
-			}
-		}
+		logKey := lastCheckpointKey(t, v.Reply)
 		require.NotEmpty(t, logKey, "the card's checkpoint names its signing key")
 		ok := runStaple(t, path, "--counterparty-key", v.Holder, "--checkpoint-key", logKey)
 		assert.Equal(t, "ACCEPTED", ok.Verdict, ok.raw)
@@ -204,7 +196,18 @@ func TestVerifyHistoryStapledCardAcceptedWithBothKeys(t *testing.T) {
 	t.Fatal("no history_card/1 vector")
 }
 
-func cutAfter(s, sep string) (string, string, bool) { return strings.Cut(s, sep) }
+// lastCheckpointKey is the key that signed the last checkpoint of a served
+// history_card/1 reply.
+func lastCheckpointKey(t *testing.T, reply string) string {
+	t.Helper()
+	rep, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: []byte(reply), MediaType: evidencerequest.MediaTypeJSON})
+	require.NoError(t, err)
+	statements, _, why := cardForm(rep.Envelope)
+	require.Empty(t, why)
+	signed, err := witness.ParseSignedCheckpoint(statements[len(statements)-1])
+	require.NoError(t, err)
+	return signed.KeyID
+}
 
 // One property flipped at a time on the Goose card: each is a FAIL.
 func TestVerifyHistoryStapledGooseCardTampered(t *testing.T) {
