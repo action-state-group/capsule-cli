@@ -126,8 +126,8 @@ stay until step 5 decides.
 - **Aliases.** The transitional aliases (`close`, `reconcile`, `request`,
   `respond`, `compose`, `result open`, `report`, `backfill`, `migrate`) are
   deleted in PR B. Due in v0.2.0 (`AliasRemovedIn`); PLUGINS.md says once the
-  skills, the Muse integration and the docs use the new names. README.md,
-  docs/OUTCOME-REPORT-QUICKSTART.md and docs/PR-CAPSULE-PROFILE.md still use
+  skills, the Muse integration and the docs use the new names. README.md
+  and docs/PR-CAPSULE-PROFILE.md still use
   old verbs. The PR greps skills, docs, examples and actionstate-muse first,
   moves them to the new names and updates PLUGINS.md. No install-time alias
   table.
