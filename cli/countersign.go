@@ -304,9 +304,29 @@ func getJSON(ctx context.Context, client *http.Client, target string, out any) e
 	return DecodeJSONAs("the response from "+target, raw, out)
 }
 
+// refuseReproducedBundle refuses a bundle in which any record's digested
+// header carries the `reproduction` member. A reproduced scratch book stamps
+// caller-given times (evidencebook#232, guard 2), so it can be compared but
+// never vouched; the marker sits in the digested header, so it cannot be
+// stripped without changing the record's identity.
+func refuseReproducedBundle(bundle map[string]interface{}) error {
+	records, _ := bundle["records"].([]interface{})
+	for _, raw := range records {
+		record, _ := raw.(map[string]interface{})
+		header, _ := record["evidence_record_header"].(map[string]interface{})
+		if _, marked := header["reproduction"]; marked {
+			return InputError("countersign request refuses this bundle: it comes from a reproduced scratch book (a record header carries reproduction), whose times were given by the caller")
+		}
+	}
+	return nil
+}
+
 // buildCountersignSubmission signs the bundle digest with the requester's own
 // key and assembles the request body countersign request submits.
 func buildCountersignSubmission(bundle map[string]interface{}, window, requesterID string, key ed25519.PrivateKey) (countersignSubmission, string, error) {
+	if err := refuseReproducedBundle(bundle); err != nil {
+		return countersignSubmission{}, "", err
+	}
 	digest, err := aacbundle.BundleDigest(bundle)
 	if err != nil {
 		return countersignSubmission{}, "", err

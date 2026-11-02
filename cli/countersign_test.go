@@ -172,6 +172,28 @@ func TestCountersignRequestAgainstMockService(t *testing.T) {
 	assert.Equal(t, receiptAbsent, reports[0].Receipt, "an entry without a receipt is still valid; its receipt is reported absent")
 }
 
+// TestCountersignRequestRefusesReproducedBundle: a record header carrying the
+// reproduction marker (evidencebook#232 guard 2) is refused before anything is
+// signed; the same bundle without the marker is unchanged.
+func TestCountersignRequestRefusesReproducedBundle(t *testing.T) {
+	bundle, profile, key := withheldBundleFixture(t)
+	_, _, err := buildCountersignSubmission(bundle, "30d", profile.LogID, key)
+	require.NoError(t, err)
+
+	records, ok := bundle["records"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, records)
+	record, ok := records[0].(map[string]interface{})
+	require.True(t, ok)
+	// The fixture's record carries no Evidence Record header; give it one,
+	// marked as a reproduced scratch book's records are.
+	record["evidence_record_header"] = map[string]interface{}{"reproduction": map[string]interface{}{"clock": "caller"}}
+
+	_, _, err = buildCountersignSubmission(bundle, "30d", profile.LogID, key)
+	require.ErrorContains(t, err, "reproduced scratch book")
+	assert.ErrorIs(t, err, ErrInput)
+}
+
 // TestCountersignVerifyTamperedEntryFails is the mutant-catching negative:
 // flipping a byte of the signature must flip verification to failure, not
 // silently pass.
