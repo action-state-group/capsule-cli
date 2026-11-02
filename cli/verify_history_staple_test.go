@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/witness"
@@ -31,6 +32,7 @@ type stapleOut struct {
 		Status string `json:"status"`
 	} `json:"anchor_witnessed"`
 	Staples []stapleRow `json:"staples"`
+	raw     string
 }
 
 func runStaple(t *testing.T, path string, args ...string) stapleOut {
@@ -39,6 +41,7 @@ func runStaple(t *testing.T, path string, args ...string) stapleOut {
 	var got stapleOut
 	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
 	require.NotEmpty(t, got.Staples, out)
+	got.raw = out
 	return got
 }
 
@@ -62,12 +65,13 @@ func TestVerifyHistoryStapledGooseCommitment(t *testing.T) {
 	assert.Equal(t, "NOT_ACCEPTED", got.Verdict)
 	assert.Equal(t, "NOT_PRESENT", got.AnchorWitnessed.Status)
 	p := got.Staples[0].Properties
-	for _, name := range []string{"envelope_signature", "responder_trust", "card_form", "anchor_match", "checkpoint_signature", "commitment_signature", "commitment_anchor", "card_digest"} {
+	for _, name := range []string{"envelope_signature", "responder_trust", "card_form", "checkpoint_anchor", "checkpoint_signature", "commitment_signature", "stream_match", "commitment_anchor", "card_digest"} {
 		assert.Equal(t, "PASS", p[name], name)
 	}
 	assert.Equal(t, "NOT_PRESENT", p["request_binding"])
+	assert.Equal(t, "FAIL", p["subject_scope"], "the Goose node asks full_history, not the checkpoints subject (Sherlock2's finding)")
 	assert.Equal(t, "NOT_CHECKED", p["checkpoint_key"], "no accepted log key was given")
-	assert.NotContains(t, p, "history_properties", "a history_card/1 has no History properties")
+	assert.NotContains(t, got.raw, "history_properties", "a history_card/1 has no History properties")
 
 	t.Run("no counterparty key checks nothing about the sender", func(t *testing.T) {
 		p := runStaple(t, path).Staples[0].Properties
@@ -82,12 +86,6 @@ func TestVerifyHistoryStapledGooseCommitment(t *testing.T) {
 		assert.Equal(t, "FAIL", row.Properties["commitment_signature"])
 	})
 	t.Run("the log key is the reader's, not the sender's", func(t *testing.T) {
-		var doc struct {
-			Cards []struct {
-				Bytes string `json:"bytes"`
-			} `json:"history_cards"`
-		}
-		require.NoError(t, json.Unmarshal(checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256), &doc))
 		key := checkpointKeyOf(t, path)
 		pass := runStaple(t, path, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key).Staples[0]
 		assert.Equal(t, "PASS", pass.Properties["checkpoint_key"])
@@ -149,14 +147,112 @@ func TestVerifyHistoryStapledCardRunsTheStapleVectors(t *testing.T) {
 				"request": map[string]any{"media_type": "application/json", "octets_text": v.Request},
 				"reply":   map[string]any{"media_type": "application/json", "octets_text": v.Reply}})
 			require.NoError(t, err)
-			row := runStaple(t, writeHistory(t, file), "--counterparty-key", v.Holder).Staples[0]
+			got := runStaple(t, writeHistory(t, file), "--counterparty-key", v.Holder)
+			row := got.Staples[0]
 			assert.Equal(t, "PASS", row.Properties["responder_trust"])
 			if v.Pass {
-				for _, name := range []string{"envelope_signature", "request_binding", "card_form", "anchor_match"} {
+				for _, name := range []string{"envelope_signature", "request_binding", "card_form", "checkpoint_anchor", "checkpoint_signature"} {
 					assert.Equal(t, "PASS", row.Properties[name], name)
 				}
+				return
 			}
+			assert.Equal(t, "NOT_ACCEPTED", got.Verdict)
+			assert.NotEmpty(t, row.Findings, "a negative vector names what failed")
 		})
 	}
 	assert.Positive(t, ran)
+}
+
+// With the sender's key and the log key both given, the served staple is
+// ACCEPTED; with another log key it is not.
+func TestVerifyHistoryStapledCardAcceptedWithBothKeys(t *testing.T) {
+	var vectors []struct {
+		Name    string `json:"name"`
+		Holder  string `json:"holder"`
+		Pass    bool   `json:"pass"`
+		Request string `json:"request"`
+		Reply   string `json:"reply"`
+	}
+	require.NoError(t, json.Unmarshal(checkedFile(t, "staple-v0/vectors.json", stapleVectorsSHA256), &vectors))
+	for _, v := range vectors {
+		if v.Name != "history_card/1" {
+			continue
+		}
+		file, err := json.Marshal(map[string]any{"history": "history_card/1",
+			"request": map[string]any{"media_type": "application/json", "octets_text": v.Request},
+			"reply":   map[string]any{"media_type": "application/json", "octets_text": v.Reply}})
+		require.NoError(t, err)
+		path := writeHistory(t, file)
+		first := runStaple(t, path, "--counterparty-key", v.Holder)
+		key := first.Staples[0].Findings
+		_ = key
+		var logKey string
+		for _, f := range runStaple(t, path, "--counterparty-key", v.Holder, "--checkpoint-key", gooseNodeKey).Staples[0].Findings {
+			_, after, ok := cutAfter(f, "is signed by ")
+			if ok {
+				logKey = after[:64]
+			}
+		}
+		require.NotEmpty(t, logKey, "the card's checkpoint names its signing key")
+		ok := runStaple(t, path, "--counterparty-key", v.Holder, "--checkpoint-key", logKey)
+		assert.Equal(t, "ACCEPTED", ok.Verdict, ok.raw)
+		assert.Equal(t, "PASS", ok.Staples[0].Properties["checkpoint_key"])
+		other := runStaple(t, path, "--counterparty-key", v.Holder, "--checkpoint-key", gooseNodeKey)
+		assert.Equal(t, "NOT_ACCEPTED", other.Verdict)
+		return
+	}
+	t.Fatal("no history_card/1 vector")
+}
+
+func cutAfter(s, sep string) (string, string, bool) { return strings.Cut(s, sep) }
+
+// One property flipped at a time on the Goose card: each is a FAIL.
+func TestVerifyHistoryStapledGooseCardTampered(t *testing.T) {
+	raw := checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	card := doc["history_cards"].([]any)[0].(map[string]any)
+	envBytes, err := base64.StdEncoding.DecodeString(card["bytes"].(string))
+	require.NoError(t, err)
+	reseal := func(t *testing.T, mutate func(doc, card, env map[string]any)) string {
+		t.Helper()
+		var d map[string]any
+		require.NoError(t, json.Unmarshal(raw, &d))
+		c := d["history_cards"].([]any)[0].(map[string]any)
+		var env map[string]any
+		require.NoError(t, json.Unmarshal(envBytes, &env))
+		mutate(d, c, env)
+		out, err := json.Marshal(env)
+		require.NoError(t, err)
+		c["bytes"] = base64.StdEncoding.EncodeToString(out)
+		file, err := json.Marshal(d)
+		require.NoError(t, err)
+		return writeHistory(t, file)
+	}
+	for name, tc := range map[string]struct {
+		mutate   func(doc, card, env map[string]any)
+		property string
+	}{
+		"a card digest that is not the card's": {func(_, c, _ map[string]any) { c["sha256"] = strings.Repeat("0", 64) }, "card_digest"},
+		"a stream the card is not of":          {func(_, c, _ map[string]any) { c["stream"] = "goose/other" }, "stream_match"},
+		"a commitment checkpoint that is another": {func(d, _, _ map[string]any) {
+			d["checkpoint"].(map[string]any)["bytes"] = base64.StdEncoding.EncodeToString([]byte("x"))
+		}, "commitment_anchor"},
+		"an envelope whose artifact changed": {func(_, _, e map[string]any) { e["artifact"] = base64.StdEncoding.EncodeToString([]byte("{}")) }, "envelope_signature"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := runStaple(t, reseal(t, tc.mutate), "--counterparty-key", gooseNodeKey)
+			assert.Equal(t, "NOT_ACCEPTED", got.Verdict)
+			assert.Equal(t, "FAIL", got.Staples[0].Properties[tc.property], got.raw)
+		})
+	}
+}
+
+func TestVerifyHistoryStapleFlagsGoWithAStaple(t *testing.T) {
+	path := filepath.Join("testdata", "goose-commitment-v1", "commitment.json")
+	_, err := invoke(t, "", "verify", "--history", path, "--holder-key", gooseNodeKey)
+	require.Error(t, err)
+	c, hist := positiveHistory(t)
+	_, err = invoke(t, "", "verify", "--history", hist, "--holder-key", c.Pins.TrustPolicy.ResponderKeys[0], "--counterparty-key", gooseNodeKey)
+	require.Error(t, err)
 }

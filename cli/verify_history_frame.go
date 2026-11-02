@@ -17,7 +17,6 @@ import (
 // frame-v0.md §6.1). It is read from the file's `history` member, never
 // guessed from its shape.
 type historyInstance struct {
-	id string
 	// pending names the AAC reader the instance waits for, empty when the
 	// instance is evaluable here.
 	pending string
@@ -26,14 +25,14 @@ type historyInstance struct {
 }
 
 var historyInstances = map[string]historyInstance{
-	"personal_history_basic/1":   {id: "personal_history_basic/1"},
-	"standard_history/1":         {id: "standard_history/1"},
-	"personal_history_outcome/1": {id: "personal_history_outcome/1", pending: "agent-action-capsule#555"},
+	"personal_history_basic/1":   {},
+	"standard_history/1":         {},
+	"personal_history_outcome/1": {pending: "agent-action-capsule#555"},
 	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
 	// 71efdf5a): the reader is chosen by the file's own id.
-	stapleCommitment:              {id: stapleCommitment, staple: true},
-	stapleCard:                    {id: stapleCard, staple: true},
-	"inference-service-history/0": {id: "inference-service-history/0", pending: "agent-action-capsule#555"},
+	stapleCommitment:              {staple: true},
+	stapleCard:                    {staple: true},
+	"inference-service-history/0": {pending: "agent-action-capsule#555"},
 }
 
 // historyInstanceOf reads the instance id of a History file. It is the

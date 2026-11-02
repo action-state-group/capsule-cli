@@ -101,7 +101,7 @@ type historyReport struct {
 // outputInOrder writes value as Output does, with its members in their
 // declared order rather than sorted: a History's report is read in PH
 // §6.3's order (what is not established first, the limits last).
-func outputInOrder(c *cobra.Command, value historyReport) error {
+func outputInOrder(c *cobra.Command, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -130,6 +130,15 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 		return err
 	}
 	id, named := historyInstanceOf(raw)
+	// A flag for the other kind of file is an input error, never ignored:
+	// the reader would otherwise believe a sender or log key was checked.
+	staple := named && historyInstances[id].staple
+	switch {
+	case !staple && (c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key")):
+		return InputError("--counterparty-key and --checkpoint-key go with a stapled history_card/1 (an evidence-commitment/1 or a {history, request, reply} file)")
+	case staple && len(holderKeys) > 0:
+		return InputError("--holder-key goes with a History; a stapled card takes --counterparty-key")
+	}
 	if named && id != personalhistory.Name {
 		return verifyOtherInstance(c, id, raw, holderKeys)
 	}
@@ -325,11 +334,7 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 			return err
 		}
 	}
-	data, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(c.OutOrStdout(), "{\"spec_version\":\"capsule-cli-result/v1\",%s\n", data[1:]); err != nil {
+	if err := outputInOrder(c, r); err != nil {
 		return err
 	}
 	if r.Verdict == "ACCEPTED" {
