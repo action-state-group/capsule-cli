@@ -406,3 +406,39 @@ func errorsJoinClose(err error, t *Target) error {
 	}
 	return err
 }
+
+// A calibration claim (aac #552) carries no close or reconcile body and
+// passes the schema; the type is closed-world, so another name still fails.
+func TestResultSchemaAdmitsACalibrationClaim(t *testing.T) {
+	check := func(mutate func(claim map[string]any)) error {
+		claim := resultTestClaim("claim-1", "met", strings.Repeat("a", 64))
+		mutate(claim)
+		raw, err := json.Marshal(resultTestDoc(claim))
+		require.NoError(t, err)
+		decoded, err := DecodeResult(raw)
+		require.NoError(t, err)
+		return CheckResultSchema(decoded)
+	}
+	require.NoError(t, check(func(claim map[string]any) { claim["type"] = ClaimTypeCalibration }))
+	for name, mutate := range map[string]func(map[string]any){
+		"an unknown type":  func(claim map[string]any) { claim["type"] = "calibrations" },
+		"a close body":     func(claim map[string]any) { claim["type"], claim["close"] = ClaimTypeCalibration, map[string]any{} },
+		"a reconcile body": func(claim map[string]any) { claim["type"], claim["reconcile"] = ClaimTypeCalibration, map[string]any{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := check(mutate)
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
+}
+
+// aac 09c8b86's calibration vector (vectors/evidence-result, copied to
+// testdata/evidence-result) passes the schema.
+func TestResultSchemaAdmitsTheCalibrationVector(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", "pos-example-org-calibration-result.json"))
+	require.NoError(t, err)
+	doc, err := DecodeResult(raw)
+	require.NoError(t, err)
+	require.NoError(t, CheckResultSchema(doc))
+}

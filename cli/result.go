@@ -45,13 +45,16 @@ import (
 // coverage_declaration (aac #312), and a claim's evidence[]
 // holding at least one record (aac #353), plus one later hunk: the optional
 // document members plan_ref and dataset_ref, which appear together or not
-// at all (spec section 7.3, aac #443 at 8c673d1, for evidencebook#107). Only
-// that hunk is taken from 8c673d1. The rules aac added between the two
+// at all (spec section 7.3, aac #443 at 8c673d1, for evidencebook#107), and
+// the claim type `calibration` (aac #552 at 09c8b86: the ClaimType enum and
+// the descriptions that name it; its evidence-citation rule is a checker rule
+// the schema does not carry). Only those hunks are taken from 8c673d1 and
+// 09c8b86. The rules aac added between the two
 // commits (#363, #368, #402, #436: coverage per evaluation, out_of_scope and
 // applicability, requirements_covered, ECMA-262 patterns) are deliberately
 // not vendored: they need cross-checks this gate does not have, and arrive
 // with aac's own gate (capsule-cli#473). testdata/evidence-result holds
-// 8c673d1's vectors for the hunk. The pinned aac Go module does
+// the vectors for those hunks. The pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's
@@ -65,13 +68,14 @@ const (
 	ResultVersion  = "evidence-result-v0"
 	resultSchemaID = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
-	ResultSchemaDigest = "f34d146909ae9dd4a36e10ebf5dcc1b5b6ce4b58e7f97f9a763bcaa37e43d4da"
+	ResultSchemaDigest = "8609129ba6892f3be375f35233fee5763aa9469cc063928d3c4ec5131bdd77f6"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref and main@09c8b8668b59affa1e0e26275b5a4c1d1b4a849f's calibration claim type (aac #552)"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"
 	ClaimTypeClose       = "close"
+	ClaimTypeCalibration = "calibration"
 
 	// resultActionID and resultDeveloper name the Capsule `result build`
 	// seals; its operator is the profile's.
