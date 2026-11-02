@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Changed:** `countersign request` refuses a bundle in which any record's
+  `evidence_record_header` carries the `reproduction` member, which marks a reproduced scratch
+  book whose times the caller gave (evidencebook#232 guard 2). It is an input error;
+  `countersign verify` is unchanged (#525).
+
 ## v0.1.0-rc31
 
 - **Added:** a profile can name one countersigner directory, `countersign.directory` (an HTTPS
