@@ -43,7 +43,7 @@ const (
 // request_binding is NOT_PRESENT for a commitment, which staples the reply
 // octets only, so a commitment is never ACCEPTED (Sherlock2's finding on the
 // Goose staple): it reports what it can and says why.
-var stapleMustPass = []string{"envelope_signature", "responder_trust", "request_binding", "card_form", "subject_scope", "checkpoint_anchor", "checkpoint_signature", "checkpoint_key"}
+var stapleMustPass = []string{"envelope_signature", "responder_trust", "request_binding", "card_form", "subject_scope", "checkpoint_anchor", "checkpoint_signature", "checkpoint_key", "checkpoint_consistency"}
 
 // stapleRow is one stapled card's checks.
 type stapleRow struct {
@@ -70,7 +70,6 @@ func stapleKeys(c *cobra.Command) (counterparty string, checkpointKeys []string,
 // verifyStaple reads a stapled history_card/1 file.
 func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 	r := frameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
-		"the checkpoints' consistency proofs are not recomputed",
 		"the staple's nonce and freshness (min_freshness) are the reader's policy",
 		"no History property and no count: a history_card/1 carries neither",
 	}}
@@ -256,7 +255,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 			// agrees or this row already says FAIL.
 		}
 	}
-	checkpoints, stream, form := cardForm(e)
+	checkpoints, proofs, stream, form := cardForm(e)
 	row.stream = stream
 	// ER §8.1: history_card/1 is the proof-carrying form of the checkpoints
 	// subject, so a staple over another subject (the Goose node asks
@@ -271,7 +270,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	} else {
 		row.set("card_form", statusPass, "")
 	}
-	checkpointChecks(&row, e.Anchor.Digest, checkpoints, ckKeys)
+	checkpointChecks(&row, e.Anchor.Digest, checkpoints, proofs, ckKeys)
 	return row
 }
 
@@ -281,14 +280,14 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 // and the consistency proof from the one before (null for the first). It
 // returns the checkpoint statements, the card's stream and a reason when
 // the form is wrong.
-func cardForm(e *evidencerequest.Envelope) ([][]byte, string, string) {
+func cardForm(e *evidencerequest.Envelope) ([][]byte, [][]byte, string, string) {
 	if e.Derivation != stapleCard {
-		return nil, "", "the envelope's derivation is " + e.Derivation + ", not " + stapleCard
+		return nil, nil, "", "the envelope's derivation is " + e.Derivation + ", not " + stapleCard
 	}
 	decoded, err := evidencerequest.DecodeJSON(e.Artifact)
 	card, ok := decoded.(map[string]any)
 	if err != nil || !ok {
-		return nil, "", "the card is not a JSON object"
+		return nil, nil, "", "the card is not a JSON object"
 	}
 	keys := make([]string, 0, len(card))
 	for k := range card {
@@ -296,46 +295,49 @@ func cardForm(e *evidencerequest.Envelope) ([][]byte, string, string) {
 	}
 	slices.Sort(keys)
 	if !slices.Equal(keys, []string{"anchor", "derivation", "evidence_stream", "history", "subject"}) {
-		return nil, "", "the card has members other than the card's"
+		return nil, nil, "", "the card has members other than the card's"
 	}
 	subject, _ := card["subject"].(map[string]any)
 	if len(subject) != 1 || !reflect.DeepEqual(subject, e.Subject.Value()) {
-		return nil, "", "the card's subject is not the envelope's"
+		return nil, nil, "", "the card's subject is not the envelope's"
 	}
 	stream, _ := card["evidence_stream"].(string)
 	if card["derivation"] != stapleCard || card["anchor"] != e.Anchor.Digest || stream == "" {
-		return nil, "", "the card does not name its derivation, anchor and stream"
+		return nil, nil, "", "the card does not name its derivation, anchor and stream"
 	}
 	history, _ := card["history"].([]any)
 	if len(history) == 0 {
-		return nil, "", "the card has no history"
+		return nil, nil, "", "the card has no history"
 	}
-	var statements [][]byte
+	var statements, proofs [][]byte
 	for i, item := range history {
 		entry, _ := item.(map[string]any)
 		checkpoint, _ := entry["checkpoint"].(string)
 		proof, isText := entry["consistency_from_previous"].(string)
 		statement, derr := hex.DecodeString(checkpoint)
 		if len(entry) != 2 || derr != nil || checkpoint == "" || strings.ToLower(checkpoint) != checkpoint || (i == 0) != (entry["consistency_from_previous"] == nil) || (i > 0 && !isText) {
-			return nil, "", fmt.Sprintf("history entry %d is not a hex checkpoint with its consistency proof", i)
+			return nil, nil, "", fmt.Sprintf("history entry %d is not a hex checkpoint with its consistency proof", i)
 		}
-		if _, err := hex.DecodeString(proof); err != nil || strings.ToLower(proof) != proof {
-			return nil, "", fmt.Sprintf("history entry %d's consistency proof is not hex", i)
+		raw, err := hex.DecodeString(proof)
+		if err != nil || strings.ToLower(proof) != proof {
+			return nil, nil, "", fmt.Sprintf("history entry %d's consistency proof is not hex", i)
 		}
 		statements = append(statements, statement)
+		proofs = append(proofs, raw)
 	}
-	return statements, stream, ""
+	return statements, proofs, stream, ""
 }
 
 // checkpointChecks is IP v1 §6.2.1 for the card's checkpoints: the last is
 // the envelope's anchor, each is signed by the key it names, and that key
 // is one the reader accepts. The log key need not be the responder's, so
 // it is never compared with the counterparty key (IP §6.2.1).
-func checkpointChecks(row *cardRow, anchor string, statements [][]byte, accepted []string) {
+func checkpointChecks(row *cardRow, anchor string, statements, proofs [][]byte, accepted []string) {
 	if len(statements) == 0 {
 		row.set("checkpoint_anchor", statusNotChecked, "")
 		row.set("checkpoint_signature", statusNotChecked, "")
 		row.set("checkpoint_key", statusNotChecked, "")
+		row.set("checkpoint_consistency", statusNotChecked, "")
 		return
 	}
 	if sum := sha256.Sum256(statements[len(statements)-1]); hex.EncodeToString(sum[:]) != anchor {
@@ -347,9 +349,13 @@ func checkpointChecks(row *cardRow, anchor string, statements [][]byte, accepted
 	if len(accepted) == 0 {
 		key = statusNotChecked
 	}
+	parsed := make([]witness.SignedCheckpoint, len(statements))
+	readable := true
 	for i, s := range statements {
 		signed, err := witness.ParseSignedCheckpoint(s)
+		parsed[i] = signed
 		if err != nil {
+			readable = false
 			signature = statusFail
 			row.Findings = append(row.Findings, fmt.Sprintf("checkpoint_signature FAIL: checkpoint %d: %v", i, err))
 			continue
@@ -361,6 +367,20 @@ func checkpointChecks(row *cardRow, anchor string, statements [][]byte, accepted
 	}
 	row.set("checkpoint_signature", signature, "")
 	row.set("checkpoint_key", key, "")
+	// ER §8.1: the card is a chain, each checkpoint extending the one before,
+	// which is all a D0 card claims. Unrelated checkpoints, each signed by an
+	// accepted key, are not a history.
+	if !readable {
+		row.set("checkpoint_consistency", statusNotChecked, "")
+		return
+	}
+	row.set("checkpoint_consistency", statusPass, "")
+	for i := 1; i < len(parsed); i++ {
+		if why := chainFailure(parsed[i-1], parsed[i], statements[i-1], statements[i], proofs[i]); why != "" {
+			row.set("checkpoint_consistency", statusFail, fmt.Sprintf("checkpoint %d: %s", i, why))
+			break
+		}
+	}
 }
 
 // commitmentChecks is the commitment's own signature: the sender's key_id

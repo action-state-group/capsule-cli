@@ -7,7 +7,7 @@
   never `PASS`.
 - **Added:** a stapled `history_card/1`, in an `evidence-commitment/1` or a `{history, request, reply}`
   file, is read as that derivation, not as a History instance: the envelope, the card's form, its
-  checkpoints and `anchor_witnessed`, with no History property and no count. The sender is checked
+  checkpoints (each signed, the last the anchor, and each extending the one before by its consistency proof) and `anchor_witnessed`, with no History property and no count. The sender is checked
   against `--counterparty-key`, which you hold and never read from the staple, and the log key against
   `--checkpoint-key`; a staple under another key reports `FAIL`. A commitment staples the reply octets
   only, so its `request_binding` is `NOT_PRESENT` and it is not `ACCEPTED`.

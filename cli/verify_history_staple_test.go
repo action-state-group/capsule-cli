@@ -202,7 +202,7 @@ func lastCheckpointKey(t *testing.T, reply string) string {
 	t.Helper()
 	rep, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: []byte(reply), MediaType: evidencerequest.MediaTypeJSON})
 	require.NoError(t, err)
-	statements, _, why := cardForm(rep.Envelope)
+	statements, _, _, why := cardForm(rep.Envelope)
 	require.Empty(t, why)
 	signed, err := witness.ParseSignedCheckpoint(statements[len(statements)-1])
 	require.NoError(t, err)
@@ -258,4 +258,37 @@ func TestVerifyHistoryStapleFlagsGoWithAStaple(t *testing.T) {
 	c, hist := positiveHistory(t)
 	_, err = invoke(t, "", "verify", "--history", hist, "--holder-key", c.Pins.TrustPolicy.ResponderKeys[0], "--counterparty-key", gooseNodeKey)
 	require.Error(t, err)
+}
+
+// The card's checkpoints must form one chain: the consistency proof of
+// entry 1 proves entry 0 extends to it, and any break is a failure.
+func TestChainFailureOnTheStapleVectorCard(t *testing.T) {
+	var vectors []struct {
+		Name  string `json:"name"`
+		Reply string `json:"reply"`
+	}
+	require.NoError(t, json.Unmarshal(checkedFile(t, "staple-v0/vectors.json", stapleVectorsSHA256), &vectors))
+	for _, v := range vectors {
+		if v.Name != "history_card/1" {
+			continue
+		}
+		rep, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: []byte(v.Reply), MediaType: evidencerequest.MediaTypeJSON})
+		require.NoError(t, err)
+		statements, proofs, _, why := cardForm(rep.Envelope)
+		require.Empty(t, why)
+		require.GreaterOrEqual(t, len(statements), 2)
+		prev, err := witness.ParseSignedCheckpoint(statements[0])
+		require.NoError(t, err)
+		next, err := witness.ParseSignedCheckpoint(statements[1])
+		require.NoError(t, err)
+		assert.Empty(t, chainFailure(prev, next, statements[0], statements[1], proofs[1]))
+
+		bad := append([]byte(nil), proofs[1]...)
+		bad[len(bad)-1] ^= 1
+		assert.NotEmpty(t, chainFailure(prev, next, statements[0], statements[1], bad), "a flipped proof byte")
+		assert.NotEmpty(t, chainFailure(next, prev, statements[1], statements[0], proofs[1]), "checkpoints out of order")
+		assert.NotEmpty(t, chainFailure(prev, prev, statements[0], statements[0], proofs[1]), "a checkpoint does not extend itself")
+		return
+	}
+	t.Fatal("no history_card/1 vector")
 }
