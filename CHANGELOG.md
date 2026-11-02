@@ -7,6 +7,11 @@
   book whose times the caller gave (evidencebook#232 guard 2). It is an input error;
   `countersign verify` is unchanged (#525).
 
+- **Changed:** the README no longer says a deal profile is witnessed by default. A card from a
+  default profile reads signed, not witnessed, because the default names no SCRAPI Transparency
+  Service; a holder who sets `checkpoint.endpoint` to a `scrapi+https://` service gets witnessed
+  cards (Steven's ruling on #519, 2026-11-01). Wording only; no behavior changes.
+
 ## v0.1.0-rc31
 
 - **Added:** a profile can name one countersigner directory, `countersign.directory` (an HTTPS

@@ -425,8 +425,11 @@ unresolved signer, and the command exits partial (3).
 `deal` seals a deal's baseline and, when the host calls it, checks each point
 of no return (pay, commit, sign, share) against it. The check is advisory: it
 holds an action only where the host runs it from a pre-action hook. A deal
-profile is witnessed by default on a fixed schedule, its checkpoint cadence:
-one checkpoint of hashes per tick, at the profile's `cadence.interval` (the
+profile checkpoints on a fixed schedule, its checkpoint cadence, but a card from a
+default profile reads signed, not witnessed: the default profile names no Transparency
+Service, so no witness Receipt covers the card's anchor. A holder who sets
+`checkpoint.endpoint` to a `scrapi+https://` Transparency Service gets witnessed cards. A
+cadence tick is one checkpoint of hashes, at the profile's `cadence.interval` (the
 deal plugin sets its default; see [Witness cadence](https://github.com/action-state-group/evidencebook-deal/blob/main/skills/deal/README.md#witness-cadence)
 in the deal skill), whether or not anything happened, never on activity.
 `cll checkpoint cadence --wait-up-to D`, scheduled every D (D is a duration
