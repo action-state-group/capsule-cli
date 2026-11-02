@@ -49,12 +49,12 @@ import (
 // the claim type `calibration` (aac #552 at 09c8b86: the ClaimType enum and
 // the descriptions that name it; its evidence-citation rule is a checker rule
 // the schema does not carry). Only those hunks are taken from 8c673d1 and
-// 09c8b86. The rules aac added between the two
-// commits (#363, #368, #402, #436: coverage per evaluation, out_of_scope and
+// 09c8b86. The rules aac added after 4b24505
+// (#363, #368, #402, #436, and the out_of_scope clause of #552: coverage per evaluation, out_of_scope and
 // applicability, requirements_covered, ECMA-262 patterns) are deliberately
 // not vendored: they need cross-checks this gate does not have, and arrive
 // with aac's own gate (capsule-cli#473). testdata/evidence-result holds
-// the vectors for those hunks. The pinned aac Go module does
+// the vectors for those hunks (the calibration ones that need the checker's records are not copied). The pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's

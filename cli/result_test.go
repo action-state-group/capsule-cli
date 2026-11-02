@@ -433,12 +433,26 @@ func TestResultSchemaAdmitsACalibrationClaim(t *testing.T) {
 	}
 }
 
-// aac 09c8b86's calibration vector (vectors/evidence-result, copied to
-// testdata/evidence-result) passes the schema.
-func TestResultSchemaAdmitsTheCalibrationVector(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", "pos-example-org-calibration-result.json"))
-	require.NoError(t, err)
-	doc, err := DecodeResult(raw)
-	require.NoError(t, err)
-	require.NoError(t, CheckResultSchema(doc))
+// aac 09c8b86's schema-level calibration vectors (vectors/evidence-result,
+// copied to testdata/evidence-result): the positive passes the schema, the
+// negative with a close body fails it.
+func TestResultSchemaRunsTheCalibrationVectors(t *testing.T) {
+	for name, valid := range map[string]bool{
+		"pos-example-org-calibration-result.json": true,
+		"neg-calibration-with-close-body.json":    false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", name))
+			require.NoError(t, err)
+			doc, err := DecodeResult(raw)
+			require.NoError(t, err)
+			err = CheckResultSchema(doc)
+			if valid {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
 }
