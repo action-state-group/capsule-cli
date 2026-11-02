@@ -55,6 +55,8 @@ func TestCheckMovedPaths(t *testing.T) {
 		"docs/b.md": "fetched from https://example.test/api/plugins/cmd/demo\n",
 		"docs/c.md": "the agent host's copy: /path/to/the/agent/skills/deal/SKILL.md\n",
 		"Makefile":  "\tcd $(root)/plugins/cmd/capsulectl-deal\n",
+
+		"changelog.d/x.md": "- **Changed:** removed skills/deal/SKILL.md\n",
 	})
 	run := func(args ...string) (string, error) {
 		out, err := exec.Command("bash", append([]string{filepath.Join(dir, "scripts", "check-moved-paths.sh")}, args...)...).CombinedOutput()
@@ -66,6 +68,7 @@ func TestCheckMovedPaths(t *testing.T) {
 	assert.Contains(t, out, "::warning::Makefile references a moved path")
 	assert.NotContains(t, out, "docs/b.md", "a URL is not a repository path")
 	assert.NotContains(t, out, "docs/c.md", "an absolute path is not a repository path")
+	assert.NotContains(t, out, "changelog.d", "a fragment is history on its way into CHANGELOG.md")
 
 	out, err = run("--fail")
 	require.Error(t, err)

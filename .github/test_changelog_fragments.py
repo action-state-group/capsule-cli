@@ -44,6 +44,8 @@ class Fragments(unittest.TestCase):
         for name, text in {
             "empty.md": "  \n", "h2.md": "## Added\n- x\n", "missing.md": "<!-- changelog: nope.md -->\n- x\n",
             "escape.md": "<!-- changelog: ../x.md -->\n- x\n", "ext.txt": "- x\n",
+            "blank-first.md": "\n<!-- changelog: rust/CHANGELOG.md -->\n- x\n",
+            "nospace.md": "<!--changelog: rust/CHANGELOG.md-->\n- x\n",
         }.items():
             d = repo({"CHANGELOG.md": CL, f"changelog.d/{name}": text})
             self.assertEqual(cf.check(d), 1, name)

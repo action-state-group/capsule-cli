@@ -21,6 +21,7 @@ import sys
 DIR = "changelog.d"
 DEFAULT_TARGET = "CHANGELOG.md"
 TARGET = re.compile(r"\A<!-- changelog: (\S+) -->[ \t]*(?:\n|\Z)")
+STRAY_TARGET = re.compile(r"<!--\s*changelog\s*:")
 UNRELEASED = re.compile(r"^## Unreleased[ \t]*$", re.M)
 H2 = re.compile(r"^## ", re.M)
 
@@ -40,6 +41,9 @@ def parse(path, base):
         target = m.group(1)
         text = text[m.end():]
     body = text.strip()
+    if STRAY_TARGET.search(body):
+        errors.append("has a `<!-- changelog: ... -->` comment that is not exactly the first line; "
+                      "it would not select a changelog")
     if not body:
         errors.append("is empty")
     if H2.search(body):
