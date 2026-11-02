@@ -47,7 +47,9 @@ B. **CI on `main` is green.** In particular, these jobs block a release:
      bundle.
 
    `quality`, `test` and `seal-pr-capsule` must be green too.
-C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tagged commit, move
+C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tagged commit, first
+   run `python3 .github/changelog_fragments.py fold` (it appends the pending `changelog.d/`
+   fragments to `## Unreleased` and deletes them), then move
    everything under `## Unreleased` under a new `## v0.1.0-rcNN` heading. Leave `## Unreleased`
    empty. A version shipped without this leaves its changes under Unreleased. Then the release
    state has to be rebuilt from the tags (`git log v0.1.0-rcPREV..v0.1.0-rcNN`).

@@ -10,5 +10,8 @@ This repository will contain a CLI wrapper over emit, artifact storage, and CLL.
   ownership. Never access production databases from tests.
 - Use testify assert/require in tests. Keep application-specific one-off migration
   tools and fixtures outside this repository.
+- Do not edit `CHANGELOG.md` in a pull request: add a fragment `changelog.d/<short-name>.md`
+  holding the entry for `## Unreleased` (see `changelog.d/README.md`), so parallel pull
+  requests never conflict there.
 - Before an authorized commit, format, tidy modules, run tests and vet. Use DCO
   sign-off and conventional commit messages. Never commit secrets or local plans.

@@ -5,6 +5,12 @@ CI checks formatting, module files, vet, the build, and the suite under the
 race detector (slow single-goroutine case loops sampled), then every case
 without it; see "Tests" and "Continuous integration" in the README.
 
+## Changelog
+
+Do not edit `CHANGELOG.md` in a pull request. Add a fragment `changelog.d/<short-name>.md`
+holding the entry for `## Unreleased` (a `- **Changed:** ...` bullet, as the changelog writes
+them). CI checks its format; the release folds it in. See `changelog.d/README.md`.
+
 ## Running the tests the way CI does
 
 ```bash
