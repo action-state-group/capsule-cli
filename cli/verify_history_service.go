@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 	"github.com/action-state-group/agent-action-capsule/go/inferencehistory"
@@ -95,7 +100,19 @@ func verifyInferenceHistory(c *cobra.Command, raw []byte, holderKeys []string) (
 	}
 	r.Properties = res.Properties
 	r.Envelope = envelopeStatuses(res.Exchange.Reply)
-	r.Detail = map[string]any{"coverage": res.Coverage, "witness": res.Witness, "exchanges": res.Exchanges}
+	if res.Exchange.Reply == nil || res.Exchange.Reply.MessageType != "envelope" {
+		r.Reason = "the reply is not an envelope"
+		if res.Exchange.Reason != nil {
+			r.Reason += fmt.Sprintf(" (a refusal: %v)", res.Exchange.Reason)
+		}
+	} else {
+		r.Detail = snakeKeys(map[string]any{"coverage": res.Coverage, "witness": res.Witness, "exchanges": res.Exchanges}).(map[string]any)
+		r.Findings = append(r.Findings, notPassing("envelope", r.Envelope)...)
+		r.Findings = append(r.Findings, notPassing("history", res.Properties)...)
+		if !res.Accepted && len(r.Findings) == 0 {
+			r.Findings = append(r.Findings, "the exchange is not accepted under the interop profile")
+		}
+	}
 	r.Verdict = acceptedVerdict(res.Accepted)
 	return r, nil
 }
@@ -167,8 +184,15 @@ func verifyOutcomeHistory(c *cobra.Command, raw []byte, holderKeys []string) (fr
 		if err != nil {
 			return r, InputError("--outcome-policy: " + err.Error())
 		}
-		if err := json.Unmarshal(b, &policy); err != nil {
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&policy); err != nil {
 			return r, InputError("--outcome-policy is not {predicate_table, outcome_roles, outcome_requirements}: " + err.Error())
+		}
+		for _, k := range append(append([]string{}, policy.Roles.Counterparty...), policy.Roles.Judge...) {
+			if !evidencerequest.IsDigest(k) {
+				return r, InputError("--outcome-policy outcome_roles are raw Ed25519 public keys as 64 lowercase hex characters")
+			}
 		}
 		if len(policy.PredicateTable) > 0 {
 			if table, err = evidencerequest.DecodeJSON(policy.PredicateTable); err != nil {
@@ -193,7 +217,17 @@ func verifyOutcomeHistory(c *cobra.Command, raw []byte, holderKeys []string) (fr
 		return r, err
 	}
 	r.Properties = res.Properties
-	r.Detail = map[string]any{"claims": res.Claims, "requirements": res.Requirements, "deal_commitment_opening": res.Openings}
+	exchanges := make([]map[string]any, len(res.Exchanges))
+	for i, x := range res.Exchanges {
+		statuses := envelopeStatuses(x.Reply)
+		exchanges[i] = map[string]any{"accepted": x.Accepted, "envelope_properties": statuses}
+		r.Findings = append(r.Findings, notPassing("exchange "+strconv.Itoa(i), statuses)...)
+		if !x.Accepted && len(statuses) == 0 {
+			r.Findings = append(r.Findings, "exchange "+strconv.Itoa(i)+" is not accepted")
+		}
+	}
+	r.Findings = append(r.Findings, notPassing("history", res.Properties)...)
+	r.Detail = snakeKeys(map[string]any{"exchanges": exchanges, "claims": res.Claims, "requirements": res.Requirements, "deal_commitment_opening": res.Openings}).(map[string]any)
 	r.Verdict = acceptedVerdict(res.Accepted)
 	return r, nil
 }
@@ -215,4 +249,55 @@ func envelopeStatuses(r *evidencerequest.ReplyResult) map[string]string {
 		out[p.Property] = p.Status
 	}
 	return out
+}
+
+// notPassing is one finding per property that is not PASS, in name order.
+// NOT_CHECKED is a finding too: it is what the reader could not establish.
+func notPassing(scope string, statuses map[string]string) []string {
+	var names []string
+	for name, status := range statuses {
+		if status != evidencerequest.StatusPass {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	out := make([]string, len(names))
+	for i, name := range names {
+		out[i] = scope + " " + name + " " + statuses[name]
+	}
+	return out
+}
+
+var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+
+// snakeKeys round-trips a report fragment through JSON and writes its
+// member names snake_case, as the rest of capsule-cli-result/v1 does: AAC's
+// result structs carry no json tags and their Go field names are not our
+// contract.
+func snakeKeys(v any) any {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	var out any
+	if json.Unmarshal(data, &out) != nil {
+		return v
+	}
+	return snake(out)
+}
+
+func snake(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[strings.ToLower(camelBoundary.ReplaceAllString(k, "${1}_${2}"))] = snake(e)
+		}
+		return out
+	case []any:
+		for i := range x {
+			x[i] = snake(x[i])
+		}
+	}
+	return v
 }

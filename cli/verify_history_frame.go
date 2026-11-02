@@ -25,7 +25,7 @@ type historyInstance struct {
 
 var historyInstances = map[string]historyInstance{
 	"personal_history_basic/1": {},
-	"standard_history/1":       {reader: nil},
+	"standard_history/1":       {},
 	outcomeInstance:            {reader: verifyOutcomeHistory},
 	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
 	// 71efdf5a): the reader is chosen by the file's own id.

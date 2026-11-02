@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -175,6 +176,79 @@ func TestVerifyHistoryServiceFlagsGoWithTheirOwnFile(t *testing.T) {
 			data, err := json.Marshal(map[string]any{"history": tc.history})
 			require.NoError(t, err)
 			_, err = invoke(t, "", append([]string{"verify", "--history", writeHistory(t, data)}, tc.args...)...)
+			require.Error(t, err)
+			assert.NotErrorIs(t, err, ErrHistoryNotAccepted)
+		})
+	}
+}
+
+// A refusal and a rejected exchange say why, and the report's members are
+// snake_case (AAC's result structs have no json tags).
+func TestVerifyHistoryServiceReportsWhyAndSnakeCase(t *testing.T) {
+	var inference struct {
+		Cases []struct {
+			ID   string `json:"id"`
+			Pins struct {
+				TrustPolicy struct {
+					ResponderKeys []string `json:"responder_keys"`
+				} `json:"trust_policy"`
+			} `json:"pins"`
+			Inputs map[string]any `json:"inputs"`
+		} `json:"cases"`
+	}
+	raw, err := os.ReadFile(filepath.Join("testdata", "inference-service-history-v0", "vectors.json"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &inference))
+	run := func(t *testing.T, id string, withKey bool) map[string]any {
+		for _, tc := range inference.Cases {
+			if tc.ID != id {
+				continue
+			}
+			tc.Inputs["history"] = inferenceInstance
+			data, err := json.Marshal(tc.Inputs)
+			require.NoError(t, err)
+			args := []string{"verify", "--history", writeHistory(t, data)}
+			if withKey {
+				for _, k := range tc.Pins.TrustPolicy.ResponderKeys {
+					args = append(args, "--holder-key", k)
+				}
+			}
+			out, _ := invoke(t, "", args...)
+			var got map[string]any
+			require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+			return got
+		}
+		t.Fatalf("no case %s", id)
+		return nil
+	}
+	t.Run("a refusal", func(t *testing.T) {
+		got := run(t, "refused-range-interval", true)
+		assert.Equal(t, "NOT_ACCEPTED", got["verdict"])
+		assert.Contains(t, got["reason"], "not an envelope")
+		assert.NotContains(t, got, "detail", "no zero-value coverage for a refusal")
+	})
+	t.Run("an answer from an unaccepted responder", func(t *testing.T) {
+		got := run(t, "standard-served-only", false)
+		assert.Equal(t, "NOT_ACCEPTED", got["verdict"])
+		assert.Contains(t, got["findings"], "envelope responder_trust FAIL")
+		detail, ok := got["detail"].(map[string]any)
+		require.True(t, ok, got)
+		for key := range detail["coverage"].(map[string]any) {
+			assert.Equal(t, strings.ToLower(key), key, "snake_case member names")
+			assert.NotContains(t, key, "A", "no Go field names")
+		}
+	})
+}
+
+func TestVerifyHistoryOutcomePolicyIsStrict(t *testing.T) {
+	file, err := json.Marshal(map[string]any{"history": outcomeInstance, "definition": map[string]any{}})
+	require.NoError(t, err)
+	for name, policy := range map[string]string{
+		"a misspelled member":   `{"roles":{}}`,
+		"an uppercase role key": `{"outcome_roles":{"judge":["` + strings.Repeat("A", 64) + `"]}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := invoke(t, "", "verify", "--history", writeHistory(t, file), "--outcome-policy", writeHistory(t, []byte(policy)))
 			require.Error(t, err)
 			assert.NotErrorIs(t, err, ErrHistoryNotAccepted)
 		})
