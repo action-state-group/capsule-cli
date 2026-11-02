@@ -3,7 +3,7 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/agent-action-capsule/go v0.19.0
+	github.com/action-state-group/agent-action-capsule/go v0.20.0
 	github.com/action-state-group/capsule-emit/go v0.3.0
 	github.com/action-state-group/capsule-viewer/go v0.10.0
 	github.com/action-state-group/checkpointed-local-log/go v0.3.0
@@ -23,7 +23,11 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.5.1 // indirect
+	github.com/btcsuite/btcd/chainhash/v2 v2.0.0 // indirect
 	github.com/datatrails/go-datatrails-merklelog/mmr v0.4.2-0.20250428132117-275103a34a08 // indirect
+	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect

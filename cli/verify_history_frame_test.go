@@ -70,10 +70,8 @@ func TestAnchorWitnessedRunsTheAnchorWitnessVectors(t *testing.T) {
 
 func TestVerifyHistoryNamesTheInstanceItCannotEvaluate(t *testing.T) {
 	for id, reason := range map[string]string{
-		"personal_history_basic/2":    "unknown History instance",
-		"made-up/9":                   "unknown History instance",
-		"inference-service-history/0": "no Go reader yet; waits on agent-action-capsule#555",
-		"personal_history_outcome/1":  "no Go reader yet; waits on agent-action-capsule#555",
+		"personal_history_basic/2": "unknown History instance",
+		"made-up/9":                "unknown History instance",
 	} {
 		data, err := json.Marshal(map[string]any{"history": id})
 		require.NoError(t, err)
