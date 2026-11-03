@@ -1382,3 +1382,23 @@ func TestPluginInstallByNameIsRefused(t *testing.T) {
 	}
 	noLeftovers(t, root)
 }
+
+// A deal verb with no capsulectl-deal plugin installed names the plugin and
+// how to install it, not the suppressed generic line (capsule-cli#539).
+func TestAMissingDealPluginIsNamed(t *testing.T) {
+	installHome(t)
+	_, err := invoke(t, "", "deal", "init", "--dir", "./store")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, 2, ExitCode(err))
+	assert.Contains(t, SafeError(err), "capsulectl-deal plugin, which is not installed")
+	assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-deal")
+}
+
+// An installed deal plugin keeps its verb: the placeholder only fills a gap.
+func TestAnInstalledDealPluginKeepsItsVerb(t *testing.T) {
+	installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "deal", "1", ""))
+	require.NoError(t, err)
+	_, err = invoke(t, "", "deal")
+	require.NotContains(t, fmt.Sprint(err), "which is not installed")
+}
