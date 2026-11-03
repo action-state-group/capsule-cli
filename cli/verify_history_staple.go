@@ -257,13 +257,14 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	}
 	checkpoints, proofs, stream, form := cardForm(e)
 	row.stream = stream
-	// ER §8.1: history_card/1 is the proof-carrying form of the checkpoints
-	// subject, so a staple over another subject (the Goose node asks
-	// full_history) is outside it.
-	if e.Subject.Kind == evidencerequest.SubjectCheckpoints {
+	// ER §8.1 defines history_card/1 "for the named evidence stream" and does
+	// not restrict the subject, so a staple over checkpoints or full_history
+	// (what the mesh plugin's probe and loop's reporter ask) is in scope;
+	// any other subject is outside it (Sherlock2, Buzz 0d760ea3, on AAC#430).
+	if subjectInScope(e.Subject.Kind) {
 		row.set("subject_scope", statusPass, "")
 	} else {
-		row.set("subject_scope", statusFail, "a history_card/1 answers the checkpoints subject, not "+string(e.Subject.Kind))
+		row.set("subject_scope", statusFail, "a history_card/1 answers the checkpoints or full_history subject, not "+string(e.Subject.Kind))
 	}
 	if form != "" {
 		row.set("card_form", statusFail, form)
@@ -272,6 +273,11 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	}
 	checkpointChecks(&row, e.Anchor.Digest, checkpoints, proofs, ckKeys)
 	return row
+}
+
+// subjectInScope is whether a history_card/1 answers the subject.
+func subjectInScope(kind evidencerequest.SubjectKind) bool {
+	return kind == evidencerequest.SubjectCheckpoints || kind == evidencerequest.SubjectFullHistory
 }
 
 // cardForm checks the history_card/1 artifact (ER §8.1) has the card's

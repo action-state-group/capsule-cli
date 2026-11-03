@@ -70,7 +70,7 @@ func TestVerifyHistoryStapledGooseCommitment(t *testing.T) {
 		assert.Equal(t, "PASS", p[name], name)
 	}
 	assert.Equal(t, "NOT_PRESENT", p["request_binding"])
-	assert.Equal(t, "FAIL", p["subject_scope"], "the Goose node asks full_history, not the checkpoints subject (Sherlock2's finding)")
+	assert.Equal(t, "PASS", p["subject_scope"], "the Goose node asks full_history, which a history_card/1 answers as it does checkpoints (AAC#430)")
 	assert.Equal(t, "NOT_CHECKED", p["checkpoint_key"], "no accepted log key was given")
 	assert.NotContains(t, got.raw, "history_properties", "a history_card/1 has no History properties")
 
@@ -291,4 +291,50 @@ func TestChainFailureOnTheStapleVectorCard(t *testing.T) {
 		return
 	}
 	t.Fatal("no history_card/1 vector")
+}
+
+// A history_card/1 answers the checkpoints subject (the staple vector) and
+// the full_history subject (the Goose card, checked in its own test); any
+// other subject is outside the derivation (TestSubjectInScope).
+func TestVerifyHistoryStapleSubjectScope(t *testing.T) {
+	var vectors []struct {
+		Name    string `json:"name"`
+		Holder  string `json:"holder"`
+		Request string `json:"request"`
+		Reply   string `json:"reply"`
+	}
+	require.NoError(t, json.Unmarshal(checkedFile(t, "staple-v0/vectors.json", stapleVectorsSHA256), &vectors))
+	for _, v := range vectors {
+		if v.Name != "history_card/1" {
+			continue
+		}
+		file := func(reply string) string {
+			raw, err := json.Marshal(map[string]any{"history": "history_card/1",
+				"request": map[string]any{"media_type": "application/json", "octets_text": v.Request},
+				"reply":   map[string]any{"media_type": "application/json", "octets_text": reply}})
+			require.NoError(t, err)
+			return writeHistory(t, raw)
+		}
+		ok := runStaple(t, file(v.Reply), "--counterparty-key", v.Holder)
+		assert.Equal(t, "PASS", ok.Staples[0].Properties["subject_scope"], "checkpoints")
+
+		return
+	}
+	t.Fatal("no history_card/1 vector")
+}
+
+func TestSubjectInScope(t *testing.T) {
+	for _, kind := range evidencerequest.SubjectForms {
+		want := kind == evidencerequest.SubjectCheckpoints || kind == evidencerequest.SubjectFullHistory
+		assert.Equal(t, want, subjectInScope(kind), kind)
+	}
+}
+
+// A History that is not accepted says so in its own words, not that the file
+// was changed.
+func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
+	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", gooseNodeKey)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
 }
