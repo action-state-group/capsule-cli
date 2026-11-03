@@ -1,1 +1,0 @@
-- **Removed:** the stale `docs/OUTCOME-REPORT-QUICKSTART.md`; the README now points to the maintained quickstart in evidencebook-skills (#534).
