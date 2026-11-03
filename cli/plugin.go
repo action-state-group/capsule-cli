@@ -787,4 +787,30 @@ func addPluginCommands(root *cobra.Command) {
 		root.AddCommand(refusedPluginPlaceholder(name, refused))
 		reserved[name] = true
 	}
+	// A verb a first-party plugin provides names that plugin when it is not
+	// installed, where cobra would say only "unknown command".
+	for _, name := range firstPartyVerbs {
+		if !reserved[name] {
+			root.AddCommand(missingPluginPlaceholder(name, refused))
+			reserved[name] = true
+		}
+	}
+}
+
+// firstPartyVerbs are the top-level commands that a first-party plugin of the
+// same name provides.
+var firstPartyVerbs = []string{"deal"}
+
+// missingPluginPlaceholder answers the name of a first-party plugin's verb,
+// when the plugin is not installed, with the plugin that provides it and how
+// to install it.
+func missingPluginPlaceholder(name string, refused []refusedPlugin) *cobra.Command {
+	return &cobra.Command{
+		Use:                name,
+		Short:              "(provided by the capsulectl-" + name + " plugin, which is not installed)",
+		DisableFlagParsing: true,
+		RunE: func(*cobra.Command, []string) error {
+			return missingPluginError(name, refused)
+		},
+	}
 }
