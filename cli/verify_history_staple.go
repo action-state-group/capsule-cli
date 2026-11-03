@@ -493,13 +493,15 @@ func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.Exchange, others []evidencerequest.Exchange) {
 	// AAC reports the property over every envelope it is given, so only
 	// copies of the staple's own question (responder, subject, derivation,
-	// anchor) asked by a different request go in; otherwise another group's
-	// result, or the staple's own file given twice, would pass for a
-	// comparison of the staple.
-	same, seen := []evidencerequest.Exchange{}, map[string]bool{evidencerequest.Digest(staple.Request.Octets): true}
+	// anchor) go in, each pair once; otherwise another group's result, or the
+	// staple's own file given twice, would pass for a comparison of the staple.
+	pair := func(x evidencerequest.Exchange) string {
+		return evidencerequest.Digest(x.Request.Octets) + "|" + evidencerequest.Digest(x.Replies[0].Octets)
+	}
+	same, seen := []evidencerequest.Exchange{}, map[string]bool{pair(staple): true}
 	own := envelopeOf(staple)
 	for _, o := range others {
-		e, d := envelopeOf(o), evidencerequest.Digest(o.Request.Octets)
+		e, d := envelopeOf(o), pair(o)
 		if own == nil || e == nil || seen[d] || e.Responder != own.Responder || e.Derivation != own.Derivation ||
 			e.Anchor.Digest != own.Anchor.Digest || !reflect.DeepEqual(e.Subject.Value(), own.Subject.Value()) {
 			continue
@@ -510,7 +512,7 @@ func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.
 	if len(same) == 0 {
 		row.set("caller_invariance", statusNotChecked, "")
 		if len(others) > 0 {
-			row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: no --also-served copy answers the staple's question under its anchor to a different request")
+			row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: no --also-served answer is to the staple's question under its anchor")
 		}
 		return
 	}
@@ -538,8 +540,26 @@ func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.
 			return
 		}
 	}
-	row.set("caller_invariance", res.CallerInvariance.Status, res.CallerInvariance.Detail)
-	if res.CallerInvariance.Status == statusNotChecked && res.CallerInvariance.Detail != "" {
+	status := res.CallerInvariance.Status
+	if status == statusPass {
+		// A second answer to the staple's own request is not another caller:
+		// PASS needs a verified answer to a different request. (FAIL stands:
+		// one request answered with two artifacts is the violation.)
+		other := false
+		for i, x := range res.Exchanges[1:] {
+			r := x.Replies[0]
+			if evidencerequest.Digest(same[i].Request.Octets) != evidencerequest.Digest(staple.Request.Octets) &&
+				r.Status("envelope_signature") == statusPass && r.Status("responder_trust") == statusPass && r.Status("artifact_digest") == statusPass {
+				other = true
+			}
+		}
+		if !other {
+			status = statusNotChecked
+			row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: no verified --also-served answer is to a different request")
+		}
+	}
+	row.set("caller_invariance", status, res.CallerInvariance.Detail)
+	if status == statusNotChecked && res.CallerInvariance.Detail != "" {
 		row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: "+res.CallerInvariance.Detail)
 	}
 }

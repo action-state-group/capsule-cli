@@ -20,7 +20,13 @@ import (
 // card's form (card_form is its own property).
 func served(t *testing.T, private ed25519.PrivateKey, anchor, nonce, artifact string) string {
 	t.Helper()
-	responder := hex.EncodeToString(private.Public().(ed25519.PublicKey))
+	return servedAs(t, private, hex.EncodeToString(private.Public().(ed25519.PublicKey)), anchor, nonce, artifact)
+}
+
+// servedAs names the responder in the envelope, which is not the signer's
+// when an answer is forged.
+func servedAs(t *testing.T, private ed25519.PrivateKey, responder, anchor, nonce, artifact string) string {
+	t.Helper()
 	subject := evidencerequest.Subject{Kind: evidencerequest.SubjectFullHistory}
 	request, err := evidencerequest.Encode(evidencerequest.MediaTypeJSON, map[string]any{
 		"profile": evidencerequest.ProfileID, "derivation": stapleCard, "subject": subject.Value(),
@@ -82,6 +88,14 @@ func TestVerifyHistoryStapleCallerInvariance(t *testing.T) {
 			func() []string {
 				return []string{served(t, private, anchor, "n2", "x"), served(t, private, anchor, "n3", "y")}
 			}, true, "NOT_CHECKED", ""},
+		{"a forged copy of a request does not hide a genuine conflict", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string {
+				return []string{servedAs(t, other, holder, anchor, "n2", "forged"), served(t, private, anchor, "n2", "another card")}
+			}, true, "FAIL", "caller_invariance FAIL"},
+		{"one request answered with two artifacts", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string { return []string{served(t, private, anchor, "n1", "another card")} }, true, "FAIL", "caller_invariance FAIL"},
+		{"a staple whose signature fails is not compared", func() string { return servedAs(t, other, holder, anchor, "n1", "card") },
+			func() []string { return []string{served(t, private, anchor, "n2", "card")} }, true, "NOT_CHECKED", "envelope_signature"},
 		{"without the counterparty key nothing is verified", func() string { return served(t, private, anchor, "n1", "card") },
 			func() []string { return []string{served(t, private, anchor, "n2", "another card")} }, false, "NOT_CHECKED", ""},
 	}
@@ -100,6 +114,8 @@ func TestVerifyHistoryStapleCallerInvariance(t *testing.T) {
 			assert.Equal(t, c.want, got.Staples[0].Properties["caller_invariance"], got.raw)
 			if c.want == "FAIL" {
 				assert.Equal(t, "NOT_ACCEPTED", got.Verdict)
+			}
+			if c.finding != "" {
 				assert.Contains(t, strings.Join(got.Staples[0].Findings, "\n"), c.finding)
 			}
 		})
