@@ -491,8 +491,27 @@ func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 // copy cannot fail a staple. One staple alone, or copies under other anchors,
 // compare nothing: NOT_CHECKED.
 func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.Exchange, others []evidencerequest.Exchange) {
-	if len(others) == 0 {
+	// AAC reports the property over every envelope it is given, so only
+	// copies of the staple's own question (responder, subject, derivation,
+	// anchor) asked by a different request go in; otherwise another group's
+	// result, or the staple's own file given twice, would pass for a
+	// comparison of the staple.
+	same, seen := []evidencerequest.Exchange{}, map[string]bool{evidencerequest.Digest(staple.Request.Octets): true}
+	own := envelopeOf(staple)
+	for _, o := range others {
+		e, d := envelopeOf(o), evidencerequest.Digest(o.Request.Octets)
+		if own == nil || e == nil || seen[d] || e.Responder != own.Responder || e.Derivation != own.Derivation ||
+			e.Anchor.Digest != own.Anchor.Digest || !reflect.DeepEqual(e.Subject.Value(), own.Subject.Value()) {
+			continue
+		}
+		seen[d] = true
+		same = append(same, o)
+	}
+	if len(same) == 0 {
 		row.set("caller_invariance", statusNotChecked, "")
+		if len(others) > 0 {
+			row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: no --also-served copy answers the staple's question under its anchor to a different request")
+		}
 		return
 	}
 	trust := evidencerequest.TrustPolicy{}
@@ -502,15 +521,34 @@ func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.
 	v, err := evidencerequest.NewVerifier(trust, evidencerequest.VerificationPolicyFromPin(nil), evidencerequest.ProfileTime(DealClock()), nil)
 	var res evidencerequest.VerificationResult
 	if err == nil {
-		res, err = v.Verify(append([]evidencerequest.Exchange{staple}, others...), evidencerequest.VerifyOptions{})
+		res, err = v.Verify(append([]evidencerequest.Exchange{staple}, same...), evidencerequest.VerifyOptions{})
 	}
 	if err != nil {
 		row.set("caller_invariance", statusNotChecked, "")
 		row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: the copies do not verify: "+err.Error())
 		return
 	}
+	// The report is over every verified envelope given; the staple's row
+	// takes it only when the staple is one of them.
+	got := res.Exchanges[0].Replies[0]
+	for _, p := range []string{"envelope_signature", "responder_trust", "artifact_digest"} {
+		if got.Status(p) != statusPass {
+			row.set("caller_invariance", statusNotChecked, "")
+			row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: the staple's own "+p+" is "+got.Status(p))
+			return
+		}
+	}
 	row.set("caller_invariance", res.CallerInvariance.Status, res.CallerInvariance.Detail)
 	if res.CallerInvariance.Status == statusNotChecked && res.CallerInvariance.Detail != "" {
 		row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: "+res.CallerInvariance.Detail)
 	}
+}
+
+// envelopeOf is the exchange's reply envelope, or nil if it has none.
+func envelopeOf(x evidencerequest.Exchange) *evidencerequest.Envelope {
+	reply, err := evidencerequest.ParseReply(x.Replies[0])
+	if err != nil {
+		return nil
+	}
+	return reply.Envelope
 }

@@ -68,6 +68,20 @@ func TestVerifyHistoryStapleCallerInvariance(t *testing.T) {
 			func() []string { return []string{served(t, private, elsewhere, "n2", "another card")} }, true, "NOT_CHECKED", ""},
 		{"a copy signed by another key cannot fail the staple", func() string { return served(t, private, anchor, "n1", "card") },
 			func() []string { return []string{served(t, other, anchor, "n2", "another card")} }, true, "NOT_CHECKED", ""},
+		{"two copies agreeing under another anchor say nothing of the staple", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string {
+				return []string{served(t, private, elsewhere, "n2", "x"), served(t, private, elsewhere, "n3", "x")}
+			}, true, "NOT_CHECKED", ""},
+		{"two copies differing under another anchor do not fail the staple", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string {
+				return []string{served(t, private, elsewhere, "n2", "x"), served(t, private, elsewhere, "n3", "y")}
+			}, true, "NOT_CHECKED", ""},
+		{"a copy with the staple's own request is not another caller", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string { return []string{served(t, private, anchor, "n1", "card")} }, true, "NOT_CHECKED", ""},
+		{"a staple signed by another key is not compared", func() string { return served(t, other, anchor, "n1", "card") },
+			func() []string {
+				return []string{served(t, private, anchor, "n2", "x"), served(t, private, anchor, "n3", "y")}
+			}, true, "NOT_CHECKED", ""},
 		{"without the counterparty key nothing is verified", func() string { return served(t, private, anchor, "n1", "card") },
 			func() []string { return []string{served(t, private, anchor, "n2", "another card")} }, false, "NOT_CHECKED", ""},
 	}
@@ -103,4 +117,16 @@ func TestVerifyHistoryStapleCallerInvarianceCommitment(t *testing.T) {
 	_, hist := positiveHistory(t)
 	_, err = invoke(t, "", "verify", "--history", hist, "--also-served", path)
 	require.Error(t, err)
+}
+
+// A copy that is not a served history_card/1 is an input error, not an
+// unchecked property.
+func TestVerifyHistoryStapleAlsoServedUnreadable(t *testing.T) {
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	staple := served(t, private, strings.Repeat("a", 64), "n1", "card")
+	for name, data := range map[string]string{"not json": "x", "another history": `{"history":"standard_history/1"}`} {
+		_, err := invoke(t, "", "verify", "--history", staple, "--also-served", writeHistory(t, []byte(data)))
+		require.Error(t, err, name)
+	}
 }
