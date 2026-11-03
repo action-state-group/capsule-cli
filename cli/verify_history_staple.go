@@ -99,6 +99,9 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 	var anchors []string
 	switch {
 	case head.Profile == stapleCommitment:
+		if given, _ := c.Flags().GetStringArray("also-served"); len(given) > 0 {
+			return r, InputError("--also-served goes with a {history, request, reply} staple; a commitment staples one answer with no request to compare")
+		}
 		commitment := commitmentChecks(raw, counterparty)
 		cards := 0
 		for _, hc := range head.HistoryCards {
@@ -122,6 +125,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 			} else {
 				row.set("card_digest", statusPass, "")
 			}
+			row.set("caller_invariance", statusNotChecked, "a commitment staples one answer; the other copies to compare are not in it")
 			for k, v := range commitment.Properties {
 				row.set(k, v, "")
 			}
@@ -157,6 +161,11 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 			return r, InputError("--history a stapled history_card/1 is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
 		}
 		row := cardChecks(rep.Octets, &req, counterparty, ckKeys)
+		others, err := alsoServed(c)
+		if err != nil {
+			return r, err
+		}
+		callerInvariance(&row, counterparty, evidencerequest.Exchange{Request: req, Replies: []evidencerequest.Message{rep}}, others)
 		r.Staples = append(r.Staples, row.stapleRow)
 		anchors = append(anchors, row.anchor)
 	default:
@@ -441,4 +450,67 @@ func commitmentCheckpoint(raw []byte) (string, bool) {
 	}
 	sum := sha256.Sum256(statement)
 	return hex.EncodeToString(sum[:]), true
+}
+
+// alsoServed reads --also-served: each file is another served copy of the
+// card, {history: "history_card/1", request, reply}.
+func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
+	paths, _ := c.Flags().GetStringArray("also-served")
+	var out []evidencerequest.Exchange
+	for _, path := range paths {
+		raw, err := ReadInput(path)
+		if err != nil {
+			return nil, err
+		}
+		var f struct {
+			History string  `json:"history"`
+			Request carried `json:"request"`
+			Reply   carried `json:"reply"`
+		}
+		if err := json.Unmarshal(raw, &f); err != nil || f.History != stapleCard {
+			return nil, InputError("--also-served " + path + " is not a {history: \"history_card/1\", request, reply} file")
+		}
+		req, err := f.Request.message()
+		if err != nil {
+			return nil, InputError("--also-served " + path + " request: " + err.Error())
+		}
+		rep, err := f.Reply.message()
+		if err != nil {
+			return nil, InputError("--also-served " + path + " reply: " + err.Error())
+		}
+		out = append(out, evidencerequest.Exchange{Request: req, Replies: []evidencerequest.Message{rep}})
+	}
+	return out, nil
+}
+
+// callerInvariance is ER §5 / IP v1 §7.2 for a staple: among the verified
+// envelopes held for one (responder, subject, derivation, anchor), the
+// artifact digests are identical, whoever asked. The comparison is AAC's
+// verifier's, over the staple and every other copy given; only envelopes
+// that verify under the counterparty key the reader holds count, so a forged
+// copy cannot fail a staple. One staple alone, or copies under other anchors,
+// compare nothing: NOT_CHECKED.
+func callerInvariance(row *cardRow, counterparty string, staple evidencerequest.Exchange, others []evidencerequest.Exchange) {
+	if len(others) == 0 {
+		row.set("caller_invariance", statusNotChecked, "")
+		return
+	}
+	trust := evidencerequest.TrustPolicy{}
+	if counterparty != "" {
+		trust.ResponderKeys = []string{counterparty}
+	}
+	v, err := evidencerequest.NewVerifier(trust, evidencerequest.VerificationPolicyFromPin(nil), evidencerequest.ProfileTime(DealClock()), nil)
+	var res evidencerequest.VerificationResult
+	if err == nil {
+		res, err = v.Verify(append([]evidencerequest.Exchange{staple}, others...), evidencerequest.VerifyOptions{})
+	}
+	if err != nil {
+		row.set("caller_invariance", statusNotChecked, "")
+		row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: the copies do not verify: "+err.Error())
+		return
+	}
+	row.set("caller_invariance", res.CallerInvariance.Status, res.CallerInvariance.Detail)
+	if res.CallerInvariance.Status == statusNotChecked && res.CallerInvariance.Detail != "" {
+		row.Findings = append(row.Findings, "caller_invariance NOT_CHECKED: "+res.CallerInvariance.Detail)
+	}
 }

@@ -451,8 +451,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 			return InputError("give one of --capsule, --bundle and --history")
 		case len(holderKeys) > 0 && historyPath == "":
 			return InputError("--holder-key goes with --history")
-		case historyPath == "" && (c.Flags().Changed("receipt") || c.Flags().Changed("anchor-witness-policy") || c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key") || c.Flags().Changed("log-key") || c.Flags().Changed("witness-key") || c.Flags().Changed("peer-key") || c.Flags().Changed("outcome-policy")):
-			return InputError("--receipt, --anchor-witness-policy, --counterparty-key, --checkpoint-key, --log-key, --witness-key, --peer-key and --outcome-policy go with --history")
+		case historyPath == "" && (c.Flags().Changed("receipt") || c.Flags().Changed("anchor-witness-policy") || c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key") || c.Flags().Changed("also-served") || c.Flags().Changed("log-key") || c.Flags().Changed("witness-key") || c.Flags().Changed("peer-key") || c.Flags().Changed("outcome-policy")):
+			return InputError("--receipt, --anchor-witness-policy, --counterparty-key, --checkpoint-key, --also-served, --log-key, --witness-key, --peer-key and --outcome-policy go with --history")
 		case historyPath != "" && c.Flags().Changed("witness-directory"):
 			return InputError("--witness-directory goes with --bundle; a History carries no witness receipt to check")
 		}
@@ -527,6 +527,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	verify.Flags().StringArray("receipt", nil, "With --history: a witness receipt (a COSE Receipt file) over the History's anchor, beside the card (repeat for each); with none, anchor_witnessed is NOT_PRESENT")
 	verify.Flags().String("counterparty-key", "", "With --history on a stapled history_card/1 (a commitment or a {history, request, reply} file): the key you hold for the staple's sender, as 64 lowercase hex characters, from the deal or request you hold, never from the staple; without it the sender is not checked and the staple is not ACCEPTED")
 	verify.Flags().StringArray("checkpoint-key", nil, "With --history on a stapled history_card/1: a log key you accept for the card's checkpoints, as 64 lowercase hex characters (repeat for each); the checkpoint key need not be the sender's; without one the checkpoint key is not checked and the staple is not ACCEPTED")
+	verify.Flags().StringArray("also-served", nil, "With --history on a stapled {history: \"history_card/1\", request, reply} file: another copy of the same answer, served to a different caller or over another channel, in the same {history, request, reply} form (repeat for each); the staple is compared with them for caller_invariance, which is NOT_CHECKED without one")
 	verify.Flags().StringArray("log-key", nil, "With --history on an inference-service-history/0 file: a log key you accept for the History's checkpoints, as 64 lowercase hex characters (repeat for each); without one the log key is not checked")
 	verify.Flags().StringArray("witness-key", nil, "With --history on an inference-service-history/0 file: a witness key whose receipts you count, as 64 lowercase hex characters (repeat for each); without one no receipt is counted")
 	verify.Flags().StringArray("peer-key", nil, "With --history on an inference-service-history/0 file: a peer key whose half confirms an exchange, as 64 lowercase hex characters (repeat for each); without one no exchange is peer-confirmed")
