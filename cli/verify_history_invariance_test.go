@@ -27,6 +27,13 @@ func served(t *testing.T, private ed25519.PrivateKey, anchor, nonce, artifact st
 // when an answer is forged.
 func servedAs(t *testing.T, private ed25519.PrivateKey, responder, anchor, nonce, artifact string) string {
 	t.Helper()
+	return servedAt(t, private, responder, anchor, nonce, artifact, "2026-11-02T00:00:00Z")
+}
+
+// servedAt also fixes issued_at, which changes the reply's bytes and not the
+// artifact.
+func servedAt(t *testing.T, private ed25519.PrivateKey, responder, anchor, nonce, artifact, issuedAt string) string {
+	t.Helper()
 	subject := evidencerequest.Subject{Kind: evidencerequest.SubjectFullHistory}
 	request, err := evidencerequest.Encode(evidencerequest.MediaTypeJSON, map[string]any{
 		"profile": evidencerequest.ProfileID, "derivation": stapleCard, "subject": subject.Value(),
@@ -37,7 +44,7 @@ func servedAs(t *testing.T, private ed25519.PrivateKey, responder, anchor, nonce
 		Profile: evidencerequest.ProfileID, RequestDigest: evidencerequest.Digest(request), Subject: subject,
 		Derivation: stapleCard, Anchor: evidencerequest.Anchor{Digest: anchor},
 		ArtifactDigest: evidencerequest.Digest([]byte(artifact)), Responder: responder,
-		IssuedAt: "2026-11-02T00:00:00Z", Artifact: []byte(artifact),
+		IssuedAt: issuedAt, Artifact: []byte(artifact),
 	}.Sign(t.Context(), ed25519Signer(private))
 	require.NoError(t, err)
 	reply, err := evidencerequest.Encode(evidencerequest.MediaTypeJSON, envelope.Value())
@@ -95,7 +102,13 @@ func TestVerifyHistoryStapleCallerInvariance(t *testing.T) {
 		{"one request answered with two artifacts", func() string { return served(t, private, anchor, "n1", "card") },
 			func() []string { return []string{served(t, private, anchor, "n1", "another card")} }, true, "FAIL", "caller_invariance FAIL"},
 		{"a staple whose signature fails is not compared", func() string { return servedAs(t, other, holder, anchor, "n1", "card") },
-			func() []string { return []string{served(t, private, anchor, "n2", "card")} }, true, "NOT_CHECKED", "envelope_signature"},
+			func() []string {
+				return []string{served(t, private, anchor, "n2", "card"), served(t, private, anchor, "n3", "card")}
+			}, true, "NOT_CHECKED", "caller_invariance NOT_CHECKED: the staple's own envelope_signature is FAIL"},
+		{"the staple's request answered again is not another caller", func() string { return served(t, private, anchor, "n1", "card") },
+			func() []string {
+				return []string{servedAt(t, private, holder, anchor, "n1", "card", "2026-11-02T00:00:01Z")}
+			}, true, "NOT_CHECKED", "no verified --also-served answer is to a different request"},
 		{"without the counterparty key nothing is verified", func() string { return served(t, private, anchor, "n1", "card") },
 			func() []string { return []string{served(t, private, anchor, "n2", "another card")} }, false, "NOT_CHECKED", ""},
 	}
