@@ -293,13 +293,10 @@ func TestChainFailureOnTheStapleVectorCard(t *testing.T) {
 	t.Fatal("no history_card/1 vector")
 }
 
-// A history_card/1 answers the checkpoints subject and the full_history
-// subject; the Goose card is the latter, the staple vector the former, and a
-// card whose envelope names another subject is outside the derivation.
+// A history_card/1 answers the checkpoints subject (the staple vector) and
+// the full_history subject (the Goose card, checked in its own test); any
+// other subject is outside the derivation (TestSubjectInScope).
 func TestVerifyHistoryStapleSubjectScope(t *testing.T) {
-	goose := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", gooseNodeKey)
-	assert.Equal(t, "PASS", goose.Staples[0].Properties["subject_scope"], "full_history")
-
 	var vectors []struct {
 		Name    string `json:"name"`
 		Holder  string `json:"holder"`
@@ -331,4 +328,13 @@ func TestSubjectInScope(t *testing.T) {
 		want := kind == evidencerequest.SubjectCheckpoints || kind == evidencerequest.SubjectFullHistory
 		assert.Equal(t, want, subjectInScope(kind), kind)
 	}
+}
+
+// A History that is not accepted says so in its own words, not that the file
+// was changed.
+func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
+	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", gooseNodeKey)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
 }
