@@ -621,13 +621,16 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 }
 
 // verifyNarration is verify's report line: unchanged when every check
-// passed, unable when something could not be checked here (exit 3), and
-// changed when a check failed. A History that failed a check is not a file
-// that changed, so it has its own line.
+// passed, unable when something could not be checked here (exit 3), refused
+// when the only gap is a refusal the other side signed (also exit 3), changed
+// when a check failed. A History that failed a check is not a file that
+// changed, so it has its own line.
 func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
 	switch {
 	case err == nil:
+	case errors.As(err, &errServedRefusalsOnly{}):
+		key = "say.verify.refused"
 	case errors.Is(err, ErrPartial):
 		key = "say.verify.unable"
 	case errors.Is(err, ErrHistoryNotAccepted):
