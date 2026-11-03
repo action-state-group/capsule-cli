@@ -360,6 +360,19 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false, nil},
 		// A served refusal does not excuse another unmet claim.
 		"verified, no checkpoint": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) { delete(v, "checkpoint") }},
+		// Nor another refusal that is not signed (capsule-cli#513).
+		"verified, other refusal unsigned": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) {
+			block := v["extensions"].(map[string]interface{})["composed/v1"].(map[string]interface{})
+			member := block["members"].([]interface{})[1].(map[string]interface{})
+			refusal := map[string]interface{}{"issued_at": "2026-10-29T12:02:00Z", "reason": "not_authorized", "request_digest": member["request_digest"]}
+			delete(member, "absence")
+			member["outcome"], member["refusal"] = "refusal", refusal
+			digest, err := canonical.JSONDigest(refusal)
+			require.NoError(t, err)
+			member["digest"] = digest
+			block["composed_digest"], err = aacbundle.ComposedDigest(block)
+			require.NoError(t, err)
+		}},
 		// Signed and verifying, but by a key that is not the observer's: INVALID.
 		"other key": {func(r map[string]interface{}) {
 			public, private, err := ed25519.GenerateKey(nil)
@@ -378,6 +391,17 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 			result, err := verifyBundleOutput(t, writeBundle(t, value))
 			assert.Equal(t, c.verdict, result["verdict"])
 			assert.Equal(t, c.verdict == "INVALID", errors.Is(err, ErrBundleInvalid))
+			assert.Equal(t, c.verdict == "INCOMPLETE", errors.Is(err, ErrPartial))
+			// The say line tells a served refusal from a file that could not
+			// be checked (capsule-cli#513); another unmet claim keeps "unable".
+			say := "say.verify.unable"
+			switch {
+			case c.verdict == "INVALID":
+				say = "say.verify.changed"
+			case c.served && c.verdict == "INCOMPLETE" && c.pageable:
+				say = "say.verify.refused"
+			}
+			assert.Equal(t, BuiltinWording().Entries[say], result["say"])
 			var composed map[string]interface{}
 			for _, x := range result["extensions"].([]interface{}) {
 				if entry := x.(map[string]interface{}); entry["kind"] == "composed/v1" {
