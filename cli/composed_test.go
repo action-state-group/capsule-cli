@@ -391,6 +391,7 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 			result, err := verifyBundleOutput(t, writeBundle(t, value))
 			assert.Equal(t, c.verdict, result["verdict"])
 			assert.Equal(t, c.verdict == "INVALID", errors.Is(err, ErrBundleInvalid))
+			assert.Equal(t, c.verdict == "INCOMPLETE", errors.Is(err, ErrPartial))
 			// The say line tells a served refusal from a file that could not
 			// be checked (capsule-cli#513); another unmet claim keeps "unable".
 			say := "say.verify.unable"
