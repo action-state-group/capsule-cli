@@ -14,17 +14,17 @@
 
 - **Fixed:** `verify --history` accepts a stapled `history_card/1` whose request subject is `full_history` as well as `checkpoints` (the ER does not restrict the subject), so a lab node's History card passes `subject_scope`; and a History that fails a check no longer says "This file was changed after it was locked" but "This history wasn't accepted. The findings list the checks that didn't pass." (AAC#430). A wording pack pinned with `profile update --wording` needs the new key `say.verify.history_not_accepted`, or it falls back to the built-in pack.
 
-### `verify --history` reads personal_history_outcome/1 and inference-service-history/0 (capsule-cli#523)
-
-- **Added:** `verify --history` evaluates a `personal_history_outcome/1` file `{history, definition, exchanges, evidence, openings}` and an `inference-service-history/0` file `{history, definition, request, reply}`, with agent-action-capsule's readers (go/v0.20.0). The keys and policy are yours, given by flag, never read from the file: `--holder-key` for responders, `--log-key`, `--witness-key` and `--peer-key` for the service History's pins, and `--outcome-policy` (predicate table, role keys, requirements) for the Outcome History. Each property is `PASS`, `FAIL`, `INCONCLUSIVE`, `NOT_CHECKED` or `NOT_PRESENT`, with no score and no sum across instances. The `definition` of an inference-service-history/0 file is the file's own: the report shows its `definition_digest` for you to compare with the one you hold. The members of `detail` come from agent-action-capsule's result structs and are not a stable contract yet. A native object's check is `NOT_CHECKED`: this verifier loads no adapter.
-- **Changed:** the two instances were `not_evaluable` until now.
-- **Changed (dependency):** agent-action-capsule/go v0.19.0 to v0.20.0.
-
 - **Fixed:** `verify --bundle` on a bundle that is INCOMPLETE only because a `composed/v1`
   member is a refusal the observer signed no longer says "I couldn't check this file here."
   It says part of it was refused, the refusal is signed, and everything else in it checked out (#513, new
   `say.verify.refused` wording key; a pinned wording pack without it falls back to the
   built-in wording pack and `doctor` reports it).
+
+### `verify --history` reads personal_history_outcome/1 and inference-service-history/0 (capsule-cli#523)
+
+- **Added:** `verify --history` evaluates a `personal_history_outcome/1` file `{history, definition, exchanges, evidence, openings}` and an `inference-service-history/0` file `{history, definition, request, reply}`, with agent-action-capsule's readers (go/v0.20.0). The keys and policy are yours, given by flag, never read from the file: `--holder-key` for responders, `--log-key`, `--witness-key` and `--peer-key` for the service History's pins, and `--outcome-policy` (predicate table, role keys, requirements) for the Outcome History. Each property is `PASS`, `FAIL`, `INCONCLUSIVE`, `NOT_CHECKED` or `NOT_PRESENT`, with no score and no sum across instances. The `definition` of an inference-service-history/0 file is the file's own: the report shows its `definition_digest` for you to compare with the one you hold. The members of `detail` come from agent-action-capsule's result structs and are not a stable contract yet. A native object's check is `NOT_CHECKED`: this verifier loads no adapter.
+- **Changed:** the two instances were `not_evaluable` until now.
+- **Changed (dependency):** agent-action-capsule/go v0.19.0 to v0.20.0.
 
 ## v0.1.0-rc32
 
