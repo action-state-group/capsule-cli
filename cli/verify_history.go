@@ -134,8 +134,8 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 	// the reader would otherwise believe a sender or log key was checked.
 	staple := named && historyInstances[id].staple
 	switch {
-	case !staple && (c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key")):
-		return InputError("--counterparty-key and --checkpoint-key go with a stapled history_card/1 (an evidence-commitment/1 or a {history, request, reply} file)")
+	case !staple && (c.Flags().Changed("counterparty-key") || c.Flags().Changed("checkpoint-key") || c.Flags().Changed("also-served")):
+		return InputError("--counterparty-key, --checkpoint-key and --also-served go with a stapled history_card/1 (an evidence-commitment/1 or a {history, request, reply} file)")
 	case staple && len(holderKeys) > 0:
 		return InputError("--holder-key goes with a History; a stapled card takes --counterparty-key")
 	}
