@@ -294,6 +294,7 @@ capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
 capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
+capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -1102,6 +1103,49 @@ when nothing failed but no holder key was given, 1 when a check failed or an
 answer was not accepted, and 2 when the file is not a one-file History or the
 flags conflict. A
 released `x-history-selection/v0` file still verifies with `verify --bundle`.
+
+### Find an advertised commitment before you ask or pay
+
+A node that answers evidence requests may advertise one signed evidence
+commitment (how to ask it, what it answers, its latest checkpoint and one
+stapled `history_card/1` per stream) in a directory record, in an A2A Agent
+Card or as a Nostr event.
+`capsulectl commitment find` takes where you were told to look, fetches the
+commitment octets and checks them with the rules of the carriers binding
+(`spec/bindings/evidence-commitment-carriers-v0.md`, §6):
+
+```
+capsulectl commitment find --directory https://example.test/.well-known/ard.json --node-key HEX
+capsulectl commitment find --a2a-card https://example.test/.well-known/agent-card.json
+capsulectl commitment find --nostr-relay wss://relay.example --node-id HEX
+capsulectl commitment find --file COMMITMENT.json
+```
+
+It trusts only the commitment's own bytes, never the carrier: a digest in a
+directory or card entry that is not the octets marks a stale pointer and
+changes nothing else, and the same commitment found through two carriers is
+checked once. The report names each failed check (`commitment_signature`,
+`key_id_spki`, `staple_digest`, `key_mismatch`, and so on) and, per node, the
+commitment with the newest `issued_at` is the current one. `--node-key` is the
+key you hold for the node from the deal or request you hold, never from a
+carrier; without it, `key_id` is proven only when the node's own fresh answer
+verifies under it. A node that names an `https:` endpoint with the `http`
+binding is asked for a fresh `history_card/1` that must extend the checkpoint
+you hold (`--offline` asks nothing and checks only the stapled chain).
+
+The report labels the node `witnessed since <time>` or `unwitnessed`. The
+label comes from the receipts you give with `--receipt`, checked under the
+witnesses in your own `--anchor-witness-policy`; receipts the node staples
+from witnesses you do not list count for nothing, and nothing the node says
+sets the label. For an unwitnessed node `find` keeps the first checkpoint it
+saw for each node key and stream (in `--pin-dir`, by default beside your
+profiles; `--no-pin` keeps none) and fails any later answer that cannot prove
+consistency to it. A stream missing from a later commitment is reported as
+dropped since the time you pinned it, and a new one as new. `--refuse-unwitnessed`
+refuses a node no witness in your policy vouches for; the default admits it,
+labelled. Finding a commitment confers no trust, and the command is never run
+for you. The exit is 0 when every node found is verified, 1 when a check
+failed or nothing was found, and 2 when the flags conflict.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
