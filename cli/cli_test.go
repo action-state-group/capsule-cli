@@ -625,7 +625,7 @@ func TestUnknownCommandIsSpecificAndValueFree(t *testing.T) {
 	code, out, errOut := run("version")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errOut+out, `unknown command "version"`)
-	assert.Contains(t, errOut+out, "capsulectl --version")
+	assert.Contains(t, errOut+out, "for the version, run `capsulectl --version`")
 	assert.NotContains(t, errOut+out, "operation failed")
 
 	secret := "Zq9-not-a-command-0123456789abcdef0123456789abcdef"

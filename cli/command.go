@@ -116,23 +116,24 @@ var commandWord = regexp.MustCompile(`^[a-z][a-z0-9-]{0,23}$`)
 // unknownCommandError turns cobra's unknown-command refusal into an input
 // error that names the word only when it is command-shaped, and the commands it
 // is close to, so a mistyped `capsulectl version` is not the masked failure.
-func unknownCommandError(root *cobra.Command, err error) error {
+func unknownCommandError(root *cobra.Command, name string, err error) error {
 	m := unknownCommand.FindStringSubmatch(err.Error())
 	if m == nil {
 		return err
 	}
+	help := "run `" + name + " --help` for the commands"
 	word, e := strconv.Unquote(m[1])
 	if e != nil || !commandWord.MatchString(word) {
-		return InputError("unknown command; run `capsulectl --help` for the commands")
+		return InputError("unknown command; " + help)
 	}
 	msg := fmt.Sprintf("unknown command %q", word)
-	if near := root.SuggestionsFor(word); len(near) > 0 {
-		msg += "; did you mean " + strings.Join(near, ", ") + "?"
-	}
 	if word == "version" {
-		msg += "; the version is `capsulectl --version`"
+		msg += "; for the version, run `" + name + " --version`"
 	}
-	return InputError(msg + "; run `capsulectl --help` for the commands")
+	if near := root.SuggestionsFor(word); len(near) > 0 {
+		msg += "; did you mean " + strings.Join(near, ", ")
+	}
+	return InputError(msg + "; " + help)
 }
 
 // flagError names the flag a command line got wrong, never its value.
