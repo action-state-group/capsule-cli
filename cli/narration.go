@@ -631,6 +631,8 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	case err == nil:
 	case errors.As(err, &errServedRefusalsOnly{}):
 		key = "say.verify.refused"
+	case errors.Is(err, ErrHistoryAnswersNoRequest):
+		key = "say.verify.history_answers_no_request"
 	case errors.Is(err, ErrPartial):
 		key = "say.verify.unable"
 	case errors.Is(err, ErrHistoryNotAccepted):

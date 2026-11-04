@@ -338,3 +338,33 @@ func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
 }
+
+// A commitment staple whose every check passes except the two it cannot make
+// (no request stapled, no copies to compare) says the card checks out but
+// answers no request, and exits 3; the verdict stays NOT_ACCEPTED (#548). A
+// staple that really failed keeps the failure wording and exit 1.
+func TestVerifyHistoryCleanCommitmentAnswersNoRequest(t *testing.T) {
+	path := filepath.Join("testdata", "goose-commitment-v1", "commitment.json")
+	key := checkpointKeyOf(t, path)
+	exit := func(t *testing.T, args ...string) (map[string]any, int) {
+		t.Helper()
+		out, err := invoke(t, "", append([]string{"verify", "--history", path}, args...)...)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, ExitCode(err)
+	}
+
+	got, code := exit(t, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key)
+	assert.Equal(t, "NOT_ACCEPTED", got["verdict"])
+	assert.Empty(t, got["findings"])
+	assert.Equal(t, 3, code)
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_answers_no_request"], got["say"])
+
+	got, code = exit(t, "--counterparty-key", hex.EncodeToString(make([]byte, 32)), "--checkpoint-key", key)
+	assert.Equal(t, 1, code, "a wrong counterparty key is a failure")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+
+	got, code = exit(t, "--counterparty-key", gooseNodeKey)
+	assert.Equal(t, 1, code, "without a log key checkpoint_key is unfinished, not the one open check")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+}

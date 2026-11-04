@@ -612,3 +612,26 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 	}
 	return rows, nil
 }
+
+// cleanButUnbound is a staple report where nothing failed and the only
+// checks left are the two a commitment cannot make: request_binding is
+// NOT_PRESENT (no request is stapled) and caller_invariance is NOT_CHECKED
+// (one answer, no copies to compare). Any finding, FAIL or other unfinished
+// check keeps the report a failure.
+func cleanButUnbound(r frameReport) bool {
+	if len(r.Findings) > 0 || len(r.Staples) == 0 {
+		return false
+	}
+	for _, row := range r.Staples {
+		if len(row.Findings) > 0 || row.Properties["request_binding"] != statusNotPresent {
+			return false
+		}
+		for p, status := range row.Properties {
+			if status == statusPass || (p == "request_binding" && status == statusNotPresent) || (p == "caller_invariance" && status == statusNotChecked) {
+				continue
+			}
+			return false
+		}
+	}
+	return true
+}

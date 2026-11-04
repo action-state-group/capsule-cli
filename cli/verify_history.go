@@ -17,6 +17,13 @@ import (
 // accepted under PH §6.1, or no reply names a holder key.
 var ErrHistoryNotAccepted = errors.New("history not accepted")
 
+// ErrHistoryAnswersNoRequest is the exit of `verify --history` on a stapled
+// card that checks out but answers no request of the reader's: nothing
+// failed, and request_binding is NOT_PRESENT because a commitment staples the
+// reply octets only. It is an ErrPartial (exit 3, "nothing failed, but
+// something is left"), not a failure, though the verdict stays NOT_ACCEPTED.
+var ErrHistoryAnswersNoRequest = errors.Join(ErrPartial, errors.New("history answers no request"))
+
 // historyNotEstablished is what a History at the Basic level never
 // establishes, shown before any count (PH §5, §6.3 item 1).
 var historyNotEstablished = []string{
@@ -345,6 +352,9 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 	}
 	if r.Verdict == "ACCEPTED" {
 		return nil
+	}
+	if inst.staple && cleanButUnbound(r) {
+		return ErrHistoryAnswersNoRequest
 	}
 	return ErrHistoryNotAccepted
 }
