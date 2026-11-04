@@ -54,6 +54,7 @@ func resignWith(t *testing.T, private ed25519.PrivateKey, change func(doc map[st
 	der, err := x509.MarshalPKIXPublicKey(public)
 	require.NoError(t, err)
 	doc["key_id"], doc["spki"] = hex.EncodeToString(public), base64.StdEncoding.EncodeToString(der)
+	restaple(t, doc, private)
 	if change != nil {
 		change(doc)
 	}
@@ -64,6 +65,28 @@ func resignWith(t *testing.T, private ed25519.PrivateKey, change func(doc map[st
 	out, err := json.Marshal(doc)
 	require.NoError(t, err)
 	return out
+}
+
+// restaple signs the commitment's stapled card envelope under the node's own
+// key, as a real node's staple is: same card, same checkpoints, a responder
+// that is the commitment's key.
+func restaple(t *testing.T, doc map[string]any, key ed25519.PrivateKey) {
+	t.Helper()
+	card := doc["history_cards"].([]any)[0].(map[string]any)
+	raw, err := base64.StdEncoding.DecodeString(card["bytes"].(string))
+	require.NoError(t, err)
+	env := mustDecode(t, raw).(map[string]any)
+	artifact := env["artifact"]
+	delete(env, "sig")
+	delete(env, "artifact")
+	env["responder"] = hex.EncodeToString(key.Public().(ed25519.PublicKey))
+	body, err := evidencerequest.EncodeJCS(env)
+	require.NoError(t, err)
+	env["sig"] = hex.EncodeToString(ed25519.Sign(key, body))
+	env["artifact"] = artifact
+	out, err := evidencerequest.EncodeJCS(env)
+	require.NoError(t, err)
+	card["bytes"], card["sha256"] = base64.StdEncoding.EncodeToString(out), sha(out)
 }
 
 func sha(b []byte) string {
@@ -231,12 +254,15 @@ func TestFindTakesTheNewerCommitmentFromAnotherCarrier(t *testing.T) {
 	cs := newCarrierServer(t, older, sha(older))
 	path := filepath.Join(t.TempDir(), "newer.json")
 	require.NoError(t, os.WriteFile(path, gooseOctets(t), 0o600))
-	rep, err := find(t, "--directory", cs.URL+"/ard.json", "--file", path, "--no-pin")
-	require.NoError(t, err)
+	rep, err := find(t, "--directory", cs.URL+"/ard.json", "--file", path, "--no-pin", "--node-key", gooseNodeKey)
+	require.NoError(t, err, "a stranger's valid commitment under another key for the node cannot change the verdict")
 	assert.Len(t, rep.Nodes, 2, "two keys are two nodes here; the key decides who is the node")
-	for _, n := range rep.Nodes {
-		assert.Equal(t, "current", n.Commitment.Status)
-	}
+	assert.Equal(t, "VERIFIED", rep.Verdict)
+	verdicts := []string{rep.Nodes[0].Verdict, rep.Nodes[1].Verdict}
+	assert.ElementsMatch(t, []string{"VERIFIED", "NOT_DESCRIBING"}, verdicts)
+
+	_, err = find(t, "--directory", cs.URL+"/ard.json", "--no-pin", "--node-key", strings.Repeat("3", 64))
+	require.ErrorIs(t, err, ErrHistoryNotAccepted, "no commitment is under the key the asker holds")
 }
 
 func TestFindFirstCheckpointPin(t *testing.T) {
@@ -404,7 +430,7 @@ func TestFindFromANostrRelay(t *testing.T) {
 
 	t.Run("an announce event carries the octets", func(t *testing.T) {
 		relay := relayServing(t, good)
-		rep, err := find(t, "--nostr-relay", relay, "--node-id", node, "--node-key", gooseNodeKey, "--no-pin")
+		rep, err := find(t, "--nostr-relay", relay, "--allow-private-network", "--node-id", node, "--node-key", gooseNodeKey, "--no-pin")
 		require.NoError(t, err)
 		assert.Equal(t, []string{"nostr"}, rep.Nodes[0].Commitment.Sources)
 	})
@@ -412,14 +438,16 @@ func TestFindFromANostrRelay(t *testing.T) {
 		bad := good
 		bad.Sig = strings.Repeat("0", 128)
 		relay := relayServing(t, bad)
-		rep, err := find(t, "--nostr-relay", relay, "--node-id", node, "--no-pin")
+		rep, err := find(t, "--nostr-relay", relay, "--allow-private-network", "--node-id", node, "--no-pin")
 		require.ErrorIs(t, err, ErrHistoryNotAccepted)
 		assert.Empty(t, rep.Nodes)
+		require.Len(t, rep.Failures, 1, "a bad event is named, not dropped")
+		assert.Equal(t, checkNostrEvent, rep.Failures[0].Check)
 	})
 	t.Run("an event with the wrong tags fails its form", func(t *testing.T) {
 		wrong := signedEvent(t, key, nostrAnnounceKind, [][]string{{"d", node}, {"x", sha(octets)}}, base64.RawURLEncoding.EncodeToString(octets))
 		relay := relayServing(t, wrong)
-		rep, err := find(t, "--nostr-relay", relay, "--node-id", node, "--no-pin")
+		rep, err := find(t, "--nostr-relay", relay, "--allow-private-network", "--node-id", node, "--no-pin")
 		require.ErrorIs(t, err, ErrHistoryNotAccepted)
 		require.Len(t, rep.Failures, 1)
 		assert.Equal(t, checkNostrEvent, rep.Failures[0].Check)
@@ -431,7 +459,7 @@ func TestFindFromANostrRelay(t *testing.T) {
 		relay := relayServing(t, relayed)
 		d := checkCommitmentOctets(octets)
 		assert.Equal(t, "relayed", nostrAttribution(d, &relayed), "the author is not the commitment's mailbox key")
-		rep, err := find(t, "--nostr-relay", relay, "--node-id", node, "--node-key", gooseNodeKey, "--no-pin")
+		rep, err := find(t, "--nostr-relay", relay, "--allow-private-network", "--node-id", node, "--node-key", gooseNodeKey, "--no-pin")
 		require.NoError(t, err, "the octets are the same and verify on their own")
 		assert.Equal(t, "VERIFIED", rep.Verdict)
 	})
@@ -538,23 +566,30 @@ func TestDeriveWitnessLabel(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, anchor)
-	rows := []cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: anchor}}
+	rows := []cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: anchor, responder: "k"}}
 
-	got := deriveWitness(rows, findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
+	got := deriveWitness(rows, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
 	assert.Equal(t, "witnessed since "+got.Since, got.Label)
 	assert.NotEmpty(t, got.Since)
 	assert.Equal(t, "PASS", got.Streams[0].Status)
 
-	none := deriveWitness(rows, findInput{})
+	none := deriveWitness(rows, "k", findInput{})
 	assert.Equal(t, "unwitnessed", none.Label)
 	assert.Contains(t, none.Reason, "no receipt")
 
-	unknown := deriveWitness(rows, findInput{Receipts: [][]byte{receipt}})
+	unknown := deriveWitness(rows, "k", findInput{Receipts: [][]byte{receipt}})
 	assert.Equal(t, "unwitnessed", unknown.Label, "a receipt by a witness the asker's policy does not list counts for nothing")
 	assert.Contains(t, unknown.Reason, "policy")
 
-	other := deriveWitness([]cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: strings.Repeat("0", 64)}}, findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
+	other := deriveWitness([]cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: strings.Repeat("0", 64), responder: "k"}}, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
 	assert.Equal(t, "unwitnessed", other.Label, "a receipt over another anchor is not this card's")
+
+	foreign := deriveWitness(rows, "someone-else", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
+	assert.Equal(t, "unwitnessed", foreign.Label, "a card another key signed earns this key no label")
+	assert.Contains(t, foreign.Reason, "another key")
+
+	late := append(rows, cardRow{stapleRow: stapleRow{Stream: "t"}, anchor: anchor, responder: "k"})
+	assert.Equal(t, "witnessed since "+got.Since, deriveWitness(late, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]}).Label)
 }
 
 // nodeStub answers a POSTed history_card/1 request the way a node does: the
@@ -623,40 +658,254 @@ func TestFindAsksTheNodeLive(t *testing.T) {
 	})
 	path := filepath.Join(t.TempDir(), "c.json")
 	require.NoError(t, os.WriteFile(path, octets, 0o600))
+	nodeKey := hex.EncodeToString(key.Public().(ed25519.PublicKey))
 
-	t.Run("a fresh card signed by key_id extends the checkpoint and proves the key", func(t *testing.T) {
+	t.Run("a fresh card signed by key_id extends the checkpoint", func(t *testing.T) {
 		handler = nodeStub(t, key, nil)
-		rep, err := find(t, "--file", path, "--no-pin")
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
 		require.NoError(t, err)
 		n := rep.Nodes[0]
 		assert.True(t, strings.HasPrefix(n.Live, "PASS"), n.Live)
-		assert.Equal(t, "PASS", n.KeyBinding["answers"], "key_id is proven by the node's own signed answer (V5)")
+		assert.Equal(t, "PASS", n.KeyBinding["answers_under_key_id"])
+		assert.Equal(t, "VERIFIED", n.Verdict)
 	})
 	t.Run("an answer signed by another key does not prove key_id", func(t *testing.T) {
 		_, other, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		handler = nodeStub(t, other, nil)
-		rep, err := find(t, "--file", path, "--no-pin")
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
 		require.ErrorIs(t, err, ErrHistoryNotAccepted)
 		assert.Contains(t, rep.Nodes[0].Reasons, "live_answer")
 	})
-	t.Run("a fresh card of another stream fails", func(t *testing.T) {
+	t.Run("a fresh card of a stream the commitment does not staple checks nothing", func(t *testing.T) {
 		handler = nodeStub(t, key, func(card map[string]any) { card["evidence_stream"] = "other/stream" })
-		rep, err := find(t, "--file", path, "--no-pin")
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
+		require.NoError(t, err)
+		assert.True(t, strings.HasPrefix(rep.Nodes[0].Live, "NOT_CHECKED"), rep.Nodes[0].Live)
+	})
+	t.Run("a failed live answer is reported as FAIL, not PASS", func(t *testing.T) {
+		_, other, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		handler = nodeStub(t, other, nil)
+		rep, _ := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
+		assert.True(t, strings.HasPrefix(rep.Nodes[0].Live, "FAIL"), rep.Nodes[0].Live)
+	})
+	t.Run("a node under another key than the asker holds is not asked", func(t *testing.T) {
+		handler = func(w http.ResponseWriter, r *http.Request) { t.Error("the node was asked"); http.Error(w, "", 500) }
+		_, err := find(t, "--file", path, "--no-pin", "--node-key", gooseNodeKey)
 		require.ErrorIs(t, err, ErrHistoryNotAccepted)
-		assert.Contains(t, rep.Nodes[0].Reasons, "live_answer")
+	})
+	t.Run("a refusal or another form is not a failure", func(t *testing.T) {
+		handler = func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"reason":"policy_declined"}`)) }
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
+		require.NoError(t, err)
+		assert.True(t, strings.HasPrefix(rep.Nodes[0].Live, "NOT_CHECKED"), rep.Nodes[0].Live)
 	})
 	t.Run("a node that does not answer leaves the stapled chain as the only check", func(t *testing.T) {
 		handler = func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no", http.StatusServiceUnavailable) }
-		rep, err := find(t, "--file", path, "--no-pin")
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", nodeKey)
 		require.NoError(t, err)
 		assert.True(t, strings.HasPrefix(rep.Nodes[0].Live, "NOT_CHECKED"), rep.Nodes[0].Live)
-		assert.Equal(t, "NOT_CHECKED", rep.Nodes[0].KeyBinding["answers"])
 	})
 	t.Run("--offline asks nothing", func(t *testing.T) {
 		handler = func(w http.ResponseWriter, r *http.Request) { t.Error("the node was asked"); http.Error(w, "", 500) }
-		rep, err := find(t, "--file", path, "--no-pin", "--offline")
+		rep, err := find(t, "--file", path, "--no-pin", "--offline", "--node-key", nodeKey)
 		require.NoError(t, err)
 		assert.Contains(t, rep.Nodes[0].Live, "--offline")
 	})
+}
+
+func TestFindWithoutAnyKeyBindsNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.json")
+	require.NoError(t, os.WriteFile(path, gooseOctets(t), 0o600))
+	pins := t.TempDir()
+	rep, err := find(t, "--file", path, "--pin-dir", pins)
+	require.ErrorIs(t, err, ErrPartial, "nothing failed; only the key is left to give")
+	assert.Equal(t, "KEY_NOT_BOUND", rep.Verdict)
+	assert.Contains(t, rep.Nodes[0].Reasons, "key_unbound")
+	entries, _ := os.ReadDir(pins)
+	assert.Empty(t, entries, "an unbound commitment pins nothing")
+	assert.Contains(t, rep.Nodes[0].Live, "not contacted")
+}
+
+func TestStapleFailuresIgnoreAnotherStreamsAnchor(t *testing.T) {
+	row := func(anchor string) cardRow {
+		return cardRow{stapleRow: stapleRow{Properties: map[string]string{"commitment_anchor": anchor}, Findings: []string{}}}
+	}
+	assert.Empty(t, stapleFailures([]cardRow{row("PASS"), row("FAIL")}), "the checkpoint is one stream's")
+	assert.Contains(t, stapleFailures([]cardRow{row("FAIL"), row("FAIL")}), "staple_commitment_anchor")
+}
+
+func TestFindRefusesAMalformedStapleInsteadOfAborting(t *testing.T) {
+	bad := resign(t, func(doc map[string]any) { doc["history_cards"] = "x" })
+	path := filepath.Join(t.TempDir(), "bad.json")
+	require.NoError(t, os.WriteFile(path, bad, 0o600))
+	rep, err := find(t, "--file", path, "--file", filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--no-pin", "--node-key", gooseNodeKey)
+	require.NoError(t, err, "one malformed commitment does not hide the other")
+	require.Len(t, rep.Refused, 1)
+	assert.Equal(t, reasonCommitmentForm, rep.Refused[0].Refused)
+}
+
+func TestFindAnA2ACardWithADiscoveryObjectViolationIsNotRead(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	card := `{"capabilities":{"extensions":[{"uri":"` + a2aEvidenceRequestExtension + `","required":false,"params":{"issued_at":"2026-11-04T00:00:00Z"}},` +
+		`{"uri":"` + a2aCommitmentExtension + `","required":false,"params":{"commitment_uri":"https://x/c","commitment_digest":"` + digest + `"}}]}}`
+	pointers, fails := a2aPointers([]byte(card))
+	assert.Empty(t, pointers, "V0 failed: the card's commitment entry is not read")
+	assert.Len(t, fails, 1)
+}
+
+func TestFindDoesNotReachPrivateHosts(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) }))
+	t.Cleanup(srv.Close)
+	// The shipped client, not a test client: it refuses a loopback address,
+	// and never follows a redirect.
+	_, err := fetchHTTPS(http.MethodGet, srv.URL, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a public address")
+	assert.NoError(t, publicOnly("tcp", "8.8.8.8:443", nil))
+	for _, a := range []string{"127.0.0.1:1", "10.0.0.1:1", "192.168.1.1:1", "169.254.169.254:1", "[::1]:1", "0.0.0.0:1"} {
+		assert.Error(t, publicOnly("tcp", a, nil), a)
+	}
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	assert.NoError(t, publicOnly("tcp", "10.0.0.1:1", nil))
+}
+
+func TestFindDoesNotFollowARedirect(t *testing.T) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`secret`)) }))
+	t.Cleanup(target.Close)
+	redirect := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, http.StatusFound) }))
+	t.Cleanup(redirect.Close)
+	old := commitmentClient
+	commitmentClient = &http.Client{Transport: redirect.Client().Transport, CheckRedirect: old.CheckRedirect}
+	t.Cleanup(func() { commitmentClient = old })
+	_, err := fetchHTTPS(http.MethodGet, redirect.URL, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "302")
+}
+
+func TestPinLockSerializesRuns(t *testing.T) {
+	dir := t.TempDir()
+	first, err := loadPins(dir, gooseNodeKey)
+	require.NoError(t, err)
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		first.release()
+		close(done)
+	}()
+	second, err := loadPins(dir, gooseNodeKey)
+	require.NoError(t, err, "the second run waits for the first to release")
+	second.release()
+	<-done
+}
+
+func TestAnExistingPinBindsAWitnessedNodeToo(t *testing.T) {
+	// pinChecks with create false (the node is witnessed) still checks a pin
+	// and makes none.
+	pins := &commitmentPins{KeyID: "k", Streams: map[string]streamPin{"s": {LogID: "L", Size: 5, Root: "r", SeenAt: "t"}}}
+	var failed []string
+	fail := func(reason, _ string) { failed = append(failed, reason) }
+	chain := cardChain{Stream: "s", Parsed: []witness.SignedCheckpoint{{LogID: "L", MMRSize: 9, Root: "other"}}}
+	notes := pinChecks(pins, []cardChain{chain, {Stream: "new", Parsed: chain.Parsed}}, time.Now(), false, fail)
+	assert.Equal(t, []string{"pin_consistency"}, failed, "a witnessed fork of the pinned log still fails")
+	assert.NotContains(t, strings.Join(notes, ""), "new stream")
+	assert.NotContains(t, pins.Streams, "new")
+}
+
+func TestFindReadsAnEvidenceCommitmentZeroAndRefusesDuplicateStreams(t *testing.T) {
+	t.Run("a /0 commitment staples one card in history_card, with no stream label", func(t *testing.T) {
+		_, key, _ := ed25519.GenerateKey(nil)
+		octets := resignWith(t, key, func(doc map[string]any) {
+			doc["profile"] = "evidence-commitment/0"
+			card := doc["history_cards"].([]any)[0].(map[string]any)
+			delete(card, "stream")
+			delete(card, "derivation")
+			delete(doc, "history_cards")
+			doc["history_card"] = card
+		})
+		path := filepath.Join(t.TempDir(), "c.json")
+		require.NoError(t, os.WriteFile(path, octets, 0o600))
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", hex.EncodeToString(key.Public().(ed25519.PublicKey)))
+		require.NoError(t, err)
+		assert.Equal(t, "evidence-commitment/0", rep.Nodes[0].Commitment.Profile)
+	})
+	t.Run("two cards for one stream are refused: the pin and live checks read the card the rows checked", func(t *testing.T) {
+		_, key, _ := ed25519.GenerateKey(nil)
+		octets := resignWith(t, key, func(doc map[string]any) {
+			cards := doc["history_cards"].([]any)
+			doc["history_cards"] = append(cards, cards[0])
+		})
+		path := filepath.Join(t.TempDir(), "c.json")
+		require.NoError(t, os.WriteFile(path, octets, 0o600))
+		rep, err := find(t, "--file", path, "--no-pin", "--node-key", hex.EncodeToString(key.Public().(ed25519.PublicKey)))
+		require.ErrorIs(t, err, ErrHistoryNotAccepted)
+		assert.Contains(t, rep.Nodes[0].Reasons, "staple_stream")
+	})
+}
+
+func TestResolveNaddrChecksTheEventAgainstTheAddress(t *testing.T) {
+	octets := gooseOctets(t)
+	mine, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	other, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	node := strings.Repeat("c", 64)
+	tags := [][]string{{"d", node}, {"t", "evidence-commitment"}, {"x", sha(octets)}}
+	content := base64.RawURLEncoding.EncodeToString(octets)
+	author := hex.EncodeToString(schnorr.SerializePubKey(mine.PubKey()))
+	authorBytes, _ := hex.DecodeString(author)
+	tlv := func(typ byte, v []byte) []byte { return append([]byte{typ, byte(len(v))}, v...) }
+	addr := func(relay string) string {
+		payload := append(tlv(0, []byte(node)), tlv(1, []byte(relay))...)
+		payload = append(payload, tlv(2, authorBytes)...)
+		payload = append(payload, tlv(3, []byte{0, 0, byte(nostrAnnounceKind >> 8), byte(nostrAnnounceKind & 0xff)})...)
+		return "nostr:" + bech32Encode("naddr", payload)
+	}
+	// The relay ignores the filter and serves another author's newer event.
+	stranger := signedEvent(t, other, nostrAnnounceKind, tags, content)
+	stranger.CreatedAt += 1000
+	stranger = resignEvent(t, other, stranger)
+	relay := relayServing(t, stranger)
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	_, err = resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
+	require.Error(t, err, "an event by another author is not the one the address names")
+	assert.Contains(t, err.Error(), "no relay has the event")
+
+	genuine := signedEvent(t, mine, nostrAnnounceKind, tags, content)
+	relay = relayServing(t, stranger, genuine)
+	got, err := resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
+	require.NoError(t, err)
+	assert.Equal(t, octets, got)
+}
+
+// resignEvent recomputes an event's id and signature after a change.
+func resignEvent(t *testing.T, key *btcec.PrivateKey, ev nostrEvent) nostrEvent {
+	t.Helper()
+	pre, err := ev.serialize()
+	require.NoError(t, err)
+	sum := sha256.Sum256(pre)
+	ev.ID = hex.EncodeToString(sum[:])
+	sig, err := schnorr.Sign(key, sum[:])
+	require.NoError(t, err)
+	ev.Sig = hex.EncodeToString(sig.Serialize())
+	return ev
+}
+
+func TestRelayFloodIsBounded(t *testing.T) {
+	key, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	var flood []nostrEvent
+	for i := 0; i < maxRelayEvents+10; i++ {
+		ev := signedEvent(t, key, nostrAnnounceKind, [][]string{{"d", strings.Repeat("a", 64)}}, strings.Repeat("x", i+1))
+		flood = append(flood, ev)
+	}
+	relay := relayServing(t, flood...)
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	events, err := queryRelay(relay, map[string]any{"kinds": []int{nostrAnnounceKind}})
+	require.Error(t, err)
+	assert.LessOrEqual(t, len(events), maxRelayEvents)
 }

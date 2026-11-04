@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -191,6 +193,37 @@ func convertBits(data []byte, from, to uint) ([]byte, bool) {
 	return out, true
 }
 
+// allowPrivateAddresses lets the verb reach loopback, private and link-local
+// hosts (--allow-private-network). Off by default: a carrier or a commitment
+// names the hosts the verb contacts, and a stranger's pointer must not aim the
+// asker's machine at its own network.
+var allowPrivateAddresses = false
+
+// publicOnly is a dialer Control that refuses a connection to an address that
+// is not public, after the name was resolved (so a name that resolves to a
+// private address is refused too).
+func publicOnly(network, address string, _ syscall.RawConn) error {
+	if allowPrivateAddresses {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		return fmt.Errorf("%s is not a public address (--allow-private-network reaches private hosts)", host)
+	}
+	return nil
+}
+
+// Bounds on what one relay may send: a relay is a stranger's server.
+const (
+	maxRelayEvents = 64
+	maxRelayBytes  = 4 << 20
+)
+
 // nostrDialInsecure lets a test reach a ws:// relay; a real relay is wss://.
 var nostrDialInsecure = false
 
@@ -210,17 +243,20 @@ func queryRelay(relay string, filter map[string]any) ([]nostrEvent, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.Dialer = &net.Dialer{Timeout: relayTimeout, Control: publicOnly}
 	conn, err := cfg.DialContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("relay %s: %w", relay, err)
 	}
 	defer conn.Close()
+	conn.MaxPayloadBytes = maxRelayBytes
 	_ = conn.SetDeadline(time.Now().Add(relayTimeout))
 	const sub = "capsulectl"
 	if err := websocket.JSON.Send(conn, []any{"REQ", sub, filter}); err != nil {
 		return nil, err
 	}
 	var events []nostrEvent
+	total := 0
 	for {
 		var frame []json.RawMessage
 		if err := websocket.JSON.Receive(conn, &frame); err != nil {
@@ -241,6 +277,9 @@ func queryRelay(relay string, filter map[string]any) ([]nostrEvent, error) {
 		case "EVENT":
 			var ev nostrEvent
 			if len(frame) == 3 && id == sub && json.Unmarshal(frame[2], &ev) == nil {
+				if total += len(frame[2]); len(events) >= maxRelayEvents || total > maxRelayBytes {
+					return events, fmt.Errorf("relay %s sent more than %d events or %d bytes", relay, maxRelayEvents, maxRelayBytes)
+				}
 				events = append(events, ev)
 			}
 		}

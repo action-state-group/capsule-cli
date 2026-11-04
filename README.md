@@ -1126,12 +1126,20 @@ directory or card entry that is not the octets marks a stale pointer and
 changes nothing else, and the same commitment found through two carriers is
 checked once. The report names each failed check (`commitment_signature`,
 `key_id_spki`, `staple_digest`, `key_mismatch`, and so on) and, per node, the
-commitment with the newest `issued_at` is the current one. `--node-key` is the
-key you hold for the node from the deal or request you hold, never from a
-carrier; without it, `key_id` is proven only when the node's own fresh answer
-verifies under it. A node that names an `https:` endpoint with the `http`
-binding is asked for a fresh `history_card/1` that must extend the checkpoint
-you hold (`--offline` asks nothing and checks only the stapled chain).
+commitment with the newest `issued_at` is the current one.
+
+`--node-key` is the key you hold for the node, from the deal or request you
+hold, never from a carrier. Without it nothing proves the commitment is the
+node's, since anyone can sign a commitment for any node id: the verdict is
+`KEY_NOT_BOUND` (exit 3), nothing is pinned and the endpoint the commitment
+names is not contacted. With it, a valid commitment for the same node id under
+another key is reported as `NOT_DESCRIBING` and does not change the verdict. A
+node that names an `https:` endpoint with the `http` binding is asked for a
+fresh `history_card/1`, which must be signed by `key_id` and extend the
+checkpoint you hold for that stream (`--offline` asks nothing; a node that does
+not answer, or refuses, leaves the stapled chains as the only check, and the
+report says so). The verb reaches only public hosts and follows no redirect;
+`--allow-private-network` lifts that for a node on your own network.
 
 The report labels the node `witnessed since <time>` or `unwitnessed`. The
 label comes from the receipts you give with `--receipt`, checked under the
@@ -1140,12 +1148,14 @@ from witnesses you do not list count for nothing, and nothing the node says
 sets the label. For an unwitnessed node `find` keeps the first checkpoint it
 saw for each node key and stream (in `--pin-dir`, by default beside your
 profiles; `--no-pin` keeps none) and fails any later answer that cannot prove
-consistency to it. A stream missing from a later commitment is reported as
-dropped since the time you pinned it, and a new one as new. `--refuse-unwitnessed`
-refuses a node no witness in your policy vouches for; the default admits it,
-labelled. Finding a commitment confers no trust, and the command is never run
-for you. The exit is 0 when every node found is verified, 1 when a check
-failed or nothing was found, and 2 when the flags conflict.
+consistency to it; an existing pin is checked for a witnessed node too. A
+stream missing from a later commitment is reported as dropped since the time
+you pinned it, and a new one as new. `--refuse-unwitnessed` refuses a node no
+witness in your policy vouches for; the default admits it, labelled. Finding a
+commitment confers no trust, and the command is never run for you. The exit is
+0 when the node is verified, 3 when nothing failed but no `--node-key` was
+given, 1 when a check failed or nothing was found, and 2 when the flags
+conflict.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 

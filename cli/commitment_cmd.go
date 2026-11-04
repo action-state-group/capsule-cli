@@ -20,6 +20,7 @@ func commitmentCommands() *cobra.Command {
 		in.NodeKey, _ = c.Flags().GetString("node-key")
 		in.RefuseUnwitnessed, _ = c.Flags().GetBool("refuse-unwitnessed")
 		in.Offline, _ = c.Flags().GetBool("offline")
+		in.AllowPrivate, _ = c.Flags().GetBool("allow-private-network")
 		noPin, _ := c.Flags().GetBool("no-pin")
 		in.PinDir, _ = c.Flags().GetString("pin-dir")
 		switch {
@@ -49,6 +50,9 @@ func commitmentCommands() *cobra.Command {
 				return err
 			}
 		}
+		if len(in.Relays) > maxRelays {
+			return InputError("give at most 8 --nostr-relay")
+		}
 		for _, relay := range in.Relays {
 			if !strings.HasPrefix(relay, "wss://") && !(nostrDialInsecure && strings.HasPrefix(relay, "ws://")) {
 				return InputError("--nostr-relay is a wss:// URL")
@@ -61,8 +65,12 @@ func commitmentCommands() *cobra.Command {
 		if err := Output(c, rep); err != nil {
 			return err
 		}
-		if rep.Verdict == "VERIFIED" {
+		switch rep.Verdict {
+		case verdictVerified:
 			return nil
+		case verdictKeyUnbound:
+			// Nothing failed; only the key is left to give, as for verify --history.
+			return ErrPartial
 		}
 		return ErrHistoryNotAccepted
 	}}
@@ -79,6 +87,7 @@ func commitmentCommands() *cobra.Command {
 	f.String("pin-dir", "", "Where your first-seen checkpoints are kept per node key (default: beside your profiles)")
 	f.Bool("no-pin", false, "Keep no first-seen checkpoint and check none")
 	f.Bool("refuse-unwitnessed", false, "Refuse a node that no witness in your policy vouches for")
+	f.Bool("allow-private-network", false, "Contact loopback, private and link-local hosts: by default the hosts a carrier or commitment names must be public")
 	f.Bool("offline", false, "Do not ask the node: check only the chain stapled in the commitment")
 	group.AddCommand(find)
 	return group

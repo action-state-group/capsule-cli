@@ -82,14 +82,8 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		return r, err
 	}
 	var head struct {
-		Profile      string `json:"profile"`
-		History      string `json:"history"`
-		HistoryCards []struct {
-			Stream     string `json:"stream"`
-			Derivation string `json:"derivation"`
-			Bytes      string `json:"bytes"`
-			SHA256     string `json:"sha256"`
-		} `json:"history_cards"`
+		Profile string  `json:"profile"`
+		History string  `json:"history"`
 		Request carried `json:"request"`
 		Reply   carried `json:"reply"`
 	}
@@ -166,6 +160,10 @@ type cardRow struct {
 	anchor string
 	// stream is the card's own evidence_stream.
 	stream string
+	// responder is the card envelope's responder key; octets are the card's
+	// bytes as stapled (set for a commitment's staples).
+	responder string
+	octets    []byte
 }
 
 func (r *cardRow) set(property, status, finding string) {
@@ -190,6 +188,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	}
 	e := reply.Envelope
 	row.anchor = e.Anchor.Digest
+	row.responder = e.Responder
 	if err := e.Verify(); err != nil {
 		row.set("envelope_signature", statusFail, err.Error())
 	} else {
@@ -570,7 +569,9 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 	commitment := commitmentChecks(raw, counterparty)
 	var rows []cardRow
 	for _, hc := range cards {
-		if hc.Derivation != stapleCard {
+		// ECC §3 lists no derivation member for a staple, so one without it is
+		// read as a card; one that names another derivation is not ours.
+		if hc.Derivation != "" && hc.Derivation != stapleCard {
 			continue
 		}
 		octets, err := base64.StdEncoding.DecodeString(hc.Bytes)
@@ -578,6 +579,7 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 			return nil, InputError("--history history_cards bytes: " + err.Error())
 		}
 		row := cardChecks(octets, nil, counterparty, ckKeys)
+		row.octets = octets
 		row.Stream = hc.Stream
 		if hc.Stream == "" && head.HistoryCard != nil {
 			// An evidence-commitment/0 names no stream; the card's own is read.

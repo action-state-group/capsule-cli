@@ -46,6 +46,8 @@ type commitmentDoc struct {
 	Detail  string `json:"detail,omitempty"`
 	// Status is current, superseded, conflicting or future_dated (V4).
 	Status string `json:"status,omitempty"`
+	// Attribution is announced or relayed for a Nostr event (ECC §5.3).
+	Attribution string `json:"nostr_attribution,omitempty"`
 	// DigestMismatch lists the carriers whose digest hint was not these octets.
 	DigestMismatch []string `json:"digest_mismatch,omitempty"`
 
@@ -106,6 +108,9 @@ func checkCommitmentOctets(octets []byte) *commitmentDoc {
 		len(signature) != ed25519.SignatureSize || !ed25519.Verify(public, signed, signature) {
 		return refuse(reasonCommitmentSignature, "sig does not verify under the key in spki")
 	}
+	if why := stapleShapeFailure(doc); why != "" {
+		return refuse(reasonCommitmentForm, why)
+	}
 	if why := stapleDigestFailure(doc); why != "" {
 		return refuse(reasonStapleDigest, why)
 	}
@@ -119,6 +124,43 @@ func copyObject(m map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// stapleShapeFailure is whether the members ECC §3 reads have their types:
+// a checkpoint and each card an object whose bytes, sha256, stream and
+// derivation are text. A commitment that does not is refused here, so one
+// malformed carrier entry cannot abort a run that holds other nodes.
+func stapleShapeFailure(doc map[string]any) string {
+	text := func(o map[string]any, names ...string) bool {
+		for _, n := range names {
+			if v, present := o[n]; present {
+				if _, ok := v.(string); !ok {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	if o, ok := doc["checkpoint"].(map[string]any); !ok || !text(o, "bytes", "sha256") {
+		return "checkpoint is not an object with text bytes and sha256"
+	}
+	var cards []any
+	if v, present := doc["history_cards"]; present {
+		list, ok := v.([]any)
+		if !ok {
+			return "history_cards is not a list"
+		}
+		cards = list
+	}
+	if v, present := doc["history_card"]; present {
+		cards = append(cards, v)
+	}
+	for i, c := range cards {
+		if o, ok := c.(map[string]any); !ok || !text(o, "bytes", "sha256", "stream", "derivation") {
+			return fmt.Sprintf("history card %d is not an object with text members", i)
+		}
+	}
+	return ""
 }
 
 // stapleDigestFailure is V3: the checkpoint's and every card's sha256 is that

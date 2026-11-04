@@ -181,6 +181,13 @@ func a2aPointers(doc []byte) ([]commitmentPointer, []carrierFailure) {
 			pointers = append(pointers, p)
 		}
 	}
+	// A card whose evidence-request entry carries a commitment member fails V0:
+	// its commitment entry is then not read (ECC §6).
+	for _, f := range failures {
+		if f.Check == checkDiscoveryObject {
+			return nil, failures
+		}
+	}
 	return pointers, failures
 }
 

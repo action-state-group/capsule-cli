@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // commitmentPins are the checkpoints an asker saw first, per node key and
@@ -19,6 +20,7 @@ type commitmentPins struct {
 	KeyID   string               `json:"key_id"`
 	Streams map[string]streamPin `json:"streams"`
 	path    string
+	lock    string
 	changed bool
 }
 
@@ -40,20 +42,50 @@ func DefaultPinDir() (string, error) {
 	return filepath.Join(filepath.Dir(profiles), "commitment-pins"), nil
 }
 
-// loadPins reads the pins for a node key; none yet is an empty set.
+// loadPins reads the pins for a node key; none yet is an empty set. It takes
+// the key's lock, so that two runs cannot both read "no pin", accept different
+// logs and overwrite each other; the caller releases it.
 func loadPins(dir, keyID string) (*commitmentPins, error) {
 	p := &commitmentPins{KeyID: keyID, Streams: map[string]streamPin{}, path: filepath.Join(dir, keyID+".json")}
+	p.lock = p.path + ".lock"
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	for waited := time.Duration(0); ; waited += 100 * time.Millisecond {
+		f, err := os.OpenFile(p.lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			f.Close()
+			break
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, err
+		}
+		if waited >= 5*time.Second {
+			return nil, InputError("another run holds " + p.lock + "; if none is running, remove it")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	raw, err := os.ReadFile(p.path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return p, nil
 	case err != nil:
+		p.release()
 		return nil, fmt.Errorf("read the pin file: %w", err)
 	}
 	if err := json.Unmarshal(raw, p); err != nil || p.KeyID != keyID || p.Streams == nil {
+		p.release()
 		return nil, InputError("the pin file " + p.path + " is not this node key's pins; remove it to pin again")
 	}
 	return p, nil
+}
+
+// release gives up the key's lock.
+func (p *commitmentPins) release() {
+	if p != nil && p.lock != "" {
+		_ = os.Remove(p.lock)
+		p.lock = ""
+	}
 }
 
 // add pins a stream's first checkpoint; a stream already pinned is not
