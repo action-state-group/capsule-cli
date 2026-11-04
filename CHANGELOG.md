@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-- **Added:** the `--rules-checker` pin file takes an optional `"kind"` (`admission`, `live`, `after_the_fact`,
-  `deal` or `conduct`), the pack's `scope.kind`, stored on the profile. Only a `deal` pin is shared with a counterparty
-  (`ProfileRulesChecker.SharesWithCounterparty`); a pin that states no kind, or any other, is private. A pin file replaces
-  the whole pin, so re-pinning without a kind clears it. For evidencebook-deal#138.
-
 ## v0.1.0-rc34
 
 - **Fixed:** A mistyped top-level command (for example `capsulectl version`) now says `unknown command "version"`, with, when there are any, the nearest command names, and a pointer to `--help`, and exits 2, instead of the masked "operation failed". The word is echoed only when it is a short lowercase command name; anything else (such as a key typed where a command goes) is not repeated.

@@ -412,6 +412,9 @@ func (p Profile) validate() error {
 			return InputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
 		}
 	}
+	if k := p.RulesChecker.Kind; k != "" && !slices.Contains(RulesKinds, k) {
+		return InputError("rules_checker kind must be one of " + strings.Join(RulesKinds, ", ") + ", not " + k + ": edit the profile file")
+	}
 	// Until the deal plugin checks a role's answer against ForRole's digests
 	// (evidencebook-deal#66), check time still enforces the flat digests alone,
 	// so roles without a flat default would run unpinned. Remove this refusal

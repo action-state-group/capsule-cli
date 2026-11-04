@@ -214,3 +214,18 @@ func TestRepinningWithoutAKindClearsIt(t *testing.T) {
 	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestA+`"}`)))
 	assert.False(t, p.RulesChecker.SharesWithCounterparty())
 }
+
+// A hand-edited profile file with a kind the pin would refuse does not load: the stored pin
+// always holds a valid kind, so a deal pack's digest is never silently kept private by a typo.
+func TestAProfileWithAnUnknownRulesCheckerKindDoesNotValidate(t *testing.T) {
+	p, _ := profileFixture(t)
+	require.NoError(t, p.validate())
+	p.RulesChecker.Kind = "deal"
+	require.NoError(t, p.validate())
+	for _, kind := range []string{"Deal", "deals", "share"} {
+		p.RulesChecker.Kind = kind
+		err := p.validate()
+		require.ErrorIs(t, err, ErrInput, kind)
+		assert.Contains(t, err.Error(), "rules_checker kind must be one of")
+	}
+}
