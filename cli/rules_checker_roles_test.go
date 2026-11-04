@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,4 +177,66 @@ func TestRolesNeedAFlatDefaultUntilTheDealPluginChecksPerRole(t *testing.T) {
 	err := pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/x","definition_digest":"`+digestA+`"}}}`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "evidencebook-deal#66")
+}
+
+// A pin states the pack's kind; only a deal pack is shared with a counterparty.
+func TestRulesCheckerPinStatesThePacksKind(t *testing.T) {
+	root := pluginRoot(t)
+	pin := func(kind string) string {
+		body := `{"command":["CHECKER"],"definition_digest":"` + digestA + `"`
+		if kind != "" {
+			body += `,"kind":"` + kind + `"`
+		}
+		return pinFile(t, root, body+`}`)
+	}
+	for kind, shared := range map[string]bool{"deal": true, "conduct": false, "admission": false, "live": false, "after_the_fact": false, "": false} {
+		var p Profile
+		require.NoError(t, pinRulesChecker(&p, pin(kind)), kind)
+		assert.Equal(t, kind, p.RulesChecker.Kind)
+		assert.Equal(t, shared, p.RulesChecker.SharesWithCounterparty(), "kind %q", kind)
+	}
+}
+
+func TestRulesCheckerPinRefusesAnUnknownKind(t *testing.T) {
+	root := pluginRoot(t)
+	var p Profile
+	err := pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestA+`","kind":"share"}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kind must be one of")
+	assert.Empty(t, p.RulesChecker.Command, "a refused pin leaves the profile unchanged")
+}
+
+// Re-pinning without a kind clears the earlier one: a pin file replaces the whole pin.
+func TestRepinningWithoutAKindClearsIt(t *testing.T) {
+	root := pluginRoot(t)
+	var p Profile
+	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestA+`","kind":"deal"}`)))
+	require.True(t, p.RulesChecker.SharesWithCounterparty())
+	require.NoError(t, pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"definition_digest":"`+digestA+`"}`)))
+	assert.False(t, p.RulesChecker.SharesWithCounterparty())
+}
+
+// A hand-edited profile file with a kind the pin would refuse does not load: the stored pin
+// always holds a valid kind, so a deal pack's digest is never silently kept private by a typo.
+func TestAProfileWithAnUnknownRulesCheckerKindDoesNotValidate(t *testing.T) {
+	p, _ := profileFixture(t)
+	require.NoError(t, p.validate())
+	p.RulesChecker.Kind = "deal"
+	require.NoError(t, p.validate())
+	for _, kind := range []string{"Deal", "deals", "share"} {
+		p.RulesChecker.Kind = kind
+		err := p.validate()
+		require.ErrorIs(t, err, ErrInput, kind)
+		assert.Contains(t, err.Error(), "rules_checker kind must be one of")
+	}
+}
+
+// A pin with no kind shows and saves as it did before the kind existed: no member for it.
+func TestAPinWithNoKindAddsNoMemberToTheProfileShow(t *testing.T) {
+	raw, err := json.Marshal(ProfileRulesChecker{Command: []string{"/x"}, DefinitionDigest: digestA})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "Kind")
+	raw, err = json.Marshal(ProfileRulesChecker{Command: []string{"/x"}, DefinitionDigest: digestA, Kind: "deal"})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"Kind":"deal"`)
 }

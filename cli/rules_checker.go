@@ -44,6 +44,9 @@ type rulesCheckerPin struct {
 	Command          []string `json:"command"`
 	Timeout          string   `json:"timeout,omitempty"`
 	DefinitionDigest string   `json:"definition_digest,omitempty"`
+	// Kind states the pack's kind (RulesKinds), as publish writes it from the
+	// pack-source's scope.kind. Only "deal" is shared with a counterparty.
+	Kind string `json:"kind,omitempty"`
 	// DefinitionDigests pins a set of rulesets: the checker may report any
 	// of them. Together with DefinitionDigest, the set is both.
 	DefinitionDigests []string `json:"definition_digests,omitempty"`
@@ -83,6 +86,9 @@ func pinRulesChecker(p *Profile, path string) error {
 	if _, err = RulesTimeout(pin.Timeout); err != nil {
 		return err
 	}
+	if pin.Kind != "" && !slices.Contains(RulesKinds, pin.Kind) {
+		return InputError("--rules-checker kind must be one of " + strings.Join(RulesKinds, ", ") + ", not " + pin.Kind)
+	}
 	digests, err := pinnedDigestSet("--rules-checker", pin.DefinitionDigest, pin.DefinitionDigests)
 	if err != nil {
 		return err
@@ -115,7 +121,7 @@ func pinRulesChecker(p *Profile, path string) error {
 	if err != nil {
 		return err
 	}
-	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, Roles: roles}
+	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, Kind: pin.Kind, Roles: roles}
 	// One digest is stored as it was before a set could be pinned, so the
 	// profile file reads the same.
 	if len(digests) == 1 {
