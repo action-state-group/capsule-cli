@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc34
+
+- **Fixed:** A mistyped top-level command (for example `capsulectl version`) now says `unknown command "version"`, with, when there are any, the nearest command names, and a pointer to `--help`, and exits 2, instead of the masked "operation failed". The word is echoed only when it is a short lowercase command name; anything else (such as a key typed where a command goes) is not repeated.
+
 ## v0.1.0-rc33
 
 - **Fixed:** `capsulectl deal ...` with no `capsulectl-deal` plugin installed now says the verb is provided by
