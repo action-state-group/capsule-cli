@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // commitmentPins are the checkpoints an asker saw first, per node key and
@@ -17,11 +16,12 @@ import (
 // (loop#319, COMMON_RULES, "Trust on first use for the unwitnessed"). The pin
 // is the asker's own file; nothing the node or a carrier says writes it.
 type commitmentPins struct {
-	KeyID   string               `json:"key_id"`
-	Streams map[string]streamPin `json:"streams"`
-	path    string
-	lock    string
-	changed bool
+	KeyID    string               `json:"key_id"`
+	Streams  map[string]streamPin `json:"streams"`
+	path     string
+	lock     string
+	lockFile *os.File
+	changed  bool
 }
 
 // streamPin is the first checkpoint seen for a stream.
@@ -51,25 +51,8 @@ func loadPins(dir, keyID string) (*commitmentPins, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	for waited := time.Duration(0); ; waited += 100 * time.Millisecond {
-		f, err := os.OpenFile(p.lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			f.Close()
-			break
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, err
-		}
-		// A run killed while it held the lock leaves it behind; no run holds
-		// it for long, since it covers the pin check and save only.
-		if info, serr := os.Stat(p.lock); serr == nil && time.Since(info.ModTime()) > time.Minute {
-			_ = os.Remove(p.lock)
-			continue
-		}
-		if waited >= 5*time.Second {
-			return nil, InputError("another run holds " + p.lock + "; if none is running, remove it")
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := p.acquire(); err != nil {
+		return nil, err
 	}
 	raw, err := os.ReadFile(p.path)
 	switch {
@@ -88,10 +71,11 @@ func loadPins(dir, keyID string) (*commitmentPins, error) {
 
 // release gives up the key's lock.
 func (p *commitmentPins) release() {
-	if p != nil && p.lock != "" {
-		_ = os.Remove(p.lock)
-		p.lock = ""
+	if p == nil || p.lockFile == nil {
+		return
 	}
+	p.unlock()
+	p.lockFile = nil
 }
 
 // add pins a stream's first checkpoint; a stream already pinned is not

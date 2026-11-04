@@ -1108,7 +1108,7 @@ released `x-history-selection/v0` file still verifies with `verify --bundle`.
 
 A node that answers evidence requests may advertise one signed evidence
 commitment (how to ask it, what it answers, its latest checkpoint and one
-stapled `history_card/1` per stream) in a directory record, in an A2A Agent
+stapled `history_card/1` per stream) in a directory record (an Agentic Resource Discovery (ARD) file or a NANDA Index record), in an A2A Agent
 Card or as a Nostr event.
 `capsulectl commitment find` takes where you were told to look, fetches the
 commitment octets and checks them with the rules of the carriers binding
@@ -1141,7 +1141,8 @@ not answer, or refuses, leaves the stapled chains as the only check, and the
 report says so). The verb reaches only public hosts and follows no redirect;
 `--allow-private-network` lifts that for a node on your own network.
 
-The report labels the node `witnessed since <time>` or `unwitnessed`. The
+The report labels the node `witnessed since <time>` or `unwitnessed`;
+`<time>` is when the last of its streams was first witnessed. The
 label comes from the receipts you give with `--receipt`, checked under the
 witnesses in your own `--anchor-witness-policy`; receipts the node staples
 from witnesses you do not list count for nothing, and nothing the node says
@@ -1152,7 +1153,7 @@ consistency to it; an existing pin is checked for a witnessed node too. A
 stream missing from a later commitment is reported as dropped since the time
 you pinned it, and a new one as new. `--refuse-unwitnessed` refuses a node no
 witness in your policy vouches for; the default admits it, labelled. Finding a
-commitment confers no trust, and the command is never run for you. The exit is
+commitment confers no trust, and no agent or install runs `find` on your behalf. The exit is
 0 when the node is verified, 3 when nothing failed but no `--node-key` was
 given, 1 when a check failed or nothing was found, and 2 when the flags
 conflict.

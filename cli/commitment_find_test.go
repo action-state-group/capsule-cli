@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -943,29 +945,121 @@ func TestABadCopyOfAGenuineEventDoesNotHideItFromAnotherRelay(t *testing.T) {
 	hostile, honest := relayServing(t, bad), relayServing(t, genuine)
 	allowPrivateAddresses = true
 	t.Cleanup(func() { allowPrivateAddresses = false })
-	events, fails, err := collectEvents([]string{hostile, honest}, map[string]any{"kinds": []int{nostrAnnounceKind}})
+	events, fails, _, err := collectEvents([]string{hostile, honest}, map[string]any{"kinds": []int{nostrAnnounceKind}})
 	require.NoError(t, err)
 	assert.Equal(t, []nostrEvent{genuine}, events)
 	assert.Len(t, fails, 1)
 }
 
-func TestAnnouncedAttributionIsSticky(t *testing.T) {
-	// covered through gather's order: the second sighting of the same octets
-	// by another key does not turn announced into relayed.
-	d := &commitmentDoc{NodeID: strings.Repeat("c", 64), doc: map[string]any{"ask": map[string]any{"nostr": map[string]any{"mailbox_key": strings.Repeat("a", 64)}}}}
-	announced := &nostrEvent{Pubkey: strings.Repeat("a", 64), Tags: [][]string{{"d", d.NodeID}}}
-	other := &nostrEvent{Pubkey: strings.Repeat("b", 64), Tags: [][]string{{"d", d.NodeID}}}
-	assert.Equal(t, "announced", nostrAttribution(d, announced))
-	assert.Equal(t, "relayed", nostrAttribution(d, other))
+func TestAnnouncedAttributionIsStickyThroughGather(t *testing.T) {
+	mailbox, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	stranger, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	_, nodeKey, _ := ed25519.GenerateKey(nil)
+	octets := resignWith(t, nodeKey, func(doc map[string]any) {
+		doc["ask"] = map[string]any{"bindings": []any{"nostr"}, "endpoint": "x", "nostr": map[string]any{
+			"mailbox_key": hex.EncodeToString(schnorr.SerializePubKey(mailbox.PubKey())), "relays": []any{"wss://relay.example"}}}
+	})
+	node := checkCommitmentOctets(octets).NodeID
+	tags := [][]string{{"d", node}, {"t", "evidence-commitment"}, {"x", sha(octets)}}
+	content := base64.RawURLEncoding.EncodeToString(octets)
+	announced := signedEvent(t, mailbox, nostrAnnounceKind, tags, content)
+	relayed := signedEvent(t, stranger, nostrAnnounceKind, tags, content)
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	for name, order := range map[string][]nostrEvent{"announced first": {announced, relayed}, "relayed first": {relayed, announced}} {
+		t.Run(name, func(t *testing.T) {
+			docs, _, _ := gather(findInput{Relays: []string{relayServing(t, order...)}, NodeID: node})
+			require.Len(t, docs, 1)
+			assert.Equal(t, "announced", docs[0].Attribution)
+		})
+	}
 }
 
-func TestAStaleLockIsTaken(t *testing.T) {
+func TestStapleFailureTextOfAnotherStreamsAnchorIsDropped(t *testing.T) {
+	rows := []cardRow{{stapleRow: stapleRow{Properties: map[string]string{"commitment_anchor": "FAIL"}, Findings: []string{"commitment_anchor FAIL: the commitment's checkpoint is not the card's anchor"}}}}
+	assert.Empty(t, stapleFailures(rows))
+	assert.Empty(t, rows[0].Findings)
+}
+
+func TestTruncationIsReportedWhateverTheFilterLeaves(t *testing.T) {
+	key, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	node := strings.Repeat("a", 64)
+	var flood []nostrEvent
+	for i := 0; i < maxRelayEvents+5; i++ {
+		flood = append(flood, signedEvent(t, key, nostrAnnounceKind, [][]string{{"d", node}}, strings.Repeat("x", i+1)))
+	}
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	rep, err := runFind(findInput{Relays: []string{relayServing(t, flood...)}, NodeID: node, NodeKey: gooseNodeKey, AllowPrivate: true})
+	require.NoError(t, err)
+	assert.Equal(t, "NOT_VERIFIED", rep.Verdict)
+	assert.Contains(t, rep.Reasons, "carrier_truncated")
+	assert.NotContains(t, strings.Join(rep.NotRun, "|"), "no carrier led to a commitment")
+}
+
+func TestABadFormEventOnTheNaddrPathIsANamedFailure(t *testing.T) {
+	key, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	author := hex.EncodeToString(schnorr.SerializePubKey(key.PubKey()))
+	authorBytes, _ := hex.DecodeString(author)
+	node := strings.Repeat("c", 64)
+	tlv := func(typ byte, v []byte) []byte { return append([]byte{typ, byte(len(v))}, v...) }
+	badForm := signedEvent(t, key, nostrAnnounceKind, [][]string{{"d", node}}, "")
+	relay := relayServing(t, badForm)
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	payload := append(tlv(0, []byte(node)), tlv(1, []byte(relay))...)
+	payload = append(payload, tlv(2, authorBytes)...)
+	payload = append(payload, tlv(3, []byte{0, 0, byte(nostrAnnounceKind >> 8), byte(nostrAnnounceKind & 0xff)})...)
+	_, fails, err := resolvePointer(commitmentPointer{Carrier: "directory", URI: "nostr:" + bech32Encode("naddr", payload)}, 0)
+	require.Error(t, err)
+	require.NotEmpty(t, fails)
+	assert.Equal(t, checkNostrEvent, fails[0].Check)
+}
+
+func TestTwoRunsNeverHoldTheLockTogether(t *testing.T) {
 	dir := t.TempDir()
 	lock := filepath.Join(dir, gooseNodeKey+".json.lock")
-	require.NoError(t, os.WriteFile(lock, nil, 0o600))
-	old := time.Now().Add(-2 * time.Minute)
-	require.NoError(t, os.Chtimes(lock, old, old))
-	p, err := loadPins(dir, gooseNodeKey)
-	require.NoError(t, err, "a lock left by a killed run is taken over")
-	p.release()
+	require.NoError(t, os.WriteFile(lock, []byte("dead"), 0o600))
+	var holding, worst atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p, err := loadPins(dir, gooseNodeKey)
+			if !assert.NoError(t, err) {
+				return
+			}
+			n := holding.Add(1)
+			for {
+				w := worst.Load()
+				if n <= w || worst.CompareAndSwap(w, n) {
+					break
+				}
+			}
+			time.Sleep(150 * time.Millisecond)
+			holding.Add(-1)
+			p.release()
+		}()
+	}
+	wg.Wait()
+	assert.Equal(t, int32(1), worst.Load(), "never two holders at once")
+}
+
+func TestAKilledRunsLockIsNotLeftBehind(t *testing.T) {
+	// Closing the file stands in for the process dying: the system drops the
+	// lock with it, so the next run takes it at once.
+	dir := t.TempDir()
+	first, err := loadPins(dir, gooseNodeKey)
+	require.NoError(t, err)
+	require.NoError(t, first.lockFile.Close())
+	start := time.Now()
+	second, err := loadPins(dir, gooseNodeKey)
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), time.Second)
+	second.release()
 }

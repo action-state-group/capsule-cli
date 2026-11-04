@@ -75,7 +75,7 @@ func commitmentCommands() *cobra.Command {
 		return ErrHistoryNotAccepted
 	}}
 	f := find.Flags()
-	f.StringArray("directory", nil, "An ARD file or NANDA Index record URL (https:) that lists the node's commitment (repeat for each)")
+	f.StringArray("directory", nil, "A directory record URL (https:), an Agentic Resource Discovery (ARD) file or a NANDA Index record, that lists the node's commitment (repeat for each)")
 	f.StringArray("a2a-card", nil, "An A2A Agent Card URL (https:) whose commitment extension points to it (repeat for each)")
 	f.StringArray("nostr-relay", nil, "A relay (wss:) to search for the node's announce event; needs --node-id (repeat for each)")
 	f.String("node-id", "", "The node's id, 64 lowercase hex: the Nostr search key, and a filter on what the other carriers return")

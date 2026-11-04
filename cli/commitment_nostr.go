@@ -238,6 +238,9 @@ var nonPublicPrefixes = func() []netip.Prefix {
 	return out
 }()
 
+// errRelayTruncated marks a relay that sent more than the bounds allow.
+var errRelayTruncated = errors.New("relay sent more than the bounds allow")
+
 // Bounds on what one relay may send: a relay is a stranger's server.
 const (
 	maxRelayEvents = 64
@@ -298,7 +301,7 @@ func queryRelay(relay string, filter map[string]any) ([]nostrEvent, error) {
 			var ev nostrEvent
 			if len(frame) == 3 && id == sub && json.Unmarshal(frame[2], &ev) == nil {
 				if total += len(frame[2]); len(events) >= maxRelayEvents || total > maxRelayBytes {
-					return events, fmt.Errorf("relay %s sent more than %d events or %d bytes", relay, maxRelayEvents, maxRelayBytes)
+					return events, fmt.Errorf("relay %s sent more than %d events or %d bytes: %w", relay, maxRelayEvents, maxRelayBytes, errRelayTruncated)
 				}
 				events = append(events, ev)
 			}

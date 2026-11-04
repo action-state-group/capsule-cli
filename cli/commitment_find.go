@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -40,6 +41,9 @@ var commitmentClient = &http.Client{
 // maxPointers bounds the commitments one carrier document may send the verb
 // to fetch.
 const maxPointers = 16
+
+// checkTruncated names a carrier that sent more than is read.
+const checkTruncated = "carrier_truncated"
 
 // commitmentSkew is the clock skew within which a commitment's issued_at is
 // not future_dated (ECC §6 V4).
@@ -151,7 +155,10 @@ func resolvePointer(p commitmentPointer, depth int) ([]byte, []carrierFailure, e
 		if err != nil || a.Kind != nostrAnnounceKind || len(a.Relays) == 0 || len(a.Relays) > maxRelays {
 			return nil, nil, fmt.Errorf("%s is not an naddr of an announce event with one to %d relay hints", p.URI, maxRelays)
 		}
-		events, bad, err := collectEvents(a.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "authors": []string{a.Author}, "#d": []string{a.D}})
+		events, bad, cut, err := collectEvents(a.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "authors": []string{a.Author}, "#d": []string{a.D}})
+		if cut {
+			bad = append(bad, carrierFailure{"nostr", checkTruncated, "a relay sent more events than are read"})
+		}
 		if err != nil {
 			return nil, bad, err
 		}
@@ -167,6 +174,7 @@ func resolvePointer(p commitmentPointer, depth int) ([]byte, []carrierFailure, e
 		}
 		q, reason := nostrPointer(*newest)
 		if reason != "" {
+			bad = append(bad, carrierFailure{"nostr", checkNostrEvent, reason})
 			return nil, bad, fmt.Errorf("%s: %s", checkNostrEvent, reason)
 		}
 		octets, more, err := resolvePointer(q, depth+1)
@@ -190,16 +198,18 @@ func hasTag(ev nostrEvent, name, value string) bool {
 
 // collectEvents asks every relay and keeps the events whose id and signature
 // verify, naming each that does not. It fails only when no relay answered.
-func collectEvents(relays []string, filter map[string]any) ([]nostrEvent, []carrierFailure, error) {
+func collectEvents(relays []string, filter map[string]any) ([]nostrEvent, []carrierFailure, bool, error) {
 	var out []nostrEvent
 	var fails []carrierFailure
 	var errs []string
+	truncated := false
 	answered := false
 	seen, reported := map[string]bool{}, map[string]bool{}
 	for _, relay := range relays {
 		events, err := queryRelay(relay, filter)
 		if err != nil {
 			errs = append(errs, err.Error())
+			truncated = truncated || errors.Is(err, errRelayTruncated)
 		}
 		if err == nil || len(events) > 0 {
 			answered = true
@@ -222,9 +232,9 @@ func collectEvents(relays []string, filter map[string]any) ([]nostrEvent, []carr
 		}
 	}
 	if !answered {
-		return nil, fails, fmt.Errorf("no relay answered: %s", strings.Join(errs, "; "))
+		return nil, fails, truncated, fmt.Errorf("no relay answered: %s", strings.Join(errs, "; "))
 	}
-	return out, fails, nil
+	return out, fails, truncated, nil
 }
 
 // gather reads every reference and returns the distinct commitments they
@@ -268,6 +278,9 @@ func gather(in findInput) ([]*commitmentDoc, []carrierRead, []carrierFailure) {
 				}
 			}
 			octets, bad, err := resolvePointer(p, 0)
+			for _, f := range bad {
+				r.Truncated = r.Truncated || f.Check == checkTruncated
+			}
 			failures = append(failures, bad...)
 			if err != nil {
 				r.Error = err.Error()
@@ -298,10 +311,10 @@ func gather(in findInput) ([]*commitmentDoc, []carrierRead, []carrierFailure) {
 	}
 	if len(in.Relays) > 0 {
 		ref := strings.Join(in.Relays, ",") + " " + in.NodeID
-		events, bad, err := collectEvents(in.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "#t": []string{"evidence-commitment"}, "#d": []string{in.NodeID}})
+		events, bad, cut, err := collectEvents(in.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "#t": []string{"evidence-commitment"}, "#d": []string{in.NodeID}})
 		failures = append(failures, bad...)
 		if err != nil {
-			reads = append(reads, carrierRead{Reference: ref, Carrier: "nostr", Error: err.Error()})
+			reads = append(reads, carrierRead{Reference: ref, Carrier: "nostr", Error: err.Error(), Truncated: cut})
 		} else {
 			var pointers []commitmentPointer
 			var fails []carrierFailure
@@ -312,7 +325,11 @@ func gather(in findInput) ([]*commitmentDoc, []carrierRead, []carrierFailure) {
 					pointers = append(pointers, p)
 				}
 			}
+			before := len(reads)
 			follow(ref, "nostr", pointers, fails)
+			if cut && len(reads) > before {
+				reads[before].Truncated = true
+			}
 		}
 	}
 	for _, path := range in.Files {
@@ -402,20 +419,19 @@ func runFind(in findInput) (findReport, error) {
 		}
 		counted++
 	}
+	truncated := slices.ContainsFunc(reads, func(r carrierRead) bool { return r.Truncated })
 	if counted == 0 {
 		rep.Verdict = verdictNotVerified
 		switch {
 		case len(rep.Nodes) > 0:
 			rep.Reasons = []string{reasonKeyMismatch}
-			for _, r := range reads {
-				if r.Truncated {
-					rep.Reasons = append(rep.Reasons, "carrier_truncated")
-					break
-				}
-			}
-		case len(rep.Refused) == 0 && len(failures) == 0:
+		case len(rep.Refused) == 0 && len(failures) == 0 && !truncated:
 			rep.NotRun = append(rep.NotRun, "no carrier led to a commitment")
 		}
+	}
+	if truncated && rep.Verdict != verdictVerified {
+		// A carrier sent more than is read; the commitment sought may be in the rest.
+		rep.Reasons = append(rep.Reasons, "carrier_truncated")
 	}
 	if len(rep.Refused) > 0 || len(failures) > 0 {
 		// A refused commitment or a malformed carrier entry is reported by name;
@@ -431,8 +447,10 @@ func runFind(in findInput) (findReport, error) {
 // property is left out of `find`'s rows.
 func stapleFailures(rows []cardRow) map[string]string {
 	out := map[string]string{}
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		delete(row.Properties, "commitment_anchor")
+		row.Findings = slices.DeleteFunc(row.Findings, func(f string) bool { return strings.HasPrefix(f, "commitment_anchor FAIL") })
 		for p, status := range row.Properties {
 			if status != statusFail {
 				continue
