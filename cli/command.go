@@ -393,6 +393,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.SetFlagErrorFunc(flagError)
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())
+	root.AddCommand(commitmentCommands())
 	root.AddCommand(bundleCommands()...)
 	root.AddCommand(countersignCommands())
 	root.AddCommand(contractCommands())

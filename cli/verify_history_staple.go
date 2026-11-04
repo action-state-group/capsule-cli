@@ -82,14 +82,8 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		return r, err
 	}
 	var head struct {
-		Profile      string `json:"profile"`
-		History      string `json:"history"`
-		HistoryCards []struct {
-			Stream     string `json:"stream"`
-			Derivation string `json:"derivation"`
-			Bytes      string `json:"bytes"`
-			SHA256     string `json:"sha256"`
-		} `json:"history_cards"`
+		Profile string  `json:"profile"`
+		History string  `json:"history"`
 		Request carried `json:"request"`
 		Reply   carried `json:"reply"`
 	}
@@ -102,42 +96,12 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		if given, _ := c.Flags().GetStringArray("also-served"); len(given) > 0 {
 			return r, InputError("--also-served goes with a {history, request, reply} staple; a commitment staples one answer with no request to compare")
 		}
-		commitment := commitmentChecks(raw, counterparty)
-		cards := 0
-		for _, hc := range head.HistoryCards {
-			if hc.Derivation != stapleCard {
-				continue
-			}
-			cards++
-			octets, err := base64.StdEncoding.DecodeString(hc.Bytes)
-			if err != nil {
-				return r, InputError("--history history_cards bytes: " + err.Error())
-			}
-			row := cardChecks(octets, nil, counterparty, ckKeys)
-			row.Stream = hc.Stream
-			if row.stream != hc.Stream {
-				row.set("stream_match", statusFail, "the commitment labels the card "+hc.Stream+" but the card is of stream "+row.stream)
-			} else {
-				row.set("stream_match", statusPass, "")
-			}
-			if sum := sha256.Sum256(octets); hc.SHA256 != hex.EncodeToString(sum[:]) {
-				row.set("card_digest", statusFail, "the commitment's sha256 for the card is not the card's digest")
-			} else {
-				row.set("card_digest", statusPass, "")
-			}
-			row.set("caller_invariance", statusNotChecked, "a commitment staples one answer; the other copies to compare are not in it")
-			for k, v := range commitment.Properties {
-				row.set(k, v, "")
-			}
-			row.Findings = append(row.Findings, commitment.Findings...)
-			switch sum, ok := commitmentCheckpoint(raw); {
-			case !ok:
-				row.set("commitment_anchor", statusNotPresent, "")
-			case row.anchor != sum:
-				row.set("commitment_anchor", statusFail, "the commitment's checkpoint is not the card's anchor")
-			default:
-				row.set("commitment_anchor", statusPass, "")
-			}
+		rows, err := commitmentStapleRows(raw, counterparty, ckKeys)
+		if err != nil {
+			return r, err
+		}
+		cards := len(rows)
+		for _, row := range rows {
 			r.Staples = append(r.Staples, row.stapleRow)
 			anchors = append(anchors, row.anchor)
 		}
@@ -196,6 +160,10 @@ type cardRow struct {
 	anchor string
 	// stream is the card's own evidence_stream.
 	stream string
+	// responder is the card envelope's responder key; octets are the card's
+	// bytes as stapled (set for a commitment's staples).
+	responder string
+	octets    []byte
 }
 
 func (r *cardRow) set(property, status, finding string) {
@@ -220,6 +188,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	}
 	e := reply.Envelope
 	row.anchor = e.Anchor.Digest
+	row.responder = e.Responder
 	if err := e.Verify(); err != nil {
 		row.set("envelope_signature", statusFail, err.Error())
 	} else {
@@ -571,4 +540,75 @@ func envelopeOf(x evidencerequest.Exchange) *evidencerequest.Envelope {
 		return nil
 	}
 	return reply.Envelope
+}
+
+// commitmentStapleRows checks every history_card/1 a commitment staples: the
+// card as a signed envelope, its stream and digest against the commitment's
+// labels, and the commitment's own signature and checkpoint. `verify
+// --history` and `commitment find` read a commitment's staples through it, so
+// the two cannot disagree. An evidence-commitment/0 staples one card in
+// history_card, read as a list of one that names no stream.
+func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]cardRow, error) {
+	type staple struct {
+		Stream     string `json:"stream"`
+		Derivation string `json:"derivation"`
+		Bytes      string `json:"bytes"`
+		SHA256     string `json:"sha256"`
+	}
+	var head struct {
+		HistoryCards []staple `json:"history_cards"`
+		HistoryCard  *staple  `json:"history_card"`
+	}
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return nil, InputError("--history is not a stapled history_card/1: " + err.Error())
+	}
+	cards := head.HistoryCards
+	if head.HistoryCard != nil {
+		cards = append(cards, *head.HistoryCard)
+	}
+	commitment := commitmentChecks(raw, counterparty)
+	var rows []cardRow
+	for _, hc := range cards {
+		// ECC §3 lists no derivation member for a staple, so one without it is
+		// read as a card; one that names another derivation is not ours.
+		if hc.Derivation != "" && hc.Derivation != stapleCard {
+			continue
+		}
+		octets, err := base64.StdEncoding.DecodeString(hc.Bytes)
+		if err != nil {
+			return nil, InputError("--history history_cards bytes: " + err.Error())
+		}
+		row := cardChecks(octets, nil, counterparty, ckKeys)
+		row.octets = octets
+		row.Stream = hc.Stream
+		if hc.Stream == "" && head.HistoryCard != nil {
+			// An evidence-commitment/0 names no stream; the card's own is read.
+			row.Stream = row.stream
+			row.set("stream_match", statusPass, "")
+		} else if row.stream != hc.Stream {
+			row.set("stream_match", statusFail, "the commitment labels the card "+hc.Stream+" but the card is of stream "+row.stream)
+		} else {
+			row.set("stream_match", statusPass, "")
+		}
+		if sum := sha256.Sum256(octets); hc.SHA256 != hex.EncodeToString(sum[:]) {
+			row.set("card_digest", statusFail, "the commitment's sha256 for the card is not the card's digest")
+		} else {
+			row.set("card_digest", statusPass, "")
+		}
+		row.set("caller_invariance", statusNotChecked, "a commitment staples one answer; the other copies to compare are not in it")
+		for k, v := range commitment.Properties {
+			row.set(k, v, "")
+		}
+		row.Findings = append(row.Findings, commitment.Findings...)
+		switch sum, ok := commitmentCheckpoint(raw); {
+		case !ok:
+			row.set("commitment_anchor", statusNotPresent, "")
+		case row.anchor != sum:
+			row.set("commitment_anchor", statusFail, "the commitment's checkpoint is not the card's anchor")
+		default:
+			row.set("commitment_anchor", statusPass, "")
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }
