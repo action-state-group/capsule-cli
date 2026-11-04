@@ -622,6 +622,10 @@ func cleanButUnbound(r frameReport) bool {
 	if len(r.Findings) > 0 || len(r.Staples) == 0 {
 		return false
 	}
+	// A witness check the reader asked for and that failed is a failure.
+	if r.AnchorWitnessed != nil && r.AnchorWitnessed.Status == witness.AnchorFail {
+		return false
+	}
 	for _, row := range r.Staples {
 		if len(row.Findings) > 0 || row.Properties["request_binding"] != statusNotPresent {
 			return false

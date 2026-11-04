@@ -367,4 +367,16 @@ func TestVerifyHistoryCleanCommitmentAnswersNoRequest(t *testing.T) {
 	got, code = exit(t, "--counterparty-key", gooseNodeKey)
 	assert.Equal(t, 1, code, "without a log key checkpoint_key is unfinished, not the one open check")
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+
+	// A witness check the reader asked for that fails is a failure, not "clean".
+	policy := filepath.Join(t.TempDir(), "policy.json")
+	require.NoError(t, os.WriteFile(policy, []byte(`{"witnesses":[{"name":"w","keys":["`+gooseNodeKey+`"]}]}`), 0o600))
+	got, code = exit(t, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key, "--receipt", path, "--anchor-witness-policy", policy)
+	assert.Equal(t, "FAIL", got["anchor_witnessed"].(map[string]any)["status"])
+	assert.Equal(t, 1, code, "a failed witness check is a failure")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+
+	_, err := invoke(t, "", "verify", "--history", path, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key)
+	assert.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, "history checks out but answers no request", SafeError(err))
 }

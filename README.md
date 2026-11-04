@@ -1101,7 +1101,11 @@ inclusion against the anchor, and whether the anchor is a witnessed tick. It
 ends with the History's limits. The exit is 0 when the History is accepted, 3
 when nothing failed but no holder key was given, 1 when a check failed or an
 answer was not accepted, and 2 when the file is not a one-file History or the
-flags conflict. A
+flags conflict. A stapled commitment
+(`evidence-commitment/1`) never answers a request of yours, so its verdict stays
+`NOT_ACCEPTED`; when every check passes except `request_binding` (`NOT_PRESENT`)
+and `caller_invariance` (`NOT_CHECKED`) it says the card checks out but answers
+no request of yours and exits 3, and a staple with a failed check exits 1. A
 released `x-history-selection/v0` file still verifies with `verify --bundle`.
 
 ### Find an advertised commitment before you ask or pay

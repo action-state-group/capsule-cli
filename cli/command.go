@@ -301,6 +301,8 @@ func SafeError(err error) string {
 		return ErrPending.Error()
 	case errors.Is(err, ErrReadOnlyCLL):
 		return ErrReadOnlyCLL.Error()
+	case errors.Is(err, ErrHistoryAnswersNoRequest):
+		return "history checks out but answers no request"
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
 	case errors.Is(err, ErrBundleInvalid):
