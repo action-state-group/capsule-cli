@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/action-state-group/capsule-emit/go/artifact"
@@ -103,6 +104,36 @@ var (
 	flagBadValue = regexp.MustCompile(`for "([^"]+)" flag`)
 	flagNoValue  = regexp.MustCompile(`^flag needs an argument: (\S+)`)
 )
+
+// unknownCommand is cobra's refusal of a first word that names no command.
+var unknownCommand = regexp.MustCompile(`^unknown command ("(?:[^"\\]|\\.)*") for `)
+
+// commandWord is the shape of a word that may be echoed back as a mistyped
+// command: a short lowercase name. Anything else (a key or token typed where a
+// command goes) is not repeated.
+var commandWord = regexp.MustCompile(`^[a-z][a-z0-9-]{0,23}$`)
+
+// unknownCommandError turns cobra's unknown-command refusal into an input
+// error that names the word only when it is command-shaped, and the commands it
+// is close to, so a mistyped `capsulectl version` is not the masked failure.
+func unknownCommandError(root *cobra.Command, err error) error {
+	m := unknownCommand.FindStringSubmatch(err.Error())
+	if m == nil {
+		return err
+	}
+	word, e := strconv.Unquote(m[1])
+	if e != nil || !commandWord.MatchString(word) {
+		return InputError("unknown command; run `capsulectl --help` for the commands")
+	}
+	msg := fmt.Sprintf("unknown command %q", word)
+	if near := root.SuggestionsFor(word); len(near) > 0 {
+		msg += "; did you mean " + strings.Join(near, ", ") + "?"
+	}
+	if word == "version" {
+		msg += "; the version is `capsulectl --version`"
+	}
+	return InputError(msg + "; run `capsulectl --help` for the commands")
+}
 
 // flagError names the flag a command line got wrong, never its value.
 func flagError(c *cobra.Command, err error) error {

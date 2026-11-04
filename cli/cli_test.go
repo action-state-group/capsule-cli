@@ -605,3 +605,33 @@ func TestCheckpointHexKeyCaseIsNotDifferentIdentity(t *testing.T) {
 	require.NoError(t, e)
 	assert.Equal(t, a, b)
 }
+
+func TestUnknownCommandIsSpecificAndValueFree(t *testing.T) {
+	run := func(args ...string) (int, string, string) {
+		oldArgs := os.Args
+		os.Args = append([]string{"capsulectl"}, args...)
+		defer func() { os.Args = oldArgs }()
+		root := NewCommand()
+		root.SetArgs(args)
+		var stdout, stderr bytes.Buffer
+		f, e := os.CreateTemp(t.TempDir(), "out")
+		require.NoError(t, e)
+		code := runTo(t.Context(), root, "capsulectl", f, &stderr)
+		b, e := os.ReadFile(f.Name())
+		require.NoError(t, e)
+		stdout.Write(b)
+		return code, stdout.String(), stderr.String()
+	}
+	code, out, errOut := run("version")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut+out, `unknown command "version"`)
+	assert.Contains(t, errOut+out, "capsulectl --version")
+	assert.NotContains(t, errOut+out, "operation failed")
+
+	secret := "Zq9-not-a-command-0123456789abcdef0123456789abcdef"
+	code, out, errOut = run(secret)
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut+out, "unknown command;")
+	assert.NotContains(t, errOut+out, secret)
+	assert.NotContains(t, errOut+out, "Zq9")
+}

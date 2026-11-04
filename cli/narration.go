@@ -570,7 +570,7 @@ func runTo(ctx context.Context, root *cobra.Command, name string, stdout *os.Fil
 	if err == nil {
 		return 0
 	}
-	return exitTo(out, stderr, cmd, err, name)
+	return exitTo(out, stderr, cmd, unknownCommandError(root, err), name)
 }
 
 // narratedByOutcome marks a command whose voice follows its outcome (the
