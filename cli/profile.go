@@ -186,7 +186,7 @@ type ProfileRulesChecker struct {
 	// private conduct pack. Empty states none and reads as private. Only a
 	// "deal" pack's ruleset id and digest may reach a counterparty
 	// (SharesWithCounterparty).
-	Kind string `yaml:"kind,omitempty" mapstructure:"kind"`
+	Kind string `yaml:"kind,omitempty" mapstructure:"kind" json:",omitempty"`
 	// DefinitionDigests holds a pinned set of definition digests, and
 	// DefinitionDigest is then empty. profile update --rules-checker stores
 	// a set of two or more here and one digest in DefinitionDigest alone, as

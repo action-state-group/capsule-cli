@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -228,4 +229,14 @@ func TestAProfileWithAnUnknownRulesCheckerKindDoesNotValidate(t *testing.T) {
 		require.ErrorIs(t, err, ErrInput, kind)
 		assert.Contains(t, err.Error(), "rules_checker kind must be one of")
 	}
+}
+
+// A pin with no kind shows and saves as it did before the kind existed: no member for it.
+func TestAPinWithNoKindAddsNoMemberToTheProfileShow(t *testing.T) {
+	raw, err := json.Marshal(ProfileRulesChecker{Command: []string{"/x"}, DefinitionDigest: digestA})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "Kind")
+	raw, err = json.Marshal(ProfileRulesChecker{Command: []string{"/x"}, DefinitionDigest: digestA, Kind: "deal"})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"Kind":"deal"`)
 }
