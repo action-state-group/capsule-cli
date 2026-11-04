@@ -96,6 +96,7 @@ type carrierRead struct {
 	Reference string `json:"reference"`
 	Carrier   string `json:"carrier"`
 	Found     int    `json:"commitments"`
+	Truncated bool   `json:"truncated,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -138,21 +139,21 @@ type findReport struct {
 
 // resolvePointer reads a pointer's octets: the event's content, or the URI,
 // or the announce event an naddr names.
-func resolvePointer(p commitmentPointer, depth int) ([]byte, error) {
+func resolvePointer(p commitmentPointer, depth int) ([]byte, []carrierFailure, error) {
 	if len(p.Inline) > 0 {
-		return p.Inline, nil
+		return p.Inline, nil, nil
 	}
 	if strings.HasPrefix(p.URI, "nostr:") {
 		if depth > 0 {
-			return nil, fmt.Errorf("an announce event whose r tag is an naddr")
+			return nil, nil, fmt.Errorf("an announce event whose r tag is an naddr")
 		}
 		a, err := parseNaddr(p.URI)
 		if err != nil || a.Kind != nostrAnnounceKind || len(a.Relays) == 0 || len(a.Relays) > maxRelays {
-			return nil, fmt.Errorf("%s is not an naddr of an announce event with one to %d relay hints", p.URI, maxRelays)
+			return nil, nil, fmt.Errorf("%s is not an naddr of an announce event with one to %d relay hints", p.URI, maxRelays)
 		}
-		events, _, err := collectEvents(a.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "authors": []string{a.Author}, "#d": []string{a.D}})
+		events, bad, err := collectEvents(a.Relays, map[string]any{"kinds": []int{nostrAnnounceKind}, "authors": []string{a.Author}, "#d": []string{a.D}})
 		if err != nil {
-			return nil, err
+			return nil, bad, err
 		}
 		// The relay only filters if it chooses to: the address is checked here.
 		var newest *nostrEvent
@@ -162,15 +163,17 @@ func resolvePointer(p commitmentPointer, depth int) ([]byte, error) {
 			}
 		}
 		if newest == nil {
-			return nil, fmt.Errorf("no relay has the event %s names", p.URI)
+			return nil, bad, fmt.Errorf("no relay has the event %s names", p.URI)
 		}
 		q, reason := nostrPointer(*newest)
 		if reason != "" {
-			return nil, fmt.Errorf("%s: %s", checkNostrEvent, reason)
+			return nil, bad, fmt.Errorf("%s: %s", checkNostrEvent, reason)
 		}
-		return resolvePointer(q, depth+1)
+		octets, more, err := resolvePointer(q, depth+1)
+		return octets, append(bad, more...), err
 	}
-	return fetchHTTPS(http.MethodGet, p.URI, nil)
+	octets, err := fetchHTTPS(http.MethodGet, p.URI, nil)
+	return octets, nil, err
 }
 
 // maxRelays bounds the relays one reference may name.
@@ -192,7 +195,7 @@ func collectEvents(relays []string, filter map[string]any) ([]nostrEvent, []carr
 	var fails []carrierFailure
 	var errs []string
 	answered := false
-	seen := map[string]bool{}
+	seen, reported := map[string]bool{}, map[string]bool{}
 	for _, relay := range relays {
 		events, err := queryRelay(relay, filter)
 		if err != nil {
@@ -205,11 +208,16 @@ func collectEvents(relays []string, filter map[string]any) ([]nostrEvent, []carr
 			if seen[ev.ID] {
 				continue
 			}
-			seen[ev.ID] = true
+			// An event is remembered only once it verifies: a bad copy carrying
+			// a genuine event's id must not hide the genuine one from the next relay.
 			if err := ev.verify(); err != nil {
-				fails = append(fails, carrierFailure{"nostr", checkNostrEvent, "an event from " + relay + ": " + err.Error()})
+				if key := ev.ID + err.Error(); !reported[key] {
+					reported[key] = true
+					fails = append(fails, carrierFailure{"nostr", checkNostrEvent, "an event from " + relay + ": " + err.Error()})
+				}
 				continue
 			}
+			seen[ev.ID] = true
 			out = append(out, ev)
 		}
 	}
@@ -241,19 +249,26 @@ func gather(in findInput) ([]*commitmentDoc, []carrierRead, []carrierFailure) {
 		if p.Digest != "" && p.Digest != d.SHA256 && !slices.Contains(d.DigestMismatch, p.Carrier) {
 			d.DigestMismatch = append(d.DigestMismatch, p.Carrier)
 		}
-		if p.Event != nil && d.Refused == "" {
+		if p.Event != nil && d.Refused == "" && d.Attribution != "announced" {
 			d.Attribution = nostrAttribution(d, p.Event)
 		}
 	}
 	follow := func(ref, carrier string, pointers []commitmentPointer, fails []carrierFailure) {
 		r := carrierRead{Reference: ref, Carrier: carrier}
 		failures = append(failures, fails...)
-		if len(pointers) > maxPointers {
-			r.Error = fmt.Sprintf("%d commitments listed; the first %d were read", len(pointers), maxPointers)
-			pointers = pointers[:maxPointers]
-		}
+		fetched := 0
 		for _, p := range pointers {
-			octets, err := resolvePointer(p, 0)
+			// The bound is on what has to be fetched; octets a carrier holds
+			// are already in memory.
+			if len(p.Inline) == 0 {
+				if fetched++; fetched > maxPointers {
+					r.Truncated = true
+					r.Error = fmt.Sprintf("more than %d commitments to fetch; the rest were not read", maxPointers)
+					continue
+				}
+			}
+			octets, bad, err := resolvePointer(p, 0)
+			failures = append(failures, bad...)
 			if err != nil {
 				r.Error = err.Error()
 				continue
@@ -392,6 +407,12 @@ func runFind(in findInput) (findReport, error) {
 		switch {
 		case len(rep.Nodes) > 0:
 			rep.Reasons = []string{reasonKeyMismatch}
+			for _, r := range reads {
+				if r.Truncated {
+					rep.Reasons = append(rep.Reasons, "carrier_truncated")
+					break
+				}
+			}
 		case len(rep.Refused) == 0 && len(failures) == 0:
 			rep.NotRun = append(rep.NotRun, "no carrier led to a commitment")
 		}
@@ -404,16 +425,16 @@ func runFind(in findInput) (findReport, error) {
 	return rep, nil
 }
 
-// stapleFailures names what failed in a commitment's staples. The commitment's
-// top-level checkpoint is one stream's, so a card anchored elsewhere is a
-// failure only when no card is anchored on it (ECC §6 V3 reads it for nothing
-// else).
+// stapleFailures names what failed in a commitment's staples. The
+// commitment's top-level checkpoint is read for its digest and nothing else
+// (ECC §6 V3), so a card anchored elsewhere is not a failure, and the
+// property is left out of `find`'s rows.
 func stapleFailures(rows []cardRow) map[string]string {
-	anchored := slices.ContainsFunc(rows, func(r cardRow) bool { return r.Properties["commitment_anchor"] == statusPass })
 	out := map[string]string{}
 	for _, row := range rows {
+		delete(row.Properties, "commitment_anchor")
 		for p, status := range row.Properties {
-			if status != statusFail || (p == "commitment_anchor" && anchored) {
+			if status != statusFail {
 				continue
 			}
 			name := "staple_" + p
@@ -429,6 +450,19 @@ func stapleFailures(rows []cardRow) map[string]string {
 // judgeNode applies V4 to V6 to one node's commitments.
 func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict, error) {
 	nv := nodeVerdict{NodeID: docs[0].NodeID, KeyID: docs[0].KeyID, Reasons: []string{}, Findings: []string{}, KeyBinding: map[string]string{}}
+	// V5: the key is the asker's, never the carrier's. A commitment under
+	// another key does not describe the node, whatever its status: a stranger's
+	// future-dated or conflicting commitment for the same node id cannot change
+	// the verdict. Nothing more is read from it and the endpoint it names is
+	// not contacted.
+	if in.NodeKey != "" && in.NodeKey != docs[0].KeyID {
+		nv.Verdict = verdictNotThisNode
+		nv.Commitment = docs[0]
+		nv.KeyBinding["node_key"] = statusFail
+		nv.Reasons = append(nv.Reasons, reasonKeyMismatch)
+		nv.Findings = append(nv.Findings, reasonKeyMismatch+": the commitment's key_id is not the node key you hold, so it does not describe that node")
+		return nv, nil
+	}
 	var current *commitmentDoc
 	for _, d := range docs {
 		if d.Status == "current" {
@@ -450,16 +484,6 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		return nv, nil
 	}
 	nv.Commitment = current
-	// V5: the key is the asker's, never the carrier's. A commitment under
-	// another key does not describe the node; nothing more is read from it, and
-	// the endpoint it names is not contacted.
-	if in.NodeKey != "" && in.NodeKey != current.KeyID {
-		nv.Verdict = verdictNotThisNode
-		nv.KeyBinding["node_key"] = statusFail
-		nv.Reasons = append(nv.Reasons, reasonKeyMismatch)
-		nv.Findings = append(nv.Findings, reasonKeyMismatch+": the commitment's key_id is not the node key you hold, so it does not describe that node")
-		return nv, nil
-	}
 	bound := in.NodeKey != ""
 	fail := func(reason, finding string) {
 		if !slices.Contains(nv.Reasons, reason) {
@@ -508,6 +532,11 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 	}
 	label := deriveWitness(cardRows, current.KeyID, in)
 	nv.Witness = label
+	if bound {
+		nv.Live = liveCheck(in, current, chains, fail, &nv)
+	} else {
+		nv.Live = "NOT_CHECKED: the key is not bound, so the endpoint the commitment names is not contacted"
+	}
 	// An existing pin is always checked, whatever the label says: a receipt
 	// does not show that a log extends the checkpoint the asker first saw. A
 	// new pin is made only for an unwitnessed node.
@@ -518,11 +547,6 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		}
 		defer pins.release()
 		nv.Pin = pinChecks(pins, chains, now, label.Label == "unwitnessed", fail)
-	}
-	if bound {
-		nv.Live = liveCheck(in, current, chains, fail, &nv)
-	} else {
-		nv.Live = "NOT_CHECKED: the key is not bound, so the endpoint the commitment names is not contacted"
 	}
 	if in.RefuseUnwitnessed && label.Label == "unwitnessed" {
 		fail("unwitnessed_refused", "you asked to refuse a node no configured witness vouches for: "+label.Reason)

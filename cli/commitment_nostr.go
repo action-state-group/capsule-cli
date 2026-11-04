@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 	"syscall"
@@ -211,12 +212,31 @@ func publicOnly(network, address string, _ syscall.RawConn) error {
 		return err
 	}
 	ip := net.ParseIP(host)
+	if addr, ok := netip.AddrFromSlice(ip); ok {
+		addr = addr.Unmap()
+		for _, p := range nonPublicPrefixes {
+			if p.Contains(addr) {
+				return fmt.Errorf("%s is not a public address (--allow-private-network reaches private hosts)", host)
+			}
+		}
+	}
 	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
 		return fmt.Errorf("%s is not a public address (--allow-private-network reaches private hosts)", host)
 	}
 	return nil
 }
+
+// nonPublicPrefixes are the ranges the standard library's predicates miss:
+// this-network, carrier-grade NAT, IETF protocol assignments, benchmarking,
+// reserved, site-local and NAT64.
+var nonPublicPrefixes = func() []netip.Prefix {
+	var out []netip.Prefix
+	for _, p := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4", "fec0::/10", "64:ff9b::/96"} {
+		out = append(out, netip.MustParsePrefix(p))
+	}
+	return out
+}()
 
 // Bounds on what one relay may send: a relay is a stranger's server.
 const (

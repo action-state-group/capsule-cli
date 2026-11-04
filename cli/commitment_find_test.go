@@ -733,7 +733,7 @@ func TestStapleFailuresIgnoreAnotherStreamsAnchor(t *testing.T) {
 		return cardRow{stapleRow: stapleRow{Properties: map[string]string{"commitment_anchor": anchor}, Findings: []string{}}}
 	}
 	assert.Empty(t, stapleFailures([]cardRow{row("PASS"), row("FAIL")}), "the checkpoint is one stream's")
-	assert.Contains(t, stapleFailures([]cardRow{row("FAIL"), row("FAIL")}), "staple_commitment_anchor")
+	assert.Empty(t, stapleFailures([]cardRow{row("FAIL"), row("FAIL")}), "the top-level checkpoint is read for its digest and nothing else (ECC V3)")
 }
 
 func TestFindRefusesAMalformedStapleInsteadOfAborting(t *testing.T) {
@@ -764,7 +764,7 @@ func TestFindDoesNotReachPrivateHosts(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a public address")
 	assert.NoError(t, publicOnly("tcp", "8.8.8.8:443", nil))
-	for _, a := range []string{"127.0.0.1:1", "10.0.0.1:1", "192.168.1.1:1", "169.254.169.254:1", "[::1]:1", "0.0.0.0:1"} {
+	for _, a := range []string{"127.0.0.1:1", "10.0.0.1:1", "192.168.1.1:1", "169.254.169.254:1", "[::1]:1", "0.0.0.0:1", "100.64.0.1:1", "198.18.0.1:1", "240.0.0.1:1", "[64:ff9b::7f00:1]:1", "[::ffff:10.0.0.1]:1"} {
 		assert.Error(t, publicOnly("tcp", a, nil), a)
 	}
 	allowPrivateAddresses = true
@@ -870,13 +870,13 @@ func TestResolveNaddrChecksTheEventAgainstTheAddress(t *testing.T) {
 	relay := relayServing(t, stranger)
 	allowPrivateAddresses = true
 	t.Cleanup(func() { allowPrivateAddresses = false })
-	_, err = resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
+	_, _, err = resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
 	require.Error(t, err, "an event by another author is not the one the address names")
 	assert.Contains(t, err.Error(), "no relay has the event")
 
 	genuine := signedEvent(t, mine, nostrAnnounceKind, tags, content)
 	relay = relayServing(t, stranger, genuine)
-	got, err := resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
+	got, _, err := resolvePointer(commitmentPointer{Carrier: "directory", URI: addr(relay)}, 0)
 	require.NoError(t, err)
 	assert.Equal(t, octets, got)
 }
@@ -908,4 +908,64 @@ func TestRelayFloodIsBounded(t *testing.T) {
 	events, err := queryRelay(relay, map[string]any{"kinds": []int{nostrAnnounceKind}})
 	require.Error(t, err)
 	assert.LessOrEqual(t, len(events), maxRelayEvents)
+}
+
+func TestAStrangersFutureOrConflictingCommitmentCannotChangeTheVerdict(t *testing.T) {
+	goose := filepath.Join(t.TempDir(), "goose.json")
+	require.NoError(t, os.WriteFile(goose, gooseOctets(t), 0o600))
+	_, stranger, _ := ed25519.GenerateKey(nil)
+	future := resignWith(t, stranger, func(doc map[string]any) { doc["issued_at"] = "2099-01-01T00:00:00Z" })
+	a := resignWith(t, stranger, func(doc map[string]any) { doc["issued_at"] = "2026-01-01T00:00:00Z"; doc["answers_within"] = "PT1H" })
+	b := resignWith(t, stranger, func(doc map[string]any) { doc["issued_at"] = "2026-01-01T00:00:00Z"; doc["answers_within"] = "PT2H" })
+	for name, octets := range map[string][][]byte{"future-dated": {future}, "conflicting": {a, b}} {
+		t.Run(name, func(t *testing.T) {
+			args := []string{"--file", goose, "--no-pin", "--node-key", gooseNodeKey}
+			for i, o := range octets {
+				path := filepath.Join(t.TempDir(), "s"+string(rune('a'+i))+".json")
+				require.NoError(t, os.WriteFile(path, o, 0o600))
+				args = append(args, "--file", path)
+			}
+			rep, err := find(t, args...)
+			require.NoError(t, err)
+			assert.Equal(t, "VERIFIED", rep.Verdict)
+		})
+	}
+}
+
+func TestABadCopyOfAGenuineEventDoesNotHideItFromAnotherRelay(t *testing.T) {
+	octets := gooseOctets(t)
+	key, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	node := strings.Repeat("c", 64)
+	genuine := signedEvent(t, key, nostrAnnounceKind, [][]string{{"d", node}, {"t", "evidence-commitment"}, {"x", sha(octets)}}, base64.RawURLEncoding.EncodeToString(octets))
+	bad := genuine
+	bad.Sig = strings.Repeat("0", 128)
+	hostile, honest := relayServing(t, bad), relayServing(t, genuine)
+	allowPrivateAddresses = true
+	t.Cleanup(func() { allowPrivateAddresses = false })
+	events, fails, err := collectEvents([]string{hostile, honest}, map[string]any{"kinds": []int{nostrAnnounceKind}})
+	require.NoError(t, err)
+	assert.Equal(t, []nostrEvent{genuine}, events)
+	assert.Len(t, fails, 1)
+}
+
+func TestAnnouncedAttributionIsSticky(t *testing.T) {
+	// covered through gather's order: the second sighting of the same octets
+	// by another key does not turn announced into relayed.
+	d := &commitmentDoc{NodeID: strings.Repeat("c", 64), doc: map[string]any{"ask": map[string]any{"nostr": map[string]any{"mailbox_key": strings.Repeat("a", 64)}}}}
+	announced := &nostrEvent{Pubkey: strings.Repeat("a", 64), Tags: [][]string{{"d", d.NodeID}}}
+	other := &nostrEvent{Pubkey: strings.Repeat("b", 64), Tags: [][]string{{"d", d.NodeID}}}
+	assert.Equal(t, "announced", nostrAttribution(d, announced))
+	assert.Equal(t, "relayed", nostrAttribution(d, other))
+}
+
+func TestAStaleLockIsTaken(t *testing.T) {
+	dir := t.TempDir()
+	lock := filepath.Join(dir, gooseNodeKey+".json.lock")
+	require.NoError(t, os.WriteFile(lock, nil, 0o600))
+	old := time.Now().Add(-2 * time.Minute)
+	require.NoError(t, os.Chtimes(lock, old, old))
+	p, err := loadPins(dir, gooseNodeKey)
+	require.NoError(t, err, "a lock left by a killed run is taken over")
+	p.release()
 }

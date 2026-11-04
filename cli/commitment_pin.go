@@ -60,6 +60,12 @@ func loadPins(dir, keyID string) (*commitmentPins, error) {
 		if !errors.Is(err, fs.ErrExist) {
 			return nil, err
 		}
+		// A run killed while it held the lock leaves it behind; no run holds
+		// it for long, since it covers the pin check and save only.
+		if info, serr := os.Stat(p.lock); serr == nil && time.Since(info.ModTime()) > time.Minute {
+			_ = os.Remove(p.lock)
+			continue
+		}
 		if waited >= 5*time.Second {
 			return nil, InputError("another run holds " + p.lock + "; if none is running, remove it")
 		}

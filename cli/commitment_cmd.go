@@ -80,7 +80,7 @@ func commitmentCommands() *cobra.Command {
 	f.StringArray("nostr-relay", nil, "A relay (wss:) to search for the node's announce event; needs --node-id (repeat for each)")
 	f.String("node-id", "", "The node's id, 64 lowercase hex: the Nostr search key, and a filter on what the other carriers return")
 	f.StringArray("file", nil, "Commitment octets you already hold (a file)")
-	f.String("node-key", "", "The key you hold for the node, 64 lowercase hex, from the deal or request you hold, never from a carrier; the commitment must be under it. Without it the key is proven only if the node's own answer verifies under the commitment's key_id")
+	f.String("node-key", "", "The key you hold for the node, 64 lowercase hex, from the deal or request you hold, never from a carrier; the commitment must be under it. Without it nothing proves the commitment is the node's, and the verdict is KEY_NOT_BOUND")
 	f.StringArray("checkpoint-key", nil, "A log key you accept for the stapled cards' checkpoints, 64 lowercase hex (repeat for each); the log key need not be the node's")
 	f.StringArray("receipt", nil, "A witness receipt (a COSE Receipt file) over a stapled card's anchor (repeat for each); with none the node is unwitnessed")
 	f.String("anchor-witness-policy", "", "The witnesses you accept, JSON {\"witnesses\":[{\"name\",\"keys\":[hex DER SubjectPublicKeyInfo]}]}; a receipt by any other witness counts for nothing")
