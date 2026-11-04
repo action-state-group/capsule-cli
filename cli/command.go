@@ -743,7 +743,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)
 		if e != nil {
-			return fmt.Errorf("unknown command")
+			return unknownCommandError(root, root.Name(), e)
 		}
 		return target.Help()
 	}})

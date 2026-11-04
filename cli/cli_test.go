@@ -613,20 +613,39 @@ func TestUnknownCommandIsSpecificAndValueFree(t *testing.T) {
 		defer func() { os.Args = oldArgs }()
 		root := NewCommand()
 		root.SetArgs(args)
-		var stdout, stderr bytes.Buffer
+		var stderr bytes.Buffer
 		f, e := os.CreateTemp(t.TempDir(), "out")
 		require.NoError(t, e)
 		code := runTo(t.Context(), root, "capsulectl", f, &stderr)
 		b, e := os.ReadFile(f.Name())
 		require.NoError(t, e)
-		stdout.Write(b)
-		return code, stdout.String(), stderr.String()
+		return code, string(b), stderr.String()
 	}
 	code, out, errOut := run("version")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errOut+out, `unknown command "version"`)
 	assert.Contains(t, errOut+out, "for the version, run `capsulectl --version`")
 	assert.NotContains(t, errOut+out, "operation failed")
+
+	code, out, errOut = run("verfy")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut+out, `unknown command "verfy"; did you mean verify;`)
+
+	// help takes the same path as a first word.
+	code, out, errOut = run("help", "version")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut+out, `unknown command "version"`)
+	assert.NotContains(t, errOut+out, "operation failed")
+
+	// The hint names the binary that ran.
+	oldArgs := os.Args
+	os.Args = []string{"capsulectl-actionstate", "version"}
+	root := NewCommand()
+	root.SetArgs([]string{"version"})
+	_, e := root.ExecuteC()
+	os.Args = oldArgs
+	require.Error(t, e)
+	assert.Contains(t, SafeError(unknownCommandError(root, "capsulectl-actionstate", e)), "`capsulectl-actionstate --version`")
 
 	secret := "Zq9-not-a-command-0123456789abcdef0123456789abcdef"
 	code, out, errOut = run(secret)
