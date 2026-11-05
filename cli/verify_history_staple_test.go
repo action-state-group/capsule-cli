@@ -423,3 +423,31 @@ func TestVerifyHistoryFailureLineAlwaysHasFindings(t *testing.T) {
 	assert.Equal(t, 1, code)
 	assert.Equal(t, []any{"unknown History instance"}, got["findings"])
 }
+
+// A history_card/1 staple as the deal plugin prints it (#551).
+func TestVerifyHistoryStapledCardAsPrinted(t *testing.T) {
+	var vectors []struct {
+		Request string `json:"request"`
+		Reply   string `json:"reply"`
+		Holder  string `json:"holder"`
+		Pass    bool   `json:"pass"`
+	}
+	require.NoError(t, json.Unmarshal(checkedFile(t, "staple-v0/vectors.json", stapleVectorsSHA256), &vectors))
+	for _, v := range vectors {
+		var req struct {
+			Derivation string `json:"derivation"`
+		}
+		if json.Unmarshal([]byte(v.Request), &req) != nil || req.Derivation != "history_card/1" || !v.Pass {
+			continue
+		}
+		printed, err := json.MarshalIndent(map[string]any{"derivation": "history_card/1",
+			"staple": map[string]any{"request": json.RawMessage(v.Request), "reply": json.RawMessage(v.Reply)}}, "", "  ")
+		require.NoError(t, err)
+		row := runStaple(t, writeHistory(t, printed), "--counterparty-key", v.Holder).Staples[0]
+		for _, name := range []string{"envelope_signature", "request_binding", "card_form", "checkpoint_anchor", "checkpoint_signature"} {
+			assert.Equal(t, "PASS", row.Properties[name], name)
+		}
+		return
+	}
+	t.Fatal("no passing history_card/1 vector")
+}

@@ -136,6 +136,7 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 	if err != nil {
 		return err
 	}
+	raw = readPrintedStaple(raw)
 	id, named := historyInstanceOf(raw)
 	// A flag for the other kind of file is an input error, never ignored:
 	// the reader would otherwise believe a sender or log key was checked.
