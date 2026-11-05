@@ -974,7 +974,8 @@ the draft does not define), the strict interval coverage and per-record membersh
 yet apply the strict `category_coverage` check (capsule-cli#556), so a bundle AAC's strict
 verifier rejects for that can still print `VALID`. The output names the reading in `checked_against`:
 `{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}`.
-Both values are a closed set; a member bundle of a `composed/v1` block carries the same member.
+These are the only values today, and the set is closed; a new value is a new release note.
+Each member bundle of a `composed/v1` block carries the same `checked_against`.
 
 It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
 (composed digest, each member, closure, joins) and counts toward the verdict; any other
