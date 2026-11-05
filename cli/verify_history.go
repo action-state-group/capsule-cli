@@ -347,16 +347,21 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 			return err
 		}
 	}
+	exit := error(nil)
+	if r.Verdict != "ACCEPTED" {
+		exit = ErrHistoryNotAccepted
+		switch {
+		case inst.staple:
+			exit = stapleOutcome(&r)
+		case len(r.Findings) == 0 && r.Reason != "":
+			// The failure line points at the findings, so never at none.
+			r.Findings = append(r.Findings, r.Reason)
+		}
+	}
 	if err := outputInOrder(c, r); err != nil {
 		return err
 	}
-	if r.Verdict == "ACCEPTED" {
-		return nil
-	}
-	if inst.staple {
-		return stapleOutcome(r)
-	}
-	return ErrHistoryNotAccepted
+	return exit
 }
 
 // serviceFlagsFit refuses the keys and policy of one instance given with

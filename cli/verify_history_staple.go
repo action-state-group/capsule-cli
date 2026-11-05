@@ -629,19 +629,20 @@ func (errChecksNotRun) Error() string          { return ErrPartial.Error() }
 func (e errChecksNotRun) Is(target error) bool { return target == ErrPartial }
 
 // stapleOutcome is the exit of a staple that is not ACCEPTED. A finding or a
-// FAIL property is a failure (ErrHistoryNotAccepted), so its report line
-// never points at an empty findings list. Otherwise nothing failed: the
+// FAIL property is a failure (ErrHistoryNotAccepted), as is a check whose
+// evidence the file lacks (NOT_PRESENT, listed as a finding), so its report
+// line never points at an empty findings list. Otherwise nothing failed: the
 // checks that could not run are named (errChecksNotRun), and when only the
 // two a commitment cannot make are left, request_binding NOT_PRESENT (no
 // request is stapled) and caller_invariance NOT_CHECKED (one answer, no
 // copies to compare), the card checks out but answers no request of the
 // reader's (ErrHistoryAnswersNoRequest).
-func stapleOutcome(r frameReport) error {
+func stapleOutcome(r *frameReport) error {
 	if len(r.Findings) > 0 || len(r.Staples) == 0 {
 		return ErrHistoryNotAccepted
 	}
 	unfinished := map[string]bool{}
-	unbound := false
+	unbound, missing := false, false
 	for _, row := range r.Staples {
 		if len(row.Findings) > 0 {
 			return ErrHistoryNotAccepted
@@ -654,8 +655,12 @@ func stapleOutcome(r frameReport) error {
 			case p == "request_binding" && status == statusNotPresent:
 				unbound = true
 			case p == "caller_invariance" && status == statusNotChecked:
-			default:
+			case status == statusNotChecked:
 				unfinished[p] = true
+			default:
+				// Evidence the file lacks, which no key supplies.
+				r.Findings = append(r.Findings, p+" "+status)
+				missing = true
 			}
 		}
 		for _, p := range stapleMustPass {
@@ -663,6 +668,9 @@ func stapleOutcome(r frameReport) error {
 				unfinished[p] = true
 			}
 		}
+	}
+	if missing {
+		return ErrHistoryNotAccepted
 	}
 	if len(unfinished) > 0 {
 		return errChecksNotRun{checks: slices.Sorted(maps.Keys(unfinished))}

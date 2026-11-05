@@ -625,7 +625,9 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 // when the only gap is a refusal the other side signed (also exit 3), changed
 // when a check failed. A History that failed a check is not a file that
 // changed, so it has its own line; a stapled card that checks out but answers
-// no request has another (exit 3, the verdict stays NOT_ACCEPTED).
+// no request has another, and one where nothing failed but a key was not given
+// names the checks that could not run (both exit 3; the verdict stays
+// NOT_ACCEPTED).
 func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
 	vals := V{}

@@ -389,3 +389,30 @@ func TestVerifyHistoryCleanCommitmentAnswersNoRequest(t *testing.T) {
 	assert.ErrorIs(t, err, ErrPartial)
 	assert.Equal(t, "history checks out but answers no request", SafeError(err))
 }
+
+// Evidence the file lacks is a failure with a finding, not a check a key
+// would run; and no History instance says "the findings list the checks"
+// over an empty list (#550).
+func TestVerifyHistoryFailureLineAlwaysHasFindings(t *testing.T) {
+	run := func(t *testing.T, file string, args ...string) (map[string]any, int) {
+		t.Helper()
+		out, err := invoke(t, "", append([]string{"verify", "--history", file}, args...)...)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, ExitCode(err)
+	}
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256), &doc))
+	delete(doc, "checkpoint")
+	noCheckpoint, err := json.Marshal(doc)
+	require.NoError(t, err)
+
+	got, code := run(t, writeHistory(t, noCheckpoint))
+	assert.Equal(t, 1, code, "no key supplies a missing checkpoint")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+	assert.Contains(t, got["findings"], "commitment_anchor NOT_PRESENT")
+
+	got, code = run(t, writeHistory(t, []byte(`{"history":"nosuch/1"}`)))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, []any{"unknown History instance"}, got["findings"])
+}
