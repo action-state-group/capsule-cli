@@ -971,9 +971,10 @@ profile and no network are used. It checks:
 The verdict also applies parts of AAC's strict reading, which goes beyond Disclosure Bundle -01:
 the record and producer-signature checks, and, for a `producer-selected` bundle (a selection
 the draft does not define), the strict interval coverage and per-record membership, and the strict
-`category_coverage` check: a bundle whose `category_coverage` member fails a gating property
-(`category_coverage_form`, `_signature` or `_consistency`) prints `INVALID`, as AAC's strict
-verifier does, and the report lists the member's five properties. The output names the reading in `checked_against`:
+`category_coverage` check: a bundle whose `category_coverage` member fails `category_coverage_form`
+or `category_coverage_signature` prints `INVALID`, as AAC's strict verifier does, and the report
+lists the member's five properties. `verify --bundle` supplies no category sets, request or record
+categories, so `_set_registered`, `_request` and `_consistency` are not checked here. The output names the reading in `checked_against`:
 `{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}`.
 These are the only values today, and the set is closed; a new value is a new release note.
 Each member bundle of a `composed/v1` block carries the same `checked_against`.

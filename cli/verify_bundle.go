@@ -153,9 +153,8 @@ func bundleAssessment(value map[string]interface{}, directory *witness.Directory
 }
 
 // The reading a bundle verdict names in checked_against: parts of AAC's strict
-// reading, which goes beyond Disclosure Bundle -01 (capsule-cli#456); not
-// category_coverage yet (capsule-cli#556). The values are a
-// closed set the README lists.
+// reading, which goes beyond Disclosure Bundle -01 (capsule-cli#456). The
+// values are a closed set the README lists.
 const (
 	CheckedAgainstChecks = "aac-strict"
 	CheckedAgainstDraft  = "draft-mih-zhang-agent-disclosure-bundle-01"

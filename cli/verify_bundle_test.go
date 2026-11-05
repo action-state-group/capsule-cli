@@ -279,8 +279,16 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		"produced, no checkpoint log_id":        produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
 		"produced, no cose":                     produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
 		"produced, category_coverage malformed": produced(func(b map[string]interface{}) { b["category_coverage"] = "x" }),
-		"produced, category_coverage empty":     produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
-		"selected":                              selectedBundle(t, nil),
+		"produced, category_coverage bad signature": produced(func(b map[string]interface{}) {
+			b["category_coverage"] = map[string]interface{}{
+				"set":        "x-private",
+				"categories": map[string]interface{}{"a": map[string]interface{}{"status": "AVAILABLE"}},
+				"signer":     map[string]interface{}{"key_id": strings.Repeat("ab", 32)},
+				"signature":  strings.Repeat("cd", 64),
+			}
+		}),
+		"produced, category_coverage empty": produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
+		"selected":                          selectedBundle(t, nil),
 		"selected, certificate log_id": selectedBundle(t, func(b map[string]interface{}) {
 			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
 		}),
