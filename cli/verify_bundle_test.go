@@ -275,10 +275,12 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		return value
 	}
 	for name, value := range map[string]map[string]interface{}{
-		"produced":                       produced(nil),
-		"produced, no checkpoint log_id": produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
-		"produced, no cose":              produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
-		"selected":                       selectedBundle(t, nil),
+		"produced":                              produced(nil),
+		"produced, no checkpoint log_id":        produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
+		"produced, no cose":                     produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
+		"produced, category_coverage malformed": produced(func(b map[string]interface{}) { b["category_coverage"] = "x" }),
+		"produced, category_coverage empty":     produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
+		"selected":                              selectedBundle(t, nil),
 		"selected, certificate log_id": selectedBundle(t, func(b map[string]interface{}) {
 			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
 		}),
@@ -292,6 +294,9 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		assert.Equal(t, strict.Claim("checkpoint").Status, cp["status"], name)
 		assert.ElementsMatch(t, strict.Claim("checkpoint").Findings, cp["findings"], name)
 		assert.Equal(t, strict.Verdict, result["verdict"], name)
+		// Other strict outputs the CLI computes itself (capsule-cli#556).
+		assert.Equal(t, strict.Claim("graph_closure").Status, status(result, "graph_closure"), name)
+		assert.Equal(t, strict.Witnesses.Status, status(result, "witnesses"), name)
 		if want := verdictError(strict.Verdict); want == nil {
 			assert.NoError(t, err, name)
 		} else {

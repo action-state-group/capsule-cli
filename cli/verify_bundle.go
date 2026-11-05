@@ -241,12 +241,16 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	if anchored {
 		witnesses, witnessReceipts = cadence, cadenceReceipts
 	}
+	categoryCoverage, coverageClaim := categoryCoverageClaim(strict)
 	servedRefusals := 0
 	claims := []aacbundle.ClaimResult{result.GraphClosure, signedCheckpoint, result.IntervalCoverage, result.PerRecordMembership, signatures}
 	// The bundle draft defines no witness member: only a failing receipt
 	// changes the verdict, and a file without one is judged as before.
 	if witnesses.Status == "fail" {
 		claims = append(claims, witnesses)
+	}
+	if coverageClaim.Status == "fail" {
+		claims = append(claims, coverageClaim)
 	}
 	extensions := make([]map[string]any, 0, len(result.Extensions))
 	dealSeen := false
@@ -310,7 +314,7 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	if result.BundleDigest != nil {
 		digest = *result.BundleDigest
 	}
-	return map[string]any{
+	report := map[string]any{
 		"verdict":               verdict,
 		"checked_against":       map[string]string{"checks": CheckedAgainstChecks, "bundle_draft": CheckedAgainstDraft},
 		"bundle_digest":         digest,
@@ -325,7 +329,44 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		"producer_signatures":   claim(signatures),
 		"record_signatures":     signatureStates,
 		"witnesses":             map[string]any{"status": witnesses.Status, "findings": nonNilStrings(witnesses.Findings), "receipts": witnessReceipts},
-	}, verdict, pageVerdict
+	}
+	// Printed only for a bundle that carries the member, so no other
+	// bundle's output changes.
+	if categoryCoverage != nil {
+		report["category_coverage"] = categoryCoverage
+	}
+	return report, verdict, pageVerdict
+}
+
+// gatingCategoryCoverage are the category_coverage properties whose FAIL makes
+// AAC's strict verdict INVALID (go/bundle category_coverage.go,
+// gatingProperties). The other two never change a verdict.
+var gatingCategoryCoverage = map[string]bool{
+	"category_coverage_form":        true,
+	"category_coverage_signature":   true,
+	"category_coverage_consistency": true,
+}
+
+// categoryCoverageClaim is AAC strict's category_coverage reading
+// (capsule-cli#556): the five properties as printed (nil when the bundle has
+// no such member), and a claim that fails when a gating property is FAIL, as
+// VerifyStrict's verdict does.
+func categoryCoverageClaim(strict aacbundle.StrictResult) (map[string]string, aacbundle.ClaimResult) {
+	if strict.CategoryCoverage == nil {
+		return nil, aacbundle.ClaimResult{Status: "pass"}
+	}
+	properties := map[string]string{}
+	var findings []string
+	for _, property := range strict.CategoryCoverage {
+		properties[property.Name] = property.Value
+		if gatingCategoryCoverage[property.Name] && property.Value == aacbundle.CoverageFail {
+			findings = append(findings, property.Name+" is FAIL")
+		}
+	}
+	if findings != nil {
+		return properties, aacbundle.ClaimResult{Status: "fail", Findings: findings}
+	}
+	return properties, aacbundle.ClaimResult{Status: "pass"}
 }
 
 // claimsVerdict is the verdict of a set of claims: INVALID if any fails,
