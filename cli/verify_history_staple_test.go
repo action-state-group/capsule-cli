@@ -333,8 +333,93 @@ func TestSubjectInScope(t *testing.T) {
 // A History that is not accepted says so in its own words, not that the file
 // was changed.
 func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
-	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", gooseNodeKey)
+	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", hex.EncodeToString(make([]byte, 32)))
 	var out map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
+	assert.NotEmpty(t, got.Staples[0].Findings)
+	assert.Contains(t, out["findings"], "staples[0]: "+got.Staples[0].Findings[0], "the failure line is only said with top-level findings to list")
+}
+
+// A commitment staple whose every check passes except the two it cannot make
+// (no request stapled, no copies to compare) says the card checks out but
+// answers no request, and exits 3; the verdict stays NOT_ACCEPTED (#548). A
+// staple that really failed keeps the failure wording and exit 1.
+func TestVerifyHistoryCleanCommitmentAnswersNoRequest(t *testing.T) {
+	path := filepath.Join("testdata", "goose-commitment-v1", "commitment.json")
+	key := checkpointKeyOf(t, path)
+	exit := func(t *testing.T, args ...string) (map[string]any, int) {
+		t.Helper()
+		out, err := invoke(t, "", append([]string{"verify", "--history", path}, args...)...)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, ExitCode(err)
+	}
+
+	got, code := exit(t, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key)
+	assert.Equal(t, "NOT_ACCEPTED", got["verdict"])
+	assert.Empty(t, got["findings"])
+	assert.Equal(t, 3, code)
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_answers_no_request"], got["say"])
+
+	got, code = exit(t, "--counterparty-key", hex.EncodeToString(make([]byte, 32)), "--checkpoint-key", key)
+	assert.Equal(t, 1, code, "a wrong counterparty key is a failure")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+
+	// Nothing failed but a key was not given: exit 3 names the checks that
+	// could not run, never the failure line over an empty list.
+	got, code = exit(t, "--counterparty-key", gooseNodeKey)
+	assert.Equal(t, 3, code)
+	assert.Empty(t, got["findings"])
+	assert.Equal(t, "Nothing failed, but some checks couldn't run: checkpoint_key. Give the keys you hold for this agent to run them.", got["say"])
+	got, code = exit(t)
+	assert.Equal(t, 3, code)
+	assert.Contains(t, got["say"], "commitment_signature, ")
+	assert.Contains(t, got["say"], "responder_trust")
+
+	// A witness check the reader asked for that fails is a failure, not "clean".
+	policy := filepath.Join(t.TempDir(), "policy.json")
+	require.NoError(t, os.WriteFile(policy, []byte(`{"witnesses":[{"name":"w","keys":["`+gooseNodeKey+`"]}]}`), 0o600))
+	got, code = exit(t, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key, "--receipt", path, "--anchor-witness-policy", policy)
+	assert.Equal(t, "FAIL", got["anchor_witnessed"].(map[string]any)["status"])
+	assert.NotEmpty(t, got["findings"], "a failed witness check is a finding")
+	assert.Equal(t, 1, code, "a failed witness check is a failure")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+
+	_, err := invoke(t, "", "verify", "--history", path, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key)
+	assert.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, "history checks out but answers no request", SafeError(err))
+}
+
+// Evidence the file lacks is a failure with a finding, not a check a key
+// would run; and no History instance says "the findings list the checks"
+// over an empty list (#550).
+func TestVerifyHistoryFailureLineAlwaysHasFindings(t *testing.T) {
+	run := func(t *testing.T, file string, args ...string) (map[string]any, int) {
+		t.Helper()
+		out, err := invoke(t, "", append([]string{"verify", "--history", file}, args...)...)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, ExitCode(err)
+	}
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256), &doc))
+	delete(doc, "checkpoint")
+	noCheckpoint, err := json.Marshal(doc)
+	require.NoError(t, err)
+
+	got, code := run(t, writeHistory(t, noCheckpoint))
+	assert.Equal(t, 1, code, "no key supplies a missing checkpoint")
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+	assert.Contains(t, got["findings"], "commitment_anchor NOT_PRESENT")
+
+	// Whenever the failure line is said, the top-level findings are not empty.
+	got, code = run(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", hex.EncodeToString(make([]byte, 32)))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+	assert.Contains(t, got["findings"], "staples[0]: responder_trust FAIL: the staple's responder is not the counterparty key you hold")
+
+	got, code = run(t, writeHistory(t, []byte(`{"history":"nosuch/1"}`)))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, []any{"unknown History instance"}, got["findings"])
 }

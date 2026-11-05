@@ -472,6 +472,7 @@ func TestAVerifyResultSaysWhatItFound(t *testing.T) {
 		{ErrPartial, "say.verify.unable", ErrPartial},
 		{ErrBundleInvalid, "say.verify.changed", ErrBundleInvalid},
 		{ErrHistoryNotAccepted, "say.verify.history_not_accepted", ErrHistoryNotAccepted},
+		{ErrHistoryAnswersNoRequest, "say.verify.history_answers_no_request", ErrHistoryAnswersNoRequest},
 	} {
 		cmd := NarrateByOutcome(&cobra.Command{Use: "verify", SilenceErrors: true, SilenceUsage: true, RunE: func(c *cobra.Command, _ []string) error {
 			// Members in their own order, as verify --history writes them.

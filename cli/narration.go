@@ -624,13 +624,23 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 // passed, unable when something could not be checked here (exit 3), refused
 // when the only gap is a refusal the other side signed (also exit 3), changed
 // when a check failed. A History that failed a check is not a file that
-// changed, so it has its own line.
+// changed, so it has its own line; a stapled card that checks out but answers
+// no request has another, and one where nothing failed but a key was not given
+// names the checks that could not run (both exit 3; the verdict stays
+// NOT_ACCEPTED).
 func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
+	vals := V{}
+	var notRun errChecksNotRun
 	switch {
 	case err == nil:
+	case errors.As(err, &notRun):
+		key = "say.verify.history_checks_not_run"
+		vals["checks"] = strings.Join(notRun.checks, ", ")
 	case errors.As(err, &errServedRefusalsOnly{}):
 		key = "say.verify.refused"
+	case errors.Is(err, ErrHistoryAnswersNoRequest):
+		key = "say.verify.history_answers_no_request"
 	case errors.Is(err, ErrPartial):
 		key = "say.verify.unable"
 	case errors.Is(err, ErrHistoryNotAccepted):
@@ -638,7 +648,7 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	default:
 		key = "say.verify.changed"
 	}
-	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, nil)} })
+	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, vals)} })
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with

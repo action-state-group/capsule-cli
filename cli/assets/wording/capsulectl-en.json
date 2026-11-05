@@ -25,6 +25,8 @@
     "say.settlement.terms_only": "No payment has been reported against these terms yet.",
     "say.settlement.unjoined": "The two sides' payment reports couldn't be matched to each other.",
     "say.verify.changed": "This file was changed after it was locked.",
+    "say.verify.history_answers_no_request": "This card checks out, but it wasn't sent in answer to a request from you, so it isn't accepted as one. To get an answer, send the agent a request.",
+    "say.verify.history_checks_not_run": "Nothing failed, but some checks couldn't run: {checks}. Give the keys you hold for this agent to run them.",
     "say.verify.history_not_accepted": "This history wasn't accepted. The findings list the checks that didn't pass.",
     "say.verify.refused": "Part of this was refused, and the refusal is signed, so it isn't complete. Everything else in it checked out.",
     "say.verify.unable": "I couldn't check this file here.",

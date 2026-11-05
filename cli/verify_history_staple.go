@@ -2,12 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -151,6 +153,11 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 	// One anchor per staple; the receipts sit beside the first card.
 	w := anchorWitnessed(anchors[0], receipts, policy)
 	r.AnchorWitnessed = &w
+	if r.Verdict != "ACCEPTED" && w.Status == witness.AnchorFail {
+		// A witness check the reader asked for is a finding, so the failure
+		// line never points at an empty list.
+		r.Findings = append(r.Findings, "anchor_witnessed FAIL: "+cmp.Or(w.Reason, "a --receipt does not witness the anchor"))
+	}
 	return r, nil
 }
 
@@ -611,4 +618,72 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 		rows = append(rows, row)
 	}
 	return rows, nil
+}
+
+// errChecksNotRun is ErrPartial for a staple where nothing failed but some
+// checks could not run here (a key was not given): exit 3, with the checks
+// named for the report line.
+type errChecksNotRun struct{ checks []string }
+
+func (errChecksNotRun) Error() string          { return ErrPartial.Error() }
+func (e errChecksNotRun) Is(target error) bool { return target == ErrPartial }
+
+// stapleOutcome is the exit of a staple that is not ACCEPTED. A finding or a
+// FAIL property is a failure (ErrHistoryNotAccepted), as is a check whose
+// evidence the file lacks (NOT_PRESENT, listed as a finding), so its report
+// line never points at an empty findings list. Otherwise nothing failed: the
+// checks that could not run are named (errChecksNotRun), and when only the
+// two a commitment cannot make are left, request_binding NOT_PRESENT (no
+// request is stapled) and caller_invariance NOT_CHECKED (one answer, no
+// copies to compare), the card checks out but answers no request of the
+// reader's (ErrHistoryAnswersNoRequest).
+func stapleOutcome(r *frameReport) error {
+	// The report line points at the top-level findings, so each staple's
+	// are copied up, prefixed; staples[].findings stays as it is.
+	for i, row := range r.Staples {
+		for _, f := range row.Findings {
+			r.Findings = append(r.Findings, fmt.Sprintf("staples[%d]: %s", i, f))
+		}
+	}
+	if len(r.Findings) > 0 || len(r.Staples) == 0 {
+		return ErrHistoryNotAccepted
+	}
+	unfinished := map[string]bool{}
+	unbound, missing := false, false
+	for _, row := range r.Staples {
+		if len(row.Findings) > 0 {
+			return ErrHistoryNotAccepted
+		}
+		for p, status := range row.Properties {
+			switch {
+			case status == statusFail:
+				return ErrHistoryNotAccepted
+			case status == statusPass:
+			case p == "request_binding" && status == statusNotPresent:
+				unbound = true
+			case p == "caller_invariance" && status == statusNotChecked:
+			case status == statusNotChecked:
+				unfinished[p] = true
+			default:
+				// Evidence the file lacks, which no key supplies.
+				r.Findings = append(r.Findings, p+" "+status)
+				missing = true
+			}
+		}
+		for _, p := range stapleMustPass {
+			if _, ok := row.Properties[p]; !ok {
+				unfinished[p] = true
+			}
+		}
+	}
+	if missing {
+		return ErrHistoryNotAccepted
+	}
+	if len(unfinished) > 0 {
+		return errChecksNotRun{checks: slices.Sorted(maps.Keys(unfinished))}
+	}
+	if unbound {
+		return ErrHistoryAnswersNoRequest
+	}
+	return ErrHistoryNotAccepted
 }
