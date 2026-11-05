@@ -145,9 +145,10 @@ func (m carried) message() (evidencerequest.Message, error) {
 // readPrintedStaple rewrites a staple as `deal standard-history staple`
 // prints it, {derivation, staple: {request, reply}} with the request and the
 // reply as embedded JSON values, into the carried form
-// {history, request, reply} the readers take. An embedded value is the JSON
-// octets, compacted as evidencebook's CheckStaple reads them (evidencebook-
-// deal#115). Any other file is returned unchanged.
+// {history, request, reply} the readers take. An embedded value is the whole
+// JSON octets (printedOctets: compacted, the writer's HTML escapes read
+// back); a changed byte fails request_binding. Any other file is returned
+// unchanged.
 func readPrintedStaple(raw []byte) []byte {
 	var f struct {
 		Derivation string `json:"derivation"`
@@ -182,16 +183,34 @@ func readPrintedStaple(raw []byte) []byte {
 // the plugin's result writer does. Canonical request and reply octets (JCS)
 // never contain them as escapes, so reading them back is exact; a value that
 // did carry one stays unequal to its signed digest and fails request_binding.
-var htmlEscapes = strings.NewReplacer(`\u003c`, "<", `\u003e`, ">", `\u0026`, "&", `\u2028`, "\u2028", `\u2029`, "\u2029")
+var htmlEscapes = map[string]string{`\u003c`: "<", `\u003e`: ">", `\u0026`: "&", `\u2028`: "\u2028", `\u2029`: "\u2029"}
 
 // printedOctets is an embedded JSON value as the octets it was printed from:
-// compacted, with the printer's HTML escapes read back.
+// compacted, with the printer's HTML escapes read back. It walks the
+// escapes, so the text \\u003c (an escaped backslash, then u003c) is left alone.
 func printedOctets(v json.RawMessage) (string, bool) {
 	var buf bytes.Buffer
 	if json.Compact(&buf, v) != nil {
 		return "", false
 	}
-	return htmlEscapes.Replace(buf.String()), true
+	in := buf.String()
+	var out strings.Builder
+	for i := 0; i < len(in); i++ {
+		if in[i] != '\\' || i+1 >= len(in) {
+			out.WriteByte(in[i])
+			continue
+		}
+		if in[i+1] == 'u' && i+6 <= len(in) {
+			if r, ok := htmlEscapes[in[i:i+6]]; ok {
+				out.WriteString(r)
+				i += 5
+				continue
+			}
+		}
+		out.WriteString(in[i : i+2])
+		i++
+	}
+	return out.String(), true
 }
 
 // verifyStandardHistory evaluates a served standard_history/1 answer: the

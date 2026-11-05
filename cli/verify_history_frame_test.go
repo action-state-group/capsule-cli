@@ -333,6 +333,14 @@ func TestPrintedOctetsReadBackEscapes(t *testing.T) {
 	got, ok := printedOctets(back["request"])
 	require.True(t, ok)
 	assert.Equal(t, octets, got)
+	// An escaped backslash before u003c is the text \u003c, not an escape.
+	literal := "{\"a\":\"\\\\u003c \\\\\\\\u0026 \\u0041\"}"
+	out.Reset()
+	require.NoError(t, json.NewEncoder(&out).Encode(map[string]json.RawMessage{"request": json.RawMessage(literal)}))
+	require.NoError(t, json.Unmarshal(out.Bytes(), &back))
+	got, ok = printedOctets(back["request"])
+	require.True(t, ok)
+	assert.Equal(t, literal, got)
 	_, ok = printedOctets(json.RawMessage(`{`))
 	assert.False(t, ok)
 }
