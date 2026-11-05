@@ -275,10 +275,20 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		return value
 	}
 	for name, value := range map[string]map[string]interface{}{
-		"produced":                       produced(nil),
-		"produced, no checkpoint log_id": produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
-		"produced, no cose":              produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
-		"selected":                       selectedBundle(t, nil),
+		"produced":                              produced(nil),
+		"produced, no checkpoint log_id":        produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "log_id") }),
+		"produced, no cose":                     produced(func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") }),
+		"produced, category_coverage malformed": produced(func(b map[string]interface{}) { b["category_coverage"] = "x" }),
+		"produced, category_coverage bad signature": produced(func(b map[string]interface{}) {
+			b["category_coverage"] = map[string]interface{}{
+				"set":        "x-private",
+				"categories": map[string]interface{}{"a": map[string]interface{}{"status": "AVAILABLE"}},
+				"signer":     map[string]interface{}{"key_id": strings.Repeat("ab", 32)},
+				"signature":  strings.Repeat("cd", 64),
+			}
+		}),
+		"produced, category_coverage empty": produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
+		"selected":                          selectedBundle(t, nil),
 		"selected, certificate log_id": selectedBundle(t, func(b map[string]interface{}) {
 			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
 		}),
@@ -292,6 +302,9 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		assert.Equal(t, strict.Claim("checkpoint").Status, cp["status"], name)
 		assert.ElementsMatch(t, strict.Claim("checkpoint").Findings, cp["findings"], name)
 		assert.Equal(t, strict.Verdict, result["verdict"], name)
+		// Other strict outputs the CLI computes itself (capsule-cli#556).
+		assert.Equal(t, strict.Claim("graph_closure").Status, status(result, "graph_closure"), name)
+		assert.Equal(t, strict.Witnesses.Status, status(result, "witnesses"), name)
 		if want := verdictError(strict.Verdict); want == nil {
 			assert.NoError(t, err, name)
 		} else {
@@ -703,4 +716,60 @@ func TestVerifyBundleStillRejectsARangelessCertificateWithoutSelection(t *testin
 	result, err := verifyBundleOutput(t, writeBundle(t, value))
 	assert.ErrorIs(t, err, ErrBundleInvalid)
 	assert.Equal(t, "fail", status(result, "interval_coverage"))
+}
+
+// verify --bundle fails on a gating category_coverage property and on no other
+// (capsule-cli#556).
+func TestCategoryCoverageClaim(t *testing.T) {
+	property := func(name, value string) aacbundle.CategoryProperty {
+		return aacbundle.CategoryProperty{Name: name, Value: value}
+	}
+	_, absent := categoryCoverageClaim(aacbundle.StrictResult{})
+	assert.Equal(t, "pass", absent.Status)
+	printed, _ := categoryCoverageClaim(aacbundle.StrictResult{})
+	assert.Nil(t, printed)
+
+	for _, name := range aacbundle.CategoryCoverageProperties {
+		gating := name == "category_coverage_form" || name == "category_coverage_signature" || name == "category_coverage_consistency"
+		for _, value := range []string{aacbundle.CoverageFail, aacbundle.CoverageNotChecked, aacbundle.CoverageInconclusive, aacbundle.CoverageNotPresent, aacbundle.CoveragePass} {
+			printed, got := categoryCoverageClaim(aacbundle.StrictResult{CategoryCoverage: []aacbundle.CategoryProperty{property(name, value)}})
+			assert.Equal(t, map[string]string{name: value}, printed)
+			if gating && value == aacbundle.CoverageFail {
+				assert.Equal(t, "fail", got.Status, name)
+				assert.Equal(t, []string{name + " is FAIL"}, got.Findings, name)
+			} else {
+				assert.Equal(t, "pass", got.Status, name+" "+value)
+			}
+		}
+	}
+}
+
+// A well-formed, unsigned category_coverage member is printed and does not
+// change the verdict; a bad signature on it makes the bundle INVALID.
+func TestVerifyBundleCategoryCoverageReport(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	member := func() map[string]interface{} {
+		return map[string]interface{}{
+			"set":        "x-private",
+			"categories": map[string]interface{}{"a": map[string]interface{}{"status": "AVAILABLE"}},
+		}
+	}
+	base, _ := verifyBundleOutput(t, producedBundle(t, nil))
+	assert.NotContains(t, base, "category_coverage")
+
+	result, _ := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) { b["category_coverage"] = member() }))
+	assert.Equal(t, base["verdict"], result["verdict"])
+	printed := result["category_coverage"].(map[string]interface{})
+	assert.Equal(t, "PASS", printed["category_coverage_form"])
+	assert.Equal(t, "NOT_PRESENT", printed["category_coverage_signature"])
+
+	result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+		m := member()
+		m["signer"] = map[string]interface{}{"key_id": strings.Repeat("ab", 32)}
+		m["signature"] = strings.Repeat("cd", 64)
+		b["category_coverage"] = m
+	}))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "INVALID", result["verdict"])
+	assert.Equal(t, "FAIL", result["category_coverage"].(map[string]interface{})["category_coverage_signature"])
 }
