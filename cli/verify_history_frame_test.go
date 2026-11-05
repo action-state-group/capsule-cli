@@ -196,3 +196,63 @@ func TestVerifyHistoryServedStandardHistory(t *testing.T) {
 	_, err := invoke(t, "", "verify", "--history", path, "--holder-key", hex.EncodeToString(make([]byte, 32)))
 	assert.ErrorIs(t, err, ErrHistoryNotAccepted)
 }
+
+// printedStaple is the carried file rewritten as `deal standard-history
+// staple` prints it: {derivation, staple: {request, reply}} with the octets
+// embedded as indented JSON values (#551).
+func printedStaple(t *testing.T, carriedFile []byte) []byte {
+	t.Helper()
+	var f struct {
+		History string `json:"history"`
+		Request struct {
+			OctetsText string `json:"octets_text"`
+		} `json:"request"`
+		Reply struct {
+			OctetsText string `json:"octets_text"`
+		} `json:"reply"`
+	}
+	require.NoError(t, json.Unmarshal(carriedFile, &f))
+	out, err := json.MarshalIndent(map[string]any{
+		"derivation": f.History, "deal_id": "deal-0",
+		"staple": map[string]any{"request": json.RawMessage(f.Request.OctetsText), "reply": json.RawMessage(f.Reply.OctetsText)},
+	}, "", "  ")
+	require.NoError(t, err)
+	return out
+}
+
+// A staple as the deal plugin prints it reads the same as the carried form
+// and as a staple whose request is changed fails request_binding (#551).
+func TestVerifyHistoryReadsAStapleAsPrinted(t *testing.T) {
+	var file struct {
+		Cases []struct {
+			ID     string `json:"id"`
+			Inputs struct {
+				Card json.RawMessage `json:"card"`
+			} `json:"inputs"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(pinnedVectors(t, "standard-history-v0", standardHistoryVectorsSHA), &file))
+	seed := sha256.Sum256([]byte("capsule-cli verify --history: served standard_history/1 test key"))
+	key := ed25519.NewKeyFromSeed(seed[:])
+	holder := hex.EncodeToString(key.Public().(ed25519.PublicKey))
+	var card struct {
+		Anchor string `json:"anchor"`
+	}
+	require.NoError(t, json.Unmarshal(file.Cases[0].Inputs.Card, &card))
+	carriedFile := signedStandardAnswer(t, key, file.Cases[0].Inputs.Card, card.Anchor)
+
+	want, werr := invoke(t, "", "verify", "--history", writeHistory(t, carriedFile), "--holder-key", holder)
+	got, gerr := invoke(t, "", "verify", "--history", writeHistory(t, printedStaple(t, carriedFile)), "--holder-key", holder)
+	assert.Equal(t, want, got)
+	assert.Equal(t, ExitCode(werr), ExitCode(gerr))
+	assert.Contains(t, got, `"envelope_signature":"PASS"`)
+
+	var f map[string]any
+	require.NoError(t, json.Unmarshal(printedStaple(t, carriedFile), &f))
+	f["staple"].(map[string]any)["request"].(map[string]any)["nonce"] = "n-2"
+	changed, err := json.Marshal(f)
+	require.NoError(t, err)
+	out, cerr := invoke(t, "", "verify", "--history", writeHistory(t, changed), "--holder-key", holder)
+	assert.ErrorIs(t, cerr, ErrHistoryNotAccepted)
+	assert.Contains(t, out, `"request_binding":"FAIL"`)
+}

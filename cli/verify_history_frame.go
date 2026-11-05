@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -138,6 +139,49 @@ func (m carried) message() (evidencerequest.Message, error) {
 		return evidencerequest.Message{Octets: b, MediaType: m.MediaType}, err
 	}
 	return evidencerequest.Message{}, errors.New("not {media_type, octets_text} for JSON or {media_type, octets_hex} for CBOR")
+}
+
+// readPrintedStaple rewrites a staple as `deal standard-history staple`
+// prints it, {derivation, staple: {request, reply}} with the request and the
+// reply as embedded JSON values, into the carried form
+// {history, request, reply} the readers take. An embedded value is the JSON
+// octets, compacted as evidencebook's CheckStaple reads them (evidencebook-
+// deal#115); a value already in carried form is left alone. Any other file
+// is returned unchanged.
+func readPrintedStaple(raw []byte) []byte {
+	var f struct {
+		Derivation string `json:"derivation"`
+		History    any    `json:"history"`
+		Profile    any    `json:"profile"`
+		Staple     *struct {
+			Request json.RawMessage `json:"request"`
+			Reply   json.RawMessage `json:"reply"`
+		} `json:"staple"`
+	}
+	if json.Unmarshal(raw, &f) != nil || f.Derivation == "" || f.History != nil || f.Profile != nil || f.Staple == nil {
+		return raw
+	}
+	wrap := func(v json.RawMessage) any {
+		var probe struct {
+			MediaType  string  `json:"media_type"`
+			OctetsText *string `json:"octets_text"`
+			OctetsHex  *string `json:"octets_hex"`
+		}
+		var buf bytes.Buffer
+		if json.Unmarshal(v, &probe) == nil && probe.MediaType != "" && (probe.OctetsText != nil || probe.OctetsHex != nil) {
+			return v
+		}
+		if json.Compact(&buf, v) != nil {
+			return v
+		}
+		text := buf.String()
+		return carried{MediaType: evidencerequest.MediaTypeJSON, OctetsText: &text}
+	}
+	out, err := json.Marshal(map[string]any{"history": f.Derivation, "request": wrap(f.Staple.Request), "reply": wrap(f.Staple.Reply)})
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 // verifyStandardHistory evaluates a served standard_history/1 answer: the
