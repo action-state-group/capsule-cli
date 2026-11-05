@@ -638,6 +638,13 @@ func (e errChecksNotRun) Is(target error) bool { return target == ErrPartial }
 // copies to compare), the card checks out but answers no request of the
 // reader's (ErrHistoryAnswersNoRequest).
 func stapleOutcome(r *frameReport) error {
+	// The report line points at the top-level findings, so each staple's
+	// are copied up, prefixed; staples[].findings stays as it is.
+	for i, row := range r.Staples {
+		for _, f := range row.Findings {
+			r.Findings = append(r.Findings, fmt.Sprintf("staples[%d]: %s", i, f))
+		}
+	}
 	if len(r.Findings) > 0 || len(r.Staples) == 0 {
 		return ErrHistoryNotAccepted
 	}

@@ -337,7 +337,8 @@ func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
 	var out map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
-	assert.NotEmpty(t, got.Staples[0].Findings, "the failure line is only said with findings to list")
+	assert.NotEmpty(t, got.Staples[0].Findings)
+	assert.Contains(t, out["findings"], "staples[0]: "+got.Staples[0].Findings[0], "the failure line is only said with top-level findings to list")
 }
 
 // A commitment staple whose every check passes except the two it cannot make
@@ -411,6 +412,12 @@ func TestVerifyHistoryFailureLineAlwaysHasFindings(t *testing.T) {
 	assert.Equal(t, 1, code, "no key supplies a missing checkpoint")
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
 	assert.Contains(t, got["findings"], "commitment_anchor NOT_PRESENT")
+
+	// Whenever the failure line is said, the top-level findings are not empty.
+	got, code = run(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", hex.EncodeToString(make([]byte, 32)))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+	assert.Contains(t, got["findings"], "staples[0]: responder_trust FAIL: the staple's responder is not the counterparty key you hold")
 
 	got, code = run(t, writeHistory(t, []byte(`{"history":"nosuch/1"}`)))
 	assert.Equal(t, 1, code)
