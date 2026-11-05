@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -255,4 +256,106 @@ func TestVerifyHistoryReadsAStapleAsPrinted(t *testing.T) {
 	out, cerr := invoke(t, "", "verify", "--history", writeHistory(t, changed), "--holder-key", holder)
 	assert.ErrorIs(t, cerr, ErrHistoryNotAccepted)
 	assert.Contains(t, out, `"request_binding":"FAIL"`)
+}
+
+// The real `deal standard-history staple` output (testdata/deal-staple-printed,
+// unedited), read as printed, gives the same report as the carried form built
+// from the same octets: json.Compact reproduces the signed bytes, so
+// request_binding and the envelope signature pass. A request that differs by
+// one byte fails closed (#551).
+func TestVerifyHistoryReadsTheRealPrinterOutput(t *testing.T) {
+	const responder = "afd21f256ba7ce8e402793be05cfbb9d613c26a390e90f6f8ec69fb7b08316cc"
+	for derivation, flag := range map[string]string{"standard": "--holder-key", "card": "--counterparty-key"} {
+		t.Run(derivation, func(t *testing.T) {
+			path := filepath.Join("testdata", "deal-staple-printed", "staple-"+derivation+".json")
+			raw, err := os.ReadFile(path)
+			require.NoError(t, err)
+			var doc struct {
+				Derivation string `json:"derivation"`
+				Staple     struct {
+					Request json.RawMessage `json:"request"`
+					Reply   json.RawMessage `json:"reply"`
+				} `json:"staple"`
+			}
+			require.NoError(t, json.Unmarshal(raw, &doc))
+			carriedFile, err := json.Marshal(map[string]any{"history": doc.Derivation,
+				"request": map[string]any{"media_type": "application/json", "octets_text": compactJSON(t, doc.Staple.Request)},
+				"reply":   map[string]any{"media_type": "application/json", "octets_text": compactJSON(t, doc.Staple.Reply)}})
+			require.NoError(t, err)
+
+			got, gerr := invoke(t, "", "verify", "--history", path, flag, responder)
+			want, werr := invoke(t, "", "verify", "--history", writeHistory(t, carriedFile), flag, responder)
+			assert.Equal(t, want, got)
+			assert.Equal(t, ExitCode(werr), ExitCode(gerr))
+			assert.Contains(t, got, `"envelope_signature":"PASS"`)
+			assert.Contains(t, got, `"request_binding":"PASS"`)
+
+			var f map[string]any
+			require.NoError(t, json.Unmarshal(raw, &f))
+			f["staple"].(map[string]any)["request"].(map[string]any)["nonce"] = "0" + f["staple"].(map[string]any)["request"].(map[string]any)["nonce"].(string)
+			changed, err := json.Marshal(f)
+			require.NoError(t, err)
+			out, cerr := invoke(t, "", "verify", "--history", writeHistory(t, changed), flag, responder)
+			assert.NotEqual(t, 0, ExitCode(cerr))
+			assert.NotContains(t, out, `"request_binding":"PASS"`)
+
+			// An embedded request that has members named media_type and
+			// octets_text is still the octets checked, whole.
+			var g map[string]any
+			require.NoError(t, json.Unmarshal(raw, &g))
+			st := g["staple"].(map[string]any)
+			st["request"] = map[string]any{"media_type": "application/json", "octets_text": compactJSON(t, doc.Staple.Request)}
+			look, err := json.Marshal(g)
+			require.NoError(t, err)
+			out, lerr := invoke(t, "", "verify", "--history", writeHistory(t, look), flag, responder)
+			assert.NotEqual(t, 0, ExitCode(lerr))
+			assert.NotContains(t, out, `"request_binding":"PASS"`)
+		})
+	}
+}
+
+func compactJSON(t *testing.T, v json.RawMessage) string {
+	t.Helper()
+	var b bytes.Buffer
+	require.NoError(t, json.Compact(&b, v))
+	return b.String()
+}
+
+// The plugin's result writer HTML-escapes an embedded value (<, >, & and the
+// line separators); reading it back gives the octets that were signed (#551).
+func TestPrintedOctetsReadBackEscapes(t *testing.T) {
+	octets := "{\"nonce\":\"a&b<c>d e f\",\"x\":[1,2]}"
+	var out bytes.Buffer
+	require.NoError(t, json.NewEncoder(&out).Encode(map[string]json.RawMessage{"request": json.RawMessage(octets)}))
+	require.Contains(t, out.String(), "\\u0026", "the writer escapes")
+	var back map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(out.Bytes(), &back))
+	got, ok := printedOctets(back["request"])
+	require.True(t, ok)
+	assert.Equal(t, octets, got)
+	_, ok = printedOctets(json.RawMessage(`{`))
+	assert.False(t, ok)
+}
+
+// The rewrite only applies to the printed form; every other file is read as
+// before, and a malformed staple is an input error or an unknown instance.
+func TestVerifyHistoryPrintedStapleGuards(t *testing.T) {
+	run := func(t *testing.T, doc string) (string, error) {
+		return invoke(t, "", "verify", "--history", writeHistory(t, []byte(doc)))
+	}
+	for name, doc := range map[string]string{
+		"a history member keeps the file as it is": `{"history":"standard_history/1","derivation":"x","staple":{"request":{},"reply":{}},"request":1,"reply":1}`,
+		"no request":                     `{"derivation":"standard_history/1","staple":{"reply":{}}}`,
+		"a null request":                 `{"derivation":"standard_history/1","staple":{"request":null,"reply":{}}}`,
+		"a string request":               `{"derivation":"standard_history/1","staple":{"request":"x","reply":{}}}`,
+		"a staple that is not an object": `{"derivation":"standard_history/1","staple":3}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := run(t, doc)
+			assert.Equal(t, 2, ExitCode(err))
+		})
+	}
+	out, err := run(t, `{"derivation":"nosuch/1","staple":{"request":{},"reply":{}}}`)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Contains(t, out, "unknown History instance")
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 	"github.com/action-state-group/agent-action-capsule/go/standardhistory"
@@ -146,8 +147,7 @@ func (m carried) message() (evidencerequest.Message, error) {
 // reply as embedded JSON values, into the carried form
 // {history, request, reply} the readers take. An embedded value is the JSON
 // octets, compacted as evidencebook's CheckStaple reads them (evidencebook-
-// deal#115); a value already in carried form is left alone. Any other file
-// is returned unchanged.
+// deal#115). Any other file is returned unchanged.
 func readPrintedStaple(raw []byte) []byte {
 	var f struct {
 		Derivation string `json:"derivation"`
@@ -161,20 +161,13 @@ func readPrintedStaple(raw []byte) []byte {
 	if json.Unmarshal(raw, &f) != nil || f.Derivation == "" || f.History != nil || f.Profile != nil || f.Staple == nil {
 		return raw
 	}
+	// Always the whole embedded value: a request that happens to have
+	// members named media_type and octets_text is still the octets checked.
 	wrap := func(v json.RawMessage) any {
-		var probe struct {
-			MediaType  string  `json:"media_type"`
-			OctetsText *string `json:"octets_text"`
-			OctetsHex  *string `json:"octets_hex"`
-		}
-		var buf bytes.Buffer
-		if json.Unmarshal(v, &probe) == nil && probe.MediaType != "" && (probe.OctetsText != nil || probe.OctetsHex != nil) {
+		text, ok := printedOctets(v)
+		if !ok {
 			return v
 		}
-		if json.Compact(&buf, v) != nil {
-			return v
-		}
-		text := buf.String()
 		return carried{MediaType: evidencerequest.MediaTypeJSON, OctetsText: &text}
 	}
 	out, err := json.Marshal(map[string]any{"history": f.Derivation, "request": wrap(f.Staple.Request), "reply": wrap(f.Staple.Reply)})
@@ -182,6 +175,23 @@ func readPrintedStaple(raw []byte) []byte {
 		return raw
 	}
 	return out
+}
+
+// htmlEscapes are what Go's JSON encoder writes for <, >, & and the two line
+// separators when it prints a RawMessage with its default HTML escaping, as
+// the plugin's result writer does. Canonical request and reply octets (JCS)
+// never contain them as escapes, so reading them back is exact; a value that
+// did carry one stays unequal to its signed digest and fails request_binding.
+var htmlEscapes = strings.NewReplacer(`\u003c`, "<", `\u003e`, ">", `\u0026`, "&", `\u2028`, "\u2028", `\u2029`, "\u2029")
+
+// printedOctets is an embedded JSON value as the octets it was printed from:
+// compacted, with the printer's HTML escapes read back.
+func printedOctets(v json.RawMessage) (string, bool) {
+	var buf bytes.Buffer
+	if json.Compact(&buf, v) != nil {
+		return "", false
+	}
+	return htmlEscapes.Replace(buf.String()), true
 }
 
 // verifyStandardHistory evaluates a served standard_history/1 answer: the
