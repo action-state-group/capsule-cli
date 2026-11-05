@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc37
+
+No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc36`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#158, evidencebook#407).
+
 ## v0.1.0-rc36
 
 - **Fixed:** `verify --history` on a stapled commitment no longer says "This history wasn't accepted. The findings list the checks that didn't pass." over an empty list. That line now always has top-level `findings` to list (a staple's findings are copied up as `staples[N]: ...`): a History file that is not evaluable lists its reason, a staple whose evidence is missing lists that check, and a failed `--receipt` witness check is now a finding (`anchor_witnessed FAIL`). When every check passes except `request_binding` (`NOT_PRESENT`) and `caller_invariance` (`NOT_CHECKED`), it says "This card checks out, but it wasn't sent in answer to a request from you, so it isn't accepted as one. To get an answer, send the agent a request." and exits 3, not 1. When nothing failed but a key was not given, it says "Nothing failed, but some checks couldn't run: {checks}. Give the keys you hold for this agent to run them." and exits 3. The verdict is still `NOT_ACCEPTED`. A wording pack pinned with `profile update --wording` needs the new keys `say.verify.history_answers_no_request` and `say.verify.history_checks_not_run`, or it falls back to the built-in pack (capsule-cli#548, capsule-cli#550).
