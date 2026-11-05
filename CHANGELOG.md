@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added:** the `verify --bundle` verdict carries `checked_against`, `{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}`, naming the reading it applied: AAC's strict checks, which go beyond Disclosure Bundle -01 (for example `producer-selected`). Every existing member and verdict value is unchanged; the README now cites -01, not -00 (capsule-cli#456).
+
 ## v0.1.0-rc37
 
 No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc36`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#158, evidencebook#407).

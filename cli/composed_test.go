@@ -99,6 +99,7 @@ func TestVerifyBundleComposedVectors(t *testing.T) {
 					assert.Equal(t, claimStatus, status(bundle, name), name)
 				}
 				assert.Equal(t, "INCOMPLETE", bundle["verdict"])
+				assert.Equal(t, "aac-strict", bundle["checked_against"].(map[string]interface{})["checks"])
 				assert.Equal(t, "pass", status(bundle, "producer_signatures"))
 			}
 
