@@ -63,6 +63,8 @@ func TestVerifyBundleAcceptsAProducedBundleOffline(t *testing.T) {
 		assert.Equal(t, "pass", status(result, claim), claim)
 	}
 	assert.NotEmpty(t, result["bundle_digest"])
+	// The verdict names the reading it applied (capsule-cli#456).
+	assert.Equal(t, map[string]interface{}{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}, result["checked_against"])
 }
 
 func TestVerifyBundleWithoutACheckpointSignatureIsIncomplete(t *testing.T) {

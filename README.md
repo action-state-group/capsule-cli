@@ -955,7 +955,7 @@ inclusion through cll-go. It does not prove producer signatures or business trut
 No trusted external prefix/time is inferred merely from a self-consistent checkpoint.
 
 `verify --bundle BUNDLE.json` checks an Evidence Bundle (`evidence-bundle/v2`,
-draft-mih-zhang-agent-disclosure-bundle-00) offline, from the file alone. No
+draft-mih-zhang-agent-disclosure-bundle-01) offline, from the file alone. No
 profile and no network are used. It checks:
 
 - every record's identity;
@@ -967,6 +967,15 @@ profile and no network are used. It checks:
   `prev_size`, `prev_root`) must equal its signed value;
 - interval coverage and each record's inclusion under that checkpoint;
 - disclosures.
+
+The verdict also applies parts of AAC's strict reading, which goes beyond Disclosure Bundle -01:
+the record and producer-signature checks, and, for a `producer-selected` bundle (a selection
+the draft does not define), the strict interval coverage and per-record membership. It does not
+yet apply the strict `category_coverage` check (capsule-cli#556), so a bundle AAC's strict
+verifier rejects for that can still print `VALID`. The output names the reading in `checked_against`:
+`{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}`.
+These are the only values today, and the set is closed; a new value is a new release note.
+Each member bundle of a `composed/v1` block carries the same `checked_against`.
 
 It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
 (composed digest, each member, closure, joins) and counts toward the verdict; any other
