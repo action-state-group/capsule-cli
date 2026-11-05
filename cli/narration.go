@@ -628,8 +628,13 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 // no request has another (exit 3, the verdict stays NOT_ACCEPTED).
 func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
+	vals := V{}
+	var notRun errChecksNotRun
 	switch {
 	case err == nil:
+	case errors.As(err, &notRun):
+		key = "say.verify.history_checks_not_run"
+		vals["checks"] = strings.Join(notRun.checks, ", ")
 	case errors.As(err, &errServedRefusalsOnly{}):
 		key = "say.verify.refused"
 	case errors.Is(err, ErrHistoryAnswersNoRequest):
@@ -641,7 +646,7 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	default:
 		key = "say.verify.changed"
 	}
-	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, nil)} })
+	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, vals)} })
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with

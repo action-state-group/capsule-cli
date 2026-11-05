@@ -1103,9 +1103,11 @@ when nothing failed but no holder key was given, 1 when a check failed or an
 answer was not accepted, and 2 when the file is not a one-file History or the
 flags conflict. A stapled commitment
 (`evidence-commitment/1`) never answers a request of yours, so its verdict stays
-`NOT_ACCEPTED`; when every check passes except `request_binding` (`NOT_PRESENT`)
-and `caller_invariance` (`NOT_CHECKED`) it says the card checks out but answers
-no request of yours and exits 3, and a staple with a failed check exits 1. A
+`NOT_ACCEPTED`. On a staple the exit is 1 when a check failed (the findings list
+it), 3 when nothing failed but some checks could not run because a key was not
+given (the line names them), and 3 when every check passes except
+`request_binding` (`NOT_PRESENT`) and `caller_invariance` (`NOT_CHECKED`): the
+card checks out but was not sent in answer to a request of yours. A
 released `x-history-selection/v0` file still verifies with `verify --bundle`.
 
 ### Find an advertised commitment before you ask or pay

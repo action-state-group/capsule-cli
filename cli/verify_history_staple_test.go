@@ -333,10 +333,11 @@ func TestSubjectInScope(t *testing.T) {
 // A History that is not accepted says so in its own words, not that the file
 // was changed.
 func TestVerifyHistoryNotAcceptedSaysSo(t *testing.T) {
-	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", gooseNodeKey)
+	got := runStaple(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"), "--counterparty-key", hex.EncodeToString(make([]byte, 32)))
 	var out map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got.raw), &out))
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], out["say"])
+	assert.NotEmpty(t, got.Staples[0].Findings, "the failure line is only said with findings to list")
 }
 
 // A commitment staple whose every check passes except the two it cannot make
@@ -364,15 +365,23 @@ func TestVerifyHistoryCleanCommitmentAnswersNoRequest(t *testing.T) {
 	assert.Equal(t, 1, code, "a wrong counterparty key is a failure")
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
 
+	// Nothing failed but a key was not given: exit 3 names the checks that
+	// could not run, never the failure line over an empty list.
 	got, code = exit(t, "--counterparty-key", gooseNodeKey)
-	assert.Equal(t, 1, code, "without a log key checkpoint_key is unfinished, not the one open check")
-	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
+	assert.Equal(t, 3, code)
+	assert.Empty(t, got["findings"])
+	assert.Equal(t, "Nothing failed, but some checks couldn't run: checkpoint_key. Give the keys you hold for this agent to run them.", got["say"])
+	got, code = exit(t)
+	assert.Equal(t, 3, code)
+	assert.Contains(t, got["say"], "commitment_signature, ")
+	assert.Contains(t, got["say"], "responder_trust")
 
 	// A witness check the reader asked for that fails is a failure, not "clean".
 	policy := filepath.Join(t.TempDir(), "policy.json")
 	require.NoError(t, os.WriteFile(policy, []byte(`{"witnesses":[{"name":"w","keys":["`+gooseNodeKey+`"]}]}`), 0o600))
 	got, code = exit(t, "--counterparty-key", gooseNodeKey, "--checkpoint-key", key, "--receipt", path, "--anchor-witness-policy", policy)
 	assert.Equal(t, "FAIL", got["anchor_witnessed"].(map[string]any)["status"])
+	assert.NotEmpty(t, got["findings"], "a failed witness check is a finding")
 	assert.Equal(t, 1, code, "a failed witness check is a failure")
 	assert.Equal(t, BuiltinWording().Entries["say.verify.history_not_accepted"], got["say"])
 

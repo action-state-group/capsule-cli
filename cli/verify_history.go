@@ -353,8 +353,8 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 	if r.Verdict == "ACCEPTED" {
 		return nil
 	}
-	if inst.staple && cleanButUnbound(r) {
-		return ErrHistoryAnswersNoRequest
+	if inst.staple {
+		return stapleOutcome(r)
 	}
 	return ErrHistoryNotAccepted
 }

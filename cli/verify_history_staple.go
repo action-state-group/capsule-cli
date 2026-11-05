@@ -2,12 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -151,6 +153,11 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 	// One anchor per staple; the receipts sit beside the first card.
 	w := anchorWitnessed(anchors[0], receipts, policy)
 	r.AnchorWitnessed = &w
+	if r.Verdict != "ACCEPTED" && w.Status == witness.AnchorFail {
+		// A witness check the reader asked for is a finding, so the failure
+		// line never points at an empty list.
+		r.Findings = append(r.Findings, "anchor_witnessed FAIL: "+cmp.Or(w.Reason, "a --receipt does not witness the anchor"))
+	}
 	return r, nil
 }
 
@@ -613,29 +620,55 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 	return rows, nil
 }
 
-// cleanButUnbound is a staple report where nothing failed and the only
-// checks left are the two a commitment cannot make: request_binding is
-// NOT_PRESENT (no request is stapled) and caller_invariance is NOT_CHECKED
-// (one answer, no copies to compare). Any finding, FAIL or other unfinished
-// check keeps the report a failure.
-func cleanButUnbound(r frameReport) bool {
+// errChecksNotRun is ErrPartial for a staple where nothing failed but some
+// checks could not run here (a key was not given): exit 3, with the checks
+// named for the report line.
+type errChecksNotRun struct{ checks []string }
+
+func (errChecksNotRun) Error() string          { return ErrPartial.Error() }
+func (e errChecksNotRun) Is(target error) bool { return target == ErrPartial }
+
+// stapleOutcome is the exit of a staple that is not ACCEPTED. A finding or a
+// FAIL property is a failure (ErrHistoryNotAccepted), so its report line
+// never points at an empty findings list. Otherwise nothing failed: the
+// checks that could not run are named (errChecksNotRun), and when only the
+// two a commitment cannot make are left, request_binding NOT_PRESENT (no
+// request is stapled) and caller_invariance NOT_CHECKED (one answer, no
+// copies to compare), the card checks out but answers no request of the
+// reader's (ErrHistoryAnswersNoRequest).
+func stapleOutcome(r frameReport) error {
 	if len(r.Findings) > 0 || len(r.Staples) == 0 {
-		return false
+		return ErrHistoryNotAccepted
 	}
-	// A witness check the reader asked for and that failed is a failure.
-	if r.AnchorWitnessed != nil && r.AnchorWitnessed.Status == witness.AnchorFail {
-		return false
-	}
+	unfinished := map[string]bool{}
+	unbound := false
 	for _, row := range r.Staples {
-		if len(row.Findings) > 0 || row.Properties["request_binding"] != statusNotPresent {
-			return false
+		if len(row.Findings) > 0 {
+			return ErrHistoryNotAccepted
 		}
 		for p, status := range row.Properties {
-			if status == statusPass || (p == "request_binding" && status == statusNotPresent) || (p == "caller_invariance" && status == statusNotChecked) {
-				continue
+			switch {
+			case status == statusFail:
+				return ErrHistoryNotAccepted
+			case status == statusPass:
+			case p == "request_binding" && status == statusNotPresent:
+				unbound = true
+			case p == "caller_invariance" && status == statusNotChecked:
+			default:
+				unfinished[p] = true
 			}
-			return false
+		}
+		for _, p := range stapleMustPass {
+			if _, ok := row.Properties[p]; !ok {
+				unfinished[p] = true
+			}
 		}
 	}
-	return true
+	if len(unfinished) > 0 {
+		return errChecksNotRun{checks: slices.Sorted(maps.Keys(unfinished))}
+	}
+	if unbound {
+		return ErrHistoryAnswersNoRequest
+	}
+	return ErrHistoryNotAccepted
 }
