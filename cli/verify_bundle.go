@@ -339,10 +339,13 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 
 // categoryCoverageClaim is AAC strict's category_coverage reading
 // (capsule-cli#556): the five properties as printed (nil when the bundle has
-// no such member), and a claim that fails when strict's verdict is INVALID
-// for the member alone: no claim and no witness receipt failed, so a gating
-// property did. AAC does not export its gating set, so the CLI keeps no copy
-// that could drift from it (capsule-cli#558).
+// no such member), and a claim that fails when a property is FAIL and strict's
+// verdict is INVALID. AAC does not export its gating set, so the CLI keeps no
+// copy that could drift from it (capsule-cli#558). The claim only ever adds
+// the INVALID strict already reached, so it can never make the verdict
+// stricter than AAC's; it is needed because the CLI keeps its own claim list
+// (a cadence-anchored bundle replaces the witness claim), and a failure
+// strict reached through the member must not depend on the others matching.
 func categoryCoverageClaim(strict aacbundle.StrictResult) (map[string]string, aacbundle.ClaimResult) {
 	if strict.CategoryCoverage == nil {
 		return nil, aacbundle.ClaimResult{Status: "pass"}
@@ -355,13 +358,8 @@ func categoryCoverageClaim(strict aacbundle.StrictResult) (map[string]string, aa
 			findings = append(findings, property.Name+" is FAIL")
 		}
 	}
-	if strict.Verdict != aacbundle.VerdictInvalid || (strict.Witnesses != nil && strict.Witnesses.Status == "fail") {
+	if findings == nil || strict.Verdict != aacbundle.VerdictInvalid {
 		return properties, aacbundle.ClaimResult{Status: "pass"}
-	}
-	for _, claim := range strict.Claims {
-		if claim.Status == "fail" {
-			return properties, aacbundle.ClaimResult{Status: "pass"}
-		}
 	}
 	return properties, aacbundle.ClaimResult{Status: "fail", Findings: findings}
 }

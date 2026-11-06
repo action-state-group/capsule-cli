@@ -742,7 +742,7 @@ func TestVerifyBundleStillRejectsARangelessCertificateWithoutSelection(t *testin
 }
 
 // verify --bundle's category_coverage claim fails when AAC strict's verdict is
-// INVALID for the member alone, and on no other reading (capsule-cli#556,
+// INVALID and a property is FAIL, and on no other reading (capsule-cli#556,
 // #558). The CLI keeps no copy of AAC's gating set: which property gates is
 // AAC's, exercised end to end by the bundles in
 // TestVerifyBundleCheckpointIsAACStrict.
@@ -761,18 +761,28 @@ func TestCategoryCoverageClaim(t *testing.T) {
 	assert.Equal(t, "fail", got.Status)
 	assert.Equal(t, []string{"category_coverage_form is FAIL"}, got.Findings)
 
-	// A verdict that is not INVALID, or one a claim or a witness receipt
-	// failed, is not this member's.
+	// Strict's verdict not INVALID, or no property FAIL: not this member's.
 	for name, strict := range map[string]aacbundle.StrictResult{
 		"valid":      {CategoryCoverage: failed, Verdict: aacbundle.VerdictValid},
 		"incomplete": {CategoryCoverage: failed, Verdict: aacbundle.VerdictIncomplete},
+		"no FAIL": {Verdict: aacbundle.VerdictInvalid, CategoryCoverage: []aacbundle.CategoryProperty{
+			{Name: "category_coverage_form", Value: aacbundle.CoveragePass}}},
+	} {
+		_, got := categoryCoverageClaim(strict)
+		assert.Equal(t, "pass", got.Status, name)
+	}
+
+	// A FAIL under an INVALID verdict fails the claim even when another claim
+	// or the witnesses failed too, so a cadence-anchored bundle's swapped
+	// witness claim cannot hide it.
+	for name, strict := range map[string]aacbundle.StrictResult{
 		"a claim failed": {CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid,
 			Claims: []aacbundle.NamedClaim{{Name: "records", ClaimResult: aacbundle.ClaimResult{Status: "fail"}}}},
 		"a witness failed": {CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid,
 			Witnesses: &aacbundle.ClaimResult{Status: "fail"}},
 	} {
 		_, got := categoryCoverageClaim(strict)
-		assert.Equal(t, "pass", got.Status, name)
+		assert.Equal(t, "fail", got.Status, name)
 	}
 }
 
