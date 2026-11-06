@@ -288,7 +288,19 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 			}
 		}),
 		"produced, category_coverage empty": produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
-		"selected":                          selectedBundle(t, nil),
+		// The disclosures overlay: strict's claim, and so the verdict, is the
+		// CLI's whether a disclosure matches, is withheld or does not match
+		// (capsule-cli#558).
+		"produced, disclosure matches": produced(func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{b["root"].(string): map[string]interface{}{}}
+		}),
+		"produced, disclosure mismatch": produced(func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{b["root"].(string): map[string]interface{}{"agent_input": map[string]interface{}{"result": "edited"}}}
+		}),
+		"produced, disclosure for no record": produced(func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{strings.Repeat("ab", 32): map[string]interface{}{"agent_input": map[string]interface{}{"result": "edited"}}}
+		}),
+		"selected": selectedBundle(t, nil),
 		"selected, certificate log_id": selectedBundle(t, func(b map[string]interface{}) {
 			b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
 		}),
@@ -305,6 +317,17 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		// Other strict outputs the CLI computes itself (capsule-cli#556).
 		assert.Equal(t, strict.Claim("graph_closure").Status, status(result, "graph_closure"), name)
 		assert.Equal(t, strict.Witnesses.Status, status(result, "witnesses"), name)
+		if disclosures := strict.Claim("disclosures"); disclosures != nil {
+			// The CLI's per-member list is bad exactly when strict's
+			// disclosures claim fails.
+			ok := true
+			for _, d := range result["disclosures"].([]interface{}) {
+				if s := d.(map[string]interface{})["status"]; s != "disclosure_match" && s != "withheld" {
+					ok = false
+				}
+			}
+			assert.Equal(t, disclosures.Status != "fail", ok, name)
+		}
 		if want := verdictError(strict.Verdict); want == nil {
 			assert.NoError(t, err, name)
 		} else {
@@ -718,29 +741,38 @@ func TestVerifyBundleStillRejectsARangelessCertificateWithoutSelection(t *testin
 	assert.Equal(t, "fail", status(result, "interval_coverage"))
 }
 
-// verify --bundle fails on a gating category_coverage property and on no other
-// (capsule-cli#556).
+// verify --bundle's category_coverage claim fails when AAC strict's verdict is
+// INVALID for the member alone, and on no other reading (capsule-cli#556,
+// #558). The CLI keeps no copy of AAC's gating set: which property gates is
+// AAC's, exercised end to end by the bundles in
+// TestVerifyBundleCheckpointIsAACStrict.
 func TestCategoryCoverageClaim(t *testing.T) {
-	property := func(name, value string) aacbundle.CategoryProperty {
-		return aacbundle.CategoryProperty{Name: name, Value: value}
+	failed := []aacbundle.CategoryProperty{
+		{Name: "category_coverage_form", Value: aacbundle.CoverageFail},
+		{Name: "category_coverage_request", Value: aacbundle.CoverageNotChecked},
 	}
-	_, absent := categoryCoverageClaim(aacbundle.StrictResult{})
+	_, absent := categoryCoverageClaim(aacbundle.StrictResult{Verdict: aacbundle.VerdictInvalid})
 	assert.Equal(t, "pass", absent.Status)
-	printed, _ := categoryCoverageClaim(aacbundle.StrictResult{})
+	printed, _ := categoryCoverageClaim(aacbundle.StrictResult{Verdict: aacbundle.VerdictInvalid})
 	assert.Nil(t, printed)
 
-	for _, name := range aacbundle.CategoryCoverageProperties {
-		gating := name == "category_coverage_form" || name == "category_coverage_signature" || name == "category_coverage_consistency"
-		for _, value := range []string{aacbundle.CoverageFail, aacbundle.CoverageNotChecked, aacbundle.CoverageInconclusive, aacbundle.CoverageNotPresent, aacbundle.CoveragePass} {
-			printed, got := categoryCoverageClaim(aacbundle.StrictResult{CategoryCoverage: []aacbundle.CategoryProperty{property(name, value)}})
-			assert.Equal(t, map[string]string{name: value}, printed)
-			if gating && value == aacbundle.CoverageFail {
-				assert.Equal(t, "fail", got.Status, name)
-				assert.Equal(t, []string{name + " is FAIL"}, got.Findings, name)
-			} else {
-				assert.Equal(t, "pass", got.Status, name+" "+value)
-			}
-		}
+	printed, got := categoryCoverageClaim(aacbundle.StrictResult{CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid})
+	assert.Equal(t, map[string]string{"category_coverage_form": "FAIL", "category_coverage_request": "NOT_CHECKED"}, printed)
+	assert.Equal(t, "fail", got.Status)
+	assert.Equal(t, []string{"category_coverage_form is FAIL"}, got.Findings)
+
+	// A verdict that is not INVALID, or one a claim or a witness receipt
+	// failed, is not this member's.
+	for name, strict := range map[string]aacbundle.StrictResult{
+		"valid":      {CategoryCoverage: failed, Verdict: aacbundle.VerdictValid},
+		"incomplete": {CategoryCoverage: failed, Verdict: aacbundle.VerdictIncomplete},
+		"a claim failed": {CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid,
+			Claims: []aacbundle.NamedClaim{{Name: "records", ClaimResult: aacbundle.ClaimResult{Status: "fail"}}}},
+		"a witness failed": {CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid,
+			Witnesses: &aacbundle.ClaimResult{Status: "fail"}},
+	} {
+		_, got := categoryCoverageClaim(strict)
+		assert.Equal(t, "pass", got.Status, name)
 	}
 }
 
