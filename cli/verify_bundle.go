@@ -337,19 +337,15 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	return report, verdict, pageVerdict
 }
 
-// gatingCategoryCoverage are the category_coverage properties whose FAIL makes
-// AAC's strict verdict INVALID (go/bundle category_coverage.go,
-// gatingProperties). The other two never change a verdict.
-var gatingCategoryCoverage = map[string]bool{
-	"category_coverage_form":        true,
-	"category_coverage_signature":   true,
-	"category_coverage_consistency": true,
-}
-
 // categoryCoverageClaim is AAC strict's category_coverage reading
 // (capsule-cli#556): the five properties as printed (nil when the bundle has
-// no such member), and a claim that fails when a gating property is FAIL, as
-// VerifyStrict's verdict does.
+// no such member), and a claim that fails when a property is FAIL and strict's
+// verdict is INVALID. AAC does not export its gating set, so the CLI keeps no
+// copy that could drift from it (capsule-cli#558). The claim only ever adds
+// the INVALID strict already reached, so it can never make the verdict
+// stricter than AAC's; it is needed because the CLI keeps its own claim list
+// (a cadence-anchored bundle replaces the witness claim), and a failure
+// strict reached through the member must not depend on the others matching.
 func categoryCoverageClaim(strict aacbundle.StrictResult) (map[string]string, aacbundle.ClaimResult) {
 	if strict.CategoryCoverage == nil {
 		return nil, aacbundle.ClaimResult{Status: "pass"}
@@ -358,14 +354,14 @@ func categoryCoverageClaim(strict aacbundle.StrictResult) (map[string]string, aa
 	var findings []string
 	for _, property := range strict.CategoryCoverage {
 		properties[property.Name] = property.Value
-		if gatingCategoryCoverage[property.Name] && property.Value == aacbundle.CoverageFail {
+		if property.Value == aacbundle.CoverageFail {
 			findings = append(findings, property.Name+" is FAIL")
 		}
 	}
-	if findings != nil {
-		return properties, aacbundle.ClaimResult{Status: "fail", Findings: findings}
+	if findings == nil || strict.Verdict != aacbundle.VerdictInvalid {
+		return properties, aacbundle.ClaimResult{Status: "pass"}
 	}
-	return properties, aacbundle.ClaimResult{Status: "pass"}
+	return properties, aacbundle.ClaimResult{Status: "fail", Findings: findings}
 }
 
 // claimsVerdict is the verdict of a set of claims: INVALID if any fails,
