@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.0-rc38
+
+- **Fixed:** `verify --bundle` no longer prints `VALID` (exit 0) for a bundle whose `category_coverage` member fails a gating property: it prints `INVALID` (exit 1), as AAC's strict verifier decides. The gating properties are `category_coverage_form` and `category_coverage_signature`, which `verify --bundle` can check, and `category_coverage_consistency`, which needs record categories it does not supply (it prints `NOT_CHECKED`). The report lists the member's five properties under `category_coverage`, only for a bundle that carries the member. `checked_against` is unchanged (capsule-cli#556).
+
+- **Added:** the `verify --bundle` verdict carries `checked_against`, `{"checks": "aac-strict", "bundle_draft": "draft-mih-zhang-agent-disclosure-bundle-01"}`, naming the reading it applied: parts of AAC's strict reading (record and producer signatures, and strict coverage and membership for a `producer-selected` bundle), which go beyond Disclosure Bundle -01. Every existing member and verdict value is unchanged; the README now cites -01, not -00 (capsule-cli#456).
+
 ## v0.1.0-rc37
 
 No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc36`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#158, evidencebook#407).
