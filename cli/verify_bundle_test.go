@@ -289,9 +289,9 @@ func TestVerifyBundleCheckpointIsAACStrict(t *testing.T) {
 		}),
 		"produced, category_coverage empty": produced(func(b map[string]interface{}) { b["category_coverage"] = map[string]interface{}{} }),
 		// The disclosures overlay: strict's claim, and so the verdict, is the
-		// CLI's whether a disclosure matches, is withheld or does not match
+		// CLI's whether every member is withheld, one does not match, or none names a record
 		// (capsule-cli#558).
-		"produced, disclosure matches": produced(func(b map[string]interface{}) {
+		"produced, disclosure withholds every member": produced(func(b map[string]interface{}) {
 			b["disclosures"] = map[string]interface{}{b["root"].(string): map[string]interface{}{}}
 		}),
 		"produced, disclosure mismatch": produced(func(b map[string]interface{}) {
