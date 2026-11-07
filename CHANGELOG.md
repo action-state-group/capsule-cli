@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc39
+
+No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc38`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#171, evidencebook#430).
+
 ## v0.1.0-rc38
 
 - **Fixed:** `verify --bundle` no longer prints `VALID` (exit 0) for a bundle whose `category_coverage` member fails a gating property: it prints `INVALID` (exit 1), as AAC's strict verifier decides. The gating properties are `category_coverage_form` and `category_coverage_signature`, which `verify --bundle` can check, and `category_coverage_consistency`, which needs record categories it does not supply (it prints `NOT_CHECKED`). The report lists the member's five properties under `category_coverage`, only for a bundle that carries the member. `checked_against` is unchanged (capsule-cli#556).
