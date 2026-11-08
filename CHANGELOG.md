@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc40
+
+No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc39`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#174, #176, #177, #179, #180, for actionstate-muse#160).
+
 ## v0.1.0-rc39
 
 No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc38`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#171, evidencebook#430).
