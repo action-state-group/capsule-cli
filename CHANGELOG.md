@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc41
+
+- **Dependencies:** `agent-action-capsule/go` moves from v0.20.0 to v0.21.0 (capsule-cli#564). No `capsulectl` command, flag or output is changed by this repository. This release lets the plugins that pair with a capsulectl release ship their own change: capsulectl-deal takes the version of the capsulectl release it pairs with, and a published tag never changes (evidencebook-deal#191, #194, for actionstate-muse#192).
+
 ## v0.1.0-rc40
 
 No change to `capsulectl`: this release carries nothing new since `v0.1.0-rc39`. It exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal and capsulectl-book each take the version of the capsulectl release they pair with, and a published tag never changes (evidencebook-deal#174, #176, #177, #179, #180, for actionstate-muse#160).
