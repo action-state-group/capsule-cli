@@ -1,9 +1,8 @@
 # Design note: a counterparty's verified History as a rules input
 
-capsule-cli#327. Status: draft for review (round 3). Design only: no field
-is added and no code is written until this note converges, including
-Sherlock2's product-boundary check (the issue's own gate, and the recorded
-non-stop decision on the issue). Checked against capsule-cli `main`
+capsule-cli#327. Status: converged (round 3), with D1 decided as (a) under
+the non-stop rule (section 3). Converged with Codex, Kimi and Sherlock2's
+product-boundary check (review record on capsule-cli#566). Checked against capsule-cli `main`
 `dbf7470e`, evidencebook-deal `main` `2404d9d`, evidencebook `main`
 `1f917bb`, capsule-engine `main` `e59ace8` and company-internal-all `main`
 `6b2ac1c`.
@@ -68,6 +67,12 @@ verified nor attributed and is kept out of the sealed result on purpose.
 
 ## 3. The decision for the boundary check
 
+**Decided: (a), with the three conditions below** (non-stop decision for
+Steven, 2026-11-16 after Ethan's work hours, taking Sherlock2's
+recommendation, Buzz `0d98dcdd`, confirmed on this note's round-2 head; the
+ruling request stays open in Buzz `b42cb0e4`, and if Steven rules
+otherwise, that change is a new task). Recorded on capsule-cli#327.
+
 **D1 (to Steven, through Sherlock2's boundary check).** May a counterparty's
 verified, attributed History change the deal check's **sealed** verdict and
 findings?
@@ -85,7 +90,7 @@ findings?
   verification and attribution on top of #166, and step 4's "the decision is
   sealed" stays unmet on the deal path.
 
-Conditions proposed with (a), for Steven to accept or change:
+The conditions that come with (a):
 
 1. **No NO from History alone.** A fold over `received_history` may add a
    finding or make the check ask, but never by itself turns the verdict into
@@ -308,18 +313,19 @@ computes a value.
 
 ## 8. Order
 
-1. Converge this note (Codex, Kimi, Sherlock2 boundary check); Steven rules
-   D1.
+1. Converge this note (Codex, Kimi, Sherlock2 boundary check) and decide D1
+   (done: section 3).
 2. evidencebook: the input member and schema text; release.
 3. capsule-cli: a library entry for the staple verifier; release.
 4. evidencebook-deal: `--history`, the keys, verification, the input, the
    sealed digests and the share rule; pin both releases.
-5. capsule-engine: `card.history_deals` and the listed predicates read the member; Muse's pack follows
-   (their own items, not this one).
+5. capsule-engine: `card.history_deals` and the listed predicates read the
+   member; Muse's pack follows (its own item, not this one).
 
 The issue records "no code before #264" (How ack and Triage). That
 dependency is revised here: the seam reads any verified
 `personal_history_basic/1` or stapled `history_card/1`, and AAC's reader for
 both is already in capsule-cli's verifier, so #264's remaining PR (`deal
 history` writing `personal_history_basic/1` envelopes) is not a
-precondition. The issue is updated when this note converges.
+precondition. This revision is an engineering call, accepted by the
+coordinator on 2026-11-16 and recorded on capsule-cli#327.
