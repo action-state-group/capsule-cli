@@ -1,8 +1,8 @@
 # Design note: a counterparty's verified History as a rules input
 
-capsule-cli#327. Status: converged (round 3), with D1 decided as (a) under
-the non-stop rule (section 3). Converged with Codex, Kimi and Sherlock2's
-product-boundary check (review record on capsule-cli#566). Checked against capsule-cli `main`
+capsule-cli#327. Status: converged (round 3); Steven ruled D1 (a)
+(section 3). Converged with Codex, Kimi and Sherlock2's product-boundary
+check (review record on capsule-cli#566). Checked against capsule-cli `main`
 `dbf7470e`, evidencebook-deal `main` `2404d9d`, evidencebook `main`
 `1f917bb`, capsule-engine `main` `e59ace8` and company-internal-all `main`
 `6b2ac1c`.
@@ -67,11 +67,11 @@ verified nor attributed and is kept out of the sealed result on purpose.
 
 ## 3. The decision for the boundary check
 
-**Decided: (a), with the three conditions below** (non-stop decision for
-Steven, 2026-11-16 after Ethan's work hours, taking Sherlock2's
-recommendation, Buzz `0d98dcdd`, confirmed on this note's round-2 head; the
-ruling request stays open in Buzz `b42cb0e4`, and if Steven rules
-otherwise, that change is a new task). Recorded on capsule-cli#327.
+**Ruled: (a), with the three conditions below.** Steven ruled (a),
+2026-11-16, Buzz `cc0e2943` in thread `b42cb0e4`, on this note at
+`050a8791`; Sherlock2 recorded it in ops `5aaabe11`. Not ruled: whether a
+deal-path verdict that read History counts for step 4 (condition 3); until
+Steven rules, it does not.
 
 **D1 (to Steven, through Sherlock2's boundary check).** May a counterparty's
 verified, attributed History change the deal check's **sealed** verdict and
