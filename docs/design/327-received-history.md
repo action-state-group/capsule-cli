@@ -1,6 +1,6 @@
 # Design note: a counterparty's verified History as a rules input
 
-capsule-cli#327. Status: draft for review (round 2). Design only: no field
+capsule-cli#327. Status: draft for review (round 3). Design only: no field
 is added and no code is written until this note converges, including
 Sherlock2's product-boundary check (the issue's own gate, and the recorded
 non-stop decision on the issue). Checked against capsule-cli `main`
@@ -236,16 +236,25 @@ the predicates that read the counterparty's card, each over one document:
 
 - **known counterparty:** `card.verified` (an H3 or H4 verified under the
   policy key);
-- **N verified deals:** `card.claims_held` with `min`, or
-  `card.band_history_or_stake`, over the one H3 or the card's counts;
+- **N deals, as their History lists them:** a new predicate,
+  `card.history_deals` (`min`), over the one H3: the number of deal
+  references the holder selected and the verifier accepted. A Basic History
+  never establishes an outcome (sale, payment, delivery), that the selection
+  is complete, or who holds the key (`historyNotEstablished`,
+  `cli/verify_history.go`), so the row reads "their History lists N deals",
+  never "N deals held", and the caller fills neither `Claims` nor `Bands`
+  from it (those are claims held and corroborated, net-settled subjects,
+  which an H3 does not show). A `history_card/1` carries no counts
+  (`Card.Claims`, `go/admission/evaluate.go`), so over an H4 this row reads
+  `not_read`;
 - **how recent:** `card.fresh` (`max_age_s`) and `card.key_age`
   (`min_days`);
 - **witnessed:** `card.witnessed`, `card.witness_receipts`.
 
 Each predicate reads one document of one counterparty and yields one row
-result; a pack has no predicate that combines rows into one number. New
-predicates over the member are capsule-engine changes and go through this
-same boundary. The schema descriptions state the limits positively: a
+result; a pack has no predicate that combines rows into one number. The new
+`card.history_deals` and any later predicate over the member are
+capsule-engine changes and go through this same boundary. The schema descriptions state the limits positively: a
 finding that reads `received_history` reports one named fold about this
 counterparty against its limit, read side by side with the others and never
 combined into one number. The member's verification and attribution are
@@ -269,14 +278,18 @@ computes a value.
    `input_sha256` (evidencebook-deal).
 4. A stub checker that refuses with the document on stderr seals the cause
    alone; a check record with `received_history` is withheld from the
-   counterparty, keep and every other shared copy, with the rules verdict's
-   share policy on (evidencebook-deal).
+   counterparty, adjudicator and every other shared copy, with the rules
+   verdict's share policy on; the test names `history_sha256` and
+   `input_sha256` exactly, since a key ending in `_digest` or `_commitment`
+   would be shared (evidencebook-deal).
 5. **No score or aggregate.** The input member is closed, `about` is the
    const `counterparty`, and `histories` holds at most one entry per kind
    (evidencebook). The result schema stays closed with no new member
    (evidencebook). A pack row over the member whose check is not a listed
    predicate is refused, and each listed predicate's result is about one
-   document (capsule-engine).
+   document; `card.history_deals` counts an H3's accepted deal references,
+   leaves `Claims` and `Bands` unset, and reads `not_read` over an H4
+   (capsule-engine).
 6. `received_cards` behaves byte for byte as before when given alongside
    `--history` (evidencebook-deal).
 
@@ -301,7 +314,7 @@ computes a value.
 3. capsule-cli: a library entry for the staple verifier; release.
 4. evidencebook-deal: `--history`, the keys, verification, the input, the
    sealed digests and the share rule; pin both releases.
-5. capsule-engine: the predicates read the member; Muse's pack follows
+5. capsule-engine: `card.history_deals` and the listed predicates read the member; Muse's pack follows
    (their own items, not this one).
 
 The issue records "no code before #264" (How ack and Triage). That
