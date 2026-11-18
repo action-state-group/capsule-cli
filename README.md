@@ -1185,7 +1185,7 @@ The seller's side of the same binding. `capsulectl commitment publish` signs one
 one key stands behind the commitment and the card, and a card signed by another
 key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
 it; `history_card/2`, whose size grows with the logarithm of the number of
-checkpoints, is the staple to use for a long log. `capsulectl publish` still staples
+checkpoints, is the staple to use for a long log. `capsulectl commitment publish` still staples
 `history_card/1`; `capsulectl verify --history` and `commitment find` check a staple of
 either, a `history_card/2` through agent-action-capsule's own check.
 
