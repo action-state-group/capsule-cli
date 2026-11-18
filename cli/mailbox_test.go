@@ -436,3 +436,69 @@ func TestMailboxReachesARelayByTheNameACommitmentGivesIt(t *testing.T) {
 		require.ErrorIs(t, err, ErrInput)
 	})
 }
+
+func TestMailboxPollKeepsAnAnswerARelayDroppedAfterSending(t *testing.T) {
+	f := newMailboxFixture(t)
+	asked, err := f.ask(t)
+	require.NoError(t, err)
+	inbox := f.inbox(t)
+	_, err = f.reply(t, inbox.Requests[0].EventFile, answerFor(t, f.seed, f.requestOct))
+	require.NoError(t, err)
+	f.relay.NoEOSE = true
+	rep, err := f.poll(t, asked.RequestEventID)
+	require.NoError(t, err)
+	assert.Equal(t, "answered", rep.Status, "the valid reply the relay sent before it hung up counts")
+	assert.NotEqual(t, "ok", rep.Relays[f.relay.URL], "the failure is reported beside it")
+}
+
+func TestMailboxPollJudgesArrivalAfterTheQuery(t *testing.T) {
+	f := newMailboxFixture(t)
+	asked, err := f.ask(t)
+	require.NoError(t, err)
+	inbox := f.inbox(t)
+	_, err = f.reply(t, inbox.Requests[0].EventFile, answerFor(t, f.seed, f.requestOct))
+	require.NoError(t, err)
+	// The poll starts inside the window; the relay delivers after it closes.
+	f.relay.OnReq = func() { setClock(t, f.now.Add(2*time.Minute)) }
+	rep, err := f.poll(t, asked.RequestEventID)
+	require.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, "absent", rep.Status)
+	assert.True(t, rep.Late)
+}
+
+func TestMailboxPollKeepsEveryDistinctVerifiedReply(t *testing.T) {
+	f := newMailboxFixture(t)
+	asked, err := f.ask(t)
+	require.NoError(t, err)
+	key, err := readNostrKey(f.mailboxKey)
+	require.NoError(t, err)
+	request := f.relay.Events()[0]
+	first := answerFor(t, f.seed, f.requestOct)
+	// The same envelope with a different issued_at is a different answer to
+	// the same request, signed by the responder.
+	second := answerFor(t, f.seed, f.requestOct)
+	var env map[string]any
+	require.NoError(t, json.Unmarshal(second, &env))
+	env["issued_at"] = "2026-11-18T12:00:30Z"
+	delete(env, "sig")
+	artifact := env["artifact"]
+	delete(env, "artifact")
+	body, err := evidencerequest.EncodeJCS(env)
+	require.NoError(t, err)
+	env["sig"] = hex.EncodeToString(ed25519.Sign(f.seed, body))
+	env["artifact"] = artifact
+	second, err = evidencerequest.EncodeJCS(env)
+	require.NoError(t, err)
+	require.NotEqual(t, first, second)
+	for i, a := range [][]byte{first, second} {
+		ev, err := replyEvent(key, request, "", "application/json", a, f.now.Add(time.Duration(i)*time.Second))
+		require.NoError(t, err)
+		f.relay.Put(ev)
+	}
+	rep, err := f.poll(t, asked.RequestEventID)
+	require.NoError(t, err)
+	require.Len(t, rep.OtherReplies, 1)
+	other, err := os.ReadFile(rep.OtherReplies[0].File)
+	require.NoError(t, err)
+	assert.Equal(t, second, other, "the second answer is kept for the verifier to compare")
+}

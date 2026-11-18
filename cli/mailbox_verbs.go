@@ -220,24 +220,32 @@ type mailboxRejected struct {
 	Reason  string `json:"reason"`
 }
 
+type mailboxOtherReply struct {
+	EventID string `json:"event_id"`
+	Digest  string `json:"reply_digest"`
+	File    string `json:"file"`
+}
+
 type mailboxPollReport struct {
 	// Status is answered (a verified reply in the window), pending (nothing
 	// verified yet, the window open) or absent (the window closed with no
 	// verified reply; a late reply, if any, is kept beside it).
-	Status         string            `json:"status"`
-	RequestEventID string            `json:"request_event_id"`
-	RequestDigest  string            `json:"request_digest"`
-	Deadline       string            `json:"deadline,omitempty"`
-	Route          string            `json:"route"`
-	ReplyEventID   string            `json:"reply_event_id,omitempty"`
-	Outcome        string            `json:"outcome,omitempty"`
-	ReplyDigest    string            `json:"reply_digest,omitempty"`
-	Output         string            `json:"output,omitempty"`
-	Late           bool              `json:"late,omitempty"`
-	Conflicting    bool              `json:"conflicting_replies,omitempty"`
-	Rejected       []mailboxRejected `json:"rejected,omitempty"`
-	Events         map[string]int    `json:"events"`
-	Relays         map[string]string `json:"relays"`
+	Status         string `json:"status"`
+	RequestEventID string `json:"request_event_id"`
+	RequestDigest  string `json:"request_digest"`
+	Deadline       string `json:"deadline,omitempty"`
+	Route          string `json:"route"`
+	ReplyEventID   string `json:"reply_event_id,omitempty"`
+	Outcome        string `json:"outcome,omitempty"`
+	ReplyDigest    string `json:"reply_digest,omitempty"`
+	Output         string `json:"output,omitempty"`
+	Late           bool   `json:"late,omitempty"`
+	// OtherReplies are the verified replies whose octets differ from the first:
+	// the responder answered one request in more than one way.
+	OtherReplies []mailboxOtherReply `json:"other_replies,omitempty"`
+	Rejected     []mailboxRejected   `json:"rejected,omitempty"`
+	Events       map[string]int      `json:"events"`
+	Relays       map[string]string   `json:"relays"`
 }
 
 func mailboxPollCommand() *cobra.Command {
@@ -291,7 +299,12 @@ func mailboxPollCommand() *cobra.Command {
 				// the answer it also sent.
 				events = append(events, got...)
 				if qerr != nil && !errors.Is(qerr, errRelayTruncated) {
+					// What it sent before it failed still counts; the failure
+					// is reported beside it.
 					rep.Relays[relay] = qerr.Error()
+					if len(got) > 0 {
+						answered++
+					}
 					continue
 				}
 				answered++
@@ -322,7 +335,9 @@ func mailboxPollCommand() *cobra.Command {
 			}
 			verified = append(verified, cl)
 		}
-		closed := !deadline.IsZero() && now.After(deadline)
+		// Arrival is judged by this clock when the replies reached us, after
+		// the queries, never by a time taken before them.
+		closed := !deadline.IsZero() && nostrNow().After(deadline)
 		switch {
 		case len(verified) == 0 && closed:
 			rep.Status = "absent"
@@ -340,9 +355,6 @@ func mailboxPollCommand() *cobra.Command {
 			first := verified[0]
 			rep.ReplyEventID = first.Event.ID
 			rep.ReplyDigest = requestDigest(first.Octets)
-			for _, v := range verified[1:] {
-				rep.Conflicting = rep.Conflicting || !bytes.Equal(v.Octets, first.Octets)
-			}
 			reply, _ := evidencerequest.ParseReply(evidencerequest.Message{Octets: first.Octets, MediaType: media})
 			rep.Outcome = "envelope"
 			if reply.Refusal != nil {
@@ -352,6 +364,22 @@ func mailboxPollCommand() *cobra.Command {
 				return err
 			}
 			rep.Output = output
+			// Every distinct verified reply is kept, each in its own file, for
+			// the verifier to compare (caller_invariance): the first at
+			// --output, the others beside it.
+			kept := map[string]bool{rep.ReplyDigest: true}
+			for _, v := range verified[1:] {
+				digest := requestDigest(v.Octets)
+				if kept[digest] {
+					continue
+				}
+				kept[digest] = true
+				name := fmt.Sprintf("%s.%d", output, len(rep.OtherReplies)+2)
+				if err := os.WriteFile(name, v.Octets, 0o644); err != nil {
+					return err
+				}
+				rep.OtherReplies = append(rep.OtherReplies, mailboxOtherReply{EventID: v.Event.ID, Digest: digest, File: name})
+			}
 		}
 		if err := Output(c, rep); err != nil {
 			return err
