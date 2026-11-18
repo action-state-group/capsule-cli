@@ -94,16 +94,12 @@ func commitmentPublishCommand() *cobra.Command {
 		if in.Seed, err = PrivateKey(p.Signing); err != nil {
 			return err
 		}
-		if p.Checkpoint.Signing != (Secret{}) {
+		if in.CheckpointKey == "" && p.Checkpoint.Signing != (Secret{}) {
 			ck, err := PrivateKey(p.Checkpoint.Signing)
 			if err != nil {
 				return err
 			}
-			own := hex.EncodeToString(ck.Public().(ed25519.PublicKey))
-			if in.CheckpointKey != "" && in.CheckpointKey != own {
-				return InputError("--checkpoint-key is not the profile's checkpoint key; leave it out to use the profile's")
-			}
-			in.CheckpointKey = own
+			in.CheckpointKey = hex.EncodeToString(ck.Public().(ed25519.PublicKey))
 		}
 		if in.Staple, err = ReadInput(staplePath); err != nil {
 			return err
@@ -118,7 +114,7 @@ func commitmentPublishCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := json.Unmarshal(raw, &in.ARDEntry); err != nil || in.ARDEntry == nil {
+			if in.ARDEntry, err = decodeObject(raw); err != nil {
 				return InputError("--ard-entry is a JSON object: the seller's own listing entry")
 			}
 			if in.CommitmentURI == "" {
@@ -203,11 +199,11 @@ func commitmentPublishCommand() *cobra.Command {
 	f.StringSlice("binding", []string{"evidencebook/respond"}, "ask.bindings: the bindings the node answers on (repeat for each)")
 	f.StringSlice("subject", []string{"checkpoints"}, "answers.subjects the node answers (repeat for each)")
 	f.StringSlice("derivation", []string{"history_card/1"}, "answers.derivations the node answers (repeat for each)")
-	f.StringSlice("predicate-class", nil, "lcap.predicate_classes, such as performed:counterparty_half (repeat for each)")
+	f.StringSlice("predicate-class", []string{"performed:counterparty_half"}, "lcap.predicate_classes, <class>:<name> (repeat for each)")
 	f.Bool("human-gated", true, "Whether a person approves each answer")
 	f.String("answers-within", "PT24H", "How long an asker should wait, an ISO 8601 duration: not shorter than the node's poll interval")
 	f.String("share-deal-half", "counterparty", "The signed disclosure policy's share_deal_half: counterparty, or empty to share none")
-	f.String("checkpoint-key", "", "The card's checkpoint key, 64 lowercase hex (default: the profile's checkpoint.signing)")
+	f.String("checkpoint-key", "", "The key the card's checkpoints are signed by, 64 lowercase hex (default: read from the card; the profile's checkpoint.signing is checked against it when you give one)")
 	f.String("mailbox-key", "", "A file holding the node's Nostr mailbox secret (`mailbox key new`, mode 600): it names ask.nostr.mailbox_key and signs the announce event")
 	f.StringArray("nostr-relay", nil, "A relay (wss:) the node reads its mailbox on and announces to (repeat for each); with --mailbox-key it becomes ask.nostr")
 	f.String("commitment-uri", "", "Where you serve the commitment octets (https:): the URI the carrier entries name; serve the file under --out as it is")

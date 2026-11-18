@@ -73,7 +73,7 @@ func newPublishFixture(t *testing.T) publishFixture {
 func (f publishFixture) publish(t *testing.T, extra ...string) (string, error) {
 	t.Helper()
 	args := append([]string{"commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "goose",
-		"--checkpoint-key", strings.Repeat("ab", 32), "--out", filepath.Join(f.dir, "out")}, extra...)
+		"--out", filepath.Join(f.dir, "out")}, extra...)
 	return invoke(t, "", args...)
 }
 
@@ -266,4 +266,78 @@ func TestMailboxKeyNewWritesASecretOnlyTheOwnerReads(t *testing.T) {
 	assert.NotContains(t, out, "secret\":", "the secret is not printed")
 	_, err = invoke(t, "", "mailbox", "key", "new", "--output", file)
 	require.ErrorIs(t, err, ErrInput, "a key is never overwritten")
+}
+
+func TestPublishWritesAMergedFileWithoutChangingNumbersThatAreNotItsOwn(t *testing.T) {
+	f := newPublishFixture(t)
+	ard := filepath.Join(f.dir, "ard.json")
+	require.NoError(t, os.WriteFile(ard, []byte(`{"entries":[{"identifier":"urn:air:other.example:print:x","x-id":9007199254740993}]}`), 0o600))
+	listing := filepath.Join(f.dir, "listing.json")
+	require.NoError(t, os.WriteFile(listing, []byte(`{"identifier":"urn:air:seller.example:print:badges","x-big":18446744073709551615}`), 0o600))
+	_, err := f.publish(t, "--yes", "--to", "ard", "--ard-file", ard, "--ard-entry", listing, "--commitment-uri", "https://seller.example/c.json")
+	require.NoError(t, err)
+	raw, err := os.ReadFile(ard)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "9007199254740993", "another entry's number is kept exactly")
+	assert.Contains(t, string(raw), "18446744073709551615", "the seller's own number is kept exactly")
+}
+
+func TestPublishRefusesACardFileTheReaderWouldRefuse(t *testing.T) {
+	f := newPublishFixture(t)
+	// The evidence-request entry carries a commitment member: V0 refuses the
+	// whole card, so the verb writes nothing.
+	original := `{"capabilities":{"extensions":[{"uri":"` + a2aEvidenceRequestExtension + `","params":{"commitment_uri":"https://x.example/c.json"}}]}}`
+	card := filepath.Join(f.dir, "card.json")
+	require.NoError(t, os.WriteFile(card, []byte(original), 0o600))
+	_, err := f.publish(t, "--yes", "--to", "a2a", "--a2a-card", card, "--commitment-uri", "https://seller.example/c.json")
+	require.ErrorIs(t, err, ErrInput)
+	got, _ := os.ReadFile(card)
+	assert.Equal(t, original, string(got), "the seller's card is untouched")
+}
+
+func TestPublishRefusesInputsTheLoopCheckerRefuses(t *testing.T) {
+	f := newPublishFixture(t)
+	for name, args := range map[string][]string{
+		"no history_card/1 among the derivations":      {"--derivation", "checkpoints"},
+		"a predicate class that is not <class>:<name>": {"--predicate-class", "performed"},
+		"an endpoint that is a number":                 {"--endpoint", "12345"},
+		"a subject that is a number":                   {"--subject", "2026"},
+		"a checkpoint key that is not the card's":      {"--checkpoint-key", strings.Repeat("ab", 32)},
+		"a relay IPv6 literal not in compressed form":  {"--mailbox-key", f.mailboxKey(t), "--nostr-relay", "wss://[0:0:0:0:0:0:0:1]"},
+		"a relay on the default port":                  {"--mailbox-key", f.mailboxKey(t), "--nostr-relay", "wss://relay.example:443"},
+		"a mailbox key without relays":                 {"--mailbox-key", f.mailboxKey(t)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := f.publish(t, args...)
+			require.ErrorIs(t, err, ErrInput)
+		})
+	}
+}
+
+func (f publishFixture) mailboxKey(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(f.dir, "mb.key")
+	if _, err := os.Stat(path); err != nil {
+		_, err := invoke(t, "", "mailbox", "key", "new", "--output", path)
+		require.NoError(t, err)
+	}
+	return path
+}
+
+func TestPublishNamesTheKeyTheCardIsCheckpointedUnder(t *testing.T) {
+	f := newPublishFixture(t)
+	out, err := f.publish(t)
+	require.NoError(t, err, out)
+	var rep publishReport
+	require.NoError(t, json.Unmarshal([]byte(out), &rep))
+	octets, _ := os.ReadFile(filepath.Join(f.dir, "out", rep.NodeID+".json"))
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(octets, &doc))
+	card := doc["history_cards"].([]any)[0].(map[string]any)
+	der, err := base64.RawURLEncoding.DecodeString(card["checkpoint_key"].(string))
+	require.NoError(t, err)
+	cardBytes, _ := base64.StdEncoding.DecodeString(card["bytes"].(string))
+	chain, ok := chainOf(cardBytes)
+	require.True(t, ok)
+	assert.Equal(t, chain.Parsed[len(chain.Parsed)-1].KeyID, hex.EncodeToString(der[len(der)-32:]))
 }

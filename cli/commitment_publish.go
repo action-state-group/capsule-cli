@@ -123,23 +123,25 @@ func stapledReply(raw []byte) ([]byte, error) {
 
 // cardOf reads the stapled reply as a history_card/1 envelope signed by key:
 // the same key that signs the commitment, so one key stands behind both. It
-// returns the card's stream and its newest checkpoint statement.
-func cardOf(octets []byte, key string) (stream string, latest []byte, err error) {
+// returns the card's stream, its newest checkpoint statement and the key that
+// statement is signed by: the card's checkpoint key.
+func cardOf(octets []byte, key string) (stream string, latest []byte, checkpointKey string, err error) {
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
-		return "", nil, InputError("--staple's reply is not an evidence envelope")
+		return "", nil, "", InputError("--staple's reply is not an evidence envelope")
 	}
 	if reply.Envelope.Responder != key {
-		return "", nil, InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
+		return "", nil, "", InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
 	}
 	if err := reply.Envelope.Verify(); err != nil {
-		return "", nil, InputError("the card's envelope signature does not verify: " + err.Error())
+		return "", nil, "", InputError("the card's envelope signature does not verify: " + err.Error())
 	}
 	chain, ok := chainOf(octets)
 	if !ok || len(chain.Statements) == 0 {
-		return "", nil, InputError("--staple's reply is not a well-formed history_card/1")
+		return "", nil, "", InputError("--staple's reply is not a well-formed history_card/1")
 	}
-	return chain.Stream, chain.Statements[len(chain.Statements)-1], nil
+	last := len(chain.Statements) - 1
+	return chain.Stream, chain.Statements[last], chain.Parsed[last].KeyID, nil
 }
 
 // checkPublishInput refuses the members a loop checker would refuse of what
@@ -156,16 +158,20 @@ func checkPublishInput(in publishInput) error {
 		return InputError("--endpoint is not empty")
 	case in.ShareDealHalf != "" && in.ShareDealHalf != "counterparty":
 		return InputError("--share-deal-half is counterparty, or left out")
-	case !lowerHex64.MatchString(in.CheckpointKey):
-		return InputError("the card's checkpoint key is 64 lowercase hex characters: --checkpoint-key, or a profile with checkpoint.signing")
+	case len(in.PredicateClasses) == 0:
+		return InputError("--predicate-class is needed at least once: lcap.predicate_classes is a non-empty list")
+	case !slices.Contains(in.Derivs, stapleCard):
+		return InputError("--derivation must include " + stapleCard + ": the commitment staples that card")
+	case countLike(in.Endpoint):
+		return InputError("--endpoint is not a number: a commitment carries no counts")
 	}
 	for name, values := range map[string][]string{"--binding": in.Bindings, "--subject": in.Subjects, "--derivation": in.Derivs} {
 		if len(values) == 0 {
 			return InputError(name + " needs at least one value")
 		}
 		for _, v := range values {
-			if !tokenForm.MatchString(v) {
-				return InputError(name + " values are lowercase names, such as evidencebook/respond")
+			if !tokenForm.MatchString(v) || countLike(v) {
+				return InputError(name + " values are lowercase names, such as evidencebook/respond, and not numbers")
 			}
 		}
 	}
@@ -183,6 +189,28 @@ func checkPublishInput(in publishInput) error {
 		}
 	}
 	return nil
+}
+
+// countLike is a value that reads as a decimal number: the commitment carries
+// no counts, so the loop's checker refuses a number or a digit-only string in
+// any member (a member name or a value).
+func countLike(v string) bool {
+	return v != "" && strings.Trim(v, "0123456789") == ""
+}
+
+// decodeObject reads a JSON object keeping every number exactly, so a file
+// the seller owns is rewritten without changing a value that is not ours.
+func decodeObject(raw []byte) (map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var doc map[string]any
+	if err := dec.Decode(&doc); err != nil || doc == nil {
+		return nil, errors.New("not a JSON object")
+	}
+	if _, err := dec.Token(); err == nil {
+		return nil, errors.New("more than one JSON value")
+	}
+	return doc, nil
 }
 
 // signedWith adds sig to doc: Ed25519 over the JCS form of doc without it.
@@ -220,10 +248,17 @@ func buildPublishPlan(in publishInput) (publishPlan, error) {
 	if err != nil {
 		return publishPlan{}, err
 	}
-	stream, latest, err := cardOf(card, keyID)
+	stream, latest, cardCheckpointKey, err := cardOf(card, keyID)
 	if err != nil {
 		return publishPlan{}, err
 	}
+	// The commitment names the key the card's checkpoints are signed by, so an
+	// asker checks the card under it. A key given by the caller must be that
+	// one: naming another would publish a commitment its own card fails under.
+	if in.CheckpointKey != "" && in.CheckpointKey != cardCheckpointKey {
+		return publishPlan{}, InputError("the checkpoint key " + in.CheckpointKey + " is not the key the card's checkpoints are signed by (" + cardCheckpointKey + "): leave --checkpoint-key out, and check the profile's checkpoint.signing")
+	}
+	in.CheckpointKey = cardCheckpointKey
 	if in.NodeID == "" {
 		in.NodeID = keyID
 	}
@@ -377,6 +412,20 @@ func ardEntryWith(listing map[string]any, uri, digest string) (map[string]any, e
 	return entry, nil
 }
 
+// hasPointer is whether one of the pointers is the entry's attestation.
+func hasPointer(pointers []commitmentPointer, entry map[string]any) bool {
+	manifest, _ := entry["trustManifest"].(map[string]any)
+	for _, a := range asList(manifest["attestations"]) {
+		o, _ := a.(map[string]any)
+		for _, p := range pointers {
+			if o["uri"] == p.URI && o["digest"] == "sha256:"+p.Digest {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func asList(v any) []any {
 	list, _ := v.([]any)
 	return list
@@ -388,7 +437,7 @@ func asList(v any) []any {
 func mergeARDFile(path string, entry map[string]any) error {
 	doc := map[string]any{}
 	if raw, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(raw, &doc); err != nil || doc == nil {
+		if doc, err = decodeObject(raw); err != nil {
 			return InputError(path + " is not a JSON object")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -415,6 +464,10 @@ func mergeARDFile(path string, entry map[string]any) error {
 	if err != nil {
 		return err
 	}
+	// What is written must read back as the pointer it was made to be.
+	if pointers, failures := directoryPointers(out); len(failures) > 0 || !hasPointer(pointers, entry) {
+		return InputError(fmt.Sprintf("%s would not read back as a commitment entry (%v): nothing is written", path, failures))
+	}
 	return writeFileAtomic(path, out)
 }
 
@@ -426,8 +479,8 @@ func mergeA2ACard(path string, entry map[string]any) error {
 	if err != nil {
 		return InputError("--a2a-card: " + err.Error())
 	}
-	var card map[string]any
-	if err := json.Unmarshal(raw, &card); err != nil || card == nil {
+	card, err := decodeObject(raw)
+	if err != nil {
 		return InputError(path + " is not a JSON object")
 	}
 	caps, _ := card["capabilities"].(map[string]any)
@@ -444,6 +497,11 @@ func mergeA2ACard(path string, entry map[string]any) error {
 	out, err := dumped(card)
 	if err != nil {
 		return err
+	}
+	// A card whose evidence-request entry carries a commitment member is
+	// refused by the reader (ECC §6, V0), and so is not written.
+	if pointers, failures := a2aPointers(out); len(failures) > 0 || len(pointers) != 1 {
+		return InputError(fmt.Sprintf("%s would not read back as a commitment extension (%v): nothing is written", path, failures))
 	}
 	return writeFileAtomic(path, out)
 }

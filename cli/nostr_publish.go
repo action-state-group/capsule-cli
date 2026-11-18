@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -161,6 +162,10 @@ func relayFormProblem(relay string) string {
 	}
 	if u, err := url.Parse(relay); err != nil || u.Host == "" {
 		return "is not a URL"
+	} else if host := u.Hostname(); strings.Contains(u.Host, "[") {
+		if addr, err := netip.ParseAddr(host); err != nil || !addr.Is6() || addr.String() != host {
+			return "writes its IPv6 literal other than in its compressed form"
+		}
 	}
 	return ""
 }
