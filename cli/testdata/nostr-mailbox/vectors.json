@@ -1,0 +1,2635 @@
+{
+ "set": "aac-nostr-mailbox-v0",
+ "status": "EXPERIMENTAL. Vectors for a carriage binding that is not part of evidence-interop/1 and names no binding token. Every key is a test key derived from a public label; never use one for anything else.",
+ "provenance": "spec-derived, constructed; no relay was contacted",
+ "binding": "spec/bindings/nostr-mailbox-v0.md",
+ "carriage": {
+  "request_kind": 4700,
+  "reply_kind": 4701,
+  "relay": "wss://relay.example"
+ },
+ "nostr_test_keys": {
+  "note": "TEST-ONLY. Each secret key is SHA-256(label) as a big-endian integer, reduced mod (n-1), plus 1; aux_rand is 32 zero bytes.",
+  "keys": {
+   "mailbox": {
+    "label": "nostr-mailbox-v0 vectors: mailbox key",
+    "public": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673"
+   },
+   "requester-1": {
+    "label": "nostr-mailbox-v0 vectors: requester carriage key 1",
+    "public": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+   },
+   "requester-2": {
+    "label": "nostr-mailbox-v0 vectors: requester carriage key 2",
+    "public": "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f"
+   },
+   "requester-3": {
+    "label": "nostr-mailbox-v0 vectors: requester carriage key 3",
+    "public": "72e32fe2f5403f50906643a3ad116f9ba74e15598dbad4187b71944b30dd4670"
+   },
+   "requester-4": {
+    "label": "nostr-mailbox-v0 vectors: requester carriage key 4",
+    "public": "318b7ab78f4565776489ad41d0bd72d13dc9f9de3c0ecb8b4a9425900815c875"
+   },
+   "other": {
+    "label": "nostr-mailbox-v0 vectors: a key the request did not address",
+    "public": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8"
+   }
+  }
+ },
+ "evidence_test_keys": {
+  "note": "The Ed25519 keys of vectors/interop-profile-v1/ (its test_keys), used unchanged.",
+  "responder": "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117",
+  "impostor": "89787d3b350075c8a32fb00397204edcd437d30da54d773031c1294bc34d362d",
+  "log": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+ },
+ "contract": {
+  "document": {
+   "id": "C",
+   "version": "1",
+   "requirements": [
+    {
+     "id": "r-record",
+     "profile": "outcome",
+     "statement": "The evidence record named by the request is served under a verified envelope.",
+     "evidence_requirements": {
+      "accepted_epistemic_types": [
+       "system_of_record_fact"
+      ]
+     }
+    },
+    {
+     "id": "r-carried-signature",
+     "profile": "outcome",
+     "statement": "The authorization carried in the evidence record verifies under its own signature method.",
+     "evidence_requirements": {
+      "accepted_epistemic_types": [
+       "producer_claim"
+      ]
+     }
+    },
+    {
+     "id": "r-authorized",
+     "profile": "outcome",
+     "statement": "The recorded action was authorized by the principal the carried authorization names.",
+     "evidence_requirements": {
+      "accepted_epistemic_types": [
+       "producer_claim",
+       "system_of_record_fact"
+      ]
+     }
+    }
+   ]
+  },
+  "contract_ref": "C@1",
+  "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561"
+ },
+ "count": 15,
+ "cases": [
+  {
+   "id": "mailbox-exchange",
+   "description": "Request 1 as deterministic CBOR in a request event addressed to the mailbox key; one reply event by that key carrying the envelope. A reply, and every required envelope property PASS: row 7 of the profile's §8.1.",
+   "cites": [
+    "§4.1",
+    "§4.2",
+    "§5.1",
+    "§5.2",
+    "interop §8.1 row 7"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-refusal-deadline-unmet",
+   "description": "Request 3 as JCS; the responder answers with a signed deadline_unmet refusal before the deadline, as ER §3.4 says it SHOULD. A reply; a conforming refusal.",
+   "cites": [
+    "§4.2",
+    "§5.2",
+    "ER §3.4",
+    "interop §6.3",
+    "interop §8.1"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/json",
+     "octets_text": "{\"coverage\":{\"expected_pin\":\"16f15dd5475d5e8ec1fb7a84470391e11d7663232365c1749c60ca7489cffe99\"},\"deadline\":\"2026-10-12T00:01:10Z\",\"nonce\":\"2026-10-12T00:00:10Z/n3\",\"profile\":\"evidence-interop/1\",\"subject\":{\"record\":\"2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244\"}}"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "4f87407f934285c61e72f6f94f607293c63fbaf4afc707ab8d6600227c1cfa5e",
+      "pubkey": "72e32fe2f5403f50906643a3ad116f9ba74e15598dbad4187b71944b30dd4670",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/json"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "eyJjb3ZlcmFnZSI6eyJleHBlY3RlZF9waW4iOiIxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5In0sImRlYWRsaW5lIjoiMjAyNi0xMC0xMlQwMDowMToxMFoiLCJub25jZSI6IjIwMjYtMTAtMTJUMDA6MDA6MTBaL24zIiwicHJvZmlsZSI6ImV2aWRlbmNlLWludGVyb3AvMSIsInN1YmplY3QiOnsicmVjb3JkIjoiMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NCJ9fQ",
+      "sig": "109de5e1be2bae1e7746d8dbd22aace8c39e534182946cbc8cd2658559811c2f3a7e7189e81faee4b3839538e041e7e5a7b4430763f7e4f7325cc5016b3c1d14"
+     },
+     "events": [
+      {
+       "id": "48b5af6afbdc9e111fe409678bed27c87d23f0691cb4c641b336cf22fa4613c3",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763213,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "4f87407f934285c61e72f6f94f607293c63fbaf4afc707ab8d6600227c1cfa5e",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "72e32fe2f5403f50906643a3ad116f9ba74e15598dbad4187b71944b30dd4670"
+        ],
+        [
+         "m",
+         "application/json"
+        ]
+       ],
+       "content": "eyJpc3N1ZWRfYXQiOiIyMDI2LTEwLTEyVDAwOjAwOjEzWiIsImtleV9pZCI6ImU4NGZlZDgxOTBhNjExNjAxNmJmNjhlZjJmYzE3ODBhOTE5ZTllZDJkOWY4OGVmYjg5NWE5NTRmZmQ3ZjAxMTciLCJyZWFzb24iOiJkZWFkbGluZV91bm1ldCIsInJlcXVlc3RfZGlnZXN0IjoiNjA3ZjQ3MGI1NjA1OTllOGMyMzAyNjU4ZGFkZjlkMjJmNjIzNDViNDgzOGQ2MDUwN2IwZjk1ODVjMDA1OTAwYiIsInNpZyI6ImViMjUzN2YxM2RmZjI2YjlhNmQ1ZmM5NzYxNjU4NjAyN2FjYzhkNDViODc0ZDRlYTg2NzY3NGYzZTFlZTUwYmUwYjcxZDNjZTgzZjYzNGYwMDk2Y2Q2MDU5OWMyMzNmNzMwMWE4ZWQ5OGJmNjM3NDYyY2E2NjY1OGEyZjFjNjAyIn0",
+       "sig": "8b1ed4a90fe40697263c2f715b7fcec9ae385040e0bd98e7d6bff6f6890c2b26952816ef554ed2d122cd250c411e8d4f69ba324f49fbaa5a5d4f5f36517d036b"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "607f470b560599e8c2302658dadf9d22f62345b4838d60507b0f9585c005900b",
+    "request_event_id": "4f87407f934285c61e72f6f94f607293c63fbaf4afc707ab8d6600227c1cfa5e",
+    "classification": [
+     "reply"
+    ],
+    "replies": [
+     {
+      "message_type": "refusal",
+      "properties": {
+       "refusal_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "request_binding": "PASS",
+       "reason_registered": "PASS",
+       "issued_at_form": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "refusal-deadline_or_malformed",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable"
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "1f04dc314b55e4d377d8bf6d784586050b50e498bb90638ed9ab4064491b3df8"
+        }
+       ],
+       "proofs": []
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-request-redelivered",
+   "description": "What the requester receives when the responder answered request event 1 twice (for example because a relay delivered it twice): two reply events with distinct envelopes, and the first delivered again. Two replies, one per event id; caller_invariance PASS over them.",
+   "cites": [
+    "§4.2",
+    "§6",
+    "interop §11.4.1 rule 8"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      },
+      {
+       "id": "b40f9277a05a96017b24ff7fdf617edc82d4bb0e413d126ee6b82c609e481fdb",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763215,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDYwMzg5OTE2NDg4NGY2NDJhNTdiNWJkODIxMDhjZmI4OTM3NWIxNjYyZGRiNWU3NmU2ZWNmNGE0ZjMzMjBkY2MyMTNiNWU1ODJjNmJlZGIzZjZmMDBjZTdiNjM4ZTJjODM4YzZlNDM0YjJhYWI1MjY5MzIxMjM1ZGNkOTc5ZjBkZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxNVppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "93d414b1ca55566f274ec473bb12025e17f76038d3ec30663d49d0329511baf3c84afad1e3df570b1641663ba2cc4d49ff755adc71719afaea3d4c6ab20c44a3"
+      },
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply",
+     "reply",
+     "duplicate"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     },
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "PASS"
+    }
+   }
+  },
+  {
+   "id": "mailbox-envelope-untrusted-key",
+   "description": "The mailbox key answers with an envelope signed by, and naming, a key the trust policy does not accept. The event is a reply (the reply position, §4.2). responder_trust FAIL: row 2.",
+   "cites": [
+    "§3",
+    "§4.2",
+    "§6",
+    "interop §7.2 responder_trust",
+    "interop §8.1 row 2"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "ef3b9b1b577f946c4d4c9ce8b29414eefb6033e31b648522ec62047899e5d569",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gGRkZGQyMjBkZWEyYWE1NzFiOGY5ZTlmMTU5YWE0ZjNjY2IyODU0MzI5MjZlOTQwYjY4ZjgxYTliYmFmNGY4MTgzYzBkN2JlNzUyNTljNGIyY2Q1MjA0ZTRkYjEwNzBkN2UxOTc1YjExZTc0ZTJhM2RjMzYzYmNhMTViZTA4MDA5ZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEA4OTc4N2QzYjM1MDA3NWM4YTMyZmIwMDM5NzIwNGVkY2Q0MzdkMzBkYTU0ZDc3MzAzMWMxMjk0YmMzNGQzNjJkbHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "7895e10908332c21e6751b271907a7e7da44dfe1f0510ad93af41e06d752674b2d963a90b3a4ff839a9957a3e07c5b283e989ca301adef1d7fb09fdcb61be18e"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "FAIL",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-2",
+        "status": "INSUFFICIENT",
+        "sufficiency": "INSUFFICIENT",
+        "verdict": "not_evaluable"
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-envelope-replayed",
+   "description": "The mailbox key answers request 2 with the genuine envelope it signed for request 1. A reply; request_binding FAIL: row 2.",
+   "cites": [
+    "§4.2",
+    "§6",
+    "interop §7.2 request_binding",
+    "interop §8.1 row 2"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e326770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+      "pubkey": "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMmdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "908036b6a122b0d7660e9b7547eabb243cca4fe3b20ec1a367626d5a335a08b39b400de1605726444798435c1670fd46049f2d34c2710c707883506e9c67ba69"
+     },
+     "events": [
+      {
+       "id": "d9e536b13ddf44487040579ac73c4193aa91a64a1929b917cc376965db8e1cf3",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763214,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "fdcf69ccae5185696e67557dad4e554d2053aba8db3a3eab4ad6d191c66a1a2b403442be5b32cd7d56353273beccdb75808f2392b3a03bd90ae32d198a0f2bfa"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "2075f570e0cf9e5ae789e8f2fa4b85032cae17adbc1aaf47fc93ae63147d07d7",
+    "request_event_id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+    "classification": [
+     "reply"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "FAIL",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-2",
+        "status": "INSUFFICIENT",
+        "sufficiency": "INSUFFICIENT",
+        "verdict": "not_evaluable"
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-relayed-by-other-key",
+   "description": "A reply event naming request event 1, signed by a Nostr key the request did not address, carrying the responder's genuine envelope for request 1. Check 7 (author) fails, but the content is signed by a trusted responder key and binds this request: a reply by content (ER §3.6), verified as in mailbox-exchange.",
+   "cites": [
+    "§4.2 check 7",
+    "§4.2 reply by content",
+    "ER §3.6",
+    "ER §4.5"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "4ec872597b8158e8e342d73ce38cb087670c3267f1aa4d9ea91f29184146de3e",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "d22d3cca26a6b7f0dc1f93f8cca438d0a636a62a583789f0ec12b6bc2b8b541354a77d7a9609b914bd592b980d7804afb62df9f5e509d9b28912a7b876044f37"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply_by_content:author"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-reply-by-content-limit",
+   "description": "A limit of two replies by content, and three reply events naming request event 1, each signed by a key the request did not address and each carrying a distinct genuine envelope for request 1. The first two are replies by content. The first, delivered again, is one event and uses no more of the limit. The mailbox key's own reply after the limit is used is still a reply. The third is beyond the limit and is not verified: not a reply, also when it claims the first one's id, since events are counted by their recomputed hash. caller_invariance PASS over the three replies.",
+   "cites": [
+    "§4.2 check 7",
+    "§4.2 reply by content",
+    "§4.2 limit",
+    "§6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "f052039eabee63ea7dc4c385b78f4b3be89bb8798b78af39121277aff2590402",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763213,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDUyZmNhNTRiYmRkYzlhODE3OGJmNWRiYzlmZTI5MzE0NWUyZjVmNDUzMTJiMmUyYzNjNThhMTE3ZGE3M2RlOTVhNGYwOTQwMWFkMmIyYTY0MjkzZTQyNTk3MGNhY2Y5NjZlNzRlY2NkYzhkYjY4MjkwYTY3YmRjMjViYTAxMDA5ZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxM1ppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "ad04912257842a854bdd031d5265659b2b72faed3276ef601dc28c0d01d3a9e91c6c5cc985dd4028b7155e12c12beac7dea7cb0bada84305e7caf528ed02884b"
+      },
+      {
+       "id": "f05986a43c15a802fb29d4875997d3f9dc702d9ab0a5612bc887331568c86307",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763216,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDI5MTEzZjYxNzg0MTcwZTZjODVhY2VkYzBjMjdkNjU1ZjI5NDg0MmUzNTljOTcwZTZkYThlYjM2OGUxN2RjMWM0NWI0YjA1Mzk3NWRmN2QzMWQ3NDNkNWQxNTBkYmNhNWE5ZDBhNDEwNWQyYzNkY2IwYmY4MmFlMWRkZDI4NjA1ZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxNlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "80a79b7e596d6e0d369030b403df65cd46c29361250ba6c5477aaedf0976c1b067f5742a8271f06b9bddf46046c466ff999701037e4c276b3881cd9e2c70471e"
+      },
+      {
+       "id": "f052039eabee63ea7dc4c385b78f4b3be89bb8798b78af39121277aff2590402",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763213,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDUyZmNhNTRiYmRkYzlhODE3OGJmNWRiYzlmZTI5MzE0NWUyZjVmNDUzMTJiMmUyYzNjNThhMTE3ZGE3M2RlOTVhNGYwOTQwMWFkMmIyYTY0MjkzZTQyNTk3MGNhY2Y5NjZlNzRlY2NkYzhkYjY4MjkwYTY3YmRjMjViYTAxMDA5ZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxM1ppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "ad04912257842a854bdd031d5265659b2b72faed3276ef601dc28c0d01d3a9e91c6c5cc985dd4028b7155e12c12beac7dea7cb0bada84305e7caf528ed02884b"
+      },
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      },
+      {
+       "id": "e96079e319702bee6f766b8de8f39e1b13456501c77d3bb81dd81e8eeaa09461",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763218,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDllM2I0M2UzZGYwNjVhNThlMDc1NTRmOTU5Y2M1MTAxZTU5ZTc4Mzg4MDBlNWJhZmY3YzZkN2VmNjczM2I3OTA5YmNmZTlhYjdlOGVkMTA0Y2RhYWUwZGNjYWRjM2MxZDg5NWQ1MmE4OWRhNTMyYzEwMmMxMTE5Zjg0OWNjYzBlZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxOFppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "38277f820c591db400bd3ce532b759a00b98b90fe9431c1923346970d5f31c23e9ad4f9c6ec5f26f1e02fd914910afcd2ad76ea793644688f1da5d64d5d1f3bf"
+      },
+      {
+       "id": "f052039eabee63ea7dc4c385b78f4b3be89bb8798b78af39121277aff2590402",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763218,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDllM2I0M2UzZGYwNjVhNThlMDc1NTRmOTU5Y2M1MTAxZTU5ZTc4Mzg4MDBlNWJhZmY3YzZkN2VmNjczM2I3OTA5YmNmZTlhYjdlOGVkMTA0Y2RhYWUwZGNjYWRjM2MxZDg5NWQ1MmE4OWRhNTMyYzEwMmMxMTE5Zjg0OWNjYzBlZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxOFppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "38277f820c591db400bd3ce532b759a00b98b90fe9431c1923346970d5f31c23e9ad4f9c6ec5f26f1e02fd914910afcd2ad76ea793644688f1da5d64d5d1f3bf"
+      }
+     ],
+     "reply_by_content_limit": 2
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply_by_content:author",
+     "reply_by_content:author",
+     "duplicate",
+     "reply",
+     "not_a_reply:limit",
+     "not_a_reply:limit"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     },
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     },
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "PASS"
+    }
+   }
+  },
+  {
+   "id": "mailbox-other-key-replays-old-envelope",
+   "description": "A reply event naming request event 2, signed by a key the request did not address, carrying the responder's genuine envelope for request 1. Check 7 fails and the content does not bind this request: not a reply; a recorded absence at the deadline. A relay cannot turn the request into a response received and failed.",
+   "cites": [
+    "§4.2 check 7",
+    "§4.2 reply by content",
+    "§6",
+    "§5.3",
+    "§6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e326770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+      "pubkey": "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMmdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "908036b6a122b0d7660e9b7547eabb243cca4fe3b20ec1a367626d5a335a08b39b400de1605726444798435c1670fd46049f2d34c2710c707883506e9c67ba69"
+     },
+     "events": [
+      {
+       "id": "7b1d3b90a20fd92cfc59fea6f196a769fca2bb5f891e870cef90854ca31fa3eb",
+       "pubkey": "21a090cae7cd4e3fe7a3479197cb842e46f4c7eecb1d1283773d68fe938a67e8",
+       "created_at": 1791763214,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "a0c2e3942f6eb69be4a85302b98d7add07751d8e0015cf3622192215978e39131b7d2703886519a308e83c546099a2d143b044644a986d8a1987dc3057a6dcc6"
+      }
+     ]
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"2075f570e0cf9e5ae789e8f2fa4b85032cae17adbc1aaf47fc93ae63147d07d7\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "2075f570e0cf9e5ae789e8f2fa4b85032cae17adbc1aaf47fc93ae63147d07d7",
+    "request_event_id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+    "classification": [
+     "not_a_reply:author"
+    ],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "6085e85d313e337e6ec6bf0f76794508219f05e3f365fb4cf18ee4a4878111e6"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-event-bad-signature",
+   "description": "Reply event 1 with its id intact and its signature replaced by another event's. Check 6 (signature) fails; the content is still the responder's envelope for this request: a reply by content.",
+   "cites": [
+    "§4.2 check 6",
+    "§4.2 reply by content",
+    "ER §3.6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "93d414b1ca55566f274ec473bb12025e17f76038d3ec30663d49d0329511baf3c84afad1e3df570b1641663ba2cc4d49ff755adc71719afaea3d4c6ab20c44a3"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "reply_by_content:signature"
+    ],
+    "replies": [
+     {
+      "message_type": "envelope",
+      "properties": {
+       "profile_version": "PASS",
+       "envelope_signature": "PASS",
+       "responder_trust": "PASS",
+       "responder_key_current": "NOT_CHECKED",
+       "issued_at_form": "PASS",
+       "request_binding": "PASS",
+       "subject_binding": "PASS",
+       "artifact_digest": "PASS",
+       "verification_binding": "PASS",
+       "anchor_match": "PASS",
+       "anchor_inclusion": "PASS"
+      },
+      "requirements": {
+       "r-record": {
+        "row": "envelope-7",
+        "status": "UNKNOWN",
+        "sufficiency": "UNKNOWN",
+        "verdict": "not_evaluable",
+        "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+       }
+      },
+      "claim": {
+       "evidence": [
+        {
+         "digest_alg": "SHA-256",
+         "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+        }
+       ],
+       "proofs": [
+        {
+         "kind": "inclusion_proof",
+         "digest_alg": "SHA-256",
+         "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+        }
+       ]
+      }
+     }
+    ],
+    "set_properties": {
+     "caller_invariance": "NOT_CHECKED"
+    }
+   }
+  },
+  {
+   "id": "mailbox-event-tampered",
+   "description": "Reply event 1 with its content replaced, after signing, by an envelope under a key the trust policy does not accept. Check 5 (id) fails and the content proves nothing: not a reply; a recorded absence at the deadline.",
+   "cites": [
+    "§4.2 check 5",
+    "§4.2 reply by content",
+    "§5.3",
+    "§6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gGRkZGQyMjBkZWEyYWE1NzFiOGY5ZTlmMTU5YWE0ZjNjY2IyODU0MzI5MjZlOTQwYjY4ZjgxYTliYmFmNGY4MTgzYzBkN2JlNzUyNTljNGIyY2Q1MjA0ZTRkYjEwNzBkN2UxOTc1YjExZTc0ZTJhM2RjMzYzYmNhMTViZTA4MDA5ZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEA4OTc4N2QzYjM1MDA3NWM4YTMyZmIwMDM5NzIwNGVkY2Q0MzdkMzBkYTU0ZDc3MzAzMWMxMjk0YmMzNGQzNjJkbHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      }
+     ]
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [
+     "not_a_reply:id"
+    ],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "73638acf7057c128db3d3b68567546ba6a64f94cb7d4d2027e96a9d8bc1d5a02"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-reply-to-other-request",
+   "description": "The relay delivers reply event 1, unchanged, on request 2's subscription. Its e tag names request event 1: check 2 (reply_to) fails, so it is not a reply to this request; a recorded absence at the deadline.",
+   "cites": [
+    "§4.2 check 2",
+    "§5.3",
+    "§6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e326770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+      "pubkey": "839ee98b7326446defd64991d8becbc9ac1c2ebdcccae63cf09f13ba3ab2463f",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMmdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "908036b6a122b0d7660e9b7547eabb243cca4fe3b20ec1a367626d5a335a08b39b400de1605726444798435c1670fd46049f2d34c2710c707883506e9c67ba69"
+     },
+     "events": [
+      {
+       "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+       "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+       "created_at": 1791763212,
+       "kind": 4701,
+       "tags": [
+        [
+         "e",
+         "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+         "wss://relay.example"
+        ],
+        [
+         "p",
+         "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ]
+       ],
+       "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+       "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+      }
+     ]
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"2075f570e0cf9e5ae789e8f2fa4b85032cae17adbc1aaf47fc93ae63147d07d7\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "2075f570e0cf9e5ae789e8f2fa4b85032cae17adbc1aaf47fc93ae63147d07d7",
+    "request_event_id": "f239833f23a9ac7f50179f92241ccd27bccb34eb0b667bd5b47ae5fbda6c88f5",
+    "classification": [
+     "not_a_reply:reply_to"
+    ],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "6085e85d313e337e6ec6bf0f76794508219f05e3f365fb4cf18ee4a4878111e6"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-request-tampered",
+   "description": "A relay alters request event 1 on its way to the responder: once with its id kept over request 2's octets, once with the id recomputed. The responder checks each request event before answering, ignores both (id, then signature), and sends no reply: the requester records an absence at the deadline, never a response received and failed.",
+   "cites": [
+    "§4.1",
+    "§6",
+    "§5.3",
+    "§6"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [],
+     "responder_events": [
+      {
+       "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+       "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+       "created_at": 1791763210,
+       "kind": 4700,
+       "tags": [
+        [
+         "p",
+         "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+         "wss://relay.example"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ],
+        [
+         "expiration",
+         "1791763270"
+        ]
+       ],
+       "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMmdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+       "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+      },
+      {
+       "id": "168da4786bb76cfb35b6309b34855e9f65308dac176c369031ff9912d2980857",
+       "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+       "created_at": 1791763210,
+       "kind": 4700,
+       "tags": [
+        [
+         "p",
+         "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+         "wss://relay.example"
+        ],
+        [
+         "m",
+         "application/cbor"
+        ],
+        [
+         "expiration",
+         "1791763270"
+        ]
+       ],
+       "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMmdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+       "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+      }
+     ]
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [],
+    "replies": [],
+    "responder": [
+     "ignored:id",
+     "ignored:signature"
+    ],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "73638acf7057c128db3d3b68567546ba6a64f94cb7d4d2027e96a9d8bc1d5a02"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-no-reply",
+   "description": "No event arrives before the deadline. The requester records an absence whose window closes at the request's deadline and whose route is the mailbox it addressed.",
+   "cites": [
+    "§5.3",
+    "interop §6.4",
+    "interop §8.1"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": []
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "73638acf7057c128db3d3b68567546ba6a64f94cb7d4d2027e96a9d8bc1d5a02"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-late-reply-after-absence",
+   "description": "No event arrives before the deadline, and the requester records an absence. Then the relay delivers reply event 1, which it had delayed past the deadline. The absence record is unchanged; the late event is a reply that verifies as in mailbox-exchange, kept as its own later fact that cites the request by its digest and its event id.",
+   "cites": [
+    "§5.3",
+    "§6",
+    "interop §6.4",
+    "interop §11.2",
+    "interop §11.4.1 rule 8"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a5656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e316770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e78403136663135646435343735643565386563316662376138343437303339316531316437363633323332333635633137343963363063613734383963666665393968646561646c696e6574323032362d31302d31325430303a30313a31305a"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+      "pubkey": "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ],
+       [
+        "expiration",
+        "1791763270"
+       ]
+      ],
+      "content": "pWVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uMWdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OWhkZWFkbGluZXQyMDI2LTEwLTEyVDAwOjAxOjEwWg",
+      "sig": "ef25832966692d1745dab9a52e0a7b9cb4cd2ea823d76dd27b13dadc969d5f082271842f542852c26f6042bfdc7ab62d3ee68ed089cc3227a7ecb8f58b9a647c"
+     },
+     "events": [],
+     "late_events": [
+      {
+       "received_at": "2026-10-12T00:01:40Z",
+       "event": {
+        "id": "621ef6052aa9b5208160642338213673adb15d939b950bba9e502447bac95fb9",
+        "pubkey": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "created_at": 1791763212,
+        "kind": 4701,
+        "tags": [
+         [
+          "e",
+          "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+          "wss://relay.example"
+         ],
+         [
+          "p",
+          "df2f1640bbd21ab794735396fd3e5e2cc6cde3e25521b83b7fbcb0a90f913a27"
+         ],
+         [
+          "m",
+          "application/cbor"
+         ]
+        ],
+        "content": "q2NzaWd4gDFjYmVlMTFiMzExMGY2OWJjZDUwOWQzZTFjNmFlNTJiMWI0YmNkY2I2NjVlZWY5MzRiMDI4MTU0MWI4MTlmYzVhOGU0OWQ2OTQ4YmNhOTM0OTQ4N2IxZjJhN2Y5ZGI4ZGZiNjY5OWIwNDY1OTBjYTFlNTc1MzJmMjhkZjNhZjBhZmFuY2hvcqFmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5Z3Byb2ZpbGVyZXZpZGVuY2UtaW50ZXJvcC8xZ3N1YmplY3ShZnJlY29yZHhAMmZiZGI5NWJkZWJhNjJmOTQ5YmNiNjAyNjA2MWZjZDY2YzAyMTUyM2EzOWU1OGZjMmRlMWNkNDRmZjYzMTI0NGhhcnRpZmFjdFgleyJleGFtcGxlIjoiZXZpZGVuY2UgcmVjb3JkIiwic2VxIjoxfWlpc3N1ZWRfYXR0MjAyNi0xMC0xMlQwMDowMDoxMlppcmVzcG9uZGVyeEBlODRmZWQ4MTkwYTYxMTYwMTZiZjY4ZWYyZmMxNzgwYTkxOWU5ZWQyZDlmODhlZmI4OTVhOTU0ZmZkN2YwMTE3bHZlcmlmaWNhdGlvboOiZGtpbmRuY2xsLWNoZWNrcG9pbnRmZGlnZXN0eEAxNmYxNWRkNTQ3NWQ1ZThlYzFmYjdhODQ0NzAzOTFlMTFkNzY2MzIzMjM2NWMxNzQ5YzYwY2E3NDg5Y2ZmZTk5omRraW5kc2NsbC1pbmNsdXNpb24tcHJvb2ZmZGlnZXN0eEAwMTNhYzVhM2JkZmY5Y2Y2MmEzZWEyODE2YjNjZDE5NzE1MTkzMGY2ZGQ0OWQ2N2Q5Mjg2ZjEyYzNjNDc1MjdhomRraW5kdWNsbC1jb25zaXN0ZW5jeS1wcm9vZmZkaWdlc3R4QDA2NTUwY2NhNzUzMTkyNDJlYTQwZTdmM2ZkOWZmMGI4ZTVlM2JmYThhMDYxMjJmNjc4NTc4YTU3Y2I0YmRjNzFucmVxdWVzdF9kaWdlc3R4QGUwYmEwNTgzNWM2M2ZiMmM3ZjAzNzQ2NDU0YjE0NzA2YTNjMGFhNGU1OTUwNTY2OTc5MDdjZGU5MjE4NTQyZDJvYXJ0aWZhY3RfZGlnZXN0eEAyZmJkYjk1YmRlYmE2MmY5NDliY2I2MDI2MDYxZmNkNjZjMDIxNTIzYTM5ZTU4ZmMyZGUxY2Q0NGZmNjMxMjQ0dHZlcmlmaWNhdGlvbl9jb250ZW50g1kBv9KEWFajAScEWCDIKs9m7yvcEGAXVEuRhz373JLwljsJnUmw9iG-33birw-iAXgYaHR0cHM6Ly9wcm9kdWNlci5leGFtcGxlAnFldmlkZW5jZS1zdHJlYW0tMaBZAR-nZGtpbmRuY2xsLWNoZWNrcG9pbnRnY2FkZW5jZRkOEGhsb2dfc2l6ZQdpaXNzdWVkX2F0dDIwMjYtMTAtMTJUMDA6MDA6MDBaaXByZXZfc2l6ZQNqY29tbWl0bWVudFhng1ggNh7-V19Ceva2zufeDyGkxaxLt2h0G6EElcoDAj2FSiJYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNP29wcmV2X2NvbW1pdG1lbnRYRYJYIBd1LNoPWuVSaHYSv-Lts1zkFLdp0n3jabOGDgRHXC4fWCBhTIaBYcPVWb9UHRlmFB6htyado8QhVQTtqf1IgiY_jVhA718vVrpfXtLElydLzJQtgZOn0xjRGYneO0CQCfqJXnOej6CK2xJAbeXytr4ud-nzOYj7GcfN9XNECDMG_I6zC1hHggOCWCBFM6JlYBMmRSZBwsJwARda_HwkBzP_qfTteo-1NSM9dVggF3Us2g9a5VJodhK_4u2zXOQUt2nSfeNps4YOBEdcLh9YsYQEC4KBWCBf1rzf-hHbV6aL5RLDbQnOCr0ARIRXJLY3nRx34a-O3IJYIEUzomVgEyZFJkHCwnABF1r8fCQHM_-p9O16j7U1Iz11WCAXdSzaD1rlUmh2Er_i7bNc5BS3adJ942mzhg4ER1wuH4JYIABgasCy-_-a6ir67pF4LV_fWbI8bB3ID68YUoCUyKXTWCBBw5Jf42DCCwJ7qUKc1hRVkC77MrEJbj1BLR7rQhhNPw",
+        "sig": "04ec9fa673f32649c8d69dc196825e3eb6f9a75976f06e2f0e168adf6767fa2aa213c1035966469741b8920f1af9a55db841fd4f31cfa02edfa5de9199b62053"
+       }
+      }
+     ]
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:01:10Z\",\"request_digest\":\"e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:01:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+    "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423",
+    "classification": [],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "deadline",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "73638acf7057c128db3d3b68567546ba6a64f94cb7d4d2027e96a9d8bc1d5a02"
+       }
+      ],
+      "proofs": []
+     }
+    },
+    "late": {
+     "classification": [
+      "reply"
+     ],
+     "replies": [
+      {
+       "message_type": "envelope",
+       "properties": {
+        "profile_version": "PASS",
+        "envelope_signature": "PASS",
+        "responder_trust": "PASS",
+        "responder_key_current": "NOT_CHECKED",
+        "issued_at_form": "PASS",
+        "request_binding": "PASS",
+        "subject_binding": "PASS",
+        "artifact_digest": "PASS",
+        "verification_binding": "PASS",
+        "anchor_match": "PASS",
+        "anchor_inclusion": "PASS"
+       },
+       "requirements": {
+        "r-record": {
+         "row": "envelope-7",
+         "status": "UNKNOWN",
+         "sufficiency": "UNKNOWN",
+         "verdict": "not_evaluable",
+         "note": "§8.1 row 7: the contract evaluates the Artifact's content; SATISFIED gives met, not_met or, where the requirement allows it, out_of_scope, and any other sufficiency gives not_evaluable [RES §1]. This profile fixes no content rule, so with no content evaluator the requirement is UNKNOWN (§11.3.7)."
+        }
+       },
+       "claim": {
+        "evidence": [
+         {
+          "digest_alg": "SHA-256",
+          "digest": "2fbdb95bdeba62f949bcb6026061fcd66c021523a39e58fc2de1cd44ff631244"
+         }
+        ],
+        "proofs": [
+         {
+          "kind": "inclusion_proof",
+          "digest_alg": "SHA-256",
+          "digest": "013ac5a3bdff9cf62a3ea2816b3cd197151930f6dd49d67d9286f12c3c47527a"
+         }
+        ]
+       }
+      }
+     ],
+     "absence_record_unchanged": true,
+     "cites": {
+      "request_digest": "e0ba05835c63fb2c7f03746454b14706a3c0aa4e595056697907cde9218542d2",
+      "request_event_id": "e3cb5b4db41184e429e8c57149b0c4abdd454a960efc2ed2ce9cef241f54b423"
+     }
+    }
+   }
+  },
+  {
+   "id": "mailbox-no-deadline-no-reply",
+   "description": "Request 4 has no deadline, so its request event has no expiration tag. No event arrives; the window closes at the requester's local timeout.",
+   "cites": [
+    "§4.1",
+    "§5.3",
+    "ER §4.4",
+    "interop §6.4"
+   ],
+   "pins": {
+    "trust_policy": {
+     "responder_keys": [
+      "e84fed8190a6116016bf68ef2fc1780a919e9ed2d9f88efb895a954ffd7f0117"
+     ],
+     "log_keys": [
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-1",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      },
+      {
+       "iss": "https://producer.example",
+       "sub": "evidence-stream-2",
+       "kid": "c82acf66ef2bdc106017544b91873dfbdc92f0963b099d49b0f621bedf76e2af"
+      }
+     ],
+     "foreign_keys": [],
+     "parties": {},
+     "successions": [],
+     "require_action_time_from_other_party": false
+    },
+    "verification_policy": {
+     "online": false,
+     "profiles_implemented": [
+      "evidence-interop/1"
+     ],
+     "kinds_implemented": [
+      "cll-checkpoint",
+      "cll-inclusion-proof",
+      "cll-consistency-proof"
+     ]
+    },
+    "contract_ref": "C@1",
+    "contract_digest": "6f6605015976f77d230ba62870bd585cb547392add86bf2efb9d46f762ee9561",
+    "evaluation_time": "2026-10-12T01:00:00Z"
+   },
+   "inputs": {
+    "request": {
+     "media_type": "application/cbor",
+     "octets_hex": "a4656e6f6e636577323032362d31302d31325430303a30303a31305a2f6e346770726f66696c657265766964656e63652d696e7465726f702f31677375626a656374a1667265636f726478403266626462393562646562613632663934396263623630323630363166636436366330323135323361333965353866633264653163643434666636333132343468636f766572616765a16c65787065637465645f70696e784031366631356464353437356435653865633166623761383434373033393165313164373636333233323336356331373439633630636137343839636666653939"
+    },
+    "mailbox": {
+     "relay": "wss://relay.example",
+     "mailbox_key": "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+     "route": "nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs",
+     "request_event": {
+      "id": "1b03dea51f1e6467eeab6cdfa29a6e840f5f89506741614868e204902dd2d44f",
+      "pubkey": "318b7ab78f4565776489ad41d0bd72d13dc9f9de3c0ecb8b4a9425900815c875",
+      "created_at": 1791763210,
+      "kind": 4700,
+      "tags": [
+       [
+        "p",
+        "aa7f247898e87299d2a61d1cda441a874115c9726ce2beeeedcf7a49f3077673",
+        "wss://relay.example"
+       ],
+       [
+        "m",
+        "application/cbor"
+       ]
+      ],
+      "content": "pGVub25jZXcyMDI2LTEwLTEyVDAwOjAwOjEwWi9uNGdwcm9maWxlcmV2aWRlbmNlLWludGVyb3AvMWdzdWJqZWN0oWZyZWNvcmR4QDJmYmRiOTViZGViYTYyZjk0OWJjYjYwMjYwNjFmY2Q2NmMwMjE1MjNhMzllNThmYzJkZTFjZDQ0ZmY2MzEyNDRoY292ZXJhZ2WhbGV4cGVjdGVkX3BpbnhAMTZmMTVkZDU0NzVkNWU4ZWMxZmI3YTg0NDcwMzkxZTExZDc2NjMyMzIzNjVjMTc0OWM2MGNhNzQ4OWNmZmU5OQ",
+      "sig": "5c979964b4f7dd93bd7cab6a1812b76cb1e5eb2ebb1545cb75a7b5b7aaa19fdcc823654d8b57b0c824ecc505506dca5a620130fb39a954678ff47bd9907cdf87"
+     },
+     "events": [],
+     "local_timeout": "2026-10-12T00:05:10Z"
+    },
+    "absence_record": {
+     "media_type": "application/json",
+     "octets_text": "{\"outcome\":\"recorded_absence\",\"recorded_at\":\"2026-10-12T00:05:10Z\",\"request_digest\":\"2eee4323f6c0836f54103c1bf7e1790b97337197465b1aaad07678008ed60180\",\"route\":\"nostr:nprofile1qqs25ley0zvwsu5e62np68x6gsdgwsg4e9exec47amku77jf7vrhvucpzdmhxue69uhhyetvv9ujuetcv9khqmr98nmcfs\",\"window\":{\"closed\":\"2026-10-12T00:05:10Z\",\"opened\":\"2026-10-12T00:00:10Z\"}}"
+    }
+   },
+   "expected": {
+    "request_digest": "2eee4323f6c0836f54103c1bf7e1790b97337197465b1aaad07678008ed60180",
+    "request_event_id": "1b03dea51f1e6467eeab6cdfa29a6e840f5f89506741614868e204902dd2d44f",
+    "classification": [],
+    "replies": [],
+    "absence": {
+     "form": "conforming",
+     "window_closes_at": "local_timeout",
+     "requirements": {
+      "r-record": {
+       "row": "absence",
+       "status": "UNKNOWN",
+       "sufficiency": "UNKNOWN",
+       "verdict": "not_evaluable"
+      }
+     },
+     "presentation_kind_recommended": "story",
+     "claim": {
+      "evidence": [
+       {
+        "digest_alg": "SHA-256",
+        "digest": "3d7e8917de599207f27d3de2431960c404cb36d203ce785f0740b21f1bb68852"
+       }
+      ],
+      "proofs": []
+     }
+    }
+   }
+  }
+ ]
+}

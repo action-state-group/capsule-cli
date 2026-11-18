@@ -23,6 +23,8 @@ type memoryRelay struct {
 	// Drop makes the relay take an event and keep nothing: it says OK and
 	// stores it nowhere.
 	Drop func(nostrEvent) bool
+	// Reject makes the relay say OK false to every event.
+	Reject bool
 }
 
 func newMemoryRelay(t *testing.T) *memoryRelay {
@@ -69,6 +71,10 @@ func (r *memoryRelay) serve(ws *websocket.Conn) {
 			}
 			if err := ev.verify(); err != nil {
 				_ = websocket.JSON.Send(ws, []any{"OK", ev.ID, false, "invalid: " + err.Error()})
+				continue
+			}
+			if r.Reject {
+				_ = websocket.JSON.Send(ws, []any{"OK", ev.ID, false, "blocked: no"})
 				continue
 			}
 			if r.Drop == nil || !r.Drop(ev) {

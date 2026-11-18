@@ -12,7 +12,7 @@ import (
 // evidence request (agent-action-capsule spec/bindings/nostr-mailbox-v0.md).
 func mailboxCommands() *cobra.Command {
 	group := &cobra.Command{Use: "mailbox", Short: "Carry evidence requests and answers over a Nostr mailbox a commitment names"}
-	group.AddCommand(mailboxKeyCommand())
+	group.AddCommand(mailboxKeyCommand(), mailboxAskCommand(), mailboxPollCommand(), mailboxInboxCommand(), mailboxReplyCommand())
 	return group
 }
 
