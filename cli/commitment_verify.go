@@ -244,7 +244,7 @@ type cardChain struct {
 }
 
 // chainOf reads a card envelope's checkpoint chain; ok is false when the
-// card is not a well-formed history_card/1 (cardChecks names why).
+// card is not a well-formed history card (cardChecks names why).
 func chainOf(octets []byte) (cardChain, bool) {
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
@@ -268,6 +268,14 @@ func chainOf(octets []byte) (cardChain, bool) {
 // contains is whether the chain has a checkpoint of log size size.
 func (c cardChain) contains(size uint64) bool {
 	return slices.ContainsFunc(c.Parsed, func(p witness.SignedCheckpoint) bool { return p.MMRSize == size })
+}
+
+// sampledPast is whether the chain is a bounded history_card/2, which samples
+// the log (ER -03 §8.1.2), that has grown to or past size without containing a
+// checkpoint of it: the held checkpoint is neither shown to be extended nor
+// contradicted, so the extension is not checked.
+func (c cardChain) sampledPast(size uint64) bool {
+	return c.Derivation == stapleCard2 && len(c.Parsed) > 0 && c.Parsed[len(c.Parsed)-1].MMRSize >= size && !c.contains(size)
 }
 
 // extendsPin is rule 4: the held checkpoint (size and root) appears in the

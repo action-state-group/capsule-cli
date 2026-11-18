@@ -668,6 +668,10 @@ func pinChecks(pins *commitmentPins, chains []cardChain, now time.Time, create b
 			fail("pin_consistency", "stream "+c.Stream+" is now a different log than the one you pinned on "+pin.SeenAt)
 			continue
 		}
+		if c.sampledPast(pin.Size) {
+			notes = append(notes, "stream "+c.Stream+": the stapled history_card/2 samples the log and does not contain the checkpoint pinned on "+pin.SeenAt+"; its extension was not checked")
+			continue
+		}
 		if why := c.extendsPin(pin.Size, pin.Root); why != "" {
 			fail("pin_consistency", "stream "+c.Stream+": "+why+" (pinned "+pin.SeenAt+")")
 			continue
@@ -684,7 +688,7 @@ func pinChecks(pins *commitmentPins, chains []cardChain, now time.Time, create b
 }
 
 // liveCheck asks the node, where the commitment says it can be asked over
-// HTTP, for a fresh history_card/1, and checks that the answer is signed by
+// HTTP, for a fresh history card, and checks that the answer is signed by
 // key_id, binds the request and extends the chain the commitment staples for
 // that stream. A request names no stream, so one answer covers one stream; the
 // others rest on their stapled chains, and the result says so. A node that
@@ -754,9 +758,7 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 			continue
 		}
 		last := held.Parsed[len(held.Parsed)-1]
-		// A bounded card samples the log's checkpoints (ER -03 §8.1.2), so
-		// it need not contain the one held: that proves nothing either way.
-		if fresh.Derivation == stapleCard2 && last.MMRSize <= fresh.Parsed[len(fresh.Parsed)-1].MMRSize && !fresh.contains(last.MMRSize) {
+		if fresh.sampledPast(last.MMRSize) {
 			return "NOT_CHECKED: the node's history_card/2 samples the log and does not contain the checkpoint held for stream " + held.Stream + " (size " + fmt.Sprint(last.MMRSize) + "); only the stapled chains were checked"
 		}
 		if why := fresh.extendsPin(last.MMRSize, last.Root); why != "" {

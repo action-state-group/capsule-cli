@@ -96,7 +96,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		Reply   carried `json:"reply"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return r, InputError("--history is not a stapled history_card/1: " + err.Error())
+		return r, InputError("--history is not a stapled history card: " + err.Error())
 	}
 	var anchors []string
 	switch {
@@ -131,7 +131,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 			return r, InputError("--history reply: " + err.Error())
 		}
 		if req.MediaType != evidencerequest.MediaTypeJSON || rep.MediaType != evidencerequest.MediaTypeJSON {
-			return r, InputError("--history a stapled history_card/1 is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
+			return r, InputError("--history a stapled history card is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
 		}
 		row := cardChecks(rep.Octets, &req, counterparty, ckKeys)
 		others, err := alsoServed(c)
@@ -190,7 +190,7 @@ func (r *cardRow) set(property, status, finding string) {
 	}
 }
 
-// cardChecks checks one stapled history_card/1 reply: the envelope under
+// cardChecks checks one stapled history_card/1 or history_card/2 reply: the envelope under
 // the counterparty key the reader holds, the card's form, and the
 // checkpoints it names. request is nil when the staple carries none.
 func cardChecks(octets []byte, request *evidencerequest.Message, counterparty string, ckKeys []string) cardRow {
@@ -256,7 +256,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	if subjectInScope(e.Subject.Kind) {
 		row.set("subject_scope", statusPass, "")
 	} else {
-		row.set("subject_scope", statusFail, "a history_card/1 answers the checkpoints or full_history subject, not "+string(e.Subject.Kind))
+		row.set("subject_scope", statusFail, "a history card answers the checkpoints or full_history subject, not "+string(e.Subject.Kind))
 	}
 	if form != "" {
 		row.set("card_form", statusFail, form)
@@ -271,7 +271,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	return row
 }
 
-// subjectInScope is whether a history_card/1 answers the subject.
+// subjectInScope is whether a history card answers the subject.
 func subjectInScope(kind evidencerequest.SubjectKind) bool {
 	return kind == evidencerequest.SubjectCheckpoints || kind == evidencerequest.SubjectFullHistory
 }
@@ -457,8 +457,8 @@ func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 			Request carried `json:"request"`
 			Reply   carried `json:"reply"`
 		}
-		if err := json.Unmarshal(raw, &f); err != nil || f.History != stapleCard {
-			return nil, InputError("--also-served " + path + " is not a {history: \"history_card/1\", request, reply} file")
+		if err := json.Unmarshal(raw, &f); err != nil || !isStapleCard(f.History) {
+			return nil, InputError("--also-served " + path + " is not a {history: \"history_card/1\" or \"history_card/2\", request, reply} file")
 		}
 		req, err := f.Request.message()
 		if err != nil {
@@ -563,7 +563,7 @@ func envelopeOf(x evidencerequest.Exchange) *evidencerequest.Envelope {
 	return reply.Envelope
 }
 
-// commitmentStapleRows checks every history_card/1 a commitment staples: the
+// commitmentStapleRows checks every history card a commitment staples: the
 // card as a signed envelope, its stream and digest against the commitment's
 // labels, and the commitment's own signature and checkpoint. `verify
 // --history` and `commitment find` read a commitment's staples through it, so
@@ -581,7 +581,7 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 		HistoryCard  *staple  `json:"history_card"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, InputError("--history is not a stapled history_card/1: " + err.Error())
+		return nil, InputError("--history is not a stapled history card: " + err.Error())
 	}
 	cards := head.HistoryCards
 	if head.HistoryCard != nil {
