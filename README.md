@@ -1176,7 +1176,7 @@ commitment confers no trust, and no agent or install runs `find` on your behalf.
 given, 1 when a check failed or nothing was found, and 2 when the flags
 conflict.
 
-### Publish your own commitment with its history card (`history_card/1`)
+### Publish your own commitment with its history card (`history_card/1` or `history_card/2`)
 
 The seller's side of the same binding. `capsulectl commitment publish` signs one
 `evidence-commitment/1` under your profile's own signing key and staples your
@@ -1185,11 +1185,12 @@ The seller's side of the same binding. `capsulectl commitment publish` signs one
 one key stands behind the commitment and the card, and a card signed by another
 key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
 it; `history_card/2`, whose size grows with the logarithm of the number of
-checkpoints, is the bounded form for a long log. `capsulectl commitment publish` still staples
-`history_card/1`, so it cannot publish for a log past `history_card/1`'s limits until it
-staples `history_card/2` (capsule-cli#579); `capsulectl verify --history` and
-`commitment find` already check a staple of either, and for a `history_card/2` the card's
-checkpoint chain is agent-action-capsule's `CheckHistoryCard2`.
+checkpoints, is the bounded form for a long log. Staple it with `--derivation history_card/2`
+on both verbs (`deal standard-history staple` and `commitment publish`): the commitment then
+carries the /2 card, and its `answers.derivations` and the policy's `stranger_safe` name
+`history_card/2`. `capsulectl verify --history` and `commitment find` check a staple of either,
+and for a `history_card/2` the card's checkpoint chain is agent-action-capsule's
+`CheckHistoryCard2`.
 
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json

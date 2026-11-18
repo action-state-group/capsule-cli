@@ -31,7 +31,7 @@ type publishReport struct {
 var publishCarriers = []string{"ard", "a2a", "nostr"}
 
 func commitmentPublishCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "publish", Short: "Sign an evidence commitment under the profile's key with its history card (history_card/1) stapled, and, after the seller's yes, hand it to the carriers the seller names", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "publish", Short: "Sign an evidence commitment under the profile's key with its history card (history_card/1 or history_card/2) stapled, and, after the seller's yes, hand it to the carriers the seller names", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		f := c.Flags()
 		in := publishInput{Now: nostrNow()}
 		staplePath, _ := f.GetString("staple")
@@ -194,14 +194,14 @@ func commitmentPublishCommand() *cobra.Command {
 		return nil
 	}}
 	f := cmd.Flags()
-	f.String("staple", "", "The history card (history_card/1) to staple: the output of `deal standard-history staple --derivation history_card/1` (a file, or - for stdin); the card must be signed by this profile's signing key")
+	f.String("staple", "", "The history card (history_card/1 or history_card/2) to staple: the output of `deal standard-history staple --derivation history_card/1` or `--derivation history_card/2` (a file, or - for stdin); the card must be signed by this profile's signing key")
 	f.String("out", "", "The directory the draft is written to: <node-id>.json (the commitment, exactly the octets every digest covers), policies/<node-id>.json, and the carrier entries")
 	f.String("community", "", "The card's community: mesh-llm, muse or goose")
 	f.String("node-id", "", "The node's id, 64 lowercase hex (default: the signing key)")
 	f.String("endpoint", "", "ask.endpoint, how the node is asked (default: book:<the card's stream>)")
 	f.StringSlice("binding", []string{"evidencebook/respond"}, "ask.bindings: the bindings the node answers on (repeat for each)")
 	f.StringSlice("subject", []string{"checkpoints"}, "answers.subjects the node answers (repeat for each)")
-	f.StringSlice("derivation", []string{"history_card/1"}, "answers.derivations the node answers (repeat for each)")
+	f.StringSlice("derivation", []string{"history_card/1"}, "answers.derivations the node answers (repeat for each); must include the stapled card's derivation, so --derivation history_card/2 with a /2 staple")
 	f.StringSlice("predicate-class", []string{"performed:counterparty_half"}, "lcap.predicate_classes, <class>:<name> (repeat for each)")
 	f.Bool("human-gated", true, "Whether a person approves each answer")
 	f.String("answers-within", "PT24H", "How long an asker should wait, an ISO 8601 duration: not shorter than the node's poll interval")
