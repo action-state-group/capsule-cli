@@ -129,23 +129,23 @@ func stapledReply(raw []byte) (octets []byte, derivation string, err error) {
 // the same key that signs the commitment, so one key stands behind both. It
 // returns the card's stream, its newest checkpoint statement and the key that
 // statement is signed by: the card's checkpoint key.
-func cardOf(octets []byte, key string) (stream string, latest []byte, checkpointKey string, err error) {
+func cardOf(octets []byte, key string) (derivation, stream string, latest []byte, checkpointKey string, err error) {
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
-		return "", nil, "", InputError("--staple's reply is not an evidence envelope")
+		return "", "", nil, "", InputError("--staple's reply is not an evidence envelope")
 	}
 	if reply.Envelope.Responder != key {
-		return "", nil, "", InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
+		return "", "", nil, "", InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
 	}
 	if err := reply.Envelope.Verify(); err != nil {
-		return "", nil, "", InputError("the card's envelope signature does not verify: " + err.Error())
+		return "", "", nil, "", InputError("the card's envelope signature does not verify: " + err.Error())
 	}
 	chain, ok := chainOf(octets)
 	if !ok || len(chain.Statements) == 0 {
-		return "", nil, "", InputError("--staple's reply is not a well-formed history_card/1")
+		return "", "", nil, "", InputError("--staple's reply is not a well-formed history_card/1 or history_card/2")
 	}
 	last := len(chain.Statements) - 1
-	return chain.Stream, chain.Statements[last], chain.Parsed[last].KeyID, nil
+	return chain.Derivation, chain.Stream, chain.Statements[last], chain.Parsed[last].KeyID, nil
 }
 
 // checkPublishInput refuses the members a loop checker would refuse of what
@@ -253,9 +253,14 @@ func buildPublishPlan(in publishInput) (publishPlan, error) {
 		return publishPlan{}, err
 	}
 	in.stapled = cardDerivation
-	stream, latest, cardCheckpointKey, err := cardOf(card, keyID)
+	cardOwn, stream, latest, cardCheckpointKey, err := cardOf(card, keyID)
 	if err != nil {
 		return publishPlan{}, err
+	}
+	// The printed label is the staple file's text; the card's own derivation
+	// is what the commitment and its policy must name.
+	if cardOwn != cardDerivation {
+		return publishPlan{}, InputError("--staple is labelled " + cardDerivation + " but its card is " + cardOwn)
 	}
 	// The commitment names the key the card's checkpoints are signed by, so an
 	// asker checks the card under it. A key given by the caller must be that

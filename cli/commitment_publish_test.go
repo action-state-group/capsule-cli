@@ -441,3 +441,32 @@ func TestPublishAHistoryCard2NeedsItsDerivationNamed(t *testing.T) {
 	_, statErr := os.Stat(filepath.Join(f.dir, "out"))
 	assert.True(t, os.IsNotExist(statErr), "nothing is written")
 }
+
+func TestPublishRefusesAStapleLabelledForAnotherCard(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fixture func(*testing.T) publishFixture
+		from    string
+		to      string
+	}{
+		"a /1 card labelled /2": {newPublishFixture, "history_card/1", "history_card/2"},
+		"a /2 card labelled /1": {newCard2PublishFixture, "history_card/2", "history_card/1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := tc.fixture(t)
+			raw, err := os.ReadFile(f.staple)
+			require.NoError(t, err)
+			var staple map[string]any
+			require.NoError(t, json.Unmarshal(raw, &staple))
+			require.Equal(t, tc.from, staple["derivation"])
+			staple["derivation"] = tc.to
+			raw, err = json.Marshal(staple)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(f.staple, raw, 0o600))
+			_, err = f.publish(t, "--derivation", tc.to)
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, err.Error(), "labelled")
+			_, statErr := os.Stat(filepath.Join(f.dir, "out"))
+			assert.True(t, os.IsNotExist(statErr), "nothing is written")
+		})
+	}
+}
