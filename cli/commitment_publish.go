@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -207,8 +208,8 @@ func decodeObject(raw []byte) (map[string]any, error) {
 	if err := dec.Decode(&doc); err != nil || doc == nil {
 		return nil, errors.New("not a JSON object")
 	}
-	if _, err := dec.Token(); err == nil {
-		return nil, errors.New("more than one JSON value")
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("more than one JSON value, or text after the object")
 	}
 	return doc, nil
 }
@@ -464,9 +465,15 @@ func mergeARDFile(path string, entry map[string]any) error {
 	if err != nil {
 		return err
 	}
-	// What is written must read back as the pointer it was made to be.
-	if pointers, failures := directoryPointers(out); len(failures) > 0 || !hasPointer(pointers, entry) {
-		return InputError(fmt.Sprintf("%s would not read back as a commitment entry (%v): nothing is written", path, failures))
+	// The entry written must read back as the pointer it was made to be. Only
+	// the entry is judged: another entry of the seller's that the reader
+	// refuses is the seller's to fix and does not stop this one.
+	alone, err := dumped(map[string]any{"entries": []any{entry}})
+	if err != nil {
+		return err
+	}
+	if pointers, failures := directoryPointers(alone); len(failures) > 0 || !hasPointer(pointers, entry) {
+		return InputError(fmt.Sprintf("the entry would not read back as a commitment entry (%v): nothing is written", failures))
 	}
 	return writeFileAtomic(path, out)
 }

@@ -341,3 +341,38 @@ func TestPublishNamesTheKeyTheCardIsCheckpointedUnder(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, chain.Parsed[len(chain.Parsed)-1].KeyID, hex.EncodeToString(der[len(der)-32:]))
 }
+
+func TestPublishRefusesAFileWithTextAfterTheObject(t *testing.T) {
+	f := newPublishFixture(t)
+	listing := filepath.Join(f.dir, "listing.json")
+	require.NoError(t, os.WriteFile(listing, []byte(`{"identifier":"urn:air:seller.example:print:badges"}`), 0o600))
+	for name, content := range map[string]string{"ard.json": `{"entries":[]} garbage`, "card.json": `{"capabilities":{}} {"x":1}`} {
+		path := filepath.Join(f.dir, name)
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+		args := []string{"--yes", "--commitment-uri", "https://seller.example/c.json"}
+		if name == "ard.json" {
+			args = append(args, "--to", "ard", "--ard-file", path, "--ard-entry", listing)
+		} else {
+			args = append(args, "--to", "a2a", "--a2a-card", path)
+		}
+		_, err := f.publish(t, args...)
+		require.ErrorIs(t, err, ErrInput, name)
+		got, _ := os.ReadFile(path)
+		assert.Equal(t, content, string(got), name+" is untouched")
+	}
+}
+
+func TestPublishIsNotStoppedByAnotherEntryTheReaderRefuses(t *testing.T) {
+	f := newPublishFixture(t)
+	ard := filepath.Join(f.dir, "ard.json")
+	// An old commitment attestation with a size member: V0 refuses that entry.
+	old := `{"entries":[{"identifier":"urn:air:old.example:x","trustManifest":{"identity":"old.example","attestations":[{"type":"evidence-commitment/1","uri":"https://old.example/c.json","mediaType":"application/json","digest":"sha256:` + strings.Repeat("0", 64) + `","size":12}]}}]}`
+	require.NoError(t, os.WriteFile(ard, []byte(old), 0o600))
+	listing := filepath.Join(f.dir, "listing.json")
+	require.NoError(t, os.WriteFile(listing, []byte(`{"identifier":"urn:air:seller.example:print:badges"}`), 0o600))
+	_, err := f.publish(t, "--yes", "--to", "ard", "--ard-file", ard, "--ard-entry", listing, "--commitment-uri", "https://seller.example/c.json")
+	require.NoError(t, err)
+	raw, _ := os.ReadFile(ard)
+	assert.Contains(t, string(raw), "urn:air:seller.example:print:badges")
+	assert.Contains(t, string(raw), "old.example", "the seller's other entry stays as it was")
+}
