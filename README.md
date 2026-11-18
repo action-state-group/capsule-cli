@@ -1225,25 +1225,37 @@ identity.
 A node with no listener of its own can still be asked: its commitment names a Nostr
 mailbox (`ask.nostr`: a mailbox key and the relays it reads). `capsulectl mailbox` carries
 the request and the answer over it, as `spec/bindings/nostr-mailbox-v0.md` describes. It
-only moves bytes. The request is sealed by `request`, answered by `respond`, and the answer
-is recorded by `request --response`, all as they are for any carriage, so the request
-digest and the responder's signature are the same over a mailbox as over a file.
+only moves bytes: it signs no evidence and decides nothing about what is answered. The
+answer is the plugin's own (`deal respond` for a deal profile) and is signed by the
+responder's key, so the request digest and the signature are the same over a mailbox as
+over a file.
+
+The request is a file of request octets: the digest is over exactly those bytes (a
+trailing newline counts). For the History card a `deal` profile serves:
+
+```
+{"coverage":{"expected_pin":"CHECKPOINT_DIGEST"},"deadline":"2026-11-18T12:00:00Z","derivation":"standard_history/1","nonce":"A_FRESH_NONCE","profile":"evidence-interop/0","subject":{"full_history":null}}
+```
 
 Asker:
 
 ```
-capsulectl deal request --profile NAME --request ASK.json --responder SELLER --output request.json
 capsulectl mailbox ask --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json
 capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json --request-event EVENT_ID --output answer.json
-capsulectl deal request --profile NAME --for RECORD_ID --response answer.json --responder-key SELLER_KEY_HEX --responder-checkpoint-key CHECKPOINT_KEY_HEX
 ```
+
+`answer.json` is the signed answer, exactly as the responder wrote it. Check it with
+`verify --history` (give it the request and the answer as `{"history": "standard_history/1",
+"request": {"media_type": "application/json", "octets_text": REQUEST_TEXT}, "reply":
+{...}}`), or record it with the verb of the profile that sealed the request (`request
+--response`).
 
 Responder:
 
 ```
 capsulectl mailbox key new --output mailbox.key        # once; its public key goes in the commitment
 capsulectl mailbox inbox --mailbox-key mailbox.key --nostr-relay wss://relay.example --out-dir inbox
-capsulectl deal respond --profile NAME --request inbox/EVENT_ID.request --output answer.json
+capsulectl deal respond --profile NAME --request inbox/EVENT_ID.request --requester WHO --output answer.json
 capsulectl mailbox reply --mailbox-key mailbox.key --event inbox/EVENT_ID.event.json --reply answer.json
 ```
 
@@ -1258,9 +1270,8 @@ key signed for this exact request. An answer that is not bound to this request's
 so its nonce), or is signed by another key, is listed under `rejected` and never written. It
 prints `answered`, `pending` or `absent`: the wait closes at the request's `deadline`, judged
 by your own clock when you poll; a reply that arrives after is kept in `--output` and marked
-`late`, and `route` is the `nostr:` address to record an absence with (`request
---absent-until DEADLINE --route ROUTE`). Set a `nonce` in the request: two requests with
-the same octets have the same digest.
+`late`, and `route` is the `nostr:` address to record an absence with. Set a `nonce` in the
+request: two requests with the same octets have the same digest.
 
 A relay is named `wss://` in a commitment and reached on the public internet. A relay you run on
 your own network under the name a commitment gives it is reached with `--relay-map
