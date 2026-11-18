@@ -236,13 +236,15 @@ func rankCommitments(docs []*commitmentDoc, now time.Time, skew time.Duration) {
 
 // cardChain is a stapled or served card's checkpoints, in order.
 type cardChain struct {
+	// Derivation is the card's id, history_card/1 or history_card/2.
+	Derivation string
 	Stream     string
 	Statements [][]byte
 	Parsed     []witness.SignedCheckpoint
 }
 
 // chainOf reads a card envelope's checkpoint chain; ok is false when the
-// card is not a well-formed history_card/1 (cardChecks names why).
+// card is not a well-formed history card (cardChecks names why).
 func chainOf(octets []byte) (cardChain, bool) {
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
@@ -252,7 +254,7 @@ func chainOf(octets []byte) (cardChain, bool) {
 	if form != "" {
 		return cardChain{}, false
 	}
-	c := cardChain{Stream: stream, Statements: statements}
+	c := cardChain{Derivation: reply.Envelope.Derivation, Stream: stream, Statements: statements}
 	for _, s := range statements {
 		p, err := witness.ParseSignedCheckpoint(s)
 		if err != nil {
@@ -261,6 +263,19 @@ func chainOf(octets []byte) (cardChain, bool) {
 		c.Parsed = append(c.Parsed, p)
 	}
 	return c, true
+}
+
+// contains is whether the chain has a checkpoint of log size size.
+func (c cardChain) contains(size uint64) bool {
+	return slices.ContainsFunc(c.Parsed, func(p witness.SignedCheckpoint) bool { return p.MMRSize == size })
+}
+
+// sampledPast is whether the chain is a bounded history_card/2, which samples
+// the log (ER -03 §8.1.2), that has grown to or past size without containing a
+// checkpoint of it: the held checkpoint is neither shown to be extended nor
+// contradicted, so the extension is not checked.
+func (c cardChain) sampledPast(size uint64) bool {
+	return c.Derivation == stapleCard2 && len(c.Parsed) > 0 && c.Parsed[len(c.Parsed)-1].MMRSize >= size && !c.contains(size)
 }
 
 // extendsPin is rule 4: the held checkpoint (size and root) appears in the

@@ -33,6 +33,7 @@ var historyInstances = map[string]historyInstance{
 	// 71efdf5a): the reader is chosen by the file's own id.
 	stapleCommitment:  {staple: true},
 	stapleCard:        {staple: true},
+	stapleCard2:       {staple: true},
 	inferenceInstance: {reader: verifyInferenceHistory},
 }
 

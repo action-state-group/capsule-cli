@@ -526,7 +526,7 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		fail(reasonCommitmentForm, err.Error())
 	}
 	if len(cardRows) == 0 {
-		fail("staples", "the commitment staples no history_card/1")
+		fail("staples", "the commitment staples no history_card/1 or history_card/2")
 	}
 	for name, why := range stapleFailures(cardRows) {
 		fail(name, why)
@@ -543,7 +543,7 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		streams[row.Stream] = true
 		chain, ok := chainOf(row.octets)
 		if !ok {
-			fail("staple_card_form", "the card for stream "+row.Stream+" is not a readable history_card/1")
+			fail("staple_card_form", "the card for stream "+row.Stream+" is not a readable history card")
 			continue
 		}
 		chains = append(chains, chain)
@@ -668,6 +668,10 @@ func pinChecks(pins *commitmentPins, chains []cardChain, now time.Time, create b
 			fail("pin_consistency", "stream "+c.Stream+" is now a different log than the one you pinned on "+pin.SeenAt)
 			continue
 		}
+		if c.sampledPast(pin.Size) {
+			notes = append(notes, "stream "+c.Stream+": the stapled history_card/2 samples the log and does not contain the checkpoint pinned on "+pin.SeenAt+"; its extension was not checked")
+			continue
+		}
 		if why := c.extendsPin(pin.Size, pin.Root); why != "" {
 			fail("pin_consistency", "stream "+c.Stream+": "+why+" (pinned "+pin.SeenAt+")")
 			continue
@@ -684,7 +688,7 @@ func pinChecks(pins *commitmentPins, chains []cardChain, now time.Time, create b
 }
 
 // liveCheck asks the node, where the commitment says it can be asked over
-// HTTP, for a fresh history_card/1, and checks that the answer is signed by
+// HTTP, for a fresh history card, and checks that the answer is signed by
 // key_id, binds the request and extends the chain the commitment staples for
 // that stream. A request names no stream, so one answer covers one stream; the
 // others rest on their stapled chains, and the result says so. A node that
@@ -713,7 +717,7 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 	req := evidencerequest.Request{
 		Subject:    evidencerequest.Subject{Kind: evidencerequest.SubjectCheckpoints},
 		Coverage:   evidencerequest.Coverage{MinFreshness: &evidencerequest.Freshness{Size: &floor}},
-		Derivation: stapleCard,
+		Derivation: chains[0].Derivation,
 		Nonce:      hex.EncodeToString(nonce[:]),
 		Profile:    evidencerequest.ProfileIDv1,
 	}
@@ -746,14 +750,17 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 	nv.KeyBinding["answers_under_key_id"] = statusPass
 	fresh, ok := chainOf(reply)
 	if !ok {
-		fail("live_answer", "the node's answer is not a readable history_card/1")
-		return "FAIL: the node's answer is not a readable history_card/1"
+		fail("live_answer", "the node's answer is not a readable history card")
+		return "FAIL: the node's answer is not a readable history card"
 	}
 	for _, held := range chains {
 		if held.Stream != fresh.Stream {
 			continue
 		}
 		last := held.Parsed[len(held.Parsed)-1]
+		if fresh.sampledPast(last.MMRSize) {
+			return "NOT_CHECKED: the node's history_card/2 samples the log and does not contain the checkpoint held for stream " + held.Stream + " (size " + fmt.Sprint(last.MMRSize) + "); only the stapled chains were checked"
+		}
 		if why := fresh.extendsPin(last.MMRSize, last.Root); why != "" {
 			fail("live_consistency", "stream "+held.Stream+": "+why)
 			return "FAIL: stream " + held.Stream + ": " + why

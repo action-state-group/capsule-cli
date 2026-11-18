@@ -30,7 +30,13 @@ import (
 const (
 	stapleCommitment = "evidence-commitment/1"
 	stapleCard       = "history_card/1"
+	// stapleCard2 is the bounded card of ER -03 §8.1.2; its chain check is
+	// AAC's (evidencerequest.CheckHistoryCard2), not ours.
+	stapleCard2 = evidencerequest.DerivationHistoryCard2
 )
+
+// isStapleCard is whether id is a history card derivation this verifier reads.
+func isStapleCard(id string) bool { return id == stapleCard || id == stapleCard2 }
 
 // Property statuses are IP v1 §7.1's. A staple has no History properties
 // and no counts; these are its own checks.
@@ -69,11 +75,11 @@ func stapleKeys(c *cobra.Command) (counterparty string, checkpointKeys []string,
 	return counterparty, checkpointKeys, nil
 }
 
-// verifyStaple reads a stapled history_card/1 file.
+// verifyStaple reads a stapled history_card/1 or history_card/2 file.
 func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 	r := frameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
 		"the staple's nonce and freshness (min_freshness) are the reader's policy",
-		"no History property and no count: a history_card/1 carries neither",
+		"no History property and no count: a history card carries neither",
 	}}
 	counterparty, ckKeys, err := stapleKeys(c)
 	if err != nil {
@@ -90,7 +96,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		Reply   carried `json:"reply"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return r, InputError("--history is not a stapled history_card/1: " + err.Error())
+		return r, InputError("--history is not a stapled history card: " + err.Error())
 	}
 	var anchors []string
 	switch {
@@ -108,13 +114,14 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 			anchors = append(anchors, row.anchor)
 		}
 		if cards == 0 {
-			return r, InputError("--history commitment staples no history_card/1")
+			return r, InputError("--history commitment staples no history_card/1 or history_card/2")
 		}
 		if cards > 1 && len(receipts) > 0 {
 			return r, InputError("--receipt witnesses one anchor; this commitment staples several cards, so give it a commitment with one")
 		}
 		r.NotRun = append(r.NotRun, "request_binding: a commitment staples the reply octets only, with no request or nonce")
-	case head.History == stapleCard:
+	case isStapleCard(head.History):
+		r.Kind = head.History
 		req, err := head.Request.message()
 		if err != nil {
 			return r, InputError("--history request: " + err.Error())
@@ -124,7 +131,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 			return r, InputError("--history reply: " + err.Error())
 		}
 		if req.MediaType != evidencerequest.MediaTypeJSON || rep.MediaType != evidencerequest.MediaTypeJSON {
-			return r, InputError("--history a stapled history_card/1 is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
+			return r, InputError("--history a stapled history card is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
 		}
 		row := cardChecks(rep.Octets, &req, counterparty, ckKeys)
 		others, err := alsoServed(c)
@@ -135,7 +142,7 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		r.Staples = append(r.Staples, row.stapleRow)
 		anchors = append(anchors, row.anchor)
 	default:
-		return r, InputError("--history is not a stapled history_card/1: want an evidence-commitment/1 or {history: \"history_card/1\", request, reply}")
+		return r, InputError("--history is not a stapled history card: want an evidence-commitment/1 or {history: \"history_card/1\" or \"history_card/2\", request, reply}")
 	}
 	r.Verdict = "ACCEPTED"
 	for _, row := range r.Staples {
@@ -183,7 +190,7 @@ func (r *cardRow) set(property, status, finding string) {
 	}
 }
 
-// cardChecks checks one stapled history_card/1 reply: the envelope under
+// cardChecks checks one stapled history_card/1 or history_card/2 reply: the envelope under
 // the counterparty key the reader holds, the card's form, and the
 // checkpoints it names. request is nil when the staple carries none.
 func cardChecks(octets []byte, request *evidencerequest.Message, counterparty string, ckKeys []string) cardRow {
@@ -249,18 +256,22 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	if subjectInScope(e.Subject.Kind) {
 		row.set("subject_scope", statusPass, "")
 	} else {
-		row.set("subject_scope", statusFail, "a history_card/1 answers the checkpoints or full_history subject, not "+string(e.Subject.Kind))
+		row.set("subject_scope", statusFail, "a history card answers the checkpoints or full_history subject, not "+string(e.Subject.Kind))
 	}
 	if form != "" {
 		row.set("card_form", statusFail, form)
 	} else {
 		row.set("card_form", statusPass, "")
 	}
+	if e.Derivation == stapleCard2 && form == "" {
+		card2Checks(&row, e, checkpoints, ckKeys)
+		return row
+	}
 	checkpointChecks(&row, e.Anchor.Digest, checkpoints, proofs, ckKeys)
 	return row
 }
 
-// subjectInScope is whether a history_card/1 answers the subject.
+// subjectInScope is whether a history card answers the subject.
 func subjectInScope(kind evidencerequest.SubjectKind) bool {
 	return kind == evidencerequest.SubjectCheckpoints || kind == evidencerequest.SubjectFullHistory
 }
@@ -272,8 +283,11 @@ func subjectInScope(kind evidencerequest.SubjectKind) bool {
 // returns the checkpoint statements, the card's stream and a reason when
 // the form is wrong.
 func cardForm(e *evidencerequest.Envelope) ([][]byte, [][]byte, string, string) {
-	if e.Derivation != stapleCard {
-		return nil, nil, "", "the envelope's derivation is " + e.Derivation + ", not " + stapleCard
+	if !isStapleCard(e.Derivation) {
+		return nil, nil, "", "the envelope's derivation is " + e.Derivation + ", not " + stapleCard + " or " + stapleCard2
+	}
+	if e.Derivation == stapleCard2 {
+		return card2Form(e)
 	}
 	decoded, err := evidencerequest.DecodeJSON(e.Artifact)
 	card, ok := decoded.(map[string]any)
@@ -429,7 +443,7 @@ func commitmentCheckpoint(raw []byte) (string, bool) {
 }
 
 // alsoServed reads --also-served: each file is another served copy of the
-// card, {history: "history_card/1", request, reply}.
+// card, {history: "history_card/1" or "history_card/2", request, reply}.
 func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 	paths, _ := c.Flags().GetStringArray("also-served")
 	var out []evidencerequest.Exchange
@@ -443,8 +457,8 @@ func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 			Request carried `json:"request"`
 			Reply   carried `json:"reply"`
 		}
-		if err := json.Unmarshal(raw, &f); err != nil || f.History != stapleCard {
-			return nil, InputError("--also-served " + path + " is not a {history: \"history_card/1\", request, reply} file")
+		if err := json.Unmarshal(raw, &f); err != nil || !isStapleCard(f.History) {
+			return nil, InputError("--also-served " + path + " is not a {history: \"history_card/1\" or \"history_card/2\", request, reply} file")
 		}
 		req, err := f.Request.message()
 		if err != nil {
@@ -549,7 +563,7 @@ func envelopeOf(x evidencerequest.Exchange) *evidencerequest.Envelope {
 	return reply.Envelope
 }
 
-// commitmentStapleRows checks every history_card/1 a commitment staples: the
+// commitmentStapleRows checks every history card a commitment staples: the
 // card as a signed envelope, its stream and digest against the commitment's
 // labels, and the commitment's own signature and checkpoint. `verify
 // --history` and `commitment find` read a commitment's staples through it, so
@@ -567,7 +581,7 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 		HistoryCard  *staple  `json:"history_card"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, InputError("--history is not a stapled history_card/1: " + err.Error())
+		return nil, InputError("--history is not a stapled history card: " + err.Error())
 	}
 	cards := head.HistoryCards
 	if head.HistoryCard != nil {
@@ -578,7 +592,7 @@ func commitmentStapleRows(raw []byte, counterparty string, ckKeys []string) ([]c
 	for _, hc := range cards {
 		// ECC §3 lists no derivation member for a staple, so one without it is
 		// read as a card; one that names another derivation is not ours.
-		if hc.Derivation != "" && hc.Derivation != stapleCard {
+		if hc.Derivation != "" && !isStapleCard(hc.Derivation) {
 			continue
 		}
 		octets, err := base64.StdEncoding.DecodeString(hc.Bytes)
