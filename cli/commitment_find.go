@@ -526,7 +526,7 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		fail(reasonCommitmentForm, err.Error())
 	}
 	if len(cardRows) == 0 {
-		fail("staples", "the commitment staples no history_card/1")
+		fail("staples", "the commitment staples no history_card/1 or history_card/2")
 	}
 	for name, why := range stapleFailures(cardRows) {
 		fail(name, why)
@@ -543,7 +543,7 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 		streams[row.Stream] = true
 		chain, ok := chainOf(row.octets)
 		if !ok {
-			fail("staple_card_form", "the card for stream "+row.Stream+" is not a readable history_card/1")
+			fail("staple_card_form", "the card for stream "+row.Stream+" is not a readable history card")
 			continue
 		}
 		chains = append(chains, chain)
@@ -713,7 +713,7 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 	req := evidencerequest.Request{
 		Subject:    evidencerequest.Subject{Kind: evidencerequest.SubjectCheckpoints},
 		Coverage:   evidencerequest.Coverage{MinFreshness: &evidencerequest.Freshness{Size: &floor}},
-		Derivation: stapleCard,
+		Derivation: chains[0].Derivation,
 		Nonce:      hex.EncodeToString(nonce[:]),
 		Profile:    evidencerequest.ProfileIDv1,
 	}
@@ -746,8 +746,8 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 	nv.KeyBinding["answers_under_key_id"] = statusPass
 	fresh, ok := chainOf(reply)
 	if !ok {
-		fail("live_answer", "the node's answer is not a readable history_card/1")
-		return "FAIL: the node's answer is not a readable history_card/1"
+		fail("live_answer", "the node's answer is not a readable history card")
+		return "FAIL: the node's answer is not a readable history card"
 	}
 	for _, held := range chains {
 		if held.Stream != fresh.Stream {

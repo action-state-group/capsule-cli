@@ -236,6 +236,8 @@ func rankCommitments(docs []*commitmentDoc, now time.Time, skew time.Duration) {
 
 // cardChain is a stapled or served card's checkpoints, in order.
 type cardChain struct {
+	// Derivation is the card's id, history_card/1 or history_card/2.
+	Derivation string
 	Stream     string
 	Statements [][]byte
 	Parsed     []witness.SignedCheckpoint
@@ -252,7 +254,7 @@ func chainOf(octets []byte) (cardChain, bool) {
 	if form != "" {
 		return cardChain{}, false
 	}
-	c := cardChain{Stream: stream, Statements: statements}
+	c := cardChain{Derivation: reply.Envelope.Derivation, Stream: stream, Statements: statements}
 	for _, s := range statements {
 		p, err := witness.ParseSignedCheckpoint(s)
 		if err != nil {
