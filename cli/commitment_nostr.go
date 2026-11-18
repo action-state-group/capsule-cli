@@ -253,27 +253,39 @@ var nostrDialInsecure = false
 // relayTimeout bounds one subscription.
 var relayTimeout = 15 * time.Second
 
-// queryRelay asks one relay for the events a filter matches (NIP-01 REQ) and
-// returns what it sent before EOSE, the end of stored events, or the time out.
-func queryRelay(relay string, filter map[string]any) ([]nostrEvent, error) {
+// dialRelay opens one relay connection under the public-address guard, bounded
+// by relayTimeout. The caller closes it and calls cancel.
+func dialRelay(relay string) (*websocket.Conn, context.CancelFunc, error) {
 	u, err := url.Parse(relay)
 	if err != nil || (u.Scheme != "wss" && !(nostrDialInsecure && u.Scheme == "ws")) || u.Host == "" {
-		return nil, fmt.Errorf("%s is not a wss:// relay URL", relay)
+		return nil, nil, fmt.Errorf("%s is not a wss:// relay URL", relay)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), relayTimeout)
-	defer cancel()
 	cfg, err := websocket.NewConfig(relay, "http://localhost/")
 	if err != nil {
-		return nil, err
+		cancel()
+		return nil, nil, err
 	}
 	cfg.Dialer = &net.Dialer{Timeout: relayTimeout, Control: publicOnly}
 	conn, err := cfg.DialContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("relay %s: %w", relay, err)
+		cancel()
+		return nil, nil, fmt.Errorf("relay %s: %w", relay, err)
 	}
-	defer conn.Close()
 	conn.MaxPayloadBytes = maxRelayBytes
 	_ = conn.SetDeadline(time.Now().Add(relayTimeout))
+	return conn, cancel, nil
+}
+
+// queryRelay asks one relay for the events a filter matches (NIP-01 REQ) and
+// returns what it sent before EOSE, the end of stored events, or the time out.
+func queryRelay(relay string, filter map[string]any) ([]nostrEvent, error) {
+	conn, cancel, err := dialRelay(relay)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	defer conn.Close()
 	const sub = "capsulectl"
 	if err := websocket.JSON.Send(conn, []any{"REQ", sub, filter}); err != nil {
 		return nil, err

@@ -89,6 +89,6 @@ func commitmentCommands() *cobra.Command {
 	f.Bool("refuse-unwitnessed", false, "Refuse a node that no witness in your policy vouches for")
 	f.Bool("allow-private-network", false, "Contact loopback, private and link-local hosts: by default the hosts a carrier or commitment names must be public")
 	f.Bool("offline", false, "Do not ask the node: check only the chain stapled in the commitment")
-	group.AddCommand(find)
+	group.AddCommand(find, commitmentPublishCommand())
 	return group
 }

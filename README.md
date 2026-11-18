@@ -295,6 +295,7 @@ capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
+capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --out DIR [--yes --to ard|a2a|nostr ...]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -1169,6 +1170,45 @@ commitment confers no trust, and no agent or install runs `find` on your behalf.
 0 when the node is verified, 3 when nothing failed but no `--node-key` was
 given, 1 when a check failed or nothing was found, and 2 when the flags
 conflict.
+
+### Publish your own commitment with its History card
+
+The seller's side of the same binding. `capsulectl commitment publish` signs one
+`evidence-commitment/1` under your profile's own signing key and staples your
+`history_card/1` to it. The card is what `deal standard-history staple
+--derivation history_card/1` prints, and it must be signed by that same key:
+one key stands behind the commitment and the card, and a card signed by another
+key is refused.
+
+```
+capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
+capsulectl commitment publish --profile NAME --staple staple.json --community goose \
+  --commitment-uri https://seller.example/commitments/alder.json \
+  --ard-entry listing.json --mailbox-key mailbox.key --nostr-relay wss://relay.example \
+  --out ./draft
+```
+
+Without `--yes` this is a draft and nothing leaves your machine: `--out` receives
+the commitment (`<node-id>.json`, the exact octets every digest covers; serve that
+file at `--commitment-uri`), its signed `disclosure-policy/0`
+(`policies/<node-id>.json`), your ARD entry, the A2A extension entry and the Nostr
+announce event. `commitment find --file` accepts the commitment.
+
+Your listing is yours: `--ard-entry` is your own entry (`identifier`
+`urn:air:<publisher>:...`, `displayName`, `type`, `url`, and anything else you
+list). The verb adds `trustManifest.identity`, which names the same publisher
+domain as the identifier (ARD §4.5.1), and the commitment pointer, and refuses an
+entry whose identity names another domain. It does not prove you control the
+domain.
+
+Submitting needs your yes. `--yes` with `--to` names the carriers: `ard` merges
+your entry into `--ard-file` (your own `/.well-known/ard.json`, created if absent),
+`a2a` adds the commitment extension to your Agent Card file (`--a2a-card`), and
+`nostr` publishes the announce event (kind 34700, signed by the mailbox key) to the
+`--nostr-relay` relays. `--to` without `--yes`, or `--yes` without `--to`, is
+refused before anything is written. The mailbox key is a separate secp256k1 key
+(`capsulectl mailbox key new`), used only for Nostr: it is a route, never your
+identity.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
