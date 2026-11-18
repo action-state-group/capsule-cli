@@ -402,3 +402,37 @@ func TestMailboxReplyRefusesAnEventForAnotherMailbox(t *testing.T) {
 	_, err = f.reply(t, inbox.Requests[0].EventFile, answerFor(t, f.seed, f.requestOct))
 	require.ErrorIs(t, err, ErrInput)
 }
+
+func TestMailboxReachesARelayByTheNameACommitmentGivesIt(t *testing.T) {
+	f := newMailboxFixture(t)
+	// The commitment names a wss relay; the asker reaches it on its own
+	// network at the address it maps the name to.
+	nostrDialInsecure = false
+	t.Cleanup(func() { nostrDialInsecure = true })
+	name := "wss://ard-demo.relay.invalid"
+	commitment := resignWith(t, f.seed, func(doc map[string]any) {
+		doc["ask"].(map[string]any)["nostr"] = map[string]any{"mailbox_key": f.mailboxPub, "relays": []any{name}}
+		doc["issued_at"] = f.now.Add(-time.Hour).Format("2006-01-02T15:04:05Z")
+	})
+	require.NoError(t, os.WriteFile(f.commitment, commitment, 0o644))
+	asked, err := f.ask(t)
+	require.ErrorIs(t, err, ErrInput, "unreachable without a map")
+	assert.Empty(t, asked.Took)
+	rep, err := f.ask(t, "--relay-map", name+"="+f.relay.URL)
+	require.NoError(t, err)
+	assert.Equal(t, []string{name}, rep.Took, "reported under the name the commitment gives")
+	assert.Len(t, f.relay.Events(), 1)
+
+	t.Run("a ws address is reached only on your own network", func(t *testing.T) {
+		_, err := f.ask(t, "--relay-map", name+"=ws://203.0.113.9:1")
+		require.Error(t, err)
+		allowPrivateAddresses = false
+		t.Cleanup(func() { allowPrivateAddresses = true })
+		_, err = invoke(t, "", "mailbox", "ask", "--commitment", f.commitment, "--node-key", f.nodeKey, "--request", f.request, "--relay-map", name+"="+f.relay.URL)
+		require.ErrorIs(t, err, ErrInput, "ws:// needs --allow-private-network")
+	})
+	t.Run("a malformed map is refused", func(t *testing.T) {
+		_, err := f.ask(t, "--relay-map", "nonsense")
+		require.ErrorIs(t, err, ErrInput)
+	})
+}

@@ -227,6 +227,31 @@ func publicOnly(network, address string, _ syscall.RawConn) error {
 	return nil
 }
 
+// privateOnly is a dialer Control that refuses a connection to a public
+// address: an unencrypted relay is reached only on a network of your own.
+func privateOnly(network, address string, c syscall.RawConn) error {
+	prev := allowPrivateAddresses
+	allowPrivateAddresses = false
+	err := publicOnly(network, address, c)
+	allowPrivateAddresses = prev
+	if err == nil {
+		return fmt.Errorf("%s is a public address: an unencrypted ws:// relay is reached only on a network of your own", address)
+	}
+	return nil
+}
+
+// relayMap maps a relay name a commitment carries to the address it is reached
+// at (--relay-map NAME=URL), for a relay run on your own network under the name
+// the commitment gives it.
+var relayMap = map[string]string{}
+
+func mappedRelay(name string) string {
+	if to, ok := relayMap[name]; ok {
+		return to
+	}
+	return name
+}
+
 // nonPublicPrefixes are the ranges the standard library's predicates miss:
 // this-network, carrier-grade NAT, IETF protocol assignments, benchmarking,
 // reserved, site-local and NAT64.
@@ -255,9 +280,13 @@ var relayTimeout = 15 * time.Second
 
 // dialRelay opens one relay connection under the public-address guard, bounded
 // by relayTimeout. The caller closes it and calls cancel.
-func dialRelay(relay string) (*websocket.Conn, context.CancelFunc, error) {
+func dialRelay(named string) (*websocket.Conn, context.CancelFunc, error) {
+	relay := mappedRelay(named)
 	u, err := url.Parse(relay)
-	if err != nil || (u.Scheme != "wss" && !(nostrDialInsecure && u.Scheme == "ws")) || u.Host == "" {
+	// A ws:// relay is reached only on a network you named (--allow-private-network)
+	// and never on a public address (insecureOnly).
+	insecure := u != nil && u.Scheme == "ws" && !nostrDialInsecure && allowPrivateAddresses
+	if err != nil || (u.Scheme != "wss" && !(nostrDialInsecure && u.Scheme == "ws") && !insecure) || u.Host == "" {
 		return nil, nil, fmt.Errorf("%s is not a wss:// relay URL", relay)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), relayTimeout)
@@ -267,10 +296,13 @@ func dialRelay(relay string) (*websocket.Conn, context.CancelFunc, error) {
 		return nil, nil, err
 	}
 	cfg.Dialer = &net.Dialer{Timeout: relayTimeout, Control: publicOnly}
+	if insecure {
+		cfg.Dialer = &net.Dialer{Timeout: relayTimeout, Control: privateOnly}
+	}
 	conn, err := cfg.DialContext(ctx)
 	if err != nil {
 		cancel()
-		return nil, nil, fmt.Errorf("relay %s: %w", relay, err)
+		return nil, nil, fmt.Errorf("relay %s: %w", named, err)
 	}
 	conn.MaxPayloadBytes = maxRelayBytes
 	_ = conn.SetDeadline(time.Now().Add(relayTimeout))

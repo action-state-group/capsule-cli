@@ -99,11 +99,25 @@ func requestOf(path, media string) ([]byte, time.Time, error) {
 // while fn runs.
 func withPrivateNetwork(c *cobra.Command, fn func() error) error {
 	allow, _ := c.Flags().GetBool("allow-private-network")
-	prev := allowPrivateAddresses
+	mapped, _ := c.Flags().GetStringArray("relay-map")
+	prev, prevMap := allowPrivateAddresses, relayMap
+	relayMap = map[string]string{}
+	for k, v := range prevMap {
+		relayMap[k] = v
+	}
+	for _, m := range mapped {
+		name, to, ok := strings.Cut(m, "=")
+		if !ok || relayFormProblem(name) != "" || (!strings.HasPrefix(to, "wss://") && !strings.HasPrefix(to, "ws://")) {
+			return InputError("--relay-map is NAME=URL: the relay name a commitment gives (wss://...) and the ws:// or wss:// address you reach it at")
+		}
+		relayMap[name] = to
+	}
 	allowPrivateAddresses = allowPrivateAddresses || allow
-	defer func() { allowPrivateAddresses = prev }()
+	defer func() { allowPrivateAddresses, relayMap = prev, prevMap }()
 	return fn()
 }
+
+const relayMapHelp = "A relay name a commitment gives, NAME=URL: reach it at this address instead (a relay of your own network; a ws:// address needs --allow-private-network and is refused on a public host) (repeat for each)"
 
 // ---- ask ----
 
@@ -194,6 +208,7 @@ func mailboxAskCommand() *cobra.Command {
 	f.String("media-type", "application/json", "The request's media type: application/json or application/cbor")
 	f.String("carriage-key", "", "A Nostr key file for the request event; default is a fresh key for this request, so your requests are not linked by key")
 	f.Bool("allow-private-network", false, "Reach loopback, private and link-local relays")
+	f.StringArray("relay-map", nil, relayMapHelp)
 	return cmd
 }
 
@@ -355,6 +370,7 @@ func mailboxPollCommand() *cobra.Command {
 	f.String("output", "", "Where the answer octets are written, to pass to `request --response`")
 	f.Int("content-limit", contentVerificationLimit, "At most this many events not attributed to the mailbox are verified by content; the rest are not replies")
 	f.Bool("allow-private-network", false, "Reach loopback, private and link-local relays")
+	f.StringArray("relay-map", nil, relayMapHelp)
 	return cmd
 }
 
@@ -456,6 +472,7 @@ func mailboxInboxCommand() *cobra.Command {
 	f.StringArray("nostr-relay", nil, "A relay (wss:) you read your mailbox on (repeat for each)")
 	f.String("out-dir", "", "Where each request's octets (<id>.request) and its event (<id>.event.json) are written")
 	f.Bool("allow-private-network", false, "Reach loopback, private and link-local relays")
+	f.StringArray("relay-map", nil, relayMapHelp)
 	return cmd
 }
 
@@ -607,5 +624,6 @@ func mailboxReplyCommand() *cobra.Command {
 	f.StringArray("nostr-relay", nil, "Another relay to publish the reply to; it always goes to the relay the request was read from (repeat for each)")
 	f.Bool("again", false, "Publish a reply for a request event already answered")
 	f.Bool("allow-private-network", false, "Reach loopback, private and link-local relays")
+	f.StringArray("relay-map", nil, relayMapHelp)
 	return cmd
 }

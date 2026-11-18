@@ -1232,10 +1232,10 @@ digest and the responder's signature are the same over a mailbox as over a file.
 Asker:
 
 ```
-capsulectl request --profile NAME --request ASK.json --responder SELLER --output request.json
+capsulectl deal request --profile NAME --request ASK.json --responder SELLER --output request.json
 capsulectl mailbox ask --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json
 capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json --request-event EVENT_ID --output answer.json
-capsulectl request --profile NAME --for RECORD_ID --response answer.json --responder-key SELLER_KEY_HEX --responder-checkpoint-key CHECKPOINT_KEY_HEX
+capsulectl deal request --profile NAME --for RECORD_ID --response answer.json --responder-key SELLER_KEY_HEX --responder-checkpoint-key CHECKPOINT_KEY_HEX
 ```
 
 Responder:
@@ -1243,7 +1243,7 @@ Responder:
 ```
 capsulectl mailbox key new --output mailbox.key        # once; its public key goes in the commitment
 capsulectl mailbox inbox --mailbox-key mailbox.key --nostr-relay wss://relay.example --out-dir inbox
-capsulectl respond --profile NAME --request inbox/EVENT_ID.request --output answer.json
+capsulectl deal respond --profile NAME --request inbox/EVENT_ID.request --output answer.json
 capsulectl mailbox reply --mailbox-key mailbox.key --event inbox/EVENT_ID.event.json --reply answer.json
 ```
 
@@ -1261,6 +1261,11 @@ by your own clock when you poll; a reply that arrives after is kept in `--output
 `late`, and `route` is the `nostr:` address to record an absence with (`request
 --absent-until DEADLINE --route ROUTE`). Set a `nonce` in the request: two requests with
 the same octets have the same digest.
+
+A relay is named `wss://` in a commitment and reached on the public internet. A relay you run on
+your own network under the name a commitment gives it is reached with `--relay-map
+wss://name=ws://127.0.0.1:PORT --allow-private-network` (on `mailbox ask`, `poll`, `inbox`,
+`reply` and `commitment publish`); a `ws://` address is refused on a public host.
 
 The events are not encrypted: a relay, and anyone who can read it, sees the request, the
 carriage keys, the timing and the answer. Use a relay that authenticates its readers for
