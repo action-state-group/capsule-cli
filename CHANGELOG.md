@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.0-rc44
+
+- **Added:** `capsulectl commitment publish` staples a `history_card/2` as well as a `history_card/1`: give `deal standard-history staple --derivation history_card/2` output as `--staple` and `--derivation history_card/2`, so a seller with a long log can publish a commitment; the commitment's card derivation and the policy's `stranger_safe` name the stapled card, and `history_card/1` publishing is unchanged (capsule-cli#583).
+
+- **Added:** `capsulectl verify --history` and `commitment find` now check a commitment or `{history, request, reply}` file that staples `history_card/2` (ER -03 §8.1.2): the card's window, positions, checkpoint signatures, first checkpoint (no predecessor), consistency proofs, receipts and anchor are agent-action-capsule's `CheckHistoryCard2`, reported under `card_form`, `checkpoint_signature`, `checkpoint_consistency`, `checkpoint_receipts` and `checkpoint_anchor`; `history_card/1` is checked as before. Requires agent-action-capsule/go v0.22.0 (capsule-cli#578).
+
 ## v0.1.0-rc43
 
 - **Added:** `commitment publish` signs an `evidence-commitment/1` under the profile's own signing key with the profile's history card (`history_card/1`) stapled (the card must be signed by that same key), and, only with `--yes` and the carriers named with `--to`, merges the commitment pointer into the seller's own ARD file (the entry's `trustManifest.identity` names its publisher, ARD §4.5.1), adds the extension to an A2A Agent Card, and publishes the Nostr announce event to the relays `ask.nostr` names. Without `--yes` it writes a draft and sends nothing. `commitment find` accepts what it writes (capsule-cli#571).
