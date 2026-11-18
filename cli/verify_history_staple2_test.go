@@ -100,3 +100,21 @@ func TestVerifyHistoryCard2KeepsCard1Apart(t *testing.T) {
 		assert.Equal(t, "NOT_ACCEPTED", got.Verdict, got.raw)
 	}
 }
+
+// A bounded card samples the log, so a chain need not contain the checkpoint
+// a reader holds; contains is what the live check asks before extendsPin.
+func TestCardChainContains(t *testing.T) {
+	for _, v := range card2Vectors(t) {
+		if v.Name != "history_card/2" {
+			continue
+		}
+		chain, ok := chainOf([]byte(v.Reply))
+		require.True(t, ok)
+		assert.Equal(t, stapleCard2, chain.Derivation)
+		last := chain.Parsed[len(chain.Parsed)-1]
+		assert.True(t, chain.contains(last.MMRSize))
+		assert.False(t, chain.contains(last.MMRSize+1))
+		return
+	}
+	t.Fatal("no history_card/2 vector")
+}

@@ -265,6 +265,11 @@ func chainOf(octets []byte) (cardChain, bool) {
 	return c, true
 }
 
+// contains is whether the chain has a checkpoint of log size size.
+func (c cardChain) contains(size uint64) bool {
+	return slices.ContainsFunc(c.Parsed, func(p witness.SignedCheckpoint) bool { return p.MMRSize == size })
+}
+
 // extendsPin is rule 4: the held checkpoint (size and root) appears in the
 // chain, and the chain runs on from it to its end. The chain's own links are
 // checked by checkpointChecks (checkpoint_consistency); this finds the held

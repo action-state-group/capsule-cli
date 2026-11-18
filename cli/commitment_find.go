@@ -754,6 +754,11 @@ func liveCheck(in findInput, d *commitmentDoc, chains []cardChain, fail func(rea
 			continue
 		}
 		last := held.Parsed[len(held.Parsed)-1]
+		// A bounded card samples the log's checkpoints (ER -03 §8.1.2), so
+		// it need not contain the one held: that proves nothing either way.
+		if fresh.Derivation == stapleCard2 && last.MMRSize <= fresh.Parsed[len(fresh.Parsed)-1].MMRSize && !fresh.contains(last.MMRSize) {
+			return "NOT_CHECKED: the node's history_card/2 samples the log and does not contain the checkpoint held for stream " + held.Stream + " (size " + fmt.Sprint(last.MMRSize) + "); only the stapled chains were checked"
+		}
 		if why := fresh.extendsPin(last.MMRSize, last.Root); why != "" {
 			fail("live_consistency", "stream "+held.Stream+": "+why)
 			return "FAIL: stream " + held.Stream + ": " + why
