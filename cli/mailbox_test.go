@@ -502,3 +502,25 @@ func TestMailboxPollKeepsEveryDistinctVerifiedReply(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, second, other, "the second answer is kept for the verifier to compare")
 }
+
+func TestMailboxPollKeepsATimelyAnswerWhenALaterRelayRunsPastTheDeadline(t *testing.T) {
+	f := newMailboxFixture(t)
+	slow := newMemoryRelay(t)
+	commitment := resignWith(t, f.seed, func(doc map[string]any) {
+		doc["ask"].(map[string]any)["nostr"] = map[string]any{"mailbox_key": f.mailboxPub, "relays": []any{f.relay.URL, slow.URL}}
+		doc["issued_at"] = f.now.Add(-time.Hour).Format("2006-01-02T15:04:05Z")
+	})
+	require.NoError(t, os.WriteFile(f.commitment, commitment, 0o644))
+	asked, err := f.ask(t)
+	require.NoError(t, err)
+	inbox := f.inbox(t)
+	_, err = f.reply(t, inbox.Requests[0].EventFile, answerFor(t, f.seed, f.requestOct))
+	require.NoError(t, err)
+	// The first relay delivers the answer inside the window; the second runs
+	// past the deadline before it answers.
+	slow.OnReq = func() { setClock(t, f.now.Add(2*time.Minute)) }
+	rep, err := f.poll(t, asked.RequestEventID)
+	require.NoError(t, err)
+	assert.Equal(t, "answered", rep.Status, "the answer arrived in time; the slow relay is not its arrival")
+	assert.False(t, rep.Late)
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -248,6 +249,10 @@ type mailboxPollReport struct {
 	Relays       map[string]string   `json:"relays"`
 }
 
+// arrivalKey names one delivered event by everything it carries, so a copy that
+// differs is another event.
+func arrivalKey(ev nostrEvent) string { return ev.ID + "|" + ev.Sig + "|" + ev.Content }
+
 func mailboxPollCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "poll", Short: "Poll a commitment's mailbox for the answer to a request you published, and write the answer octets for `request --response`", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		commitmentPath, _ := c.Flags().GetString("commitment")
@@ -290,6 +295,9 @@ func mailboxPollCommand() *cobra.Command {
 			return err
 		}
 		var events []nostrEvent
+		// arrived is when each event first reached us: the clock as its relay's
+		// answer came in, never created_at (NMB §5.3).
+		arrived := map[string]time.Time{}
 		answered := 0
 		err = withPrivateNetwork(c, func() error {
 			for _, relay := range route.Relays {
@@ -298,6 +306,12 @@ func mailboxPollCommand() *cobra.Command {
 				// counts: a relay that sent too much is not a reason to lose
 				// the answer it also sent.
 				events = append(events, got...)
+				at := nostrNow()
+				for _, ev := range got {
+					if first, seen := arrived[arrivalKey(ev)]; !seen || at.Before(first) {
+						arrived[arrivalKey(ev)] = at
+					}
+				}
 				if qerr != nil && !errors.Is(qerr, errRelayTruncated) {
 					// What it sent before it failed still counts; the failure
 					// is reported beside it.
@@ -335,18 +349,17 @@ func mailboxPollCommand() *cobra.Command {
 			}
 			verified = append(verified, cl)
 		}
-		// Arrival is judged by this clock when the replies reached us, after
-		// the queries, never by a time taken before them.
-		closed := !deadline.IsZero() && nostrNow().After(deadline)
+		// A reply is timely when it reached us by the deadline. Timely replies
+		// come first; one that arrives after the window is kept beside the
+		// absence, which it never rewrites.
+		late := func(v replyClass) bool { return !deadline.IsZero() && arrived[arrivalKey(v.Event)].After(deadline) }
+		sort.SliceStable(verified, func(i, j int) bool { return !late(verified[i]) && late(verified[j]) })
 		switch {
-		case len(verified) == 0 && closed:
+		case len(verified) == 0 && !deadline.IsZero() && nostrNow().After(deadline):
 			rep.Status = "absent"
 		case len(verified) == 0:
 			rep.Status = "pending"
-		case closed:
-			// Arrival is judged by this clock at the poll that first sees the
-			// reply, never by created_at (NMB §5.3): after the window the
-			// reply is kept beside the absence, which it never rewrites.
+		case late(verified[0]):
 			rep.Status, rep.Late = "absent", true
 		default:
 			rep.Status = "answered"
