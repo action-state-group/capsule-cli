@@ -564,7 +564,7 @@ type mailboxReplyReport struct {
 }
 
 func mailboxReplyCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "reply", Short: "Publish the signed answer `respond` wrote to the relay a request was read from", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "reply", Short: "Publish the signed answer `respond` wrote to the relay a request was read from (not encrypted: relays and their readers see the answer)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		keyPath, _ := c.Flags().GetString("mailbox-key")
 		eventPath, _ := c.Flags().GetString("event")
 		replyPath, _ := c.Flags().GetString("reply")
