@@ -56,7 +56,6 @@ func commitmentPublishCommand() *cobra.Command {
 		in.Relays, _ = f.GetStringArray("nostr-relay")
 		in.CheckpointKey, _ = f.GetString("checkpoint-key")
 		in.AnnounceURIOnly, _ = f.GetBool("nostr-uri-only")
-		allowPrivate, _ := f.GetBool("allow-private-network")
 
 		// The seller's yes comes first: a carrier named without it is refused
 		// before a key is read or a file written.
@@ -170,10 +169,14 @@ func commitmentPublishCommand() *cobra.Command {
 				}
 				rep.Submitted["a2a"] = a2aFile
 			case "nostr":
-				prev := allowPrivateAddresses
-				allowPrivateAddresses = allowPrivateAddresses || allowPrivate
-				took, failed := publishAll(in.Relays, *plan.Announce)
-				allowPrivateAddresses = prev
+				var took []string
+				var failed map[string]string
+				if err := withPrivateNetwork(c, func() error {
+					took, failed = publishAll(in.Relays, *plan.Announce)
+					return nil
+				}); err != nil {
+					return err
+				}
 				rep.Submitted["nostr"] = map[string]any{"event_id": plan.Announce.ID, "took": took, "failed": failed}
 				if len(took) == 0 {
 					_ = Output(c, rep)
@@ -214,5 +217,6 @@ func commitmentPublishCommand() *cobra.Command {
 	f.String("a2a-card", "", "With --to a2a: the seller's A2A Agent Card file")
 	f.Bool("nostr-uri-only", false, "Leave the octets out of the announce event and name --commitment-uri alone, for a commitment too large for a relay")
 	f.Bool("allow-private-network", false, "Reach loopback, private and link-local relays")
+	f.StringArray("relay-map", nil, relayMapHelp)
 	return cmd
 }

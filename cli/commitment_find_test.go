@@ -467,45 +467,6 @@ func TestFindFromANostrRelay(t *testing.T) {
 	})
 }
 
-// bech32Encode is BIP-173's encoder, for building test addresses.
-func bech32Encode(hrp string, payload []byte) string {
-	data, _ := convertBitsPad(payload, 8, 5)
-	exp := []byte{}
-	for _, c := range []byte(hrp) {
-		exp = append(exp, c>>5)
-	}
-	exp = append(exp, 0)
-	for _, c := range []byte(hrp) {
-		exp = append(exp, c&31)
-	}
-	mod := bech32Polymod(append(append(exp, data...), 0, 0, 0, 0, 0, 0)) ^ 1
-	out := hrp + "1"
-	for _, d := range data {
-		out += string(bech32Charset[d])
-	}
-	for i := 0; i < 6; i++ {
-		out += string(bech32Charset[byte(mod>>uint(5*(5-i)))&31])
-	}
-	return out
-}
-
-func convertBitsPad(data []byte, from, to uint) ([]byte, bool) {
-	var acc, bits uint
-	var out []byte
-	for _, v := range data {
-		acc = acc<<from | uint(v)
-		bits += from
-		for bits >= to {
-			bits -= to
-			out = append(out, byte(acc>>bits&(1<<to-1)))
-		}
-	}
-	if bits > 0 {
-		out = append(out, byte(acc<<(to-bits)&(1<<to-1)))
-	}
-	return out, true
-}
-
 func TestBech32ChecksumVectors(t *testing.T) {
 	// BIP-173's valid strings: the checksum code is the standard one.
 	for hrp, str := range map[string]string{"a": "a12uel5l", "abcdef": "abcdef1qpzry9x8gf2tvdw0s3jn54khce6mua7lmqqqxw"} {

@@ -23,6 +23,12 @@ type memoryRelay struct {
 	// Drop makes the relay take an event and keep nothing: it says OK and
 	// stores it nowhere.
 	Drop func(nostrEvent) bool
+	// NoEOSE makes the relay close the connection after the events of a REQ,
+	// without EOSE; OnReq runs when a REQ arrives, before it is answered.
+	NoEOSE bool
+	OnReq  func()
+	// Reject makes the relay say OK false to every event.
+	Reject bool
 }
 
 func newMemoryRelay(t *testing.T) *memoryRelay {
@@ -71,6 +77,10 @@ func (r *memoryRelay) serve(ws *websocket.Conn) {
 				_ = websocket.JSON.Send(ws, []any{"OK", ev.ID, false, "invalid: " + err.Error()})
 				continue
 			}
+			if r.Reject {
+				_ = websocket.JSON.Send(ws, []any{"OK", ev.ID, false, "blocked: no"})
+				continue
+			}
 			if r.Drop == nil || !r.Drop(ev) {
 				r.store(ev)
 			}
@@ -82,10 +92,16 @@ func (r *memoryRelay) serve(ws *websocket.Conn) {
 			if len(frame) > 2 {
 				_ = json.Unmarshal(frame[2], &filter)
 			}
+			if r.OnReq != nil {
+				r.OnReq()
+			}
 			for _, ev := range r.Events() {
 				if matches(filter, ev) {
 					_ = websocket.JSON.Send(ws, []any{"EVENT", sub, ev})
 				}
+			}
+			if r.NoEOSE {
+				return
 			}
 			_ = websocket.JSON.Send(ws, []any{"EOSE", sub})
 		case "CLOSE":

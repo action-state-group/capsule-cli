@@ -296,6 +296,11 @@ capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
 capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --out DIR [--yes --to ard|a2a|nostr ...]
+capsulectl mailbox key new --output MAILBOX.key
+capsulectl mailbox ask --commitment COMMITMENT.json --node-key HEX --request REQUEST.json
+capsulectl mailbox poll --commitment COMMITMENT.json --node-key HEX --request REQUEST.json --request-event ID --output ANSWER.json
+capsulectl mailbox inbox --mailbox-key MAILBOX.key --nostr-relay WSS_URL --out-dir DIR
+capsulectl mailbox reply --mailbox-key MAILBOX.key --event DIR/ID.event.json --reply ANSWER.json
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -1214,6 +1219,76 @@ your entry into `--ard-file` (your own `/.well-known/ard.json`, created if absen
 refused before anything is written. The mailbox key is a separate secp256k1 key
 (`capsulectl mailbox key new`), used only for Nostr: it is a route, never your
 identity.
+
+### Ask for evidence over a Nostr mailbox
+
+A node with no listener of its own can still be asked: its commitment names a Nostr
+mailbox (`ask.nostr`: a mailbox key and the relays it reads). `capsulectl mailbox` carries
+the request and the answer over it, as `spec/bindings/nostr-mailbox-v0.md` describes. It
+only moves bytes: it signs no evidence and decides nothing about what is answered. The
+answer is the plugin's own (`deal respond` for a deal profile) and is signed by the
+responder's key, so the request digest and the signature are the same over a mailbox as
+over a file.
+
+The request is a file of request octets: the digest is over exactly those bytes (a
+trailing newline counts). For the History card (`standard_history/1`) a `deal` profile serves:
+
+```
+{"coverage":{"expected_pin":"CHECKPOINT_DIGEST"},"deadline":"2026-11-18T12:00:00Z","derivation":"standard_history/1","nonce":"A_FRESH_NONCE","profile":"evidence-interop/0","subject":{"full_history":null}}
+```
+
+Asker:
+
+```
+capsulectl mailbox ask --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json
+capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KEY_HEX --request request.json --request-event EVENT_ID --output answer.json
+```
+
+`answer.json` is the signed answer, exactly as the responder wrote it. Check it with
+`verify --history` (give it the request and the answer as `{"history": "standard_history/1",
+"request": {"media_type": "application/json", "octets_text": REQUEST_TEXT}, "reply":
+{...}}`), or record it with the verb of the profile that sealed the request (`request
+--response`).
+
+Responder:
+
+```
+capsulectl mailbox key new --output mailbox.key        # once; its public key goes in the commitment
+capsulectl mailbox inbox --mailbox-key mailbox.key --nostr-relay wss://relay.example --out-dir inbox
+capsulectl deal respond --profile NAME --request inbox/EVENT_ID.request --requester WHO --output answer.json
+capsulectl mailbox reply --mailbox-key mailbox.key --event inbox/EVENT_ID.event.json --reply answer.json
+```
+
+Over a mailbox nobody is authenticated: a carriage key is not a requester identity (binding §3).
+`--requester` is who your policy takes the asker to be; a deal profile requires it, and it names who
+the answer is shared with.
+
+`mailbox ask` takes the mailbox only from a commitment that verifies (the carriers
+binding's V0 to V4; a commitment file has no carrier form, so V2 to V4) and is under `--node-key`, the key you hold for the responder from the
+deal or request you hold, never from a carrier: a commitment under another key is a route to
+whoever holds that key. It publishes the request under a fresh carriage key to every relay
+the commitment names, and needs at least one to take it. `mailbox poll` accepts a reply
+event only after the binding's checks: it names this request event, carries the request's
+media type and is signed by the mailbox key (the binding's checks 1 to 7), or it passes checks 1
+to 4 and is a reply by content that the responder's own key signed for this exact request. An answer that is not bound to this request's digest (and
+so its nonce), or is signed by another key, is listed under `rejected` and never written. It
+prints `answered`, `pending` or `absent`: the wait closes at the request's `deadline`, judged
+by your own clock when you poll; a reply that arrives after is kept in `--output` and marked
+`late`, and `route` is the `nostr:` address to record an absence with. Set a `nonce` in the
+request: two requests with the same octets have the same digest.
+
+A relay a commitment names is a `wss://` address; by default the verbs reach it over the public internet. A relay you run on
+your own network under the name a commitment gives it is reached with `--relay-map
+wss://name=ws://127.0.0.1:PORT --allow-private-network` (on `mailbox ask`, `poll`, `inbox`,
+`reply` and `commitment publish`); a `ws://` address is refused on a public host.
+
+The events are not encrypted: a relay, and anyone who can read it, sees the request, the
+carriage keys, the timing and the answer. Do not use a mailbox for an exchange whose subject,
+timing or parties you would not publish: v0 has no encryption (binding §8), and an authenticated
+relay still shows everything to its operator. An answer you give only to a signed ask (a
+`standard_history/1` card, say) is public once it is on a relay others can read. `mailbox inbox` writes a request only when its event id and
+signature verify and it is a conforming evidence request, and `mailbox reply` answers a request
+event once.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
