@@ -31,7 +31,7 @@ type publishReport struct {
 var publishCarriers = []string{"ard", "a2a", "nostr"}
 
 func commitmentPublishCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "publish", Short: "Sign an evidence commitment under the profile's key with its History card stapled, and, after the seller's yes, hand it to the carriers the seller names", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "publish", Short: "Sign an evidence commitment under the profile's key with its history card (history_card/1) stapled, and, after the seller's yes, hand it to the carriers the seller names", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		f := c.Flags()
 		in := publishInput{Now: nostrNow()}
 		staplePath, _ := f.GetString("staple")
@@ -191,7 +191,7 @@ func commitmentPublishCommand() *cobra.Command {
 		return nil
 	}}
 	f := cmd.Flags()
-	f.String("staple", "", "The History card to staple: the output of `deal standard-history staple --derivation history_card/1` (a file, or - for stdin); the card must be signed by this profile's signing key")
+	f.String("staple", "", "The history card (history_card/1) to staple: the output of `deal standard-history staple --derivation history_card/1` (a file, or - for stdin); the card must be signed by this profile's signing key")
 	f.String("out", "", "The directory the draft is written to: <node-id>.json (the commitment, exactly the octets every digest covers), policies/<node-id>.json, and the carrier entries")
 	f.String("community", "", "The card's community: mesh-llm, muse or goose")
 	f.String("node-id", "", "The node's id, 64 lowercase hex (default: the signing key)")

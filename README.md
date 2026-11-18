@@ -1171,14 +1171,16 @@ commitment confers no trust, and no agent or install runs `find` on your behalf.
 given, 1 when a check failed or nothing was found, and 2 when the flags
 conflict.
 
-### Publish your own commitment with its History card
+### Publish your own commitment with its history card (`history_card/1`)
 
 The seller's side of the same binding. `capsulectl commitment publish` signs one
 `evidence-commitment/1` under your profile's own signing key and staples your
 `history_card/1` to it. The card is what `deal standard-history staple
 --derivation history_card/1` prints, and it must be signed by that same key:
 one key stands behind the commitment and the card, and a card signed by another
-key is refused.
+key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
+it; `history_card/2`, the bounded card, is the staple to use once this verb
+supports it.
 
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
@@ -1193,6 +1195,9 @@ the commitment (`<node-id>.json`, the exact octets every digest covers; serve th
 file at `--commitment-uri`), its signed `disclosure-policy/0`
 (`policies/<node-id>.json`), your ARD entry, the A2A extension entry and the Nostr
 announce event. `commitment find --file` accepts the commitment.
+
+Once served or announced, the commitment is public: its history card lists every
+checkpoint of your log, and `ask.nostr` names your mailbox key and relays.
 
 Your listing is yours: `--ard-entry` is your own entry (`identifier`
 `urn:air:<publisher>:...`, `displayName`, `type`, `url`, and anything else you
