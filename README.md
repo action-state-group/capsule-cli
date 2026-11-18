@@ -1179,8 +1179,8 @@ The seller's side of the same binding. `capsulectl commitment publish` signs one
 --derivation history_card/1` prints, and it must be signed by that same key:
 one key stands behind the commitment and the card, and a card signed by another
 key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
-it; `history_card/2`, the bounded card, is the staple to use once this verb
-supports it.
+it; `history_card/2`, whose size grows with the logarithm of the number of
+checkpoints, is the staple to use once this verb supports it.
 
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
