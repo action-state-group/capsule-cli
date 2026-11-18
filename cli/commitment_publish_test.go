@@ -29,6 +29,25 @@ type publishFixture struct {
 
 func newPublishFixture(t *testing.T) publishFixture {
 	t.Helper()
+	return newPublishFixtureFrom(t, func(t *testing.T) (string, json.RawMessage, json.RawMessage) {
+		raw, err := os.ReadFile(filepath.Join("testdata", "deal-staple-printed", "staple-card.json"))
+		require.NoError(t, err)
+		var printed struct {
+			Derivation string `json:"derivation"`
+			Staple     struct {
+				Request json.RawMessage `json:"request"`
+				Reply   json.RawMessage `json:"reply"`
+			} `json:"staple"`
+		}
+		require.NoError(t, json.Unmarshal(raw, &printed))
+		return printed.Derivation, printed.Staple.Request, printed.Staple.Reply
+	})
+}
+
+// newPublishFixtureFrom is a profile with a fresh signing key whose staple is
+// the card source returns, signed again under that key.
+func newPublishFixtureFrom(t *testing.T, source func(*testing.T) (string, json.RawMessage, json.RawMessage)) publishFixture {
+	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
 	_, seed, err := ed25519.GenerateKey(nil)
@@ -41,17 +60,8 @@ func newPublishFixture(t *testing.T) publishFixture {
 	require.NoError(t, SaveProfile(p, false))
 	public := hex.EncodeToString(seed.Public().(ed25519.PublicKey))
 
-	raw, err := os.ReadFile(filepath.Join("testdata", "deal-staple-printed", "staple-card.json"))
-	require.NoError(t, err)
-	var printed struct {
-		Derivation string `json:"derivation"`
-		Staple     struct {
-			Request json.RawMessage `json:"request"`
-			Reply   json.RawMessage `json:"reply"`
-		} `json:"staple"`
-	}
-	require.NoError(t, json.Unmarshal(raw, &printed))
-	env := mustDecode(t, printed.Staple.Reply).(map[string]any)
+	derivation, request, cardReply := source(t)
+	env := mustDecode(t, cardReply).(map[string]any)
 	artifact := env["artifact"]
 	delete(env, "sig")
 	delete(env, "artifact")
@@ -62,8 +72,8 @@ func newPublishFixture(t *testing.T) publishFixture {
 	env["artifact"] = artifact
 	reply, err := evidencerequest.EncodeJCS(env)
 	require.NoError(t, err)
-	staple, err := json.Marshal(map[string]any{"derivation": printed.Derivation, "voice": "silent",
-		"staple": map[string]any{"request": printed.Staple.Request, "reply": json.RawMessage(reply)}})
+	staple, err := json.Marshal(map[string]any{"derivation": derivation, "voice": "silent",
+		"staple": map[string]any{"request": request, "reply": json.RawMessage(reply)}})
 	require.NoError(t, err)
 	stapleFile := filepath.Join(dir, "staple.json")
 	require.NoError(t, os.WriteFile(stapleFile, staple, 0o600))
@@ -375,4 +385,88 @@ func TestPublishIsNotStoppedByAnotherEntryTheReaderRefuses(t *testing.T) {
 	raw, _ := os.ReadFile(ard)
 	assert.Contains(t, string(raw), "urn:air:seller.example:print:badges")
 	assert.Contains(t, string(raw), "old.example", "the seller's other entry stays as it was")
+}
+
+// newCard2PublishFixture is a profile whose staple is the first passing
+// history_card/2 vector, signed again under the profile's key.
+func newCard2PublishFixture(t *testing.T) publishFixture {
+	t.Helper()
+	return newPublishFixtureFrom(t, func(t *testing.T) (string, json.RawMessage, json.RawMessage) {
+		for _, v := range card2Vectors(t) {
+			if v.Pass {
+				return "history_card/2", json.RawMessage(v.Request), json.RawMessage(v.Reply)
+			}
+		}
+		t.Fatal("no passing history_card/2 vector")
+		return "", nil, nil
+	})
+}
+
+func TestPublishStaplesAHistoryCard2(t *testing.T) {
+	f := newCard2PublishFixture(t)
+	out, err := f.publish(t, "--derivation", "history_card/2")
+	require.NoError(t, err, out)
+	var rep publishReport
+	require.NoError(t, json.Unmarshal([]byte(out), &rep))
+	path := filepath.Join(f.dir, "out", rep.NodeID+".json")
+	octets, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(octets, &doc))
+	assert.Equal(t, "history_card/2", doc["history_cards"].([]any)[0].(map[string]any)["derivation"])
+	assert.Equal(t, []any{"history_card/2"}, doc["answers"].(map[string]any)["derivations"])
+	policy, err := os.ReadFile(filepath.Join(f.dir, "out", "policies", rep.NodeID+".json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(policy), `"history_card/2"`)
+	assert.NotContains(t, string(policy), `"history_card/1"`)
+
+	found, _ := find(t, "--file", path, "--node-key", f.public, "--no-pin", "--offline")
+	require.Len(t, found.Nodes, 1, "%v", found)
+	assert.Empty(t, found.Refused)
+	assert.Equal(t, "current", found.Nodes[0].Commitment.Status)
+
+	got := runStaple(t, path, "--counterparty-key", f.public)
+	require.Len(t, got.Staples, 1, got.raw)
+	for name, status := range got.Staples[0].Properties {
+		assert.NotEqual(t, "FAIL", status, name)
+	}
+	assert.Equal(t, "PASS", got.Staples[0].Properties["card_form"], got.raw)
+}
+
+func TestPublishAHistoryCard2NeedsItsDerivationNamed(t *testing.T) {
+	f := newCard2PublishFixture(t)
+	_, err := f.publish(t)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "history_card/2")
+	_, statErr := os.Stat(filepath.Join(f.dir, "out"))
+	assert.True(t, os.IsNotExist(statErr), "nothing is written")
+}
+
+func TestPublishRefusesAStapleLabelledForAnotherCard(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fixture func(*testing.T) publishFixture
+		from    string
+		to      string
+	}{
+		"a /1 card labelled /2": {newPublishFixture, "history_card/1", "history_card/2"},
+		"a /2 card labelled /1": {newCard2PublishFixture, "history_card/2", "history_card/1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := tc.fixture(t)
+			raw, err := os.ReadFile(f.staple)
+			require.NoError(t, err)
+			var staple map[string]any
+			require.NoError(t, json.Unmarshal(raw, &staple))
+			require.Equal(t, tc.from, staple["derivation"])
+			staple["derivation"] = tc.to
+			raw, err = json.Marshal(staple)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(f.staple, raw, 0o600))
+			_, err = f.publish(t, "--derivation", tc.to)
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, err.Error(), "labelled")
+			_, statErr := os.Stat(filepath.Join(f.dir, "out"))
+			assert.True(t, os.IsNotExist(statErr), "nothing is written")
+		})
+	}
 }

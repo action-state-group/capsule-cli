@@ -76,6 +76,8 @@ type publishInput struct {
 	// AnnounceURIOnly leaves the octets out of the Nostr event (ECC §5.3,
 	// Size): the event then carries the r tag alone.
 	AnnounceURIOnly bool
+	// stapled is the stapled card's derivation, set from the staple itself.
+	stapled string
 }
 
 // publishPlan is everything the verb builds before it writes or sends
@@ -104,45 +106,46 @@ type printedCardStaple struct {
 
 // stapledReply reads the card's reply octets from a printed staple. They are
 // the exact octets the responder signed over, with the printer's HTML escapes
-// read back (printedOctets), and nothing else of the staple is kept: the
-// commitment has no member for the request (a verifier sees request_binding
-// NOT_PRESENT, as for any commitment).
-func stapledReply(raw []byte) ([]byte, error) {
+// read back (printedOctets), and the card's derivation, history_card/1 or
+// history_card/2. Nothing else of the staple is kept: the commitment has no
+// member for the request (a verifier sees request_binding NOT_PRESENT, as for
+// any commitment).
+func stapledReply(raw []byte) (octets []byte, derivation string, err error) {
 	var f printedCardStaple
 	if err := json.Unmarshal(raw, &f); err != nil || f.Staple == nil || len(f.Staple.Reply) == 0 {
-		return nil, InputError("--staple is the output of `deal standard-history staple --derivation history_card/1`: {derivation, staple: {request, reply}}")
+		return nil, "", InputError("--staple is the output of `deal standard-history staple --derivation history_card/1` (or history_card/2): {derivation, staple: {request, reply}}")
 	}
-	if f.Derivation != stapleCard {
-		return nil, InputError("--staple holds a " + f.Derivation + " staple; a commitment staples history_card/1")
+	if !isStapleCard(f.Derivation) {
+		return nil, "", InputError("--staple holds a " + f.Derivation + " staple; a commitment staples history_card/1 or history_card/2")
 	}
 	text, ok := printedOctets(f.Staple.Reply)
 	if !ok {
-		return nil, InputError("--staple's reply is not JSON")
+		return nil, "", InputError("--staple's reply is not JSON")
 	}
-	return []byte(text), nil
+	return []byte(text), f.Derivation, nil
 }
 
-// cardOf reads the stapled reply as a history_card/1 envelope signed by key:
+// cardOf reads the stapled reply as a history_card/1 or history_card/2 envelope signed by key:
 // the same key that signs the commitment, so one key stands behind both. It
 // returns the card's stream, its newest checkpoint statement and the key that
 // statement is signed by: the card's checkpoint key.
-func cardOf(octets []byte, key string) (stream string, latest []byte, checkpointKey string, err error) {
+func cardOf(octets []byte, key string) (derivation, stream string, latest []byte, checkpointKey string, err error) {
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
-		return "", nil, "", InputError("--staple's reply is not an evidence envelope")
+		return "", "", nil, "", InputError("--staple's reply is not an evidence envelope")
 	}
 	if reply.Envelope.Responder != key {
-		return "", nil, "", InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
+		return "", "", nil, "", InputError("the card is signed by " + reply.Envelope.Responder + ", not by this profile's signing key " + key + ": a commitment and its card are signed by one key")
 	}
 	if err := reply.Envelope.Verify(); err != nil {
-		return "", nil, "", InputError("the card's envelope signature does not verify: " + err.Error())
+		return "", "", nil, "", InputError("the card's envelope signature does not verify: " + err.Error())
 	}
 	chain, ok := chainOf(octets)
 	if !ok || len(chain.Statements) == 0 {
-		return "", nil, "", InputError("--staple's reply is not a well-formed history_card/1")
+		return "", "", nil, "", InputError("--staple's reply is not a well-formed history_card/1 or history_card/2")
 	}
 	last := len(chain.Statements) - 1
-	return chain.Stream, chain.Statements[last], chain.Parsed[last].KeyID, nil
+	return chain.Derivation, chain.Stream, chain.Statements[last], chain.Parsed[last].KeyID, nil
 }
 
 // checkPublishInput refuses the members a loop checker would refuse of what
@@ -161,8 +164,8 @@ func checkPublishInput(in publishInput) error {
 		return InputError("--share-deal-half is counterparty, or left out")
 	case len(in.PredicateClasses) == 0:
 		return InputError("--predicate-class is needed at least once: lcap.predicate_classes is a non-empty list")
-	case !slices.Contains(in.Derivs, stapleCard):
-		return InputError("--derivation must include " + stapleCard + ": the commitment staples that card")
+	case !slices.Contains(in.Derivs, in.stapled):
+		return InputError("--derivation must include " + in.stapled + ": the commitment staples that card")
 	case countLike(in.Endpoint):
 		return InputError("--endpoint is not a number: a commitment carries no counts")
 	}
@@ -245,13 +248,19 @@ func dumped(doc map[string]any) ([]byte, error) {
 func buildPublishPlan(in publishInput) (publishPlan, error) {
 	public := in.Seed.Public().(ed25519.PublicKey)
 	keyID := hex.EncodeToString(public)
-	card, err := stapledReply(in.Staple)
+	card, cardDerivation, err := stapledReply(in.Staple)
 	if err != nil {
 		return publishPlan{}, err
 	}
-	stream, latest, cardCheckpointKey, err := cardOf(card, keyID)
+	in.stapled = cardDerivation
+	cardOwn, stream, latest, cardCheckpointKey, err := cardOf(card, keyID)
 	if err != nil {
 		return publishPlan{}, err
+	}
+	// The printed label is the staple file's text; the card's own derivation
+	// is what the commitment and its policy must name.
+	if cardOwn != cardDerivation {
+		return publishPlan{}, InputError("--staple is labelled " + cardDerivation + " but its card is " + cardOwn)
 	}
 	// The commitment names the key the card's checkpoints are signed by, so an
 	// asker checks the card under it. A key given by the caller must be that
@@ -281,7 +290,7 @@ func buildPublishPlan(in publishInput) (publishPlan, error) {
 	if err != nil {
 		return publishPlan{}, err
 	}
-	policy := map[string]any{"stranger_safe": []any{"history_card/1"}}
+	policy := map[string]any{"stranger_safe": []any{cardDerivation}}
 	if in.ShareDealHalf != "" {
 		policy["share_deal_half"] = in.ShareDealHalf
 	}
@@ -323,7 +332,7 @@ func buildPublishPlan(in publishInput) (publishPlan, error) {
 			"stream":         stream,
 			"community":      in.Community,
 			"checkpoint_key": base64.RawURLEncoding.EncodeToString(checkpointSPKI),
-			"derivation":     stapleCard,
+			"derivation":     cardDerivation,
 			"sha256":         hex.EncodeToString(cardSum[:]),
 			"bytes":          base64.StdEncoding.EncodeToString(card),
 		}},
