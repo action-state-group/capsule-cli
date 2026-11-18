@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.0-rc43
+
+- **Added:** `commitment publish` signs an `evidence-commitment/1` under the profile's own signing key with the profile's history card (`history_card/1`) stapled (the card must be signed by that same key), and, only with `--yes` and the carriers named with `--to`, merges the commitment pointer into the seller's own ARD file (the entry's `trustManifest.identity` names its publisher, ARD §4.5.1), adds the extension to an A2A Agent Card, and publishes the Nostr announce event to the relays `ask.nostr` names. Without `--yes` it writes a draft and sends nothing. `commitment find` accepts what it writes (capsule-cli#571).
+
+- **Added:** `mailbox ask`, `mailbox poll`, `mailbox inbox` and `mailbox reply` carry an evidence request and its signed answer over the Nostr mailbox a commitment names (`ask.nostr`), as agent-action-capsule's `nostr-mailbox-v0` binding describes: the asker takes the mailbox only from a commitment under the key it holds for the responder; `poll` accepts a reply only by the binding's checks 1 to 7 or by content under the responder's own key for this request, refuses an answer not bound to the request's digest, and keeps a reply that arrives after the deadline beside the absence. The request, the answer and their recording stay with `request`, `respond` and `request --response`. The binding's vectors are checked byte for byte. `--relay-map NAME=URL` reaches a relay a commitment names on your own network, and `mailbox key new` makes the mailbox key (capsule-cli#573).
+
 ## v0.1.0-rc42
 
 No change to `capsulectl`: the only merged pull requests since `v0.1.0-rc41` are design notes (#566, #568: a counterparty's verified History as a rules input, #327). The release exists so the plugins that pair with a capsulectl release can ship their own changes: capsulectl-deal takes the version of the capsulectl release it pairs with, and a published tag never changes (evidencebook-deal#210, the temporary `outcome_note` record for the 2026-11-19 Goose ARD demo, evidencebook#462).
