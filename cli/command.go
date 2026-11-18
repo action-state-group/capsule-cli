@@ -398,6 +398,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())
 	root.AddCommand(commitmentCommands())
+	root.AddCommand(mailboxCommands())
 	root.AddCommand(bundleCommands()...)
 	root.AddCommand(countersignCommands())
 	root.AddCommand(contractCommands())
