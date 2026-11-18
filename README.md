@@ -1185,9 +1185,11 @@ The seller's side of the same binding. `capsulectl commitment publish` signs one
 one key stands behind the commitment and the card, and a card signed by another
 key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
 it; `history_card/2`, whose size grows with the logarithm of the number of
-checkpoints, is the staple to use for a long log. `capsulectl commitment publish` still staples
-`history_card/1`; `capsulectl verify --history` and `commitment find` check a staple of
-either, a `history_card/2` through agent-action-capsule's own check.
+checkpoints, is the bounded form for a long log. `capsulectl commitment publish` still staples
+`history_card/1`, so it cannot publish for a log past `history_card/1`'s limits until it
+staples `history_card/2` (capsule-cli#579); `capsulectl verify --history` and
+`commitment find` already check a staple of either, and for a `history_card/2` the card's
+checkpoint chain is agent-action-capsule's `CheckHistoryCard2`.
 
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json

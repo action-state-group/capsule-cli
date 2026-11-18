@@ -443,7 +443,7 @@ func commitmentCheckpoint(raw []byte) (string, bool) {
 }
 
 // alsoServed reads --also-served: each file is another served copy of the
-// card, {history: "history_card/1", request, reply}.
+// card, {history: "history_card/1" or "history_card/2", request, reply}.
 func alsoServed(c *cobra.Command) ([]evidencerequest.Exchange, error) {
 	paths, _ := c.Flags().GetStringArray("also-served")
 	var out []evidencerequest.Exchange
