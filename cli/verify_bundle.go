@@ -256,15 +256,21 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
 		if (x.Kind == DealProfile || x.Kind == DealProfileV1) && x.Status == "uninterpreted" {
+			// One verdict for the deal section: with both extensions the
+			// first names it and the other is listed uninterpreted, so the
+			// failing claim is not counted twice.
+			if !dealSeen {
+				entry = DealReportEntry(value, result)
+				entry["kind"] = x.Kind
+			}
 			dealSeen = true
-			entry = DealReportEntry(value, result)
 			// A v1 report words its own as_of: its time is the holder's
 			// computation time, not the checkpoint's.
-			if entry["report"] == "standalone" && entry["kind"] == DealProfile {
+			if entry["report"] == "standalone" && x.Kind == DealProfile {
 				entry["as_of"] = dealReportAsOf(value, witnesses, anchored)
 			}
-			if entry["status"] == "fail" {
-				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
+			if findings, ok := entry["findings"].([]string); ok && entry["status"] == "fail" {
+				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: findings})
 			}
 		}
 		if x.Kind == DealSaleExtension {
@@ -494,7 +500,10 @@ func nonNilStrings(values []string) []string {
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
 	entry := DealReportEntry(value, aacbundle.VerificationResult{})
-	if _, ok := exts[DealReportExtension]; ok && entry["status"] != "pass" {
+	// A v1 copy that fails names its report (or lacks the one it names)
+	// even when the carrier is absent.
+	_, carried := exts[DealReportExtension]
+	if (carried || entry["kind"] == DealProfileV1) && entry["status"] == "fail" || carried && entry["status"] != "pass" {
 		return errors.Join(ErrBundleInvalid, errors.New("the copy's standalone report does not verify (sealed_report_unverified)"))
 	}
 	if findings, _ := entry["findings"].([]string); slices.Contains(findings, "sealed_report_not_named") {

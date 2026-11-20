@@ -218,7 +218,7 @@ func printedOctets(v json.RawMessage) (string, bool) {
 // verifyStandardHistory evaluates a served standard_history/1 or /3 answer
 // (derivation is the file's history id): the
 // file holds the request and the reply octets as carried. The card is
-// checked with AAC's standardhistory.Check; the policy, anchor and deal
+// checked with AAC's standardhistory.CheckAs; the policy, anchor and deal
 // entries are verifier inputs this file does not carry, so the properties
 // that need them stay NOT_CHECKED.
 func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, holderKeys []string) (frameReport, error) {
@@ -274,9 +274,9 @@ func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, hold
 		r.Findings = append(r.Findings, "anchor_inclusion is not NOT_CHECKED")
 	}
 	r.Responder = reply.Envelope["responder"]
-	// The card is read under the token the signed envelope names, which
-	// request_binding has just tied to the request; a file whose history id
-	// is another token is not that token's answer.
+	// The card is read under the token the signed envelope names, which the
+	// subject binding ties to the request's derivation; a file whose history
+	// id is another token is not that token's answer.
 	if named, _ := reply.Envelope["derivation"].(string); named != derivation {
 		accepted = false
 		r.Findings = append(r.Findings, fmt.Sprintf("the answer's derivation is %q, not %s", named, derivation))

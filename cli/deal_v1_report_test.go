@@ -43,10 +43,16 @@ func v1ReportCopy(t *testing.T, reportKey ed25519.PrivateKey, edit func(input ma
 	}
 	step := sealedMember(t, key, "step", map[string]interface{}{"n": float64(1)})
 	step["evidence_record_header"] = map[string]interface{}{"record_type": "deal_step", "committed_at": "2026-10-20T00:00:00Z"}
+	// A v1 book's log id is random, not derived from the deal id; v0's is.
+	logID := "deal/d1"
+	if ext == DealProfileV1 {
+		logID = "deal/5c1e0f7a9b3d44e2a6c8f0b1d2e3a4b5"
+	}
 	input := map[string]interface{}{
 		"type": "deal_report", "profile": "x-deal-v1", "deal_id": "d1", "audience": "counterparty",
 		"as_of":           "2026-10-21T08:30:00Z",
-		"deal_checkpoint": map[string]interface{}{"log_id": "deal/d1", "mmr_size": float64(1), "root": "ab"},
+		"deal_checkpoint": map[string]interface{}{"log_id": logID, "mmr_size": float64(1), "root": "ab"},
+		"rests_on":        map[string]interface{}{"own": map[string]interface{}{"log_id": logID, "size": float64(1), "last": "ab"}},
 	}
 	if edit != nil {
 		edit(input)
@@ -56,7 +62,7 @@ func v1ReportCopy(t *testing.T, reportKey ed25519.PrivateKey, edit func(input ma
 	// The report is signed by the last step's key unless reportKey says otherwise.
 	return map[string]interface{}{
 		"checkpoint":               map[string]interface{}{"mmr_size": float64(1), "root": "ab"},
-		"completeness_certificate": map[string]interface{}{"log_id": "deal/d1", "memberships": map[string]interface{}{step["capsule_id"].(string): map[string]interface{}{"log_coordinates": map[string]interface{}{"seq": float64(1)}}}},
+		"completeness_certificate": map[string]interface{}{"log_id": logID, "memberships": map[string]interface{}{step["capsule_id"].(string): map[string]interface{}{"log_coordinates": map[string]interface{}{"seq": float64(1)}}}},
 		"records":                  []interface{}{step},
 		"extensions": map[string]interface{}{
 			ext:                 map[string]interface{}{DealReportPointer: id},
@@ -96,8 +102,11 @@ func TestDealV1StandaloneReportFails(t *testing.T) {
 		"as_of not UTC":                                        {edit: func(i map[string]interface{}) { i["as_of"] = "2026-10-21T03:30:00-05:00" }},
 		"as_of with fractional seconds":                        {edit: func(i map[string]interface{}) { i["as_of"] = "2026-10-21T08:30:00.5Z" }},
 		"as_of not a time":                                     {edit: func(i map[string]interface{}) { i["as_of"] = "soon" }},
-		"another deal":                                         {edit: func(i map[string]interface{}) { i["deal_id"] = "d2" }},
-		"a non-copy audience":                                  {edit: func(i map[string]interface{}) { i["audience"] = "public" }},
+		"no deal_id":                                           {edit: func(i map[string]interface{}) { i["deal_id"] = "" }},
+		"resting on another book's log": {edit: func(i map[string]interface{}) {
+			i["rests_on"].(map[string]interface{})["own"].(map[string]interface{})["log_id"] = "deal/other"
+		}},
+		"a non-copy audience": {edit: func(i map[string]interface{}) { i["audience"] = "public" }},
 		"another checkpoint root": {edit: func(i map[string]interface{}) {
 			i["deal_checkpoint"].(map[string]interface{})["root"] = "cd"
 		}},
@@ -143,6 +152,13 @@ func TestDealV1StandaloneReportFails(t *testing.T) {
 	})
 }
 
+// A v1 report is named for a deal whose book log id is unrelated to it.
+func TestDealV1ReportBindsToTheBookByItsLogNotTheDealID(t *testing.T) {
+	value := asFileRead(t, v1ReportCopy(t, nil, func(i map[string]interface{}) { i["deal_id"] = "some-other-name" }, DealProfileV1))
+	entry := DealReportEntry(value, aacbundle.VerificationResult{})
+	assert.Equal(t, "pass", entry["status"], entry)
+}
+
 func TestDealV0StandaloneReportIsUnchangedByV1(t *testing.T) {
 	// A v1-shaped payload under the v0 extension is not a v0 report.
 	entry := DealReportEntry(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfile)), aacbundle.VerificationResult{})
@@ -154,4 +170,53 @@ func TestCheckDealStandaloneReportReadsV1(t *testing.T) {
 	assert.NoError(t, CheckDealStandaloneReport(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1))))
 	value := v1ReportCopy(t, nil, func(i map[string]interface{}) { i["as_of"] = "soon" }, DealProfileV1)
 	assert.ErrorIs(t, CheckDealStandaloneReport(asFileRead(t, value)), ErrBundleInvalid)
+}
+
+// verify --bundle's checks for the failures a helper reader also sees: a v1
+// pointer with no carrier, or both extensions, never read as passing.
+func TestCheckDealStandaloneReportRefusesV1FailuresWithoutACarrier(t *testing.T) {
+	noCarrier := v1ReportCopy(t, nil, nil, DealProfileV1)
+	delete(noCarrier["extensions"].(map[string]interface{}), DealReportExtension)
+	assert.ErrorIs(t, CheckDealStandaloneReport(asFileRead(t, noCarrier)), ErrBundleInvalid)
+
+	both := v1ReportCopy(t, nil, nil, DealProfileV1)
+	both["extensions"].(map[string]interface{})[DealProfile] = map[string]interface{}{}
+	delete(both["extensions"].(map[string]interface{}), DealReportExtension)
+	assert.ErrorIs(t, CheckDealStandaloneReport(asFileRead(t, both)), ErrBundleInvalid)
+}
+
+// The report verify --bundle prints for a v1 copy: the extension entry shows
+// the holder's time, never the checkpoint wording, and a bundle naming both
+// versions lists each extension once under its own name with one failure.
+func TestAssessBundleShowsTheV1ReportEntry(t *testing.T) {
+	entries := func(value map[string]interface{}) []map[string]any {
+		_, _, report := bundleAssessment(value, nil)
+		out, _ := report["extensions"].([]map[string]any)
+		return out
+	}
+	got := entries(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1)))
+	var v1 map[string]any
+	for _, e := range got {
+		if e["kind"] == DealProfileV1 {
+			v1 = e
+		}
+	}
+	require.NotNil(t, v1, got)
+	assert.Equal(t, "pass", v1["status"])
+	assert.Equal(t, "as of 2026-10-21T08:30:00Z (the holder's time, when it computed the report; no witness attests it)", v1["as_of"])
+
+	both := v1ReportCopy(t, nil, nil, DealProfileV1)
+	both["extensions"].(map[string]interface{})[DealProfile] = map[string]interface{}{}
+	value := asFileRead(t, both)
+	verdict, _, report := bundleAssessment(value, nil)
+	assert.Equal(t, "INVALID", verdict)
+	kinds, fails := map[any]int{}, 0
+	for _, e := range report["extensions"].([]map[string]any) {
+		kinds[e["kind"]]++
+		if e["status"] == "fail" {
+			fails++
+		}
+	}
+	assert.Equal(t, map[any]int{DealProfile: 1, DealProfileV1: 1, DealReportExtension: 1}, kinds)
+	assert.Equal(t, 1, fails)
 }

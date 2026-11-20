@@ -46,9 +46,6 @@ var dealStepRecordTypes = map[string]bool{"deal_step": true, "step_completed": t
 func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, id, form string) {
 	exts, _ := b["extensions"].(map[string]interface{})
 	deal, _ := exts[DealProfile].(map[string]interface{})
-	if deal == nil {
-		deal, _ = exts[DealProfileV1].(map[string]interface{})
-	}
 	id, sealed := deal[DealReportPointer].(string)
 	if !sealed {
 		return deal, "", "inline"
@@ -76,7 +73,9 @@ func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, 
 //  2. that key is the verified key of the deal's last step: the record with
 //     the highest log position whose header type is a step's;
 //  3. its agent_input disclosure matches the Capsule's committed digest;
-//  4. its payload is a deal_report of the bundle's deal, for a copy audience;
+//  4. its payload is a deal_report of the bundle's deal, for a copy audience
+//     (a v1 report names its book by rests_on.own.log_id, a v0 report by
+//     its deal_id, which is the log id's suffix);
 //  5. its deal_checkpoint is the bundle's checkpoint (log id, MMR size, root);
 //  6. the section holds nothing else, and the bundle holds no deal_report;
 //  7. its lifecycle's as_of is the checkpoint's signed time; a v1 report
@@ -112,7 +111,19 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	logID, _ := cert["log_id"].(string)
 	dealID, isDeal := strings.CutPrefix(logID, "deal/")
 	audience, _ := input["audience"].(string)
-	if input["type"] != "deal_report" || input["profile"] != profile || !isDeal || input["deal_id"] != dealID || !dealCopyAudiences[audience] {
+	if input["type"] != "deal_report" || input["profile"] != profile || !isDeal || !dealCopyAudiences[audience] {
+		return fail
+	}
+	if profile == DealProfileV1 {
+		// A v1 book's log id is random, never derived from the deal id
+		// (design note 461 §3.1), so the report binds to the book by the log
+		// it rests on; deal_id is only the report's own name for the deal.
+		restsOn, _ := input["rests_on"].(map[string]interface{})
+		own, _ := restsOn["own"].(map[string]interface{})
+		if id, _ := input["deal_id"].(string); id == "" || own["log_id"] != logID {
+			return fail
+		}
+	} else if input["deal_id"] != dealID {
 		return fail
 	}
 	cp, _ := value["checkpoint"].(map[string]interface{})
