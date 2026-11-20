@@ -29,6 +29,7 @@ var historyInstances = map[string]historyInstance{
 	"personal_history_basic/1":  {},
 	standardhistory.Derivation:  {},
 	standardhistory.Derivation3: {},
+	standardhistory.Derivation4: {},
 	outcomeInstance:             {reader: verifyOutcomeHistory},
 	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
 	// 71efdf5a): the reader is chosen by the file's own id.
@@ -215,7 +216,7 @@ func printedOctets(v json.RawMessage) (string, bool) {
 	return out.String(), true
 }
 
-// verifyStandardHistory evaluates a served standard_history/1 or /3 answer
+// verifyStandardHistory evaluates a served standard_history/1, /3 or /4 answer
 // (derivation is the file's history id): the
 // file holds the request and the reply octets as carried. The card is
 // checked with AAC's standardhistory.CheckAs; the policy, anchor and deal
