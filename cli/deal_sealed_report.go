@@ -99,14 +99,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	if !ok || key != DealLastStepKey(value) {
 		return fail
 	}
-	capsule := make(map[string]interface{}, len(record))
-	for k, v := range record {
-		if k != "signature" && k != "key_id" {
-			capsule[k] = v
-		}
-	}
-	checked := disclosure.Verify(map[string]interface{}{"capsule": capsule, "disclosures": map[string]interface{}{"agent_input": input}}, nil)
-	if !checked.OK() || checked.DisclosuresMatched() != 1 {
+	if checked := agentInputDisclosure(record, input); !checked.OK() || checked.DisclosuresMatched() != 1 {
 		return fail
 	}
 	cert, _ := value["completeness_certificate"].(map[string]interface{})
@@ -297,6 +290,18 @@ func holdsDealSteps(value map[string]interface{}) bool {
 	return false
 }
 
+// agentInputDisclosure checks input against the agent_input the record's
+// Capsule commits (its digest).
+func agentInputDisclosure(record, input map[string]interface{}) disclosure.Result {
+	capsule := make(map[string]interface{}, len(record))
+	for k, v := range record {
+		if k != "signature" && k != "key_id" {
+			capsule[k] = v
+		}
+	}
+	return disclosure.Verify(map[string]interface{}{"capsule": capsule, "disclosures": map[string]interface{}{"agent_input": input}}, nil)
+}
+
 // DealV1ReportRuleFailed is the finding of a v1 report the deal plugin's
 // report rule refused.
 const DealV1ReportRuleFailed = "report_rule_failed"
@@ -316,8 +321,8 @@ var dealV1ReportVerifier func(report, first []byte) error
 func SetDealV1ReportVerifier(verify func(report, first []byte) error) { dealV1ReportVerifier = verify }
 
 // runDealV1ReportRule hands the registered verifier the report pair and the
-// bundle's first record pair: the record at the lowest log position the
-// completeness certificate gives, with its disclosed agent_input.
+// bundle's first record pair: the record at seq 1 of the completeness
+// certificate, with its disclosed agent_input.
 func runDealV1ReportRule(value, record, input map[string]interface{}) error {
 	report, err := json.Marshal(map[string]interface{}{"record": record, "agent_input": input})
 	if err != nil {
@@ -331,8 +336,9 @@ func runDealV1ReportRule(value, record, input map[string]interface{}) error {
 }
 
 // dealFirstRecordPair is the bundle's record at seq 1 with its disclosed
-// agent_input, as a book pair; an error when the bundle has none or does not
-// disclose it.
+// agent_input, as a book pair; an error when the bundle has none, does not
+// disclose it, or the disclosure is not what the record commits (the signature
+// is the plugin's rule to check).
 func dealFirstRecordPair(value map[string]interface{}) ([]byte, error) {
 	cert, _ := value["completeness_certificate"].(map[string]interface{})
 	memberships, _ := cert["memberships"].(map[string]interface{})
@@ -350,6 +356,12 @@ func dealFirstRecordPair(value map[string]interface{}) ([]byte, error) {
 		input, ok := d["agent_input"].(map[string]interface{})
 		if !ok {
 			return nil, errors.New("the record at seq 1 does not disclose its agent_input")
+		}
+		// Only the digest match: the first record's Capsule itself is the
+		// plugin's rule to verify (VerifyBook), as the report's own is here.
+		findings := agentInputDisclosure(r, input).DisclosureFindings
+		if len(findings) != 1 || findings[0].Code != disclosure.Match {
+			return nil, errors.New("the record at seq 1 does not match its disclosed agent_input")
 		}
 		return json.Marshal(map[string]interface{}{"record": r, "agent_input": input})
 	}

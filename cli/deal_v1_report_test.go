@@ -271,12 +271,103 @@ func TestDealV1ReportRuleHook(t *testing.T) {
 	gotReport = nil
 	entry = DealReportEntry(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1)), aacbundle.VerificationResult{})
 	assert.Equal(t, "fail", entry["status"])
+	assert.Equal(t, []string{DealV1ReportRuleFailed}, entry["findings"])
+	assert.Contains(t, entry["note"], "does not disclose its agent_input")
 	assert.Nil(t, gotReport)
 
 	// Neutral failures stay failures when the rule would accept.
 	refuse = nil
 	_, other, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	gotReport = nil
 	entry = DealReportEntry(asFileRead(t, withFirstDisclosed(v1ReportCopy(t, other, nil, DealProfileV1))), aacbundle.VerificationResult{})
 	assert.Equal(t, "fail", entry["status"])
+	assert.Nil(t, gotReport, "the rule runs only after the neutral checks")
+}
+
+// The first record is the one at seq 1 wherever it sits in records, and a
+// bundle with only later records (even disclosed) cannot be checked.
+func TestDealV1ReportRuleFirstRecordIsSeq1(t *testing.T) {
+	t.Cleanup(func() { SetDealV1ReportVerifier(nil) })
+	var gotFirst map[string]interface{}
+	calls := 0
+	SetDealV1ReportVerifier(func(report, first []byte) error {
+		calls++
+		require.NoError(t, json.Unmarshal(first, &gotFirst))
+		return nil
+	})
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	later := sealedMember(t, key, "later", map[string]interface{}{"n": float64(2)})
+	later["evidence_record_header"] = map[string]interface{}{"record_type": "deal_note", "committed_at": "2026-10-20T00:00:01Z"}
+
+	// seq 1 second in the array, with a record at seq 2 first.
+	copy := withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1))
+	records := copy["records"].([]interface{})
+	copy["records"] = []interface{}{later, records[0]}
+	cert := copy["completeness_certificate"].(map[string]interface{})
+	cert["memberships"].(map[string]interface{})[later["capsule_id"].(string)] = map[string]interface{}{"log_coordinates": map[string]interface{}{"seq": float64(2)}}
+	copy["disclosures"].(map[string]interface{})[later["capsule_id"].(string)] = map[string]interface{}{"agent_input": map[string]interface{}{"n": float64(2)}}
+	entry := DealReportEntry(asFileRead(t, copy), aacbundle.VerificationResult{})
+	assert.Equal(t, "pass", entry["status"], entry)
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, "step", gotFirst["record"].(map[string]interface{})["action_id"])
+
+	// Only a disclosed record at seq 2: no seq 1, the rule is not called.
+	calls = 0
+	only := withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1))
+	step := only["records"].([]interface{})[0].(map[string]interface{})
+	only["completeness_certificate"].(map[string]interface{})["memberships"].(map[string]interface{})[step["capsule_id"].(string)] = map[string]interface{}{"log_coordinates": map[string]interface{}{"seq": float64(2)}}
+	entry = DealReportEntry(asFileRead(t, only), aacbundle.VerificationResult{})
+	assert.Equal(t, "fail", entry["status"])
+	assert.Equal(t, []string{DealV1ReportRuleFailed}, entry["findings"])
+	assert.Contains(t, entry["note"], "no record at seq 1")
+	assert.Zero(t, calls)
+}
+
+// What the bundle verdict reads from the entry: an accepted report adds no
+// claim (so no INCOMPLETE finding), a refused one a failing claim (INVALID).
+func TestDealV1ReportRuleVerdict(t *testing.T) {
+	t.Cleanup(func() { SetDealV1ReportVerifier(nil) })
+	var refuse error
+	SetDealV1ReportVerifier(func(_, _ []byte) error { return refuse })
+	read := func() map[string]any {
+		return DealReportEntry(asFileRead(t, withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1))), aacbundle.VerificationResult{})
+	}
+	entry := read()
+	_, hasFindings := entry["findings"].([]string)
+	assert.False(t, hasFindings, "an accepted report adds no claim, as the verdict loop in assessBundle reads findings")
+	refuse = errors.New("no")
+	entry = read()
+	claim := aacbundle.ClaimResult{Status: entry["status"].(string), Findings: entry["findings"].([]string)}
+	assert.Equal(t, "INVALID", claimsVerdict([]aacbundle.ClaimResult{claim}))
+}
+
+// An edited seq 1 disclosure never reaches the rule, and CheckDealStandaloneReport
+// reports the rule's refusal as such.
+func TestDealV1ReportRuleDisclosureAndCheck(t *testing.T) {
+	t.Cleanup(func() { SetDealV1ReportVerifier(nil) })
+	called := false
+	var refuse error
+	SetDealV1ReportVerifier(func(_, _ []byte) error { called = true; return refuse })
+
+	edited := withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1))
+	for _, d := range edited["disclosures"].(map[string]interface{}) {
+		d.(map[string]interface{})["agent_input"] = map[string]interface{}{"n": float64(99)}
+	}
+	entry := DealReportEntry(asFileRead(t, edited), aacbundle.VerificationResult{})
+	assert.Equal(t, "fail", entry["status"])
+	assert.Equal(t, []string{DealV1ReportRuleFailed}, entry["findings"])
+	assert.Contains(t, entry["note"], "does not match its disclosed agent_input")
+	assert.False(t, called)
+
+	good := func() map[string]interface{} {
+		return asFileRead(t, withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1)))
+	}
+	assert.NoError(t, CheckDealStandaloneReport(good()))
+	refuse = errors.New("the first record is not the agreement")
+	err := CheckDealStandaloneReport(good())
+	require.ErrorIs(t, err, ErrBundleInvalid)
+	assert.ErrorContains(t, err, DealV1ReportRuleFailed)
+	assert.ErrorContains(t, err, "not the agreement")
 }
