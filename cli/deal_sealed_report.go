@@ -315,7 +315,9 @@ var dealV1ReportVerifier func(report, first []byte) error
 // the deal plugin supplies it: report is the standalone report pair
 // {"record": the report Capsule with signature and key_id, "agent_input": its
 // payload}, first is the pair of the deal's record at seq 1 in the same form
-// (a book pair), and a non-nil error fails the report. With none registered a
+// (a book pair), and a non-nil error fails the report. The core checks only
+// that first's disclosed agent_input is the digest its record commits: the
+// verifier must itself verify the record (its signature and Capsule id). With none registered a
 // passing v1 report stays report_rule_not_checked. A plugin calls it before
 // building its tree.
 func SetDealV1ReportVerifier(verify func(report, first []byte) error) { dealV1ReportVerifier = verify }
