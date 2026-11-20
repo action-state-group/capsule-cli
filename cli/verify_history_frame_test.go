@@ -436,3 +436,58 @@ func pinnedVectors3(t *testing.T) []byte {
 	require.Equal(t, standardHistory3VectorsSHA, hex.EncodeToString(sum[:]))
 	return raw
 }
+
+// A served standard_history/4 answer (capsule-cli#585): a /4 card under a /4
+// envelope is accepted, and the same card is not accepted under a /3 file or
+// envelope, nor a /3 card under /4, nor a /4 card carrying not_counted.
+func TestVerifyHistoryServedStandardHistory4(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "standard-history-v0", "vectors-4.json"))
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	// vectors-4.json is the standard_history/4 cases at agent-action-capsule go/v0.23.0.
+	require.Equal(t, "21143e7bc1f3d6d9605882870be3077503fd156145d14f00ad43999b0b15eabf", hex.EncodeToString(sum[:]))
+	var file struct {
+		Cases []struct {
+			ID     string `json:"id"`
+			Inputs struct {
+				Card json.RawMessage `json:"card"`
+			} `json:"inputs"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &file))
+	seed := sha256.Sum256([]byte("capsule-cli verify --history: served standard_history/4 test key"))
+	key := ed25519.NewKeyFromSeed(seed[:])
+	holder := hex.EncodeToString(key.Public().(ed25519.PublicKey))
+	cards := map[string]json.RawMessage{}
+	for _, tc := range file.Cases {
+		cards[tc.ID] = tc.Inputs.Card
+	}
+	verify := func(id, derivation, caseID string) (map[string]any, error) {
+		var card struct {
+			Anchor string `json:"anchor"`
+		}
+		require.NoError(t, json.Unmarshal(cards[caseID], &card))
+		out, err := invoke(t, "", "verify", "--history", writeHistory(t, signedAnswerNaming(t, key, id, derivation, cards[caseID], card.Anchor)), "--holder-key", holder)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, err
+	}
+
+	got, err := verify("standard_history/4", "standard_history/4", "no-witness-time-card-only")
+	require.NoError(t, err, got)
+	assert.Equal(t, "ACCEPTED", got["verdict"])
+	assert.Equal(t, "standard_history/4", got["kind"])
+	assert.Equal(t, "PASS", got["history_properties"].(map[string]any)["card_form"])
+	assert.Equal(t, "NOT_CHECKED", got["history_properties"].(map[string]any)["counts_recompute"])
+
+	for name, c := range map[string]struct{ id, derivation, card string }{
+		"a /4 file over a /3 answer": {"standard_history/4", "standard_history/3", "no-witness-time-card-only"},
+		"a /3 file over a /4 answer": {"standard_history/3", "standard_history/4", "no-witness-time-card-only"},
+		"a /3 card under /4":         {"standard_history/4", "standard_history/4", "v3-card-for-v4-request"},
+		"a /4 card with not_counted": {"standard_history/4", "standard_history/4", "not-counted-member"},
+	} {
+		got, err := verify(c.id, c.derivation, c.card)
+		assert.ErrorIs(t, err, ErrHistoryNotAccepted, name)
+		assert.Equal(t, "NOT_ACCEPTED", got["verdict"], name)
+	}
+}

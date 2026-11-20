@@ -1267,7 +1267,7 @@ capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KE
 `answer.json` is the signed answer, exactly as the responder wrote it. Check it with
 `verify --history` (give it the request and the answer as `{"history": "standard_history/1",
 "request": {"media_type": "application/json", "octets_text": REQUEST_TEXT}, "reply":
-{...}}`; `"standard_history/3"` is read too, under the same envelope checks), or record it
+{...}}`; `"standard_history/3"` and `"standard_history/4"` are read too, under the same envelope checks), or record it
 with the verb of the profile that sealed the request (`request --response`).
 
 Responder:
