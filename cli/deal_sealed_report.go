@@ -145,7 +145,16 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		if err != nil || t.UTC().Format(time.RFC3339) != asOf {
 			return fail
 		}
-		return map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf)}
+		// What this verifier checked is the neutral part: the bindings, the
+		// signature, the profile and the as_of form. The profile's own report
+		// rule (xdealv1.VerifyReport) is EvidenceBook's, which the core may not
+		// import, so it is reported as not checked and the bundle INCOMPLETE
+		// until the deal plugin runs it.
+		return map[string]any{
+			"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf),
+			"findings": []string{DealV1ReportRuleNotChecked},
+			"note":     "NOT_CHECKED: the x-deal-v1 report rule (xdealv1.VerifyReport: the report's structure, its rows' rulings and its first record) is run by the deal plugin (capsulectl-deal), not by this verifier",
+		}
 	}
 	report, _ := input["report"].(map[string]interface{})
 	lifecycle, _ := report["lifecycle"].(map[string]interface{})
@@ -156,6 +165,10 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	}
 	return map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone"}
 }
+
+// DealV1ReportRuleNotChecked is the finding a passing v1 report carries: the
+// profile's report rule is not run by the core.
+const DealV1ReportRuleNotChecked = "report_rule_not_checked"
 
 // dealReportAsOfV1 words a v1 report's as_of: the time the holder computed
 // the report at, which is the producer's own and which no witness attests

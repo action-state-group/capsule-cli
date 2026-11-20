@@ -269,8 +269,10 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			if entry["report"] == "standalone" && x.Kind == DealProfile {
 				entry["as_of"] = dealReportAsOf(value, witnesses, anchored)
 			}
-			if findings, ok := entry["findings"].([]string); ok && entry["status"] == "fail" {
-				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: findings})
+			if findings, ok := entry["findings"].([]string); ok && (entry["status"] == "fail" || entry["status"] == "pass") {
+				// A pass that names an unchecked finding keeps the verdict
+				// from reading VALID (INCOMPLETE).
+				claims = append(claims, aacbundle.ClaimResult{Status: entry["status"].(string), Findings: findings})
 			}
 		}
 		if x.Kind == DealSaleExtension {

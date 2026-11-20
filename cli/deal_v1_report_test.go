@@ -86,6 +86,9 @@ func TestDealV1StandaloneReportPasses(t *testing.T) {
 	assert.Equal(t, "pass", entry["status"], entry)
 	assert.Equal(t, DealProfileV1, entry["kind"])
 	assert.Equal(t, "standalone", entry["report"])
+	// The profile's report rule is the plugin's: never a clean pass here.
+	assert.Equal(t, []string{DealV1ReportRuleNotChecked}, entry["findings"])
+	assert.Contains(t, entry["note"], "capsulectl-deal")
 	assert.Equal(t, "as of 2026-10-21T08:30:00Z (the holder's time, when it computed the report; no witness attests it)", entry["as_of"])
 }
 
@@ -203,6 +206,7 @@ func TestAssessBundleShowsTheV1ReportEntry(t *testing.T) {
 	}
 	require.NotNil(t, v1, got)
 	assert.Equal(t, "pass", v1["status"])
+	assert.Equal(t, []string{DealV1ReportRuleNotChecked}, v1["findings"])
 	assert.Equal(t, "as of 2026-10-21T08:30:00Z (the holder's time, when it computed the report; no witness attests it)", v1["as_of"])
 
 	both := v1ReportCopy(t, nil, nil, DealProfileV1)
@@ -219,4 +223,10 @@ func TestAssessBundleShowsTheV1ReportEntry(t *testing.T) {
 	}
 	assert.Equal(t, map[any]int{DealProfile: 1, DealProfileV1: 1, DealReportExtension: 1}, kinds)
 	assert.Equal(t, 1, fails)
+}
+
+func TestAPassingV1ReportKeepsTheVerdictFromReadingValid(t *testing.T) {
+	entry := DealReportEntry(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1)), aacbundle.VerificationResult{})
+	claim := aacbundle.ClaimResult{Status: "pass", Findings: entry["findings"].([]string)}
+	assert.Equal(t, "INCOMPLETE", claimsVerdict([]aacbundle.ClaimResult{claim}))
 }
