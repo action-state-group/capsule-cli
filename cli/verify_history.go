@@ -344,7 +344,7 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 		}
 	default:
 		var err error
-		if r, err = verifyStandardHistory(c, raw, holderKeys); err != nil {
+		if r, err = verifyStandardHistory(c, id, raw, holderKeys); err != nil {
 			return err
 		}
 	}

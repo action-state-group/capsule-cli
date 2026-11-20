@@ -26,9 +26,10 @@ type historyInstance struct {
 }
 
 var historyInstances = map[string]historyInstance{
-	"personal_history_basic/1": {},
-	"standard_history/1":       {},
-	outcomeInstance:            {reader: verifyOutcomeHistory},
+	"personal_history_basic/1":  {},
+	standardhistory.Derivation:  {},
+	standardhistory.Derivation3: {},
+	outcomeInstance:             {reader: verifyOutcomeHistory},
 	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
 	// 71efdf5a): the reader is chosen by the file's own id.
 	stapleCommitment:  {staple: true},
@@ -214,13 +215,14 @@ func printedOctets(v json.RawMessage) (string, bool) {
 	return out.String(), true
 }
 
-// verifyStandardHistory evaluates a served standard_history/1 answer: the
+// verifyStandardHistory evaluates a served standard_history/1 or /3 answer
+// (derivation is the file's history id): the
 // file holds the request and the reply octets as carried. The card is
-// checked with AAC's standardhistory.Check; the policy, anchor and deal
+// checked with AAC's standardhistory.CheckAs; the policy, anchor and deal
 // entries are verifier inputs this file does not carry, so the properties
 // that need them stay NOT_CHECKED.
-func verifyStandardHistory(c *cobra.Command, raw []byte, holderKeys []string) (frameReport, error) {
-	r := frameReport{Kind: standardhistory.Derivation, Findings: []string{}, NotRun: []string{
+func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, holderKeys []string) (frameReport, error) {
+	r := frameReport{Kind: derivation, Findings: []string{}, NotRun: []string{
 		"window_from_policy, as_of and counts_recompute need the policy, the anchor time and the deal entries, which a served answer does not carry",
 		"anchor_inclusion: no verification material kind exists for a derivation's artifact",
 	}}
@@ -229,7 +231,7 @@ func verifyStandardHistory(c *cobra.Command, raw []byte, holderKeys []string) (f
 		Reply   carried `json:"reply"`
 	}
 	if err := json.Unmarshal(raw, &f); err != nil {
-		return r, InputError("--history is not a served standard_history/1 answer {history, request, reply}: " + err.Error())
+		return r, InputError("--history is not a served " + derivation + " answer {history, request, reply}: " + err.Error())
 	}
 	req, err := f.Request.message()
 	if err != nil {
@@ -272,7 +274,14 @@ func verifyStandardHistory(c *cobra.Command, raw []byte, holderKeys []string) (f
 		r.Findings = append(r.Findings, "anchor_inclusion is not NOT_CHECKED")
 	}
 	r.Responder = reply.Envelope["responder"]
-	props, err := standardhistory.Check(reply.Artifact, nil, nil, nil)
+	// The card is read under the token the signed envelope names, which the
+	// subject binding ties to the request's derivation; a file whose history
+	// id is another token is not that token's answer.
+	if named, _ := reply.Envelope["derivation"].(string); named != derivation {
+		accepted = false
+		r.Findings = append(r.Findings, fmt.Sprintf("the answer's derivation is %q, not %s", named, derivation))
+	}
+	props, err := standardhistory.CheckAs(derivation, reply.Artifact, nil, nil, nil)
 	if err != nil {
 		return r, err
 	}

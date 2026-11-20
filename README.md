@@ -1016,6 +1016,21 @@ of both sections is its steps only, verifies as such, and shows no report text.
 A sale's own log still records each sale bundle's cut, so it shows when a sale
 was bundled. An older capsulectl reports these copies as INVALID.
 
+**The x-deal-v1 report.** A deal on the `x-deal-v1` profile names its report in
+an `x-deal-v1` extension (`sealed_report` alone), and the report is always the
+standalone Capsule above, whose payload says `"profile": "x-deal-v1"`. The same
+checks apply, except that a v1 report has no `lifecycle`: its `as_of` member
+(RFC 3339 UTC, to the second) is when the holder computed the report. The
+`as_of` line shows it as the holder's time, not the checkpoint's; no witness
+attests it. This verifier checks the neutral part (the signature, that the report's key is the deal's
+last step's, its digest, the checkpoint and book it rests on, the profile and the `as_of` form) and reports the
+profile's own report rule (the report's structure, its rows' rulings and its first record, EvidenceBook's
+`xdealv1.VerifyReport`) as `report_rule_not_checked`, naming the deal plugin that runs it; the verdict is
+INCOMPLETE, never VALID, until then. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
+without the standalone report (or the report without the pointer), a payload
+whose profile is not the extension's, or a copy holding deal steps whose
+`x-deal-v1` section names no report, is INVALID.
+
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
 several responders' answers to Evidence Requests) is checked too, through the
@@ -1252,8 +1267,8 @@ capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KE
 `answer.json` is the signed answer, exactly as the responder wrote it. Check it with
 `verify --history` (give it the request and the answer as `{"history": "standard_history/1",
 "request": {"media_type": "application/json", "octets_text": REQUEST_TEXT}, "reply":
-{...}}`), or record it with the verb of the profile that sealed the request (`request
---response`).
+{...}}`; `"standard_history/3"` is read too, under the same envelope checks), or record it
+with the verb of the profile that sealed the request (`request --response`).
 
 Responder:
 

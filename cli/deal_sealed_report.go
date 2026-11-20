@@ -73,12 +73,21 @@ func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, 
 //  2. that key is the verified key of the deal's last step: the record with
 //     the highest log position whose header type is a step's;
 //  3. its agent_input disclosure matches the Capsule's committed digest;
-//  4. its payload is a deal_report of the bundle's deal, for a copy audience;
+//  4. its payload is a deal_report of the bundle's deal, for a copy audience
+//     (a v1 report names its book by rests_on.own.log_id, a v0 report by
+//     its deal_id, which is the log id's suffix);
 //  5. its deal_checkpoint is the bundle's checkpoint (log id, MMR size, root);
 //  6. the section holds nothing else, and the bundle holds no deal_report;
-//  7. its lifecycle's as_of is the checkpoint's signed time.
-func standaloneReportEntry(value map[string]interface{}, x map[string]interface{}, id string) map[string]any {
-	fail := map[string]any{"kind": DealProfile, "status": "fail", "findings": []string{"sealed_report_unverified"}}
+//  7. its lifecycle's as_of is the checkpoint's signed time; a v1 report
+//     (profile is x-deal-v1) has no lifecycle, so its own as_of member is
+//     instead RFC 3339 UTC to the second, as the profile's BuildReport
+//     writes it: the time the holder computed the report at, which no
+//     witness attests and which is not the checkpoint's time.
+//
+// profile is the version the extension naming the report is: DealProfile or
+// DealProfileV1. The payload's profile member must be the same.
+func standaloneReportEntry(value map[string]interface{}, x map[string]interface{}, id, profile string) map[string]any {
+	fail := map[string]any{"kind": profile, "status": "fail", "findings": []string{"sealed_report_unverified"}}
 	record, _ := x["record"].(map[string]interface{})
 	input, _ := x["agent_input"].(map[string]interface{})
 	if len(x) != 2 || record == nil || input == nil || record["capsule_id"] != id || record["action_id"] != DealReportActionID {
@@ -102,7 +111,19 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	logID, _ := cert["log_id"].(string)
 	dealID, isDeal := strings.CutPrefix(logID, "deal/")
 	audience, _ := input["audience"].(string)
-	if input["type"] != "deal_report" || input["profile"] != DealProfile || !isDeal || input["deal_id"] != dealID || !dealCopyAudiences[audience] {
+	if input["type"] != "deal_report" || input["profile"] != profile || !isDeal || !dealCopyAudiences[audience] {
+		return fail
+	}
+	if profile == DealProfileV1 {
+		// A v1 book's log id is random, never derived from the deal id
+		// (design note 461 §3.1), so the report binds to the book by the log
+		// it rests on; deal_id is only the report's own name for the deal.
+		restsOn, _ := input["rests_on"].(map[string]interface{})
+		own, _ := restsOn["own"].(map[string]interface{})
+		if id, _ := input["deal_id"].(string); id == "" || own["log_id"] != logID {
+			return fail
+		}
+	} else if input["deal_id"] != dealID {
 		return fail
 	}
 	cp, _ := value["checkpoint"].(map[string]interface{})
@@ -118,6 +139,23 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 			return fail
 		}
 	}
+	if profile == DealProfileV1 {
+		asOf, _ := input["as_of"].(string)
+		t, err := time.Parse(time.RFC3339, asOf)
+		if err != nil || t.UTC().Format(time.RFC3339) != asOf {
+			return fail
+		}
+		// What this verifier checked is the neutral part: the bindings, the
+		// signature, the profile and the as_of form. The profile's own report
+		// rule (xdealv1.VerifyReport) is EvidenceBook's, which the core may not
+		// import, so it is reported as not checked and the bundle INCOMPLETE
+		// until the deal plugin runs it.
+		return map[string]any{
+			"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf),
+			"findings": []string{DealV1ReportRuleNotChecked},
+			"note":     "NOT_CHECKED: the x-deal-v1 report rule (xdealv1.VerifyReport: the report's structure, its rows' rulings and its first record) is run by the deal plugin (capsulectl-deal), not by this verifier",
+		}
+	}
 	report, _ := input["report"].(map[string]interface{})
 	lifecycle, _ := report["lifecycle"].(map[string]interface{})
 	asOf, asOfErr := time.Parse(time.RFC3339Nano, fmt.Sprint(lifecycle["as_of"]))
@@ -125,7 +163,19 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	if asOfErr != nil || signedErr != nil || !asOf.Equal(signed) {
 		return fail
 	}
-	return map[string]any{"kind": DealProfile, "status": "pass", DealReportPointer: id, "report": "standalone"}
+	return map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone"}
+}
+
+// DealV1ReportRuleNotChecked is the finding a passing v1 report carries: the
+// profile's report rule is not run by the core.
+const DealV1ReportRuleNotChecked = "report_rule_not_checked"
+
+// dealReportAsOfV1 words a v1 report's as_of: the time the holder computed
+// the report at, which is the producer's own and which no witness attests
+// (evidencebook design note 461-deal-profile.md §9, "as_of"). It is not the
+// checkpoint's time, so no witness claim is read into it.
+func dealReportAsOfV1(asOf string) string {
+	return "as of " + asOf + " (the holder's time, when it computed the report; no witness attests it)"
 }
 
 // dealReportAsOf says when a standalone report's deal state is from, and what
