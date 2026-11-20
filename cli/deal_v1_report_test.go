@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -229,4 +230,53 @@ func TestAPassingV1ReportKeepsTheVerdictFromReadingValid(t *testing.T) {
 	entry := DealReportEntry(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1)), aacbundle.VerificationResult{})
 	claim := aacbundle.ClaimResult{Status: "pass", Findings: entry["findings"].([]string)}
 	assert.Equal(t, "INCOMPLETE", claimsVerdict([]aacbundle.ClaimResult{claim}))
+}
+
+// withFirstDisclosed makes the copy disclose its seq 1 record's agent_input,
+// as a book pair needs.
+func withFirstDisclosed(copy map[string]interface{}) map[string]interface{} {
+	step := copy["records"].([]interface{})[0].(map[string]interface{})
+	copy["disclosures"] = map[string]interface{}{step["capsule_id"].(string): map[string]interface{}{"agent_input": map[string]interface{}{"n": float64(1)}}}
+	return copy
+}
+
+func TestDealV1ReportRuleHook(t *testing.T) {
+	t.Cleanup(func() { SetDealV1ReportVerifier(nil) })
+	var gotReport, gotFirst map[string]interface{}
+	var refuse error
+	SetDealV1ReportVerifier(func(report, first []byte) error {
+		require.NoError(t, json.Unmarshal(report, &gotReport))
+		require.NoError(t, json.Unmarshal(first, &gotFirst))
+		return refuse
+	})
+	copy := func() map[string]interface{} {
+		return asFileRead(t, withFirstDisclosed(v1ReportCopy(t, nil, nil, DealProfileV1)))
+	}
+
+	entry := DealReportEntry(copy(), aacbundle.VerificationResult{})
+	assert.Equal(t, "pass", entry["status"], entry)
+	assert.NotContains(t, entry, "findings", "an accepted report no longer reads report_rule_not_checked")
+	assert.Equal(t, DealReportActionID, gotReport["record"].(map[string]interface{})["action_id"])
+	assert.Equal(t, "deal_report", gotReport["agent_input"].(map[string]interface{})["type"])
+	assert.Equal(t, map[string]interface{}{"n": float64(1)}, gotFirst["agent_input"])
+	assert.Equal(t, "step", gotFirst["record"].(map[string]interface{})["action_id"])
+
+	refuse = errors.New("the first record is not the agreement")
+	entry = DealReportEntry(copy(), aacbundle.VerificationResult{})
+	assert.Equal(t, "fail", entry["status"])
+	assert.Equal(t, []string{DealV1ReportRuleFailed}, entry["findings"])
+	assert.Contains(t, entry["note"], "not the agreement")
+
+	// A copy that does not disclose its first record cannot be checked: fail, and the rule is not called.
+	gotReport = nil
+	entry = DealReportEntry(asFileRead(t, v1ReportCopy(t, nil, nil, DealProfileV1)), aacbundle.VerificationResult{})
+	assert.Equal(t, "fail", entry["status"])
+	assert.Nil(t, gotReport)
+
+	// Neutral failures stay failures when the rule would accept.
+	refuse = nil
+	_, other, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	entry = DealReportEntry(asFileRead(t, withFirstDisclosed(v1ReportCopy(t, other, nil, DealProfileV1))), aacbundle.VerificationResult{})
+	assert.Equal(t, "fail", entry["status"])
 }

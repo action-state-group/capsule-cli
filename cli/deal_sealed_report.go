@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -145,6 +147,17 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		if err != nil || t.UTC().Format(time.RFC3339) != asOf {
 			return fail
 		}
+		if dealV1ReportVerifier != nil {
+			// The deal plugin registered the profile's report rule
+			// (SetDealV1ReportVerifier): the pass below rests on it.
+			entry := map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf)}
+			if err := runDealV1ReportRule(value, record, input); err != nil {
+				entry["status"] = "fail"
+				entry["findings"] = []string{DealV1ReportRuleFailed}
+				entry["note"] = "the x-deal-v1 report rule failed: " + err.Error()
+			}
+			return entry
+		}
 		// What this verifier checked is the neutral part: the bindings, the
 		// signature, the profile and the as_of form. The profile's own report
 		// rule (xdealv1.VerifyReport) is EvidenceBook's, which the core may not
@@ -282,4 +295,63 @@ func holdsDealSteps(value map[string]interface{}) bool {
 		}
 	}
 	return false
+}
+
+// DealV1ReportRuleFailed is the finding of a v1 report the deal plugin's
+// report rule refused.
+const DealV1ReportRuleFailed = "report_rule_failed"
+
+// dealV1ReportVerifier is the deal plugin's check of a v1 report (its
+// registration is SetDealV1ReportVerifier); nil in a process without it.
+var dealV1ReportVerifier func(report, first []byte) error
+
+// SetDealV1ReportVerifier registers the x-deal-v1 report rule for
+// `verify --bundle` (capsule-cli#587). The core may not import EvidenceBook, so
+// the deal plugin supplies it: report is the standalone report pair
+// {"record": the report Capsule with signature and key_id, "agent_input": its
+// payload}, first is the pair of the deal's record at seq 1 in the same form
+// (a book pair), and a non-nil error fails the report. With none registered a
+// passing v1 report stays report_rule_not_checked. A plugin calls it before
+// building its tree.
+func SetDealV1ReportVerifier(verify func(report, first []byte) error) { dealV1ReportVerifier = verify }
+
+// runDealV1ReportRule hands the registered verifier the report pair and the
+// bundle's first record pair: the record at the lowest log position the
+// completeness certificate gives, with its disclosed agent_input.
+func runDealV1ReportRule(value, record, input map[string]interface{}) error {
+	report, err := json.Marshal(map[string]interface{}{"record": record, "agent_input": input})
+	if err != nil {
+		return err
+	}
+	first, err := dealFirstRecordPair(value)
+	if err != nil {
+		return err
+	}
+	return dealV1ReportVerifier(report, first)
+}
+
+// dealFirstRecordPair is the bundle's record at seq 1 with its disclosed
+// agent_input, as a book pair; an error when the bundle has none or does not
+// disclose it.
+func dealFirstRecordPair(value map[string]interface{}) ([]byte, error) {
+	cert, _ := value["completeness_certificate"].(map[string]interface{})
+	memberships, _ := cert["memberships"].(map[string]interface{})
+	disclosures, _ := value["disclosures"].(map[string]interface{})
+	records, _ := value["records"].([]interface{})
+	for _, raw := range records {
+		r, _ := raw.(map[string]interface{})
+		id, _ := r["capsule_id"].(string)
+		m, _ := memberships[id].(map[string]interface{})
+		coords, _ := m["log_coordinates"].(map[string]interface{})
+		if seq, err := JSONUint(coords["seq"]); err != nil || seq != 1 {
+			continue
+		}
+		d, _ := disclosures[id].(map[string]interface{})
+		input, ok := d["agent_input"].(map[string]interface{})
+		if !ok {
+			return nil, errors.New("the record at seq 1 does not disclose its agent_input")
+		}
+		return json.Marshal(map[string]interface{}{"record": r, "agent_input": input})
+	}
+	return nil, errors.New("the bundle holds no record at seq 1")
 }
