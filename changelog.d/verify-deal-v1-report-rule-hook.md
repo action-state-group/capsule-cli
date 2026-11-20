@@ -1,1 +1,0 @@
-- `capsulectl verify --bundle` runs the x-deal-v1 report rule when the deal plugin registers it (`cli.SetDealV1ReportVerifier`): a v1 report it accepts passes with no `report_rule_not_checked`, one it refuses fails with `report_rule_failed`; without a registered rule the report stays INCOMPLETE as before (capsule-cli#587).

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.1.0-rc44
+
+- `capsulectl commitment publish` staples a `history_card/2` as well as a `history_card/1`: give `deal standard-history staple --derivation history_card/2` output as `--staple` and `--derivation history_card/2`, so a seller with a long log can publish a commitment; the commitment's card derivation and the policy's `stranger_safe` name the stapled card, and `history_card/1` publishing is unchanged (capsule-cli#583).
+
+- `capsulectl verify --bundle` now checks the `x-deal-v1` sealed report (evidencebook#461): an `x-deal-v1` extension naming a standalone report whose payload profile is `x-deal-v1`, with the v0 checks except that its own `as_of` (RFC 3339 UTC to the second) replaces `lifecycle.as_of` and is shown as the holder's time; the profile's own report rule (`xdealv1.VerifyReport`) is not run by the core, so a passing v1 report carries `report_rule_not_checked` and the verdict is INCOMPLETE until the deal plugin runs it. `verify --history` now checks a served `standard_history/3` answer (SH §11) under the same envelope checks as `/1`, with agent-action-capsule's `CheckAs`; an answer whose envelope names another derivation than its file's id is not accepted. `x-deal-v0` bundles and `standard_history/1` answers verify as before (capsule-cli#570, PR #584).
+
+- `capsulectl verify --bundle` runs the x-deal-v1 report rule when the deal plugin registers it (`cli.SetDealV1ReportVerifier`): a v1 report it accepts passes with no `report_rule_not_checked`, one it refuses fails with `report_rule_failed`; without a registered rule the report stays INCOMPLETE as before (capsule-cli#587, PR #588).
+
+- `capsulectl verify --history` now checks a served `standard_history/4` answer (SH §12: a deal with no witnessed time is counted and disclosed in `local_times`, not left out), under the same envelope checks as `/3`, with agent-action-capsule go/v0.23.0's `CheckAs`; `/1` and `/3` answers verify as before, and a `/4` card under a file or envelope naming another derivation is not accepted (capsule-cli#585, PR #586).
+
+- `capsulectl verify --history` and `commitment find` now check a commitment or `{history, request, reply}` file that staples `history_card/2` (ER -03 §8.1.2): the card's window, positions, checkpoint signatures, first checkpoint (no predecessor), consistency proofs, receipts and anchor are agent-action-capsule's `CheckHistoryCard2`, reported under `card_form`, `checkpoint_signature`, `checkpoint_consistency`, `checkpoint_receipts` and `checkpoint_anchor`; `history_card/1` is checked as before. Requires agent-action-capsule/go v0.22.0 (capsule-cli#578).
+
+- **Changed:** the embedded report-page runtime is capsule-viewer v0.19.2 (was v0.10.0), which reads the checkpoints checkpointed-local-log v0.4.0 produces; with the earlier runtime the page of a bundle that `verify --bundle` calls VALID said it did not verify (capsule-cli#581, PR #582).
+
 ## v0.1.0-rc43
 
 - **Added:** `commitment publish` signs an `evidence-commitment/1` under the profile's own signing key with the profile's history card (`history_card/1`) stapled (the card must be signed by that same key), and, only with `--yes` and the carriers named with `--to`, merges the commitment pointer into the seller's own ARD file (the entry's `trustManifest.identity` names its publisher, ARD §4.5.1), adds the extension to an A2A Agent Card, and publishes the Nostr announce event to the relays `ask.nostr` names. Without `--yes` it writes a draft and sends nothing. `commitment find` accepts what it writes (capsule-cli#571).

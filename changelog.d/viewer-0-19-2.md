@@ -1,1 +1,0 @@
-- **Changed:** the embedded report-page runtime is capsule-viewer v0.19.2 (was v0.10.0), which reads the checkpoints checkpointed-local-log v0.4.0 produces; with the earlier runtime the page of a bundle that `verify --bundle` calls VALID said it did not verify (capsule-cli#581).
