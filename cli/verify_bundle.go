@@ -499,6 +499,10 @@ func nonNilStrings(values []string) []string {
 // a copy that carries report text instead of naming the sealed report it
 // should (sealed_report_not_named, the report stripped and text put inline)
 // fails. An in-log report's disclosure is checked by the full verify only.
+//
+// For an x-deal-v1 copy, nil covers only the neutral checks (the entry carries
+// report_rule_not_checked): the caller must still run EvidenceBook's
+// xdealv1.VerifyReport, which the core may not import.
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
 	entry := DealReportEntry(value, aacbundle.VerificationResult{})
