@@ -22,6 +22,8 @@ import (
 const (
 	anchorWitnessVectorsSHA256 = "21544e319dd46320f0c388b13080235fe0a258d0d8621bd1e77fbcf11253e59d"
 	standardHistoryVectorsSHA  = "4126c66efaa5f5c94fa473432752f1eb596439a190476bd3799204afe3cb43c5"
+	// vectors-3.json is the standard_history/3 cases at agent-action-capsule go/v0.22.0.
+	standardHistory3VectorsSHA = "fe076a8249d76e3eaa35ebd0d97cd361bb72e6680a286e51058b286fad622df6"
 )
 
 func pinnedVectors(t *testing.T, dir, want string) []byte {
@@ -103,7 +105,14 @@ func TestVerifyHistoryReportsAnchorWitnessedNotPresentWithoutAReceipt(t *testing
 // signed by key, as the file `verify --history` reads.
 func signedStandardAnswer(t *testing.T, key ed25519.PrivateKey, card json.RawMessage, anchor string) []byte {
 	t.Helper()
-	request := `{"coverage":{"expected_pin":"` + anchor + `"},"derivation":"standard_history/1","nonce":"n-1","profile":"evidence-interop/0","subject":{"full_history":null}}`
+	return signedAnswerNaming(t, key, "standard_history/1", "standard_history/1", card, anchor)
+}
+
+// signedAnswerNaming is signedStandardAnswer for a request and envelope that
+// name derivation, in a file whose history id is id.
+func signedAnswerNaming(t *testing.T, key ed25519.PrivateKey, id, derivation string, card json.RawMessage, anchor string) []byte {
+	t.Helper()
+	request := `{"coverage":{"expected_pin":"` + anchor + `"},"derivation":"` + derivation + `","nonce":"n-1","profile":"evidence-interop/0","subject":{"full_history":null}}`
 	artifact, err := evidencerequest.EncodeJCS(mustDecode(t, card))
 	require.NoError(t, err)
 	requestSum := sha256.Sum256([]byte(request))
@@ -111,7 +120,7 @@ func signedStandardAnswer(t *testing.T, key ed25519.PrivateKey, card json.RawMes
 	pub := key.Public().(ed25519.PublicKey)
 	env := map[string]any{
 		"profile": "evidence-interop/0", "request_digest": hex.EncodeToString(requestSum[:]),
-		"subject": map[string]any{"full_history": nil}, "derivation": "standard_history/1",
+		"subject": map[string]any{"full_history": nil}, "derivation": derivation,
 		"anchor": map[string]any{"digest": anchor}, "artifact_digest": hex.EncodeToString(artifactSum[:]),
 		"responder": hex.EncodeToString(pub), "issued_at": "2026-10-15T00:00:15Z",
 	}
@@ -122,7 +131,7 @@ func signedStandardAnswer(t *testing.T, key ed25519.PrivateKey, card json.RawMes
 	reply, err := evidencerequest.EncodeJCS(env)
 	require.NoError(t, err)
 	file, err := json.Marshal(map[string]any{
-		"history": "standard_history/1",
+		"history": id,
 		"request": map[string]any{"media_type": "application/json", "octets_text": request},
 		"reply":   map[string]any{"media_type": "application/json", "octets_text": string(reply)},
 	})
@@ -366,4 +375,64 @@ func TestVerifyHistoryPrintedStapleGuards(t *testing.T) {
 	out, err := run(t, `{"derivation":"nosuch/1","staple":{"request":{},"reply":{}}}`)
 	assert.Equal(t, 1, ExitCode(err))
 	assert.Contains(t, out, "unknown History instance")
+}
+
+// A served standard_history/3 answer (capsule-cli#570): a /3 card under a
+// /3 envelope is checked as /3 and accepted; a /2 card is not a /3 card; and
+// a file whose history id is /3 over an answer that names /1 (or the other
+// way round) is not accepted, since the id picks the card rules.
+func TestVerifyHistoryServedStandardHistory3(t *testing.T) {
+	var file struct {
+		Cases []struct {
+			ID     string `json:"id"`
+			Inputs struct {
+				Card json.RawMessage `json:"card"`
+			} `json:"inputs"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(pinnedVectors3(t), &file))
+	seed := sha256.Sum256([]byte("capsule-cli verify --history: served standard_history/3 test key"))
+	key := ed25519.NewKeyFromSeed(seed[:])
+	holder := hex.EncodeToString(key.Public().(ed25519.PublicKey))
+	cards := map[string]json.RawMessage{}
+	for _, tc := range file.Cases {
+		cards[tc.ID] = tc.Inputs.Card
+	}
+	verify := func(id, derivation, caseID string) (map[string]any, error) {
+		var card struct {
+			Anchor string `json:"anchor"`
+		}
+		require.NoError(t, json.Unmarshal(cards[caseID], &card))
+		out, err := invoke(t, "", "verify", "--history", writeHistory(t, signedAnswerNaming(t, key, id, derivation, cards[caseID], card.Anchor)), "--holder-key", holder)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+		return got, err
+	}
+
+	got, err := verify("standard_history/3", "standard_history/3", "outcomes-from-rows")
+	require.NoError(t, err, got)
+	assert.Equal(t, "ACCEPTED", got["verdict"])
+	assert.Equal(t, "standard_history/3", got["kind"])
+	assert.Equal(t, "PASS", got["history_properties"].(map[string]any)["card_form"])
+	assert.Equal(t, "NOT_CHECKED", got["history_properties"].(map[string]any)["counts_recompute"])
+
+	for name, c := range map[string]struct{ id, derivation, card string }{
+		"a /2 card under /3":              {"standard_history/3", "standard_history/3", "v2-card-for-v3-request"},
+		"a /3 file over a /1 answer":      {"standard_history/3", "standard_history/1", "outcomes-from-rows"},
+		"a /1 file over a /3 answer":      {"standard_history/1", "standard_history/3", "outcomes-from-rows"},
+		"a count without its denominator": {"standard_history/3", "standard_history/3", "remedied-not-did-not-hold"},
+	} {
+		got, err := verify(c.id, c.derivation, c.card)
+		assert.ErrorIs(t, err, ErrHistoryNotAccepted, name)
+		assert.Equal(t, "NOT_ACCEPTED", got["verdict"], name)
+	}
+}
+
+func pinnedVectors3(t *testing.T) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "standard-history-v0", "vectors-3.json"))
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	require.Equal(t, standardHistory3VectorsSHA, hex.EncodeToString(sum[:]))
+	return raw
 }

@@ -1016,6 +1016,17 @@ of both sections is its steps only, verifies as such, and shows no report text.
 A sale's own log still records each sale bundle's cut, so it shows when a sale
 was bundled. An older capsulectl reports these copies as INVALID.
 
+**The x-deal-v1 report.** A deal on the `x-deal-v1` profile names its report in
+an `x-deal-v1` extension (`sealed_report` alone), and the report is always the
+standalone Capsule above, whose payload says `"profile": "x-deal-v1"`. The same
+checks apply, except that a v1 report has no `lifecycle`: its own `as_of` member
+(RFC 3339 UTC to the second) is the time the holder computed the report, which
+the `as_of` line shows as the holder's own time that no witness attests, not the
+checkpoint's. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
+without the standalone report (or the report without the pointer), a payload
+whose profile is not the extension's, or a copy holding deal steps whose
+`x-deal-v1` section names no report, is INVALID.
+
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
 several responders' answers to Evidence Requests) is checked too, through the
@@ -1252,8 +1263,8 @@ capsulectl mailbox poll --commitment seller-commitment.json --node-key SELLER_KE
 `answer.json` is the signed answer, exactly as the responder wrote it. Check it with
 `verify --history` (give it the request and the answer as `{"history": "standard_history/1",
 "request": {"media_type": "application/json", "octets_text": REQUEST_TEXT}, "reply":
-{...}}`), or record it with the verb of the profile that sealed the request (`request
---response`).
+{...}}`; `"standard_history/3"` is read too, under the same envelope checks), or record it
+with the verb of the profile that sealed the request (`request --response`).
 
 Responder:
 

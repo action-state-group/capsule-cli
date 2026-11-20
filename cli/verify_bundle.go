@@ -255,10 +255,12 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	dealSeen := false
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
-		if x.Kind == DealProfile && x.Status == "uninterpreted" {
+		if (x.Kind == DealProfile || x.Kind == DealProfileV1) && x.Status == "uninterpreted" {
 			dealSeen = true
 			entry = DealReportEntry(value, result)
-			if entry["report"] == "standalone" {
+			// A v1 report words its own as_of: its time is the holder's
+			// computation time, not the checkpoint's.
+			if entry["report"] == "standalone" && entry["kind"] == DealProfile {
 				entry["as_of"] = dealReportAsOf(value, witnesses, anchored)
 			}
 			if entry["status"] == "fail" {
@@ -501,6 +503,34 @@ func CheckDealStandaloneReport(value map[string]interface{}) error {
 	return nil
 }
 
+// dealV1ReportEntry is DealReportEntry for a bundle whose extension is
+// x-deal-v1. A v1 report is always standalone (design note 461-deal-profile.md
+// §9): appended to no log, so the section is a pointer alone naming the
+// report in x-deal-report/v0, and a pointer without that carrier, or a
+// carrier without the pointer, fails. A section naming no report in a copy
+// that holds deal steps is a stripped copy (sealed_report_not_named), as in
+// v0; otherwise it is a book's own bundle, which shows no report text.
+func dealV1ReportEntry(value, ext, section map[string]interface{}) map[string]any {
+	fail := func(finding string) map[string]any {
+		return map[string]any{"kind": DealProfileV1, "status": "fail", "findings": []string{finding}}
+	}
+	id, sealed := section[DealReportPointer].(string)
+	raw, carried := ext[DealReportExtension]
+	x, _ := raw.(map[string]interface{})
+	switch {
+	case sealed && carried && len(section) == 1 && x != nil:
+		return standaloneReportEntry(value, x, id, DealProfileV1)
+	case sealed || carried:
+		return fail("sealed_report_unverified")
+	case holdsDealSteps(value):
+		return fail("sealed_report_not_named")
+	}
+	return map[string]any{
+		"kind": DealProfileV1, "status": "uninterpreted", "findings": []string{"extension_unbound"},
+		"note": "a section naming no report: there is no report text to verify",
+	}
+}
+
 func DealReportEntry(value map[string]interface{}, result aacbundle.VerificationResult) map[string]any {
 	reports := map[string]bool{}
 	records, _ := value["records"].([]interface{})
@@ -526,6 +556,16 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 	fail := func(finding string) map[string]any {
 		return map[string]any{"kind": DealProfile, "status": "fail", "findings": []string{finding}}
 	}
+	// x-deal-v1 beside x-deal-v0 names no version a reader can take; a v1
+	// section is read by dealV1ReportEntry.
+	_, v0 := ext[DealProfile]
+	if v1, ok := ext[DealProfileV1]; ok {
+		if v0 {
+			return map[string]any{"kind": DealProfileV1, "status": "fail", "findings": []string{"sealed_report_unverified"}}
+		}
+		section, _ := v1.(map[string]interface{})
+		return dealV1ReportEntry(value, ext, section)
+	}
 	id, sealed := deal[DealReportPointer].(string)
 	// A standalone report (capsule-cli#294) is named by a pointer-only
 	// section; the extension without one, or beside any other section,
@@ -535,7 +575,7 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		if !sealed || len(deal) != 1 || x == nil {
 			return fail("sealed_report_unverified")
 		}
-		return standaloneReportEntry(value, x, id)
+		return standaloneReportEntry(value, x, id, DealProfile)
 	}
 	switch {
 	case sealed && (!matched[id] || len(disclosed) != 1):

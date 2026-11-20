@@ -46,6 +46,9 @@ var dealStepRecordTypes = map[string]bool{"deal_step": true, "step_completed": t
 func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, id, form string) {
 	exts, _ := b["extensions"].(map[string]interface{})
 	deal, _ := exts[DealProfile].(map[string]interface{})
+	if deal == nil {
+		deal, _ = exts[DealProfileV1].(map[string]interface{})
+	}
 	id, sealed := deal[DealReportPointer].(string)
 	if !sealed {
 		return deal, "", "inline"
@@ -76,9 +79,16 @@ func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, 
 //  4. its payload is a deal_report of the bundle's deal, for a copy audience;
 //  5. its deal_checkpoint is the bundle's checkpoint (log id, MMR size, root);
 //  6. the section holds nothing else, and the bundle holds no deal_report;
-//  7. its lifecycle's as_of is the checkpoint's signed time.
-func standaloneReportEntry(value map[string]interface{}, x map[string]interface{}, id string) map[string]any {
-	fail := map[string]any{"kind": DealProfile, "status": "fail", "findings": []string{"sealed_report_unverified"}}
+//  7. its lifecycle's as_of is the checkpoint's signed time; a v1 report
+//     (profile is x-deal-v1) has no lifecycle, so its own as_of member is
+//     instead RFC 3339 UTC to the second, as the profile's BuildReport
+//     writes it: the time the holder computed the report at, which no
+//     witness attests and which is not the checkpoint's time.
+//
+// profile is the version the extension naming the report is: DealProfile or
+// DealProfileV1. The payload's profile member must be the same.
+func standaloneReportEntry(value map[string]interface{}, x map[string]interface{}, id, profile string) map[string]any {
+	fail := map[string]any{"kind": profile, "status": "fail", "findings": []string{"sealed_report_unverified"}}
 	record, _ := x["record"].(map[string]interface{})
 	input, _ := x["agent_input"].(map[string]interface{})
 	if len(x) != 2 || record == nil || input == nil || record["capsule_id"] != id || record["action_id"] != DealReportActionID {
@@ -102,7 +112,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	logID, _ := cert["log_id"].(string)
 	dealID, isDeal := strings.CutPrefix(logID, "deal/")
 	audience, _ := input["audience"].(string)
-	if input["type"] != "deal_report" || input["profile"] != DealProfile || !isDeal || input["deal_id"] != dealID || !dealCopyAudiences[audience] {
+	if input["type"] != "deal_report" || input["profile"] != profile || !isDeal || input["deal_id"] != dealID || !dealCopyAudiences[audience] {
 		return fail
 	}
 	cp, _ := value["checkpoint"].(map[string]interface{})
@@ -118,6 +128,14 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 			return fail
 		}
 	}
+	if profile == DealProfileV1 {
+		asOf, _ := input["as_of"].(string)
+		t, err := time.Parse(time.RFC3339, asOf)
+		if err != nil || t.UTC().Format(time.RFC3339) != asOf {
+			return fail
+		}
+		return map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf)}
+	}
 	report, _ := input["report"].(map[string]interface{})
 	lifecycle, _ := report["lifecycle"].(map[string]interface{})
 	asOf, asOfErr := time.Parse(time.RFC3339Nano, fmt.Sprint(lifecycle["as_of"]))
@@ -125,7 +143,15 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	if asOfErr != nil || signedErr != nil || !asOf.Equal(signed) {
 		return fail
 	}
-	return map[string]any{"kind": DealProfile, "status": "pass", DealReportPointer: id, "report": "standalone"}
+	return map[string]any{"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone"}
+}
+
+// dealReportAsOfV1 words a v1 report's as_of: the time the holder computed
+// the report at, which is the producer's own and which no witness attests
+// (evidencebook design note 461-deal-profile.md §9, "as_of"). It is not the
+// checkpoint's time, so no witness claim is read into it.
+func dealReportAsOfV1(asOf string) string {
+	return "as of " + asOf + " (the holder's time, when it computed the report; no witness attests it)"
 }
 
 // dealReportAsOf says when a standalone report's deal state is from, and what

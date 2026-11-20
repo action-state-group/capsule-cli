@@ -20,6 +20,12 @@ import (
 // member name.
 const DealProfile = "x-deal-v0"
 
+// DealProfileV1 is the x-deal-v1 profile's, and its bundle extension's, name
+// (evidencebook#461, dealprofile/x-deal-v1/PROFILE.md). A v1 bundle names its
+// sealed report in this extension, as a v0 bundle does in x-deal-v0; the
+// report is always standalone, in x-deal-report/v0.
+const DealProfileV1 = "x-deal-v1"
+
 func FirstSchemaError(err error) string {
 	var v *jsonschema.ValidationError
 	if errors.As(err, &v) {
