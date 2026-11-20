@@ -501,7 +501,8 @@ func nonNilStrings(values []string) []string {
 // fails. An in-log report's disclosure is checked by the full verify only.
 //
 // For an x-deal-v1 copy, nil covers only the neutral checks (the entry carries
-// report_rule_not_checked): the caller must still run EvidenceBook's
+// report_rule_not_checked) unless the process registered the profile's rule
+// (SetDealV1ReportVerifier); otherwise the caller must still run EvidenceBook's
 // xdealv1.VerifyReport, which the core may not import.
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
@@ -509,6 +510,10 @@ func CheckDealStandaloneReport(value map[string]interface{}) error {
 	// A v1 copy that fails names its report (or lacks the one it names)
 	// even when the carrier is absent.
 	_, carried := exts[DealReportExtension]
+	if findings, _ := entry["findings"].([]string); slices.Contains(findings, DealV1ReportRuleFailed) {
+		note, _ := entry["note"].(string)
+		return errors.Join(ErrBundleInvalid, errors.New("the copy's standalone report fails the x-deal-v1 report rule ("+DealV1ReportRuleFailed+"): "+note))
+	}
 	if (carried || entry["kind"] == DealProfileV1) && entry["status"] == "fail" || carried && entry["status"] != "pass" {
 		return errors.Join(ErrBundleInvalid, errors.New("the copy's standalone report does not verify (sealed_report_unverified)"))
 	}
