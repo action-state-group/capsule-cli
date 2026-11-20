@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -480,14 +481,16 @@ func TestVerifyHistoryServedStandardHistory4(t *testing.T) {
 	assert.Equal(t, "PASS", got["history_properties"].(map[string]any)["card_form"])
 	assert.Equal(t, "NOT_CHECKED", got["history_properties"].(map[string]any)["counts_recompute"])
 
-	for name, c := range map[string]struct{ id, derivation, card string }{
-		"a /4 file over a /3 answer": {"standard_history/4", "standard_history/3", "no-witness-time-card-only"},
-		"a /3 file over a /4 answer": {"standard_history/3", "standard_history/4", "no-witness-time-card-only"},
-		"a /3 card under /4":         {"standard_history/4", "standard_history/4", "v3-card-for-v4-request"},
-		"a /4 card with not_counted": {"standard_history/4", "standard_history/4", "not-counted-member"},
+	for name, c := range map[string]struct{ id, derivation, card, reason string }{
+		"a /4 file over a /3 answer": {"standard_history/4", "standard_history/3", "no-witness-time-card-only", "derivation"},
+		"a /3 file over a /4 answer": {"standard_history/3", "standard_history/4", "no-witness-time-card-only", "derivation"},
+		"a /3 card under /4":         {"standard_history/4", "standard_history/4", "v3-card-for-v4-request", "card_form"},
+		"a /4 card with not_counted": {"standard_history/4", "standard_history/4", "not-counted-member", "card_form"},
 	} {
 		got, err := verify(c.id, c.derivation, c.card)
 		assert.ErrorIs(t, err, ErrHistoryNotAccepted, name)
 		assert.Equal(t, "NOT_ACCEPTED", got["verdict"], name)
+		// The named reason, so a case cannot pass on another check.
+		assert.Contains(t, fmt.Sprint(got["findings"], got["history_properties"]), c.reason, name)
 	}
 }
