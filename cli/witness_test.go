@@ -551,3 +551,38 @@ func (f *failFirstSubmitter) Submit(ctx context.Context, b []byte) (witness.Rece
 	}
 	return f.inner.Submit(ctx, b)
 }
+
+// The selection is the oldest row: it alone is delivered and newer rows,
+// though due, are left alone.
+func TestDeliverSelectedFirstRow(t *testing.T) {
+	store, rows := checkpointRows(t, 4)
+	submitter := &continuitySubmitter{t: t}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, e)
+	assert.NotNil(t, got.Receipt)
+	assert.Equal(t, [][]byte{rows[0].Checkpoint}, submitter.accepted)
+	for _, r := range rows[1:] {
+		left, e := store.GetWitness(t.Context(), "service-test", r.CheckpointSize)
+		require.NoError(t, e)
+		assert.Nil(t, left.Receipt)
+		assert.Zero(t, left.Attempts)
+	}
+}
+
+// Every older row is in backoff: nothing is due but the held selection, so
+// the command returns the selection as pending and sends nothing.
+func TestDeliverSelectedAllOlderRowsInBackoff(t *testing.T) {
+	store, rows := checkpointRows(t, 5)
+	now := time.Now().UTC().Add(time.Hour)
+	for _, r := range rows[:4] {
+		held := r
+		held.Attempts, held.NextAttemptAt, held.LastError = 1, now.Add(time.Hour), "witness not reached"
+		require.NoError(t, store.CommitWitness(t.Context(), r.Attempts, held))
+	}
+	submitter := &continuitySubmitter{t: t}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[4].CheckpointSize, submitter, acceptAll{}, now)
+	require.NoError(t, e)
+	assert.Nil(t, got.Receipt)
+	assert.Zero(t, got.Attempts)
+	assert.Empty(t, submitter.accepted)
+}

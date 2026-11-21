@@ -665,8 +665,18 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 		return cll.WitnessState{}, e
 	}
 	view := selectedWitness{WitnessStateStore: store, id: service, size: size}
-	for {
-		before, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
+	start, e := store.GetWitness(ctx, service, size)
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	// The runner handles one page per pass and counts only receipts, so the
+	// loop does not use its count. It runs until the selection has been
+	// attempted (a receipt, a permanent failure, or one more attempt than at
+	// the start) or until a whole pass leaves the due rows exactly as they
+	// were, which is a held or finished pass. At most one pass per row of the
+	// witness's backlog is possible, so the bound is a safety net only.
+	for pass := 0; pass < maxDeliveryPasses; pass++ {
+		before, e := dueState(ctx, view, service, now)
 		if e != nil {
 			return cll.WitnessState{}, e
 		}
@@ -674,17 +684,30 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 			return cll.WitnessState{}, e
 		}
 		selected, e := store.GetWitness(ctx, service, size)
-		if e != nil || selected.Receipt != nil || selected.Permanent {
+		if e != nil || selected.Receipt != nil || selected.Permanent || selected.Attempts > start.Attempts {
 			return selected, e
 		}
-		// Progress is the oldest due row leaving the due set: a receipt, a
-		// permanent failure or a backoff each take it out, while a held pass
-		// leaves it first. The runner's own count would miss the permanent
-		// failures, and the length of a page capped at cll.MaxWitnesses would
-		// miss progress through a longer backlog.
-		after, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
-		if e != nil || len(before) == 0 || (len(after) > 0 && after[0].CheckpointSize == before[0].CheckpointSize) {
+		after, e := dueState(ctx, view, service, now)
+		if e != nil || after == before {
 			return selected, e
 		}
 	}
+	return cll.WitnessState{}, fmt.Errorf("witness delivery to %q made no end after %d passes", service, maxDeliveryPasses)
+}
+
+// maxDeliveryPasses bounds deliverSelected's loop.
+const maxDeliveryPasses = 4096
+
+// dueState is the state of the rows the runner would be given: each row's
+// size, attempts, next attempt and flags, as one comparable string.
+func dueState(ctx context.Context, view selectedWitness, service string, now time.Time) (string, error) {
+	rows, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
+	if e != nil {
+		return "", e
+	}
+	var b strings.Builder
+	for _, r := range rows {
+		fmt.Fprintf(&b, "%d/%d/%d/%t/%t;", r.CheckpointSize, r.Attempts, r.NextAttemptAt.UnixNano(), r.Permanent, r.Receipt != nil)
+	}
+	return b.String(), nil
 }
