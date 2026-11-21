@@ -526,3 +526,28 @@ func (r *recordingSubmitter) Submit(_ context.Context, b []byte) (witness.Receip
 	r.submitted = append(r.submitted, b)
 	return witness.Receipt{}, witness.ErrSCRAPIPending
 }
+
+// A page in which every older row fails for good still counts as progress:
+// the runner reports only receipts, but those rows leave the due set.
+func TestDeliverSelectedPastPageOfPermanentFailures(t *testing.T) {
+	n := cll.MaxWitnesses + 2
+	store, rows := checkpointRows(t, n)
+	submitter := &failFirstSubmitter{failures: cll.MaxWitnesses, inner: &continuitySubmitter{t: t}}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, e)
+	assert.NotZero(t, got.Attempts, "the selection was attempted after the failed page")
+}
+
+// failFirstSubmitter refuses its first failures submissions for good.
+type failFirstSubmitter struct {
+	failures int
+	inner    *continuitySubmitter
+}
+
+func (f *failFirstSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
+	if f.failures > 0 {
+		f.failures--
+		return witness.Receipt{}, errors.New("refused")
+	}
+	return f.inner.Submit(ctx, b)
+}

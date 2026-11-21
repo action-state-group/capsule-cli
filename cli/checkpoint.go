@@ -664,13 +664,24 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
+	view := selectedWitness{WitnessStateStore: store, id: service, size: size}
 	for {
-		done, e := runner.RunOnce(ctx, now, cll.MaxWitnesses)
+		before, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
 		if e != nil {
 			return cll.WitnessState{}, e
 		}
+		if _, e = runner.RunOnce(ctx, now, cll.MaxWitnesses); e != nil {
+			return cll.WitnessState{}, e
+		}
 		selected, e := store.GetWitness(ctx, service, size)
-		if e != nil || done == 0 || selected.Receipt != nil || selected.Permanent {
+		if e != nil || selected.Receipt != nil || selected.Permanent {
+			return selected, e
+		}
+		// Progress is a shrinking due set: a receipt, a permanent failure or a
+		// backoff each take a row out of it, while a held pass leaves it as it
+		// was. The runner's own count would miss the permanent failures.
+		after, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
+		if e != nil || len(after) >= len(before) {
 			return selected, e
 		}
 	}
