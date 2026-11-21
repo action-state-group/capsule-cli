@@ -303,7 +303,7 @@ type selectedWitness struct {
 }
 
 func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ int) ([]cll.WitnessState, error) {
-	r, e := s.GetWitness(ctx, s.id, s.size)
+	r, e := s.WitnessStateStore.GetWitness(ctx, s.id, s.size)
 	if e != nil {
 		return nil, e
 	}
@@ -317,10 +317,24 @@ func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ 
 // override the embedded store's unscoped one would deliver an older
 // never-receipted row for the same witness instead of the selected one.
 func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now time.Time, limit int) ([]cll.WitnessState, error) {
-	if id != s.id || limit == 0 {
+	if limit < 1 || limit > cll.MaxWitnesses {
+		return nil, fmt.Errorf("%w: invalid pending witness query", cll.ErrInvalid)
+	}
+	if id != s.id {
 		return nil, nil
 	}
 	return s.PendingWitnesses(ctx, now, limit)
+}
+
+// GetWitness shows the runner only the selected row. The runner holds a row
+// while its predecessor row has no receipt; an older never-receipted row
+// outside this command's selection must not hold the selected one, and with no
+// such row the witness's own answer decides.
+func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
+	if id != s.id || size != s.size {
+		return cll.WitnessState{}, cll.ErrNotFound
+	}
+	return s.WitnessStateStore.GetWitness(ctx, id, size)
 }
 
 // witnessResult is a delivery's state. A verified one also carries its

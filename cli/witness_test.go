@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -309,22 +310,58 @@ func TestSelectedWitnessIgnoresOlderPendingRow(t *testing.T) {
 	}
 
 	now := time.Now().UTC().Add(time.Hour)
-	all, e := store.PendingWitnessesFor(t.Context(), "service-test", now, 10)
+	older, e := store.GetWitness(t.Context(), "service-test", 1)
 	require.NoError(t, e)
-	require.Greater(t, len(all), 1, "fixture must hold an older pending row")
-	newest := all[0].CheckpointSize
-	for _, r := range all {
-		if r.CheckpointSize > newest {
-			newest = r.CheckpointSize
-		}
-	}
+	require.Nil(t, older.Receipt)
+	selected, e := store.GetWitness(t.Context(), "service-test", 3)
+	require.NoError(t, e)
+	require.Equal(t, uint64(1), checkpointPrevSize(t, selected), "size 1 must be the selected row's predecessor")
 
-	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: newest}
+	// The query is scoped to the selected row and keeps cll's limit contract.
+	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: 3}
 	rows, e := view.PendingWitnessesFor(t.Context(), "service-test", now, 10)
 	require.NoError(t, e)
 	require.Len(t, rows, 1)
-	assert.Equal(t, newest, rows[0].CheckpointSize)
+	assert.Equal(t, uint64(3), rows[0].CheckpointSize)
 	other, e := view.PendingWitnessesFor(t.Context(), "other", now, 10)
 	require.NoError(t, e)
 	assert.Empty(t, other)
+	for _, limit := range []int{0, -1, cll.MaxWitnesses + 1} {
+		_, e = view.PendingWitnessesFor(t.Context(), "service-test", now, limit)
+		assert.ErrorIs(t, e, cll.ErrInvalid)
+	}
+
+	// Through the runner, the selected row is submitted and the older one is untouched.
+	public, _, e := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, e)
+	verifier, e := witness.NewReceiptVerifier(public)
+	require.NoError(t, e)
+	submitter := &recordingSubmitter{}
+	delivery, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), view, map[string]witness.Submitter{"service-test": submitter}, map[string]witness.Verifier{"service-test": verifier})
+	require.NoError(t, e)
+	_, e = delivery.RunOnce(t.Context(), now, 1)
+	require.NoError(t, e)
+	assert.Equal(t, [][]byte{selected.Checkpoint}, submitter.submitted)
+	after, e := store.GetWitness(t.Context(), "service-test", 3)
+	require.NoError(t, e)
+	assert.Equal(t, uint32(1), after.Attempts)
+	untouched, e := store.GetWitness(t.Context(), "service-test", 1)
+	require.NoError(t, e)
+	assert.Equal(t, older, untouched)
+}
+
+// recordingSubmitter records what the runner submits and answers as a witness
+// that has not finished yet, a retryable outcome.
+type recordingSubmitter struct{ submitted [][]byte }
+
+func (r *recordingSubmitter) Submit(_ context.Context, b []byte) (witness.Receipt, error) {
+	r.submitted = append(r.submitted, b)
+	return witness.Receipt{}, witness.ErrSCRAPIPending
+}
+
+func checkpointPrevSize(t *testing.T, s cll.WitnessState) uint64 {
+	t.Helper()
+	record, e := checkpoint.ParseRecord(s.Checkpoint)
+	require.NoError(t, e)
+	return record.PrevSize
 }
