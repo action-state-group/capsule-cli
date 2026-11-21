@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.0-rc46
+
+- **Fixed:** the x-deal-v1 report rule hook (`cli.SetDealV1ReportVerifier`, capsule-cli#587) now hands the rule the bundle's `x-deal-v1` extension (`{sealed_report, book: {agreement, relied_on}}`, evidencebook design note 461 §9 and PROFILE §10) with the report pair, where rc44 and rc45 handed it a pair built from the bundle's seq 1 record, which lacked the payload and so could not pass `VerifyBook` for a real bundle. The hook's second argument changes meaning, from the first record's pair to the extension. `verify --bundle` no longer refuses an `x-deal-v1` section that has members besides `sealed_report`; without a registered rule such a report is still only neutral-checked (`report_rule_not_checked`).
+
+- `verify --capsule` now names the command to use when given a `deal export` file (an x-deal-v0 deal's records without the capsules that signed them, so nothing to check): `deal report --deal ID --html receipt.html`, then `verify --bundle receipt.html`; the README shows that form beside `--capsule`. `get` on a plugin-owned sqlite profile (a deal) that holds no such capsule now says why and names the plugin's commands; that miss exits 2 (input error) where it exited 1 with the generic message (capsule-cli#593).
+
 ## v0.1.0-rc45
 
 - **Fixed:** a witness delivery in `capsulectl` now delivers the checkpoint it was asked for. With checkpointed-local-log v0.4.0 a book holding an older never-receipted row for the same witness delivered that row instead, or held the selected one, leaving it `pending` with `attempts` 0 for good. The command now sends the selected checkpoint's older unreceipted rows first, in order (the witness registers a checkpoint only after its predecessor), and leaves newer rows alone (capsule-cli#590).
