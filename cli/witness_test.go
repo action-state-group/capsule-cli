@@ -474,7 +474,7 @@ func TestDeliverSelectedRearmsOlderRefusedRow(t *testing.T) {
 // One runner pass handles at most cll.MaxWitnesses rows; a selection behind
 // more older rows than that is still delivered by one command.
 func TestDeliverSelectedPastOnePage(t *testing.T) {
-	n := cll.MaxWitnesses + 3
+	n := 2*cll.MaxWitnesses + 3
 	store, rows := checkpointRows(t, n)
 	submitter := &continuitySubmitter{t: t}
 	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-2].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
@@ -530,9 +530,9 @@ func (r *recordingSubmitter) Submit(_ context.Context, b []byte) (witness.Receip
 // A page in which every older row fails for good still counts as progress:
 // the runner reports only receipts, but those rows leave the due set.
 func TestDeliverSelectedPastPageOfPermanentFailures(t *testing.T) {
-	n := cll.MaxWitnesses + 2
+	n := 2*cll.MaxWitnesses + 2
 	store, rows := checkpointRows(t, n)
-	submitter := &failFirstSubmitter{failures: cll.MaxWitnesses, inner: &continuitySubmitter{t: t}}
+	submitter := &failFirstSubmitter{failures: 2 * cll.MaxWitnesses, inner: &continuitySubmitter{t: t}}
 	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
 	require.NoError(t, e)
 	assert.NotZero(t, got.Attempts, "the selection was attempted after the failed page")

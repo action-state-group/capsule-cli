@@ -677,11 +677,13 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 		if e != nil || selected.Receipt != nil || selected.Permanent {
 			return selected, e
 		}
-		// Progress is a shrinking due set: a receipt, a permanent failure or a
-		// backoff each take a row out of it, while a held pass leaves it as it
-		// was. The runner's own count would miss the permanent failures.
+		// Progress is the oldest due row leaving the due set: a receipt, a
+		// permanent failure or a backoff each take it out, while a held pass
+		// leaves it first. The runner's own count would miss the permanent
+		// failures, and the length of a page capped at cll.MaxWitnesses would
+		// miss progress through a longer backlog.
 		after, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
-		if e != nil || len(after) >= len(before) {
+		if e != nil || len(before) == 0 || (len(after) > 0 && after[0].CheckpointSize == before[0].CheckpointSize) {
 			return selected, e
 		}
 	}
