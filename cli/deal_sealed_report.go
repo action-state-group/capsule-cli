@@ -78,7 +78,7 @@ func DealSealedReport(b map[string]interface{}) (report map[string]interface{}, 
 //     (a v1 report names its book by rests_on.own.log_id, a v0 report by
 //     its deal_id, which is the log id's suffix);
 //  5. its deal_checkpoint is the bundle's checkpoint (log id, MMR size, root);
-//  6. the section holds nothing else, and the bundle holds no deal_report;
+//  6. for x-deal-v0 the section holds nothing else (an x-deal-v1 section also carries the book, which only the registered rule reads), and the bundle holds no deal_report;
 //  7. its lifecycle's as_of is the checkpoint's signed time; a v1 report
 //     (profile is x-deal-v1) has no lifecycle, so its own as_of member is
 //     instead RFC 3339 UTC to the second, as the profile's BuildReport
@@ -152,13 +152,13 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		}
 		// What this verifier checked is the neutral part: the bindings, the
 		// signature, the profile and the as_of form. The profile's own report
-		// rule (xdealv1.VerifyReport) is EvidenceBook's, which the core may not
+		// rule (xdealv1.VerifyReportBundle) is EvidenceBook's, which the core may not
 		// import, so it is reported as not checked and the bundle INCOMPLETE
 		// until the deal plugin runs it.
 		return map[string]any{
 			"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf),
 			"findings": []string{DealV1ReportRuleNotChecked},
-			"note":     "NOT_CHECKED: the x-deal-v1 report rule (xdealv1.VerifyReport: the report's structure, its rows' rulings and its first record) is run by the deal plugin (capsulectl-deal), not by this verifier",
+			"note":     "NOT_CHECKED: the x-deal-v1 report rule (xdealv1.VerifyReportBundle: the report's structure, its rows' rulings, the seq 1 agreement and the records its rows rely on) is run by the deal plugin (capsulectl-deal), not by this verifier",
 		}
 	}
 	report, _ := input["report"].(map[string]interface{})
