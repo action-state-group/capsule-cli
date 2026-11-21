@@ -296,21 +296,56 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 }
 
 // A scoped view prevents one command from delivering unrelated checkpoint rows.
+// It still shows the selected row's older, due, never-receipted rows of the
+// same witness: the witness refuses a checkpoint whose predecessor it has not
+// registered as a log mutation, never to be retried, and the runner holds a
+// row until its predecessor has a receipt. Rows newer than the selection are
+// left alone; a permanently failed older row is skipped (GetWitness).
 type selectedWitness struct {
 	cll.WitnessStateStore
 	id   string
 	size uint64
 }
 
-func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ int) ([]cll.WitnessState, error) {
-	r, e := s.GetWitness(ctx, s.id, s.size)
+// PendingWitnessesFor is the method the delivery runner calls; the embedded
+// store's unscoped one would hand the runner every due row of the witness.
+func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now time.Time, limit int) ([]cll.WitnessState, error) {
+	if limit < 1 || limit > cll.MaxWitnesses {
+		return nil, fmt.Errorf("%w: invalid pending witness query", cll.ErrInvalid)
+	}
+	if id != s.id {
+		return nil, nil
+	}
+	rows, e := s.WitnessStateStore.PendingWitnessesFor(ctx, id, now, cll.MaxWitnesses)
 	if e != nil {
 		return nil, e
 	}
-	if r.Receipt != nil || r.Permanent || r.NextAttemptAt.After(now) {
-		return nil, nil
+	out := make([]cll.WitnessState, 0, len(rows))
+	for _, r := range rows {
+		if r.CheckpointSize <= s.size {
+			out = append(out, r)
+		}
 	}
-	return []cll.WitnessState{r}, nil
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// GetWitness is what the runner's predecessor gate reads. A predecessor that
+// failed for good is never delivered again, so holding the selection for it
+// would leave the selection pending for ever; it is shown as absent and the
+// witness decides, as the spec lets it: a witness holding state for the log
+// refuses a checkpoint whose predecessor it did not register (a permanent
+// failure of the selection, reported as such), and one holding none MAY
+// register it as the start of the log's history there
+// (draft-mih-scitt-checkpointed-local-log-02, lines 388-393 at checkpointed-local-log 89a80fd).
+func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
+	r, e := s.WitnessStateStore.GetWitness(ctx, id, size)
+	if e == nil && r.Permanent && r.Receipt == nil && !(id == s.id && size == s.size) {
+		return cll.WitnessState{}, cll.ErrNotFound
+	}
+	return r, e
 }
 
 // witnessResult is a delivery's state. A verified one also carries its
@@ -597,20 +632,82 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	now := time.Now().UTC()
-	if state, e := store.GetWitness(ctx, service, size); e == nil {
-		if _, e = RearmRefused(ctx, store, state, now); e != nil {
+	return deliverSelected(ctx, store, service, size, client, verifier, time.Now().UTC())
+}
+
+// deliverSelected delivers the checkpoint at size and the older rows the
+// witness needs first (selectedWitness). Older refused rows are re-armed so
+// they are not skipped out of order, and the runner is repeated while it
+// makes progress, since one pass handles at most cll.MaxWitnesses rows.
+func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time) (cll.WitnessState, error) {
+	// A store that cannot list its rows (a plugin's) re-arms only the selection.
+	rows := []cll.WitnessState(nil)
+	if log, ok := store.(cll.CheckpointStateStore); ok {
+		state, e := log.LoadCLL(ctx)
+		if e != nil {
 			return cll.WitnessState{}, e
 		}
+		rows = state.Witnesses
+	} else if w, e := store.GetWitness(ctx, service, size); e == nil {
+		rows = []cll.WitnessState{w}
 	} else if !errors.Is(e, cll.ErrNotFound) {
 		return cll.WitnessState{}, e
 	}
-	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: client}, map[string]witness.Verifier{service: verifier})
+	for _, w := range rows {
+		if w.WitnessID == service && w.CheckpointSize <= size {
+			if _, e := RearmRefused(ctx, store, w, now); e != nil {
+				return cll.WitnessState{}, e
+			}
+		}
+	}
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: submitter}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	if _, e = runner.RunOnce(ctx, now, 1); e != nil {
+	view := selectedWitness{WitnessStateStore: store, id: service, size: size}
+	start, e := store.GetWitness(ctx, service, size)
+	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	return store.GetWitness(ctx, service, size)
+	// The runner handles one page per pass and counts only receipts, so the
+	// loop does not use its count. It runs until the selection has been
+	// attempted (a receipt, a permanent failure, or one more attempt than at
+	// the start) or until a whole pass leaves the due rows exactly as they
+	// were, which is a held or finished pass. At most one pass per row of the
+	// witness's backlog is possible, so the bound is a safety net only.
+	for pass := 0; pass < maxDeliveryPasses; pass++ {
+		before, e := dueState(ctx, view, service, now)
+		if e != nil {
+			return cll.WitnessState{}, e
+		}
+		if _, e = runner.RunOnce(ctx, now, cll.MaxWitnesses); e != nil {
+			return cll.WitnessState{}, e
+		}
+		selected, e := store.GetWitness(ctx, service, size)
+		if e != nil || selected.Receipt != nil || selected.Permanent || selected.Attempts > start.Attempts {
+			return selected, e
+		}
+		after, e := dueState(ctx, view, service, now)
+		if e != nil || after == before {
+			return selected, e
+		}
+	}
+	return cll.WitnessState{}, fmt.Errorf("witness delivery to %q made no end after %d passes", service, maxDeliveryPasses)
+}
+
+// maxDeliveryPasses bounds deliverSelected's loop.
+const maxDeliveryPasses = 4096
+
+// dueState is the state of the rows the runner would be given: each row's
+// size, attempts, next attempt and flags, as one comparable string.
+func dueState(ctx context.Context, view selectedWitness, service string, now time.Time) (string, error) {
+	rows, e := view.PendingWitnessesFor(ctx, service, now, cll.MaxWitnesses)
+	if e != nil {
+		return "", e
+	}
+	var b strings.Builder
+	for _, r := range rows {
+		fmt.Fprintf(&b, "%d/%d/%d/%t/%t;", r.CheckpointSize, r.Attempts, r.NextAttemptAt.UnixNano(), r.Permanent, r.Receipt != nil)
+	}
+	return b.String(), nil
 }
