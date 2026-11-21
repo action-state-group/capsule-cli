@@ -1,0 +1,1 @@
+- **Fixed:** a witness delivery in `capsulectl` now delivers the checkpoint it was asked for. With checkpointed-local-log v0.4.0 a book holding an older never-receipted row for the same witness delivered that row instead, leaving the selected one `pending` with `attempts` 0 for good (capsule-cli#590).

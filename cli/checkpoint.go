@@ -313,6 +313,16 @@ func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ 
 	return []cll.WitnessState{r}, nil
 }
 
+// PendingWitnessesFor is the method the delivery runner calls; without this
+// override the embedded store's unscoped one would deliver an older
+// never-receipted row for the same witness instead of the selected one.
+func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now time.Time, limit int) ([]cll.WitnessState, error) {
+	if id != s.id || limit == 0 {
+		return nil, nil
+	}
+	return s.PendingWitnesses(ctx, now, limit)
+}
+
 // witnessResult is a delivery's state. A verified one also carries its
 // receipt as a checkpoint.witnesses entry, whose ts_url is the profile's
 // witness endpoint and so names its binding.

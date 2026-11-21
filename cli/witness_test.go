@@ -285,3 +285,46 @@ func TestWitnessRetryTextFollowsBackoffCap(t *testing.T) {
 	_, text := WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: WitnessFailureBody(500)}, DealDefaultWitness)
 	assert.Contains(t, text, "HTTP 500")
 }
+
+// A book holding an older never-receipted row must still deliver the selected
+// checkpoint: the runner asks for PendingWitnessesFor, which the embedded
+// store would otherwise answer with the old row (state pending, attempts 0 on
+// the selected one, forever).
+func TestSelectedWitnessIgnoresOlderPendingRow(t *testing.T) {
+	p, key := profileFixture(t)
+	store := memory.New()
+	defer func() { require.NoError(t, store.Close()) }()
+	signer, e := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, e)
+	cfg := checkpoint.DefaultRunnerConfig(p.LogID)
+	cfg.Cadence.CadenceEntries = 1
+	cfg.WitnessIDs = []string{"service-test"}
+	runner, e := checkpoint.NewRunner(cfg, store, signer)
+	require.NoError(t, e)
+	for i := byte(1); i <= 2; i++ {
+		_, e = store.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{i}, 32), AppendedAt: time.Now().UTC()})
+		require.NoError(t, e)
+		_, e = runner.RunOnce(t.Context(), time.Now().UTC())
+		require.NoError(t, e)
+	}
+
+	now := time.Now().UTC().Add(time.Hour)
+	all, e := store.PendingWitnessesFor(t.Context(), "service-test", now, 10)
+	require.NoError(t, e)
+	require.Greater(t, len(all), 1, "fixture must hold an older pending row")
+	newest := all[0].CheckpointSize
+	for _, r := range all {
+		if r.CheckpointSize > newest {
+			newest = r.CheckpointSize
+		}
+	}
+
+	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: newest}
+	rows, e := view.PendingWitnessesFor(t.Context(), "service-test", now, 10)
+	require.NoError(t, e)
+	require.Len(t, rows, 1)
+	assert.Equal(t, newest, rows[0].CheckpointSize)
+	other, e := view.PendingWitnessesFor(t.Context(), "other", now, 10)
+	require.NoError(t, e)
+	assert.Empty(t, other)
+}
