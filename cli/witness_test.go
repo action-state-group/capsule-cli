@@ -12,6 +12,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -424,4 +425,63 @@ func TestSelectedWitnessSkipsPermanentlyFailedPredecessor(t *testing.T) {
 	require.NoError(t, e)
 	assert.True(t, left.Permanent)
 	assert.Nil(t, left.Receipt)
+}
+
+// checkpointRows is a memory log with n checkpoints, each due for
+// service-test, in ascending size order.
+func checkpointRows(t *testing.T, n int) (*memory.Store, []cll.WitnessState) {
+	t.Helper()
+	p, key := profileFixture(t)
+	store := memory.New()
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	signer, e := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, e)
+	cfg := checkpoint.DefaultRunnerConfig(p.LogID)
+	cfg.Cadence.CadenceEntries = 1
+	cfg.WitnessIDs = []string{"service-test"}
+	runner, e := checkpoint.NewRunner(cfg, store, signer)
+	require.NoError(t, e)
+	for i := 0; i < n; i++ {
+		_, e = store.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{byte(i + 1)}, 32), AppendedAt: time.Now().UTC()})
+		require.NoError(t, e)
+		_, e = runner.RunOnce(t.Context(), time.Now().UTC())
+		require.NoError(t, e)
+	}
+	state, e := store.LoadCLL(t.Context())
+	require.NoError(t, e)
+	rows := append([]cll.WitnessState(nil), state.Witnesses...)
+	sort.Slice(rows, func(i, j int) bool { return rows[i].CheckpointSize < rows[j].CheckpointSize })
+	require.Len(t, rows, n)
+	return store, rows
+}
+
+// An older row a build before capsule-cli#335 stored as refused (403) is
+// re-armed and goes first; skipping it would send the selection out of order.
+func TestDeliverSelectedRearmsOlderRefusedRow(t *testing.T) {
+	store, rows := checkpointRows(t, 2)
+	refused := rows[0]
+	refused.Attempts, refused.Permanent = 1, true
+	refused.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 403); response details suppressed"
+	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, refused))
+
+	submitter := &continuitySubmitter{t: t}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, e)
+	assert.NotNil(t, got.Receipt)
+	assert.Equal(t, [][]byte{rows[0].Checkpoint, rows[1].Checkpoint}, submitter.accepted)
+}
+
+// One runner pass handles at most cll.MaxWitnesses rows; a selection behind
+// more older rows than that is still delivered by one command.
+func TestDeliverSelectedPastOnePage(t *testing.T) {
+	n := cll.MaxWitnesses + 3
+	store, rows := checkpointRows(t, n)
+	submitter := &continuitySubmitter{t: t}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-2].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, e)
+	assert.NotNil(t, got.Receipt)
+	assert.Len(t, submitter.accepted, n-1)
+	last, e := store.GetWitness(t.Context(), "service-test", rows[n-1].CheckpointSize)
+	require.NoError(t, e)
+	assert.Nil(t, last.Receipt, "a newer row is left alone")
 }

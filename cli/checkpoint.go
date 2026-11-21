@@ -633,20 +633,46 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	now := time.Now().UTC()
-	if state, e := store.GetWitness(ctx, service, size); e == nil {
-		if _, e = RearmRefused(ctx, store, state, now); e != nil {
+	return deliverSelected(ctx, store, service, size, client, verifier, time.Now().UTC())
+}
+
+// deliverSelected delivers the checkpoint at size and the older rows the
+// witness needs first (selectedWitness). Older refused rows are re-armed so
+// they are not skipped out of order, and the runner is repeated while it
+// makes progress, since one pass handles at most cll.MaxWitnesses rows.
+func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time) (cll.WitnessState, error) {
+	// A store that cannot list its rows (a plugin's) re-arms only the selection.
+	rows := []cll.WitnessState(nil)
+	if log, ok := store.(cll.CheckpointStateStore); ok {
+		state, e := log.LoadCLL(ctx)
+		if e != nil {
 			return cll.WitnessState{}, e
 		}
+		rows = state.Witnesses
+	} else if w, e := store.GetWitness(ctx, service, size); e == nil {
+		rows = []cll.WitnessState{w}
 	} else if !errors.Is(e, cll.ErrNotFound) {
 		return cll.WitnessState{}, e
 	}
-	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: client}, map[string]witness.Verifier{service: verifier})
+	for _, w := range rows {
+		if w.WitnessID == service && w.CheckpointSize <= size {
+			if _, e := RearmRefused(ctx, store, w, now); e != nil {
+				return cll.WitnessState{}, e
+			}
+		}
+	}
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: submitter}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	if _, e = runner.RunOnce(ctx, now, cll.MaxWitnesses); e != nil {
-		return cll.WitnessState{}, e
+	for {
+		done, e := runner.RunOnce(ctx, now, cll.MaxWitnesses)
+		if e != nil {
+			return cll.WitnessState{}, e
+		}
+		selected, e := store.GetWitness(ctx, service, size)
+		if e != nil || done == 0 || selected.Receipt != nil || selected.Permanent {
+			return selected, e
+		}
 	}
-	return store.GetWitness(ctx, service, size)
 }
