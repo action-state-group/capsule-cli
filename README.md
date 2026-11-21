@@ -291,6 +291,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
+capsulectl verify --bundle RECEIPT.html   # a deal: write it with `deal report --deal ID --html RECEIPT.html`
 capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
@@ -722,6 +723,11 @@ bare capsule gets the same checks: its `capsule_id` recomputed, its signature
 under its `key_id`, and that key held to the profile's trusted keys. It carries
 no retained originals, so its committed digests are not rehashed, and the
 output says so.
+
+`deal export` writes a deal's sealed records, which carry no capsule ID or
+signature, so `verify --capsule` refuses them and says so. A deal is verified
+through its receipt: `capsulectl deal report --deal ID --html receipt.html`,
+then `capsulectl verify --bundle receipt.html`.
 
 `verify --profile NAME`, with none of `--capsule`, `--bundle` and `--history`,
 verifies what the profile's store holds. It reads the whole CLL in sequence
