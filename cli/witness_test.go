@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,11 +288,12 @@ func TestWitnessRetryTextFollowsBackoffCap(t *testing.T) {
 	assert.Contains(t, text, "HTTP 500")
 }
 
-// A book holding an older never-receipted row must still deliver the selected
-// checkpoint: the runner asks for PendingWitnessesFor, which the embedded
-// store would otherwise answer with the old row (state pending, attempts 0 on
-// the selected one, forever).
-func TestSelectedWitnessIgnoresOlderPendingRow(t *testing.T) {
+// A book holding older never-receipted rows must still deliver the selected
+// checkpoint: the runner asks for PendingWitnessesFor, which the embedded store
+// answers unscoped (state pending, attempts 0 on the selected row, forever).
+// The witness registers a checkpoint only after its predecessor, so the older
+// rows go first, in order, and newer rows are not touched.
+func TestSelectedWitnessDeliversPredecessorsNotNewerRows(t *testing.T) {
 	p, key := profileFixture(t)
 	store := memory.New()
 	defer func() { require.NoError(t, store.Close()) }()
@@ -302,27 +304,26 @@ func TestSelectedWitnessIgnoresOlderPendingRow(t *testing.T) {
 	cfg.WitnessIDs = []string{"service-test"}
 	runner, e := checkpoint.NewRunner(cfg, store, signer)
 	require.NoError(t, e)
-	for i := byte(1); i <= 2; i++ {
+	for i := byte(1); i <= 3; i++ {
 		_, e = store.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{i}, 32), AppendedAt: time.Now().UTC()})
 		require.NoError(t, e)
 		_, e = runner.RunOnce(t.Context(), time.Now().UTC())
 		require.NoError(t, e)
 	}
-
 	now := time.Now().UTC().Add(time.Hour)
-	older, e := store.GetWitness(t.Context(), "service-test", 1)
+	all, e := store.PendingWitnessesFor(t.Context(), "service-test", now, 10)
 	require.NoError(t, e)
-	require.Nil(t, older.Receipt)
-	selected, e := store.GetWitness(t.Context(), "service-test", 3)
-	require.NoError(t, e)
-	require.Equal(t, uint64(1), checkpointPrevSize(t, selected), "size 1 must be the selected row's predecessor")
+	require.Len(t, all, 3)
+	sizes := []uint64{all[0].CheckpointSize, all[1].CheckpointSize, all[2].CheckpointSize}
+	require.Equal(t, sizes[0], checkpointPrevSize(t, all[1]))
+	require.Equal(t, sizes[1], checkpointPrevSize(t, all[2]))
 
-	// The query is scoped to the selected row and keeps cll's limit contract.
-	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: 3}
+	// The query is scoped to the selection and keeps cll's limit contract.
+	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: sizes[1]}
 	rows, e := view.PendingWitnessesFor(t.Context(), "service-test", now, 10)
 	require.NoError(t, e)
-	require.Len(t, rows, 1)
-	assert.Equal(t, uint64(3), rows[0].CheckpointSize)
+	require.Len(t, rows, 2)
+	assert.Equal(t, sizes[:2], []uint64{rows[0].CheckpointSize, rows[1].CheckpointSize})
 	other, e := view.PendingWitnessesFor(t.Context(), "other", now, 10)
 	require.NoError(t, e)
 	assert.Empty(t, other)
@@ -331,33 +332,47 @@ func TestSelectedWitnessIgnoresOlderPendingRow(t *testing.T) {
 		assert.ErrorIs(t, e, cll.ErrInvalid)
 	}
 
-	// Through the runner, the selected row is submitted and the older one is untouched.
-	public, _, e := ed25519.GenerateKey(rand.Reader)
+	// Through the runner, against a witness that registers a checkpoint only
+	// after its predecessor: the selection and its predecessor get receipts, in
+	// order; the newer row is untouched.
+	submitter := &continuitySubmitter{t: t}
+	delivery, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), view, map[string]witness.Submitter{"service-test": submitter}, map[string]witness.Verifier{"service-test": acceptAll{}})
 	require.NoError(t, e)
-	verifier, e := witness.NewReceiptVerifier(public)
+	_, e = delivery.RunOnce(t.Context(), now, cll.MaxWitnesses)
 	require.NoError(t, e)
-	submitter := &recordingSubmitter{}
-	delivery, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), view, map[string]witness.Submitter{"service-test": submitter}, map[string]witness.Verifier{"service-test": verifier})
+	assert.Equal(t, [][]byte{all[0].Checkpoint, all[1].Checkpoint}, submitter.accepted)
+	for i, wantReceipt := range []bool{true, true, false} {
+		got, e := store.GetWitness(t.Context(), "service-test", sizes[i])
+		require.NoError(t, e)
+		assert.Equal(t, wantReceipt, got.Receipt != nil, "size %d", sizes[i])
+	}
+	newer, e := store.GetWitness(t.Context(), "service-test", sizes[2])
 	require.NoError(t, e)
-	_, e = delivery.RunOnce(t.Context(), now, 1)
-	require.NoError(t, e)
-	assert.Equal(t, [][]byte{selected.Checkpoint}, submitter.submitted)
-	after, e := store.GetWitness(t.Context(), "service-test", 3)
-	require.NoError(t, e)
-	assert.Equal(t, uint32(1), after.Attempts)
-	untouched, e := store.GetWitness(t.Context(), "service-test", 1)
-	require.NoError(t, e)
-	assert.Equal(t, older, untouched)
+	assert.Zero(t, newer.Attempts)
 }
 
-// recordingSubmitter records what the runner submits and answers as a witness
-// that has not finished yet, a retryable outcome.
-type recordingSubmitter struct{ submitted [][]byte }
-
-func (r *recordingSubmitter) Submit(_ context.Context, b []byte) (witness.Receipt, error) {
-	r.submitted = append(r.submitted, b)
-	return witness.Receipt{}, witness.ErrSCRAPIPending
+// continuitySubmitter is a witness that registers a checkpoint only when its
+// prev_size is the last one it registered, as the CLL spec requires.
+type continuitySubmitter struct {
+	t        *testing.T
+	last     uint64
+	accepted [][]byte
 }
+
+func (c *continuitySubmitter) Submit(_ context.Context, b []byte) (witness.Receipt, error) {
+	record, e := checkpoint.ParseRecord(b)
+	require.NoError(c.t, e)
+	if record.PrevSize != c.last {
+		return witness.Receipt{}, errors.New("continuity refused")
+	}
+	c.last = record.MMRSize
+	c.accepted = append(c.accepted, b)
+	return witness.Receipt{Bytes: []byte{1}, EntryHash: strings.Repeat("00", 32), EntryHashScheme: "legacy", LeafIndex: 0, TreeSize: 1}, nil
+}
+
+type acceptAll struct{}
+
+func (acceptAll) Verify([]byte, witness.Receipt) error { return nil }
 
 func checkpointPrevSize(t *testing.T, s cll.WitnessState) uint64 {
 	t.Helper()

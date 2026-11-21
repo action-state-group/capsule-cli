@@ -296,26 +296,19 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 }
 
 // A scoped view prevents one command from delivering unrelated checkpoint rows.
+// It still shows the selected row's older, due, never-receipted rows of the
+// same witness: the witness refuses a checkpoint whose predecessor it has not
+// registered as a log mutation, never to be retried, and the runner holds a
+// row until its predecessor has a receipt. Rows newer than the selection are
+// left alone.
 type selectedWitness struct {
 	cll.WitnessStateStore
 	id   string
 	size uint64
 }
 
-func (s selectedWitness) PendingWitnesses(ctx context.Context, now time.Time, _ int) ([]cll.WitnessState, error) {
-	r, e := s.WitnessStateStore.GetWitness(ctx, s.id, s.size)
-	if e != nil {
-		return nil, e
-	}
-	if r.Receipt != nil || r.Permanent || r.NextAttemptAt.After(now) {
-		return nil, nil
-	}
-	return []cll.WitnessState{r}, nil
-}
-
-// PendingWitnessesFor is the method the delivery runner calls; without this
-// override the embedded store's unscoped one would deliver an older
-// never-receipted row for the same witness instead of the selected one.
+// PendingWitnessesFor is the method the delivery runner calls; the embedded
+// store's unscoped one would hand the runner every due row of the witness.
 func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now time.Time, limit int) ([]cll.WitnessState, error) {
 	if limit < 1 || limit > cll.MaxWitnesses {
 		return nil, fmt.Errorf("%w: invalid pending witness query", cll.ErrInvalid)
@@ -323,18 +316,20 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 	if id != s.id {
 		return nil, nil
 	}
-	return s.PendingWitnesses(ctx, now, limit)
-}
-
-// GetWitness shows the runner only the selected row. The runner holds a row
-// while its predecessor row has no receipt; an older never-receipted row
-// outside this command's selection must not hold the selected one, and with no
-// such row the witness's own answer decides.
-func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
-	if id != s.id || size != s.size {
-		return cll.WitnessState{}, cll.ErrNotFound
+	rows, e := s.WitnessStateStore.PendingWitnessesFor(ctx, id, now, cll.MaxWitnesses)
+	if e != nil {
+		return nil, e
 	}
-	return s.WitnessStateStore.GetWitness(ctx, id, size)
+	out := make([]cll.WitnessState, 0, len(rows))
+	for _, r := range rows {
+		if r.CheckpointSize <= s.size {
+			out = append(out, r)
+		}
+	}
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 // witnessResult is a delivery's state. A verified one also carries its
@@ -633,7 +628,7 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	if _, e = runner.RunOnce(ctx, now, 1); e != nil {
+	if _, e = runner.RunOnce(ctx, now, cll.MaxWitnesses); e != nil {
 		return cll.WitnessState{}, e
 	}
 	return store.GetWitness(ctx, service, size)
