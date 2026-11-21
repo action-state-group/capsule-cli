@@ -485,3 +485,44 @@ func TestDeliverSelectedPastOnePage(t *testing.T) {
 	require.NoError(t, e)
 	assert.Nil(t, last.Receipt, "a newer row is left alone")
 }
+
+// An older row still in backoff is not due, so it is not sent, and it holds
+// the selection: the witness would refuse the selection out of order.
+func TestDeliverSelectedHeldByOlderRowInBackoff(t *testing.T) {
+	store, rows := checkpointRows(t, 2)
+	now := time.Now().UTC().Add(time.Hour)
+	backoff := rows[0]
+	backoff.Attempts, backoff.NextAttemptAt, backoff.LastError = 1, now.Add(time.Hour), "witness not reached"
+	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, backoff))
+
+	submitter := &continuitySubmitter{t: t}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, now)
+	require.NoError(t, e)
+	assert.Nil(t, got.Receipt)
+	assert.Zero(t, got.Attempts)
+	assert.Empty(t, submitter.accepted)
+}
+
+// A retryable failure on an older row stops the pass: the selection is not
+// sent behind it, and the command returns instead of looping.
+func TestDeliverSelectedStopsAtRetryableOlderFailure(t *testing.T) {
+	store, rows := checkpointRows(t, 2)
+	submitter := &recordingSubmitter{}
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, e)
+	assert.Nil(t, got.Receipt)
+	assert.Zero(t, got.Attempts)
+	assert.Equal(t, [][]byte{rows[0].Checkpoint}, submitter.submitted)
+	older, e := store.GetWitness(t.Context(), "service-test", rows[0].CheckpointSize)
+	require.NoError(t, e)
+	assert.Equal(t, uint32(1), older.Attempts)
+}
+
+// recordingSubmitter records what the runner submits and answers as a witness
+// that has not finished yet, a retryable outcome.
+type recordingSubmitter struct{ submitted [][]byte }
+
+func (r *recordingSubmitter) Submit(_ context.Context, b []byte) (witness.Receipt, error) {
+	r.submitted = append(r.submitted, b)
+	return witness.Receipt{}, witness.ErrSCRAPIPending
+}
