@@ -769,7 +769,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 func ownedStoreMissHint(p Profile, id string) string {
 	msg := "the artifact store holds no capsule " + id + "; this profile's store is kept by the " + p.LogOwner() + " plugin, whose own commands read its records"
 	if p.LogOwner() == "deal" {
-		msg += " (`capsulectl deal export --deal ID --output FILE` writes a deal's records to FILE); " + dealReceiptPointer
+		msg += " (`capsulectl deal export --deal ID --output FILE` writes an x-deal-v0 deal's records to FILE); " + dealReceiptPointer
 	}
 	return msg
 }
