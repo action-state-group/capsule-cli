@@ -144,7 +144,7 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 
 // dealReceiptPointer names the one verifiable form of a deal: the receipt
 // page `deal report` writes, checked as an Evidence Bundle.
-const dealReceiptPointer = "to verify a deal, write its receipt with `capsulectl deal report --deal ID --html receipt.html` and run `capsulectl verify --bundle receipt.html`"
+const dealReceiptPointer = "to verify an x-deal-v0 deal's records, write its receipt with `capsulectl deal report --deal ID --html receipt.html` and run `capsulectl verify --bundle receipt.html`"
 
 // dealExportHint refuses what `deal export` writes, with the command to use
 // instead. The export is a JSON array of x-deal-v0 records (each an object
@@ -170,5 +170,5 @@ func dealExportHint(path string, raw []byte) error {
 	default:
 		return nil
 	}
-	return InputError("--capsule " + path + " is a deal export: sealed x-deal-v0 records, not a capsule, with no signature to verify here; " + dealReceiptPointer)
+	return InputError("--capsule " + path + " is a deal export: the deal's records without the capsules that signed them (no capsule ID), not a capsule, so there is nothing to verify here; " + dealReceiptPointer)
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,8 +11,7 @@ import (
 )
 
 func TestVerifyCapsuleDealExportNamesTheReceipt(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	const wantA, wantB = "deal report --deal ID --html receipt.html", "verify --bundle receipt.html"
+	newDisclosureProfile(t)
 	for name, body := range map[string]string{
 		"array":  `[{"body":{"a":1},"x-deal-v0":{"at":"t"}},{"body":{},"x-deal-v0":{}}]`,
 		"object": `{"body":{"a":1},"x-deal-v0":{"at":"t"}}`,
@@ -19,13 +19,40 @@ func TestVerifyCapsuleDealExportNamesTheReceipt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "rec.json")
 			require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
-			err := dealExportHint(path, []byte(body))
+			_, err := invoke(t, "", "verify", "--profile", "rep", "--capsule", path)
 			require.ErrorIs(t, err, ErrInput)
 			assert.Equal(t, 2, ExitCode(err))
-			assert.Contains(t, SafeError(err), wantA)
-			assert.Contains(t, SafeError(err), wantB)
+			assert.Contains(t, SafeError(err), "deal export")
+			assert.Contains(t, SafeError(err), "deal report --deal ID --html receipt.html")
+			assert.Contains(t, SafeError(err), "verify --bundle receipt.html")
 		})
 	}
+	// Any other array keeps the old message.
+	path := filepath.Join(t.TempDir(), "other.json")
+	require.NoError(t, os.WriteFile(path, []byte(`[1]`), 0o600))
+	_, err := invoke(t, "", "verify", "--profile", "rep", "--capsule", path)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "is not a JSON object")
+}
+
+// A get miss on a profile whose sqlite store the deal plugin owns names the
+// cause and exits 2; on a core-owned store it keeps the generic error's exit.
+func TestGetMissOnPluginOwnedStore(t *testing.T) {
+	newDisclosureProfile(t)
+	missing := strings.Repeat("ab", 32)
+	_, err := invoke(t, "", "get", "--profile", "rep", "--capsule-id", missing)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrInput, "a core-owned store's miss is unchanged")
+
+	p, err := LoadProfile("rep")
+	require.NoError(t, err)
+	p.Namespace, p.Log = "ns", "deal"
+	require.NoError(t, SaveProfile(p, true))
+	_, err = invoke(t, "", "get", "--profile", "rep", "--capsule-id", missing)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, 2, ExitCode(err))
+	assert.Contains(t, SafeError(err), "kept by the deal plugin")
+	assert.Contains(t, SafeError(err), "verify --bundle receipt.html")
 }
 
 func TestDealExportHintLeavesOtherInputAlone(t *testing.T) {

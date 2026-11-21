@@ -724,10 +724,11 @@ under its `key_id`, and that key held to the profile's trusted keys. It carries
 no retained originals, so its committed digests are not rehashed, and the
 output says so.
 
-`deal export` writes a deal's sealed records, which carry no capsule ID or
-signature, so `verify --capsule` refuses them and says so. A deal is verified
-through its receipt: `capsulectl deal report --deal ID --html receipt.html`,
-then `capsulectl verify --bundle receipt.html`.
+`deal export` writes an x-deal-v0 deal's records without the capsules that
+signed them (no capsule ID or signature), so `verify --capsule` has nothing to
+check and says so. A deal's records are verified through its receipt:
+`capsulectl deal report --deal ID --html receipt.html`, then
+`capsulectl verify --bundle receipt.html`.
 
 `verify --profile NAME`, with none of `--capsule`, `--bundle` and `--history`,
 verifies what the profile's store holds. It reads the whole CLL in sequence
