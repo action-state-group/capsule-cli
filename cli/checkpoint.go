@@ -339,8 +339,7 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 // refuses a checkpoint whose predecessor it did not register (a permanent
 // failure of the selection, reported as such), and one holding none MAY
 // register it as the start of the log's history there
-// (draft-mih-scitt-checkpointed-local-log-02, the Consistency Registration
-// Policy paragraph).
+// (draft-mih-scitt-checkpointed-local-log-02, lines 388-393 at checkpointed-local-log 89a80fd).
 func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
 	r, e := s.WitnessStateStore.GetWitness(ctx, id, size)
 	if e == nil && r.Permanent && r.Receipt == nil && !(id == s.id && size == s.size) {
