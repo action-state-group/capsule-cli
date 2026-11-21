@@ -300,7 +300,7 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 // same witness: the witness refuses a checkpoint whose predecessor it has not
 // registered as a log mutation, never to be retried, and the runner holds a
 // row until its predecessor has a receipt. Rows newer than the selection are
-// left alone.
+// left alone; a permanently failed older row is skipped (GetWitness).
 type selectedWitness struct {
 	cll.WitnessStateStore
 	id   string
@@ -330,6 +330,23 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// GetWitness is what the runner's predecessor gate reads. A predecessor that
+// failed for good is never delivered again, so holding the selection for it
+// would leave the selection pending for ever; it is shown as absent and the
+// witness decides, as the spec lets it: a witness holding state for the log
+// refuses a checkpoint whose predecessor it did not register (a permanent
+// failure of the selection, reported as such), and one holding none MAY
+// register it as the start of the log's history there
+// (draft-mih-scitt-checkpointed-local-log-02, the Consistency Registration
+// Policy paragraph).
+func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
+	r, e := s.WitnessStateStore.GetWitness(ctx, id, size)
+	if e == nil && r.Permanent && r.Receipt == nil && !(id == s.id && size == s.size) {
+		return cll.WitnessState{}, cll.ErrNotFound
+	}
+	return r, e
 }
 
 // witnessResult is a delivery's state. A verified one also carries its

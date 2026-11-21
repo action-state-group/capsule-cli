@@ -380,3 +380,48 @@ func checkpointPrevSize(t *testing.T, s cll.WitnessState) uint64 {
 	require.NoError(t, e)
 	return record.PrevSize
 }
+
+// A predecessor that failed for good is never delivered again, so it must not
+// hold the selection for ever: the witness decides about the selection.
+func TestSelectedWitnessSkipsPermanentlyFailedPredecessor(t *testing.T) {
+	p, key := profileFixture(t)
+	store := memory.New()
+	defer func() { require.NoError(t, store.Close()) }()
+	signer, e := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, e)
+	cfg := checkpoint.DefaultRunnerConfig(p.LogID)
+	cfg.Cadence.CadenceEntries = 1
+	cfg.WitnessIDs = []string{"service-test"}
+	runner, e := checkpoint.NewRunner(cfg, store, signer)
+	require.NoError(t, e)
+	for i := byte(1); i <= 2; i++ {
+		_, e = store.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{i}, 32), AppendedAt: time.Now().UTC()})
+		require.NoError(t, e)
+		_, e = runner.RunOnce(t.Context(), time.Now().UTC())
+		require.NoError(t, e)
+	}
+	now := time.Now().UTC().Add(time.Hour)
+	all, e := store.PendingWitnessesFor(t.Context(), "service-test", now, 10)
+	require.NoError(t, e)
+	require.Len(t, all, 2)
+	failed := all[0]
+	failed.Attempts++
+	failed.Permanent = true
+	failed.LastError = "refused"
+	require.NoError(t, store.CommitWitness(t.Context(), all[0].Attempts, failed))
+
+	view := selectedWitness{WitnessStateStore: store, id: "service-test", size: all[1].CheckpointSize}
+	submitter := &continuitySubmitter{t: t, last: all[0].CheckpointSize}
+	delivery, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), view, map[string]witness.Submitter{"service-test": submitter}, map[string]witness.Verifier{"service-test": acceptAll{}})
+	require.NoError(t, e)
+	_, e = delivery.RunOnce(t.Context(), now, cll.MaxWitnesses)
+	require.NoError(t, e)
+	assert.Equal(t, [][]byte{all[1].Checkpoint}, submitter.accepted)
+	got, e := store.GetWitness(t.Context(), "service-test", all[1].CheckpointSize)
+	require.NoError(t, e)
+	assert.NotNil(t, got.Receipt)
+	left, e := store.GetWitness(t.Context(), "service-test", all[0].CheckpointSize)
+	require.NoError(t, e)
+	assert.True(t, left.Permanent)
+	assert.Nil(t, left.Receipt)
+}
