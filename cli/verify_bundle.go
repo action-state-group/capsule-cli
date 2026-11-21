@@ -503,7 +503,7 @@ func nonNilStrings(values []string) []string {
 // For an x-deal-v1 copy, nil covers only the neutral checks (the entry carries
 // report_rule_not_checked) unless the process registered the profile's rule
 // (SetDealV1ReportVerifier); otherwise the caller must still run EvidenceBook's
-// xdealv1.VerifyReport, which the core may not import.
+// xdealv1.VerifyReportBundle over the report pair and the x-deal-v1 section, which the core may not import.
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
 	entry := DealReportEntry(value, aacbundle.VerificationResult{})
@@ -525,8 +525,9 @@ func CheckDealStandaloneReport(value map[string]interface{}) error {
 
 // dealV1ReportEntry is DealReportEntry for a bundle whose extension is
 // x-deal-v1. A v1 report is always standalone (design note 461-deal-profile.md
-// §9): appended to no log, so the section is a pointer alone naming the
-// report in x-deal-report/v0, and a pointer without that carrier, or a
+// §9): appended to no log, so the section names the report in
+// x-deal-report/v0 by its sealed_report pointer (a copy's section also carries
+// the book the report is read against, which only a registered rule reads), and a pointer without that carrier, or a
 // carrier without the pointer, fails. A section naming no report in a copy
 // that holds deal steps is a stripped copy (sealed_report_not_named), as in
 // v0; otherwise it is a book's own bundle, which shows no report text.
@@ -538,8 +539,8 @@ func dealV1ReportEntry(value, ext, section map[string]interface{}) map[string]an
 	raw, carried := ext[DealReportExtension]
 	x, _ := raw.(map[string]interface{})
 	switch {
-	case sealed && carried && len(section) == 1 && x != nil:
-		return standaloneReportEntry(value, x, id, DealProfileV1)
+	case sealed && carried && x != nil:
+		return standaloneReportEntry(value, x, id, DealProfileV1, section)
 	case sealed || carried:
 		return fail("sealed_report_unverified")
 	case holdsDealSteps(value):
@@ -595,7 +596,7 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		if !sealed || len(deal) != 1 || x == nil {
 			return fail("sealed_report_unverified")
 		}
-		return standaloneReportEntry(value, x, id, DealProfile)
+		return standaloneReportEntry(value, x, id, DealProfile, nil)
 	}
 	switch {
 	case sealed && (!matched[id] || len(disclosed) != 1):
