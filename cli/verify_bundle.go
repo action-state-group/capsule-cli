@@ -538,8 +538,8 @@ func dealV1ReportEntry(value, ext, section map[string]interface{}) map[string]an
 	raw, carried := ext[DealReportExtension]
 	x, _ := raw.(map[string]interface{})
 	switch {
-	case sealed && carried && len(section) == 1 && x != nil:
-		return standaloneReportEntry(value, x, id, DealProfileV1)
+	case sealed && carried && x != nil:
+		return standaloneReportEntry(value, x, id, DealProfileV1, section)
 	case sealed || carried:
 		return fail("sealed_report_unverified")
 	case holdsDealSteps(value):
@@ -595,7 +595,7 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		if !sealed || len(deal) != 1 || x == nil {
 			return fail("sealed_report_unverified")
 		}
-		return standaloneReportEntry(value, x, id, DealProfile)
+		return standaloneReportEntry(value, x, id, DealProfile, nil)
 	}
 	switch {
 	case sealed && (!matched[id] || len(disclosed) != 1):

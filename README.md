@@ -1033,7 +1033,7 @@ attests it. This verifier checks the neutral part (the signature, that the repor
 last step's, its digest, the checkpoint and book it rests on, the profile and the `as_of` form) and reports the
 profile's own report rule (the report's structure, its rows' rulings and its first record, EvidenceBook's
 `xdealv1.VerifyReport`) as `report_rule_not_checked`, naming the deal plugin that runs it; the verdict is
-INCOMPLETE, never VALID, until then. A plugin that registers the rule (`cli.SetDealV1ReportVerifier`, as capsulectl-deal does) has it run here instead: the bundle's report pair and its seq 1 record (which the bundle must disclose) go to it, an accepted report passes with no finding, and a refused one fails with `report_rule_failed`. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
+INCOMPLETE, never VALID, until then. A plugin that registers the rule (`cli.SetDealV1ReportVerifier`, as capsulectl-deal does) has it run here instead: the bundle's report pair and its `x-deal-v1` extension (`sealed_report` and the `book` carrying the seq 1 agreement and the records the rows rely on) go to it, the core reading none of the book, an accepted report passes with no finding, and a refused one fails with `report_rule_failed`. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
 without the standalone report (or the report without the pointer), a payload
 whose profile is not the extension's, or a copy holding deal steps whose
 `x-deal-v1` section names no report, is INVALID.
