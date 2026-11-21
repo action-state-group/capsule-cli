@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc45
+
+- **Fixed:** a witness delivery in `capsulectl` now delivers the checkpoint it was asked for. With checkpointed-local-log v0.4.0 a book holding an older never-receipted row for the same witness delivered that row instead, or held the selected one, leaving it `pending` with `attempts` 0 for good. The command now sends the selected checkpoint's older unreceipted rows first, in order (the witness registers a checkpoint only after its predecessor), and leaves newer rows alone (capsule-cli#590).
+
 ## v0.1.0-rc44
 
 - `capsulectl commitment publish` staples a `history_card/2` as well as a `history_card/1`: give `deal standard-history staple --derivation history_card/2` output as `--staple` and `--derivation history_card/2`, so a seller with a long log can publish a commitment; the commitment's card derivation and the policy's `stranger_safe` name the stapled card, and `history_card/1` publishing is unchanged (capsule-cli#583).
