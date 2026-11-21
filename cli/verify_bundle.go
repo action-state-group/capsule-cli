@@ -525,8 +525,9 @@ func CheckDealStandaloneReport(value map[string]interface{}) error {
 
 // dealV1ReportEntry is DealReportEntry for a bundle whose extension is
 // x-deal-v1. A v1 report is always standalone (design note 461-deal-profile.md
-// §9): appended to no log, so the section is a pointer alone naming the
-// report in x-deal-report/v0, and a pointer without that carrier, or a
+// §9): appended to no log, so the section names the report in
+// x-deal-report/v0 by its sealed_report pointer (a copy's section also carries
+// the book the report is read against, which only a registered rule reads), and a pointer without that carrier, or a
 // carrier without the pointer, fails. A section naming no report in a copy
 // that holds deal steps is a stripped copy (sealed_report_not_named), as in
 // v0; otherwise it is a book's own bundle, which shows no report text.
