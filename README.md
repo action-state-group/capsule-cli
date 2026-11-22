@@ -1026,7 +1026,11 @@ and the line printed with it, on any verdict and for the member bundles of a
 composed bundle too, names the kinds: "Not checked here: KIND, which this tool
 does not interpret; check these with the tool that defines them." Whatever
 defines the extension checks it; a witness chain carried only in such an
-extension adds no witness claim here. Page writing (`bundle --html`,
+extension adds no witness claim here. The neutral form of such a chain, a
+`parent-log-witness/v1` extension (Evidence Bundle -03), is read: its
+`extensions` entry carries a `parent_witness` object (status, findings, receipts
+and, when it passed, the extent it covers, whole when `entries` equals `of`), and
+a failing chain makes the bundle INVALID. Page writing (`bundle --html`,
 `disclose --html`, `presentation build`) follows the same generic verdict, so
 a page for such a bundle shows the uninterpreted content unchecked;
 `presentation list` reads a bundle with capsule-viewer's own check, not this verdict.

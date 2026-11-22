@@ -79,15 +79,7 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 		directory = *trusted
 	}
 	status, findings, results := witness.VerifyReceipts(entries, signed, statement, directory)
-	receipts := make([]map[string]any, 0, len(results))
-	for _, r := range results {
-		receipt := map[string]any{
-			"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason,
-			"key_id": r.KeyID, "registration_time": r.RegistrationTime, "registration_time_reason": r.RegistrationTimeReason,
-			"registration_time_text": registrationTimeText(r),
-		}
-		receipts = append(receipts, receipt)
-	}
+	receipts := receiptEntries(results)
 	return aacbundle.ClaimResult{Status: status, Findings: findings}, receipts
 }
 
@@ -108,4 +100,17 @@ func registrationTimeText(r witness.ReceiptResult) string {
 		return "Rekor entry: time not reported (" + reason + ")"
 	}
 	return "no signed time (" + reason + ")"
+}
+
+// receiptEntries is AAC's receipt results in this CLI's report shape.
+func receiptEntries(results []witness.ReceiptResult) []map[string]any {
+	receipts := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		receipts = append(receipts, map[string]any{
+			"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason,
+			"key_id": r.KeyID, "registration_time": r.RegistrationTime, "registration_time_reason": r.RegistrationTimeReason,
+			"registration_time_text": registrationTimeText(r),
+		})
+	}
+	return receipts
 }

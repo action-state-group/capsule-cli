@@ -258,6 +258,20 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	extensions := make([]map[string]any, 0, len(result.Extensions))
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		if x.Kind == aacbundle.ParentLogWitnessKind {
+			// The neutral witness chain (Evidence Bundle -03), read with the
+			// witness directory this run was given: AAC's result, its claim
+			// and the extent it covers, never read from the block
+			// (capsule-cli#608).
+			parent := parentWitness(value, statement, directory)
+			entry["status"] = parent.Status
+			entry["parent_witness"] = parentWitnessReport(parent)
+			// As for the checkpoint's own receipts, only a failing chain
+			// changes the verdict (a withheld one is shown, not gating).
+			if parent.Status == "fail" {
+				claims = append(claims, aacbundle.ClaimResult{Status: parent.Status, Findings: parent.Findings})
+			}
+		}
 		if x.Composed != nil {
 			composed, memberVerdicts, served := composedOutput(value, x.Composed, env)
 			entry["composed"] = composed
@@ -452,4 +466,33 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// parentWitness is AAC's reading of the bundle's parent-log-witness/v1 block
+// against the verified checkpoint statement (nil when the checkpoint did not
+// verify, which withholds it) and the witness directory, if one was given.
+func parentWitness(value map[string]interface{}, statement []byte, directory *witness.Directory) aacbundle.ParentWitnessResult {
+	var signed *witness.SignedCheckpoint
+	if statement != nil {
+		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
+			signed = &parsed
+		}
+	}
+	var trusted witness.Directory
+	if directory != nil {
+		trusted = *directory
+	}
+	extensions, _ := value["extensions"].(map[string]interface{})
+	return aacbundle.VerifyParentLogWitness(extensions[aacbundle.ParentLogWitnessKind], signed, statement, trusted)
+}
+
+// parentWitnessReport is a parent-log-witness/v1 result in the report's
+// shape: its status, findings and receipts, and the covered extent when it
+// passed (whole when entries equals of).
+func parentWitnessReport(r aacbundle.ParentWitnessResult) map[string]any {
+	out := map[string]any{"status": r.Status, "findings": nonNilStrings(r.Findings), "receipts": receiptEntries(r.Receipts)}
+	if r.Extent != nil {
+		out["extent"] = map[string]any{"entries": r.Extent.Entries, "of": r.Extent.Of, "whole": r.Extent.Entries == r.Extent.Of}
+	}
+	return out
 }
