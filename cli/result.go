@@ -48,8 +48,11 @@ import (
 // at all (spec section 7.3, aac #443 at 8c673d1), and
 // the claim type `calibration` (aac #552 at 09c8b86: the ClaimType enum and
 // the descriptions that name it; its evidence-citation rule is a checker rule
-// the schema does not carry). Only those hunks are taken from 8c673d1 and
-// 09c8b86. The rules aac added after 4b24505
+// the schema does not carry), and the optional claim member `reason` (aac
+// #658 at ecaddb17, spec section 4.4: the Reason definition and the three
+// allOf rules that bind it to the claims it may appear on; display-only, so
+// nothing here reads it). Only those hunks are taken from 8c673d1, 09c8b86
+// and ecaddb17. The rules aac added after 4b24505
 // (#363, #368, #402, #436, and the out_of_scope clause of #552: coverage per evaluation, out_of_scope and
 // applicability, requirements_covered, ECMA-262 patterns) are deliberately
 // not vendored: they need cross-checks this gate does not have, and arrive
@@ -68,9 +71,9 @@ const (
 	ResultVersion  = "evidence-result-v0"
 	resultSchemaID = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
-	ResultSchemaDigest = "8609129ba6892f3be375f35233fee5763aa9469cc063928d3c4ec5131bdd77f6"
+	ResultSchemaDigest = "9a30f49eedc1a6dc450e1d4018e102a6dce08714ebf1e1c02c8a3b2f78e4d3ca"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref and main@09c8b8668b59affa1e0e26275b5a4c1d1b4a849f's calibration claim type (aac #552)"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref and main@09c8b8668b59affa1e0e26275b5a4c1d1b4a849f's calibration claim type (aac #552) and main@ecaddb176a24a221147dcd7f2bacd0868ae1a385's optional claim member reason (aac #657, #658; spec section 4.4)"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"

@@ -456,3 +456,95 @@ func TestResultSchemaRunsTheCalibrationVectors(t *testing.T) {
 		})
 	}
 }
+
+// aac ecaddb17's schema-level `reason` vectors (vectors/evidence-result,
+// copied to testdata/evidence-result): the two positives pass the schema (an
+// unregistered token stays valid), each negative fails it.
+func TestResultSchemaRunsTheReasonVectors(t *testing.T) {
+	for name, valid := range map[string]bool{
+		"pos-example-org-reason-result.json":                     true,
+		"pos-example-org-reason-unregistered-result.json":        true,
+		"neg-reason-capsule-code-on-satisfied-claim.json":        false,
+		"neg-reason-counterparty-code-on-unavailable-claim.json": false,
+		"neg-reason-list.json":                                   false,
+		"neg-reason-on-countersigned-claim.json":                 false,
+		"neg-reason-trailing-newline.json":                       false,
+		"neg-reason-uppercase.json":                              false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", name))
+			require.NoError(t, err)
+			doc, err := DecodeResult(raw)
+			require.NoError(t, err)
+			err = CheckResultSchema(doc)
+			if valid {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
+}
+
+// `result build` seals a Result whose claim carries the optional display-only
+// `reason` (aac spec section 4.4) byte for byte, and one without it; a reason
+// on a claim the registry does not allow it on is refused before sealing.
+func TestResultBuildSealsAClaimWithAndWithoutReason(t *testing.T) {
+	d := newDisclosureProfile(t)
+	day1 := d.publish("day-1", `{"report":"day one"}`)
+	withReason := resultTestClaim("claim-1", "met", day1)
+	withReason["reason"] = "counterparty_leg_signer_not_trusted"
+	without := resultTestClaim("claim-2", "met", day1)
+	doc := resultTestDoc(withReason, without)
+
+	out := filepath.Join(d.dir, "result.canonical.json")
+	built, stdout, err := d.buildResult(doc, "--out", out)
+	require.NoError(t, err, stdout)
+	written, err := os.ReadFile(out)
+	require.NoError(t, err)
+	var sealed struct {
+		Claims []map[string]any `json:"claims"`
+	}
+	require.NoError(t, json.Unmarshal(written, &sealed))
+	require.Len(t, sealed.Claims, 2)
+	assert.Equal(t, "counterparty_leg_signer_not_trusted", sealed.Claims[0]["reason"])
+	assert.NotContains(t, sealed.Claims[1], "reason")
+	assert.False(t, built.AlreadyBuilt)
+
+	// Refused by section 4.4's rules, not by the member being unknown: each
+	// carries a well-formed registered token on a claim the registry bars.
+	countersigned := resultTestClaim("claim-3", "met", day1)
+	countersigned["grade"], countersigned["reason"] = "countersigned", "counterparty_leg_signer_not_trusted"
+	capsuleOnSatisfied := resultTestClaim("claim-4", "met", day1)
+	capsuleOnSatisfied["reason"] = "capsule_signer_not_trusted"
+	for name, claim := range map[string]map[string]any{"a countersigned claim": countersigned, "a capsule_* reason on a satisfied claim": capsuleOnSatisfied} {
+		t.Run(name, func(t *testing.T) {
+			_, stdout, err := d.buildResult(resultTestDoc(claim))
+			require.ErrorIs(t, err, ErrInput, stdout)
+			assert.Contains(t, stdout+SafeError(err), "does not satisfy evidence-result-v0")
+		})
+	}
+}
+
+// `reason` is for a requirement claim only (spec section 4.4): a claim of
+// another type that is otherwise valid is refused once it carries one, and
+// an explicit `requirement` type still admits it.
+func TestResultSchemaAdmitsReasonOnlyOnARequirementClaim(t *testing.T) {
+	check := func(mutate func(claim map[string]any)) error {
+		claim := resultTestClaim("claim-1", "met", strings.Repeat("a", 64))
+		mutate(claim)
+		raw, err := json.Marshal(resultTestDoc(claim))
+		require.NoError(t, err)
+		decoded, err := DecodeResult(raw)
+		require.NoError(t, err)
+		return CheckResultSchema(decoded)
+	}
+	const token = "counterparty_leg_signer_not_trusted"
+	require.NoError(t, check(func(claim map[string]any) { claim["reason"] = token }))
+	require.NoError(t, check(func(claim map[string]any) { claim["type"], claim["reason"] = ClaimTypeRequirement, token }))
+	require.NoError(t, check(func(claim map[string]any) { claim["type"] = ClaimTypeCalibration }))
+	err := check(func(claim map[string]any) { claim["type"], claim["reason"] = ClaimTypeCalibration, token })
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+}
