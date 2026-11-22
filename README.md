@@ -1009,8 +1009,9 @@ These are the only values today, and the set is closed; a new value is a new rel
 Each member bundle of a `composed/v1` block carries the same `checked_against`.
 
 It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
-(composed digest, each member, closure, joins) and counts toward the verdict; any other
-extension, and any countersignature, is listed as carried but not checked. Exit codes:
+(composed digest, each member, closure, joins) and counts toward the verdict, and so does a
+`parent-log-witness/v1` chain, whose `withheld` result (no directory, no receipts) is shown
+and does not gate; any other extension, and any countersignature, is listed as carried but not checked. Exit codes:
 
 - 0: every claim passed;
 - 3: nothing failed, but something is not shown (no checkpoint signature, an

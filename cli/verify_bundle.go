@@ -193,7 +193,7 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // something not shown makes it INCOMPLETE.
 func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, env *assessEnv) (map[string]any, string, string) {
 	directory := env.directory
-	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions, WitnessDirectory: directory})
 	result = withSelection(value, result, strict)
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
@@ -258,12 +258,12 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	extensions := make([]map[string]any, 0, len(result.Extensions))
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
-		if x.Kind == aacbundle.ParentLogWitnessKind {
-			// The neutral witness chain (Evidence Bundle -03), read with the
-			// witness directory this run was given: AAC's result, its claim
-			// and the extent it covers, never read from the block
-			// (capsule-cli#608).
-			parent := parentWitness(value, statement, directory)
+		if x.Kind == aacbundle.ParentLogWitnessKind && strict.ParentWitness != nil {
+			// The neutral witness chain (Evidence Bundle -03), as AAC's strict
+			// reading computed it against the witness directory this run was
+			// given: its claim and the extent it covers, never read from the
+			// block (capsule-cli#608).
+			parent := *strict.ParentWitness
 			entry["status"] = parent.Status
 			entry["parent_witness"] = parentWitnessReport(parent)
 			// As for the checkpoint's own receipts, only a failing chain
@@ -466,24 +466,6 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
-}
-
-// parentWitness is AAC's reading of the bundle's parent-log-witness/v1 block
-// against the verified checkpoint statement (nil when the checkpoint did not
-// verify, which withholds it) and the witness directory, if one was given.
-func parentWitness(value map[string]interface{}, statement []byte, directory *witness.Directory) aacbundle.ParentWitnessResult {
-	var signed *witness.SignedCheckpoint
-	if statement != nil {
-		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
-			signed = &parsed
-		}
-	}
-	var trusted witness.Directory
-	if directory != nil {
-		trusted = *directory
-	}
-	extensions, _ := value["extensions"].(map[string]interface{})
-	return aacbundle.VerifyParentLogWitness(extensions[aacbundle.ParentLogWitnessKind], signed, statement, trusted)
 }
 
 // parentWitnessReport is a parent-log-witness/v1 result in the report's

@@ -26,6 +26,7 @@ func TestVerifyBundleReportsAParentLogWitnessChain(t *testing.T) {
 			Directory     bool                   `json:"directory"`
 			Verdict       string                 `json:"verdict"`
 			ParentWitness map[string]interface{} `json:"parent_witness"`
+			Witnesses     map[string]interface{} `json:"witnesses"`
 		} `json:"cases"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &doc))
@@ -44,6 +45,13 @@ func TestVerifyBundleReportsAParentLogWitnessChain(t *testing.T) {
 			result, err := verifyWithDirectory(t, path, dirArg)
 			assert.Equal(t, c.Verdict, result["verdict"])
 			assert.Equal(t, c.Verdict == "VALID", err == nil, "exit follows the verdict")
+			if c.ParentWitness == nil {
+				// The vector has no chain to report: only the checkpoint's own
+				// witness claim is in play.
+				require.NotNil(t, c.Witnesses)
+				assert.Equal(t, c.Witnesses["status"], result["witnesses"].(map[string]interface{})["status"])
+				return
+			}
 			var entry map[string]interface{}
 			for _, x := range result["extensions"].([]interface{}) {
 				if e := x.(map[string]interface{}); e["kind"] == "parent-log-witness/v1" {
@@ -64,7 +72,20 @@ func TestVerifyBundleReportsAParentLogWitnessChain(t *testing.T) {
 			} else {
 				assert.Nil(t, got["extent"])
 			}
-			assert.Len(t, got["receipts"], len(c.ParentWitness["receipts"].([]interface{})))
+			wantReceipts := c.ParentWitness["receipts"].([]interface{})
+			gotReceipts, _ := got["receipts"].([]interface{})
+			require.Len(t, gotReceipts, len(wantReceipts))
+			for i, raw := range wantReceipts {
+				want := raw.(map[string]interface{})
+				receipt := gotReceipts[i].(map[string]interface{})
+				for _, field := range []string{"ts_url", "binding", "status", "key_id", "registration_time", "registration_time_reason"} {
+					assert.EqualValues(t, want[field], receipt[field], "receipt %d %s", i, field)
+				}
+			}
+			if c.Witnesses != nil {
+				// A receipt on the bundle's own checkpoint is the checkpoint's witness claim.
+				assert.Equal(t, c.Witnesses["status"], result["witnesses"].(map[string]interface{})["status"])
+			}
 		})
 	}
 }
