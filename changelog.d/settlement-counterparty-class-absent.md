@@ -1,0 +1,1 @@
+- **Tests:** the x402 settlement leg is pinned to carry no `counterparty_class` (a rail cannot tell a person agent from a business agent, so the deal stays counted and shows in the card's `class_missing` tally), and a leg that adds one fails the structure check, since the leg's `settlement` member is closed (Standard History §7, SH-8). No behavior change (capsule-cli#484).

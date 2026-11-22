@@ -147,3 +147,21 @@ func TestNeverEntersExemptsOnlyTheAssetCode(t *testing.T) {
 	assert.Error(t, NeverEnters(map[string]any{"wrapped": []any{map[string]any{"note": testPayTo}}}, []string{testPayTo}))
 	assert.NoError(t, NeverEnters(map[string]any{"x": "y"}, []string{""}))
 }
+
+// A rail adapter never sets counterparty_class (Standard History §5.2, §7): a
+// rail cannot tell person_agent from business_agent and a host must not guess,
+// so the member stays absent and the deal is counted (and shows in the card's
+// class_missing tally). The leg's settlement member is closed (SH-8), so a
+// class added to the leg is refused rather than carried.
+func TestX402LegLeavesCounterpartyClassAbsent(t *testing.T) {
+	b, err := PayeeObservedX402(x402Input("exact"))
+	require.NoError(t, err)
+	assert.NotContains(t, b.Member, "counterparty_class")
+
+	leg := map[string]any{}
+	for k, v := range b.Member {
+		leg[k] = v
+	}
+	leg["counterparty_class"] = "business_agent"
+	assert.Equal(t, []string{"settlement_malformed"}, aacsettlement.StructureFailures(leg))
+}
