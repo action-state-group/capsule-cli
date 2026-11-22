@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// A host may loosen the per-user plugin root's ancestry after install: a Muse
+// A host may loosen the per-user plugin root's ancestry after install: a hosted
 // VM replacement recreates /home/hatch as 2770 (capsule-cli#336). The walk
 // then refuses every plugin there and the scheduled checkpoint cadence stops.
 // healUserRoot puts back the chmod go-w that plugin install already required

@@ -288,12 +288,12 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
-capsulectl verify --bundle RECEIPT.html   # a deal: write it with `deal report --deal ID --html RECEIPT.html`
+capsulectl verify --bundle RECEIPT.html   # an HTML page that embeds a bundle
 capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
-capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --binding acme/respond --out DIR [--yes --to ard|a2a|nostr ...]
+capsulectl commitment publish --profile NAME --staple STAPLE.json --community acme-loop --binding acme/respond --out DIR [--yes --to ard|a2a|nostr ...]
 capsulectl mailbox key new --output MAILBOX.key
 capsulectl mailbox ask --commitment COMMITMENT.json --node-key HEX --request REQUEST.json
 capsulectl mailbox poll --commitment COMMITMENT.json --node-key HEX --request REQUEST.json --request-event ID --output ANSWER.json
@@ -397,8 +397,7 @@ never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
 self-contained page: the bundle embedded and capsule-viewer's page
 runtime (`go/pageruntime`, with agent-action-capsule's verifier), which checks it
 with no network when the page is opened. The file must be new. A permalink
-carries its bundle in the link and takes no `--html`; a deal's page is its
-receipt, `deal report --html`.
+carries its bundle in the link and takes no `--html`.
 
 A page is written only for a bundle `verify --bundle` calls VALID, and only when a
 disclosed `report/v1` root shows every row. Otherwise no page is written: `bundle`
@@ -752,12 +751,6 @@ under its `key_id`, and that key held to the profile's trusted keys. It carries
 no retained originals, so its committed digests are not rehashed, and the
 output says so.
 
-`deal export` writes an x-deal-v0 deal's records without the capsules that
-signed them (no capsule ID or signature), so `verify --capsule` has nothing to
-check and says so. A deal's records are verified through its receipt:
-`capsulectl deal report --deal ID --html receipt.html`, then
-`capsulectl verify --bundle receipt.html`.
-
 `verify --profile NAME`, with none of `--capsule`, `--bundle` and `--history`,
 verifies what the profile's store holds. It reads the whole CLL in sequence
 order and, for each entry, the artifact record it names. The store authenticates
@@ -1025,46 +1018,13 @@ extension, and any countersignature, is listed as carried but not checked. Exit 
 - 1: a claim failed (an edited record, a signature that does not verify, a
   checkpoint field that differs from its signature).
 
-**A deal receipt's text is sealed with it.** A deal receipt's readable text
-(the summary lines, each step's line, the amounts and what was told) is sealed
-as a record on the deal's log when the receipt is written. The bundle's
-`x-deal-v0` extension names that record (`sealed_report`), and its `extensions`
-entry is `pass` when the record's disclosed text matches. Editing the text,
-removing the extension, naming another record, or replacing the pointer with
-text (even with the record's disclosure dropped) makes the bundle INVALID
-(`sealed_report_unverified`, `sealed_report_not_named`): a bundle that holds a
-sealed report must name it. Each copy seals its own
-text and discloses no other copy's. A receipt written before this change carries
-its text in the extension itself: `uninterpreted`, with the finding
-`extension_unbound`, and its page says the text is not checked.
-
-**Reports off the deal's log (capsule-cli#294).** A deal on the shelf whose log
-holds no sealed report seals each copy's report as a standalone signed Capsule,
-carried in the copy's `x-deal-report/v0` extension and on no log, bound to the
-deal checkpoint the copy is made at. Its log, its copies and its History then
-never show when or how often it was shared. `verify --bundle` checks that the
-report is signed by the key of the deal's last step, matches its disclosure,
-binds the copy's checkpoint and states that checkpoint's time; the page checks
-the same. A copy of such a deal whose deal section carries text instead of
-naming a standalone report is INVALID (`sealed_report_not_named`); one stripped
-of both sections is its steps only, verifies as such, and shows no report text.
-A sale's own log still records each sale bundle's cut, so it shows when a sale
-was bundled. An older capsulectl reports these copies as INVALID.
-
-**The x-deal-v1 report.** A deal on the `x-deal-v1` profile names its report in
-an `x-deal-v1` extension (`sealed_report` alone), and the report is always the
-standalone Capsule above, whose payload says `"profile": "x-deal-v1"`. The same
-checks apply, except that a v1 report has no `lifecycle`: its `as_of` member
-(RFC 3339 UTC, to the second) is when the holder computed the report. The
-`as_of` line shows it as the holder's time, not the checkpoint's; no witness
-attests it. This verifier checks the neutral part (the signature, that the report's key is the deal's
-last step's, its digest, the checkpoint and book it rests on, the profile and the `as_of` form) and reports the
-profile's own report rule (the report's structure, its rows' rulings, the seq 1 agreement and the records its rows rely on, the plugin's
-report-bundle verifier) as `report_rule_not_checked`, naming the deal plugin that runs it; the verdict is
-INCOMPLETE, never VALID, until then. A plugin that registers the rule (`cli.SetDealV1ReportVerifier`) has it run here instead: the bundle's report pair and its `x-deal-v1` extension (`sealed_report` and the `book` carrying the seq 1 agreement and the records the rows rely on) go to it, the core reading none of the book, an accepted report passes with no finding, and a refused one fails with `report_rule_failed`. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
-without the standalone report (or the report without the pointer), a payload
-whose profile is not the extension's, or a copy holding deal steps whose
-`x-deal-v1` section names no report, is INVALID.
+**An extension this verifier does not read.** An extension kind that `verify --bundle`
+does not interpret, such as a plugin's profile for its own records, is covered
+by the bundle's integrity (editing it changes the digest) but not checked here.
+Its `extensions` entry is `uninterpreted`, the verdict is the generic checks',
+and the line printed with it names the kinds: "Not checked here: KIND, which
+this tool does not interpret." Whatever defines the extension checks it; a
+witness chain carried only in such an extension adds no witness claim here.
 
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
@@ -1230,21 +1190,21 @@ conflict.
 
 The seller's side of the same binding. `capsulectl commitment publish` signs one
 `evidence-commitment/1` under your profile's own signing key and staples your
-`history_card/1` to it. The card is what `deal standard-history staple
---derivation history_card/1` prints, and it must be signed by that same key:
+`history_card/1` to it. The card is the printed staple of a plugin's staple command
+(`{derivation, staple: {request, reply}}`), and it must be signed by that same key:
 one key stands behind the commitment and the card, and a card signed by another
 key is refused. `history_card/1` lists every checkpoint, so a long log outgrows
 it; `history_card/2`, whose size grows with the logarithm of the number of
 checkpoints, is the bounded form for a long log. Staple it with `--derivation history_card/2`
-on both verbs (`deal standard-history staple` and `commitment publish`): the commitment then
+on both the plugin's staple command and `commitment publish`: the commitment then
 carries the /2 card, and its `answers.derivations` and the policy's `stranger_safe` name
 `history_card/2`. `capsulectl verify --history` and `commitment find` check a staple of either,
 and for a `history_card/2` the card's checkpoint chain is agent-action-capsule's
 `CheckHistoryCard2`.
 
 ```
-capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
-capsulectl commitment publish --profile NAME --staple staple.json --community goose \
+# staple.json: the printed staple your plugin's staple command writes for history_card/1
+capsulectl commitment publish --profile NAME --staple staple.json --community acme-loop \
   --binding acme/respond --commitment-uri https://seller.example/commitments/alder.json \
   --ard-entry listing.json --mailbox-key mailbox.key --nostr-relay wss://relay.example \
   --out ./draft

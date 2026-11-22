@@ -72,8 +72,10 @@ jq -e '[.disclosures[].agent_input.body | select(.choice? == "hold")] | length >
 jq -e '[.disclosures[].agent_input.body | select(.source? == "capsulectl_doctor_install_check")] | length > 0' bundle.json
 ```
 
-A receipt that verifies, is witnessed, holds a sealed Hold and carries the
-sealed install check is a pass. **No
+A receipt that verifies, holds a sealed Hold and carries the sealed install
+check is a pass. `verify --bundle` does not read the cadence chain: its
+witnessed checkpoint is checked by the plugin that wrote the receipt, until the
+core verifies the neutral `parent-log-witness/v1` form (capsule-cli#608). **No
 receipt for the day is the alarm**: the deal never reached its end, whatever
 the reason. This half is the only place a deal that never started can show.
 

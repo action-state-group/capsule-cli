@@ -478,7 +478,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify; field openings (opening.* originals, which the capsule does not bind) are left out of either view")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, check an Evidence Bundle or a History offline, or, with no file, verify the profile's store", Example: "  capsulectl verify --profile NAME --capsule ARTIFACT.json\n  capsulectl verify --bundle RECEIPT.html   # a deal: capsulectl deal report --deal ID --html RECEIPT.html", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, check an Evidence Bundle or a History offline, or, with no file, verify the profile's store", Example: "  capsulectl verify --profile NAME --capsule ARTIFACT.json\n  capsulectl verify --bundle RECEIPT.html", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		holderKeys, _ := c.Flags().GetStringArray("holder-key")
 		historyPath, _ := c.Flags().GetString("history")
 		given := 0
@@ -517,9 +517,6 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		}
 		raw, e := ReadInput(path)
 		if e != nil {
-			return e
-		}
-		if e = dealExportHint(path, raw); e != nil {
 			return e
 		}
 		shape, e := capsuleFileShape(path, raw)
@@ -564,10 +561,10 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		}
 		return nil
 	}}
-	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output; a `deal export` file is not one (verify a deal with --bundle)")
-	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, or an HTML receipt page that carries one (as `deal report --html` writes), verified offline from the file alone")
+	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output")
+	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, or an HTML receipt page that carries one, verified offline from the file alone")
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
-	verify.Flags().String("history", "", "A History file: a one-file personal_history_basic/1 (the profile's §8.2 form), a served standard_history/1, standard_history/3 or standard_history/4 answer {history, request, reply} (or a staple as `deal standard-history staple` prints it, {derivation, staple: {request, reply}}), a stapled history_card/1 or history_card/2 (an evidence-commitment/1 or a {history: \"history_card/1\" or \"history_card/2\", request, reply} file), an inference-service-history/0 file {history, definition, request, reply} (the definition is the file's: compare its definition_digest with the one you hold), or a personal_history_outcome/1 file {history, definition, exchanges, evidence, openings}, chosen by its own id; its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's verifier")
+	verify.Flags().String("history", "", "A History file: a one-file personal_history_basic/1 (the profile's §8.2 form), a served standard_history/1, standard_history/3 or standard_history/4 answer {history, request, reply} (or a staple file as a plugin's staple command prints it, {derivation, staple: {request, reply}}), a stapled history_card/1 or history_card/2 (an evidence-commitment/1 or a {history: \"history_card/1\" or \"history_card/2\", request, reply} file), an inference-service-history/0 file {history, definition, request, reply} (the definition is the file's: compare its definition_digest with the one you hold), or a personal_history_outcome/1 file {history, definition, exchanges, evidence, openings}, chosen by its own id; its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's verifier")
 	verify.Flags().StringArray("holder-key", nil, "With --history: a holder key you accept, as 64 lowercase hex characters, obtained from the holder by another channel (repeat for each); without one no History is accepted")
 	verify.Flags().StringArray("receipt", nil, "With --history: a witness receipt (a COSE Receipt file) over the History's anchor, beside the card (repeat for each); with none, anchor_witnessed is NOT_PRESENT")
 	verify.Flags().String("counterparty-key", "", "With --history on a stapled history_card/1 or history_card/2 (a commitment or a {history, request, reply} file): the key you hold for the staple's sender, as 64 lowercase hex characters, from the deal or request you hold, never from the staple; without it the sender is not checked and the staple is not ACCEPTED")

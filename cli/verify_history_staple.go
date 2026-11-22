@@ -49,8 +49,8 @@ const (
 
 // stapleMustPass are the properties a staple needs before it is ACCEPTED.
 // request_binding is NOT_PRESENT for a commitment, which staples the reply
-// octets only, so a commitment is never ACCEPTED (Sherlock2's finding on the
-// Goose staple): it reports what it can and says why.
+// octets only, so a commitment is never ACCEPTED (Sherlock2's finding on a
+// real staple): it reports what it can and says why.
 var stapleMustPass = []string{"envelope_signature", "responder_trust", "request_binding", "card_form", "subject_scope", "checkpoint_anchor", "checkpoint_signature", "checkpoint_key", "checkpoint_consistency"}
 
 // stapleRow is one stapled card's checks.

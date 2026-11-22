@@ -18,8 +18,11 @@ import (
 // profile type, a deal), so for them only code that picks a plugin by its
 // short name is refused.
 var (
-	companyPluginNames = regexp.MustCompile(`(?i)capsulectl-book|capsulectl-deal|evidencebook|"capsulectl-"\s*\+\s*"(book|deal)"`)
-	shortNameDispatch  = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|case "(book|deal)"|slices\.Contains\([^)]*"(book|deal)"|firstPartyVerbs`)
+	companyPluginNames = regexp.MustCompile(`(?i)capsulectl-book|capsulectl-deal|evidencebook|deal standard-history|"capsulectl-"\s*\+\s*"(book|deal)"`)
+	// communityNames are the communities the core's code and help must not name:
+	// a community is a deployment's word (capsule-cli#428 step 5).
+	communityNames    = regexp.MustCompile(`(?i)\bmesh-llm\b|\bmuse\b|\bgoose\b`)
+	shortNameDispatch = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|case "(book|deal)"|slices\.Contains\([^)]*"(book|deal)"|firstPartyVerbs`)
 )
 
 // neutralNamesAllowed lists, per file, the lines that may still name a company
@@ -28,9 +31,7 @@ var (
 // these.
 var neutralNamesAllowed = map[string][]*regexp.Regexp{
 	// Sealed vocabulary: written into bundles that core verify checks without the plugin.
-	"cli/composed.go":           {regexp.MustCompile(`EvidenceBookRefusalProfile|verifyEvidenceBookRefusal|"evidencebook-(refusal|artifact-response)"|book-library profile`)}, // signature profile ids sealed in composed bundles
-	"cli/deal_sealed_report.go": {regexp.MustCompile(`"capsulectl-deal-report"|with capsulectl-deal installed`)},                                                              // the action id, and the NOT_CHECKED note's for-example hook (capsule-cli#599)
-	"cli/deal_history.go":       {regexp.MustCompile(`"capsulectl-deal-history"`)},                                                                                            // the action id sealed in history bundles
+	"cli/composed.go": {regexp.MustCompile(`EvidenceBookRefusalProfile|verifyEvidenceBookRefusal|"evidencebook-(refusal|artifact-response)"|book-library profile`)}, // signature profile ids sealed in composed bundles
 	// The neutrality guards name what they guard against.
 	".github/workflows/ci.yml":      {regexp.MustCompile(`grep -n evidencebook go.mod|requires evidencebook`)},
 	"scripts/check-neutral-deps.sh": {regexp.MustCompile(`company-OSS module \(evidencebook`)},
@@ -58,6 +59,8 @@ func TestNeutralNamesPatternsCatchTheShapes(t *testing.T) {
 	} {
 		assert.True(t, companyPluginNames.MatchString(line) || shortNameDispatch.MatchString(line), line)
 	}
+	assert.True(t, communityNames.MatchString("--community is one of mesh-llm, muse or goose"))
+	assert.False(t, communityNames.MatchString("a museum of goosebumps"))
 	for _, line := range []string{`"capsulectl-" + name`, `Kind: "deal"`} {
 		assert.False(t, companyPluginNames.MatchString(line) || shortNameDispatch.MatchString(line), line)
 	}
@@ -91,6 +94,9 @@ func TestCoreNamesNoCompanyPlugin(t *testing.T) {
 		for i, line := range strings.Split(string(raw), "\n") {
 			if m := companyPluginNames.FindString(line); m != "" && !lineAllowed(rel, line) {
 				assert.Failf(t, "company plugin name in the core", "%s:%d names %q; the core is neutral (capsule-cli#428): say \"a plugin\" or add the file to neutralNamesAllowed with a reason", rel, i+1, m)
+			}
+			if strings.HasPrefix(rel, "cli/") && strings.HasSuffix(rel, ".go") && communityNames.MatchString(line) {
+				assert.Failf(t, "community named in the core", "%s:%d names a community (%q)", rel, i+1, communityNames.FindString(line))
 			}
 			if strings.HasSuffix(rel, ".go") && shortNameDispatch.MatchString(line) {
 				assert.Failf(t, "plugin picked by its short name", "%s:%d dispatches on a plugin's short name", rel, i+1)

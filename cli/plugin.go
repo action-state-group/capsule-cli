@@ -605,7 +605,7 @@ func execPluginAs(c *cobra.Command, info pluginInfo, args []string, profile stri
 		cmd.Env = append(cmd.Env, ProfileEnv+"="+profile)
 	}
 	// A plugin that calls core back (sealing, verify, profile show) needs to
-	// find this binary; on a host whose PATH lacks the install folder (a Muse
+	// find this binary; on a host whose PATH lacks the install folder (a hosted
 	// chat never has ~/.local/bin on it) a bare "capsulectl" fails. Core knows
 	// its own path, so it is handed over, unless the caller already set it.
 	if os.Getenv("CAPSULECTL_BIN") == "" {

@@ -628,12 +628,19 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 // no request has another, and one where nothing failed but a key was not given
 // names the checks that could not run (both exit 3; the verdict stays
 // NOT_ACCEPTED).
-func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
+func verifyNarration(c *cobra.Command, result map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
 	vals := V{}
 	var notRun errChecksNotRun
 	switch {
 	case err == nil:
+		// A VALID bundle says, on the same line, which extensions this
+		// verifier did not interpret: VALID is what it checked, not
+		// everything the file carries (capsule-cli#428).
+		if kinds := uninterpretedKinds(result); len(kinds) > 0 {
+			key = "say.verify.unchanged_unread"
+			vals["kinds"] = strings.Join(kinds, ", ")
+		}
 	case errors.As(err, &notRun):
 		key = "say.verify.history_checks_not_run"
 		vals["checks"] = strings.Join(notRun.checks, ", ")
@@ -649,6 +656,21 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 		key = "say.verify.changed"
 	}
 	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, vals)} })
+}
+
+// uninterpretedKinds are the extension kinds a verify --bundle report lists
+// as uninterpreted, in report order, without repeats.
+func uninterpretedKinds(result map[string]any) []string {
+	var kinds []string
+	list, _ := result["extensions"].([]any)
+	for _, raw := range list {
+		entry, _ := raw.(map[string]any)
+		kind, _ := entry["kind"].(string)
+		if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with

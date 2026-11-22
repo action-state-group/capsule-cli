@@ -643,19 +643,6 @@ func TestReceiptsClaimIsAACsVerifyReceipts(t *testing.T) {
 	assert.Empty(t, receipts)
 }
 
-// A deal's cadence chain is checked only against the deal checkpoint whose
-// claim passed: with no authenticated statement it is withheld with no
-// receipts (capsule-cli#438).
-func TestCadenceClaimWithholdsAChainWithoutAVerifiedCheckpoint(t *testing.T) {
-	value := map[string]interface{}{"extensions": map[string]interface{}{
-		DealCadenceExtension: map[string]interface{}{"state": "witnessed"},
-	}}
-	claim, receipts, present := cadenceClaim(value, nil, nil)
-	assert.True(t, present)
-	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
-	assert.Empty(t, receipts)
-}
-
 // The cadence chain's receipts go through the same mapping of AAC's
 // witness.VerifyReceipts: against a verified statement, a receipt whose
 // receipt_b64 is not canonical base64 is malformed and fails with no
