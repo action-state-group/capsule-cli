@@ -229,7 +229,8 @@
         },
         "presentation": { "$ref": "#/$defs/Presentation" },
         "reconcile": { "$ref": "#/$defs/ReconcileClaim" },
-        "close": { "$ref": "#/$defs/CloseClaim" }
+        "close": { "$ref": "#/$defs/CloseClaim" },
+        "reason": { "$ref": "#/$defs/Reason" }
       },
       "allOf": [
         {
@@ -251,7 +252,37 @@
           "description": "A CONTESTED Close is never met. While a peer's `rebuts` link stands, the clause the claim reports on is at best `not_met` (sufficiency SATISFIED: the Close and the rebuttal are both in evidence) or `not_evaluable` (a sufficiency gap). `met` under CONTESTED fails validation; the checker's link walk applies the same rule to the RECOMPUTED state, so a Close relabelled out of CONTESTED to keep `met` fails there.",
           "if": { "properties": { "close": { "properties": { "close_state": { "const": "CONTESTED" } }, "required": ["close_state"] } }, "required": ["close"] },
           "then": { "properties": { "verdict": { "enum": ["not_met", "not_evaluable"] } } }
+        },
+        {
+          "description": "spec section 4.4: `reason` appears only on a requirement claim (type absent or `requirement`) that is unavailable (sufficiency not SATISFIED) or whose verdict is met or not_met with a grade other than countersigned. Never on an out_of_scope claim, a met or not_met claim graded countersigned, or a reconcile, close or calibration claim (neg-reason-on-countersigned-claim, neg-reason-on-close-claim).",
+          "if": { "required": ["reason"] },
+          "then": {
+            "properties": { "type": { "const": "requirement" } },
+            "anyOf": [
+              { "properties": { "sufficiency": { "not": { "const": "SATISFIED" } } } },
+              { "properties": { "verdict": { "enum": ["met", "not_met"] }, "grade": { "not": { "const": "countersigned" } } } }
+            ]
+          }
+        },
+        {
+          "description": "spec section 4.4's registry: a capsule_* reason names a record the claim could not use, so it appears only where sufficiency is not SATISFIED (neg-reason-capsule-code-on-satisfied-claim).",
+          "if": { "properties": { "reason": { "enum": ["capsule_signature_did_not_verify", "capsule_signer_not_trusted"] } }, "required": ["reason"] },
+          "then": { "properties": { "sufficiency": { "not": { "const": "SATISFIED" } } } }
+        },
+        {
+          "description": "spec section 4.4's registry: a counterparty_leg_* reason explains a grade that stopped short of countersigned, so it appears only on a met or not_met claim graded self-attested or witnessed; an unavailable claim carries the reason for its sufficiency instead (neg-reason-counterparty-code-on-unavailable-claim).",
+          "if": { "properties": { "reason": { "enum": ["counterparty_leg_signature_did_not_verify", "counterparty_leg_signer_not_trusted"] } }, "required": ["reason"] },
+          "then": { "properties": { "verdict": { "enum": ["met", "not_met"] }, "grade": { "not": { "const": "countersigned" } } } }
         }
+      ]
+    },
+    "Reason": {
+      "description": "spec/evidence-result-v0.md section 4.4 -- the producer's statement of why a requirement claim is unavailable (sufficiency not SATISFIED) or why its grade stopped short of countersigned: one lowercase token. Display-only: a verifier MUST NOT read it to derive or adjust sufficiency, verdict, tier, grade, support, a close state, coverage or buckets, and a renderer labels it as the producer's statement. The grammar is the only rule on an unregistered token, which stays valid (a verifier may report it as not recognised). The registered tokens are the `examples` below and section 4.4's table; Claim's allOf binds each to the claims its row names.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "examples": [
+        "capsule_signature_did_not_verify", "capsule_signer_not_trusted",
+        "counterparty_leg_signature_did_not_verify", "counterparty_leg_signer_not_trusted"
       ]
     },
     "Coverage": {
