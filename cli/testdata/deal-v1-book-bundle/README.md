@@ -7,8 +7,10 @@ evidencebook main at 160dabf78d82d7569f167e8bd99577b633feeee1 (evidencebook#734,
 merged 2026-11-22; test `TestAV1ReportBundleVerifiesAndWritesNothing`, with the
 bundle file copied out of its temp dir). The bytes were first written on that PR's branch
 (`claude/v1-report-bundle` at 2824aba8). The test keys are throwaway, so the
-merged commit's test writes a bundle with the same 178 JSON paths but different
-keys and digests, not the same bytes. Its one
+merged commit's test writes a bundle of the same structure, but its keys, digests and
+the digest-keyed entries (under `disclosures`, `completeness_certificate.memberships`
+and `extensions.evidencebook/payloads`) differ, so the bytes differ.
+Its one
 step record has no `evidence_record_header`; the header is its disclosed `agent_input`.
 
 To regenerate, copy the bundle file that test writes over `bundle.json`.
