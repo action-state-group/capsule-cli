@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,4 +89,76 @@ func TestVerifyBundleReportsAParentLogWitnessChain(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A composed member that carries a parent-log-witness/v1 chain is read with
+// the run's witness directory, and a failing member chain fails the container
+// (the member is assessed by the same code as a top-level bundle,
+// cli/composed.go).
+func TestVerifyBundleReadsAParentWitnessChainInAComposedMember(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	raw, err := os.ReadFile(filepath.Join("testdata", "parent-log-witness", "cases.json"))
+	require.NoError(t, err)
+	var doc struct {
+		WitnessDirectory json.RawMessage `json:"witness_directory"`
+		Cases            []struct {
+			ID     string          `json:"id"`
+			Bundle json.RawMessage `json:"bundle"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	cases := map[string]map[string]interface{}{}
+	for _, c := range doc.Cases {
+		decoded, err := DecodeBundleJSON(c.Bundle) // exact numbers, as verify reads a file
+		require.NoError(t, err)
+		cases[c.ID] = decoded
+	}
+	directory := filepath.Join(t.TempDir(), "witnesses.json")
+	require.NoError(t, os.WriteFile(directory, doc.WitnessDirectory, 0o600))
+
+	memberChain := func(t *testing.T, id, directoryArg string) (map[string]interface{}, error) {
+		t.Helper()
+		container := composedVectors(t)[0].Container
+		block := container["extensions"].(map[string]interface{})["composed/v1"].(map[string]interface{})
+		member := block["members"].([]interface{})[1].(map[string]interface{})
+		bundle := cases[id]
+		member["bundle"] = bundle
+		var err error
+		member["digest"], err = aacbundle.BundleDigest(bundle)
+		require.NoError(t, err)
+		block["joins"] = []interface{}{}
+		block["composed_digest"], err = aacbundle.ComposedDigest(block)
+		require.NoError(t, err)
+		args := []string{"verify", "--bundle", writeBundle(t, container)}
+		if directoryArg != "" {
+			args = append(args, "--witness-directory", directoryArg)
+		}
+		out, runErr := invoke(t, "", args...)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(out), &result), out)
+		_, composed := composedOf(t, result)
+		report := composed["members"].([]interface{})[1].(map[string]interface{})["bundle"].(map[string]interface{})
+		return report, runErr
+	}
+	chainOf := func(report map[string]interface{}) map[string]interface{} {
+		for _, x := range report["extensions"].([]interface{}) {
+			if e := x.(map[string]interface{}); e["kind"] == "parent-log-witness/v1" {
+				return e["parent_witness"].(map[string]interface{})
+			}
+		}
+		return nil
+	}
+
+	report, _ := memberChain(t, "pos-witnessed-whole", directory)
+	require.NotNil(t, chainOf(report))
+	assert.Equal(t, "pass", chainOf(report)["status"], "the run's directory reaches the member")
+
+	report, _ = memberChain(t, "pos-witnessed-whole", "")
+	assert.Equal(t, "withheld", chainOf(report)["status"], "no directory: shown, not gating")
+	assert.NotEqual(t, "INVALID", report["verdict"])
+
+	report, err = memberChain(t, "neg-malformed", directory)
+	assert.Equal(t, "fail", chainOf(report)["status"])
+	assert.Equal(t, "INVALID", report["verdict"])
+	assert.ErrorIs(t, err, ErrBundleInvalid, "a failing member chain fails the container")
 }
