@@ -415,12 +415,12 @@ func (p Profile) validate() error {
 	if k := p.RulesChecker.Kind; k != "" && !slices.Contains(RulesKinds, k) {
 		return InputError("rules_checker kind must be one of " + strings.Join(RulesKinds, ", ") + ", not " + k + ": edit the profile file")
 	}
-	// Until the deal plugin checks a role's answer against ForRole's digests
-	// (evidencebook-deal#66), check time still enforces the flat digests alone,
-	// so roles without a flat default would run unpinned. Remove this refusal
-	// when evidencebook-deal#66 ships.
+	// Until the plugin that keeps the log checks a role's answer against
+	// ForRole's digests, check time still enforces the flat digests alone, so
+	// roles without a flat default would run unpinned. Remove this refusal when
+	// a plugin checks per role.
 	if len(p.RulesChecker.Roles) > 0 && len(p.RulesChecker.PinnedDigests()) == 0 {
-		return InputError("rules_checker roles need a flat definition_digest (or definition_digests) as the default until the deal plugin checks per role (evidencebook-deal#66): edit the profile file to add one")
+		return InputError("rules_checker roles need a flat definition_digest (or definition_digests) as the default until a plugin checks per role: edit the profile file to add one")
 	}
 	for role, rp := range p.RulesChecker.Roles {
 		switch {

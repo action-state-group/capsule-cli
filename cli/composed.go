@@ -31,7 +31,7 @@ var (
 )
 
 // EvidenceBookRefusalProfile names the second refusal form this CLI checks:
-// the one `respond` sends (evidencebook's Refusal). It carries `key_id` and
+// the one `respond` sends (the book library's Refusal). It carries `key_id` and
 // `sig` (an Ed25519 signature, 128 lowercase hex) over the UTF-8 JCS
 // serialization of {request_digest, reason, issued_at} only.
 const EvidenceBookRefusalProfile = "evidencebook-refusal"
@@ -111,7 +111,7 @@ func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig in
 }
 
 // ResponseSignatureProfile names the first form this CLI checks an artifact
-// member's carried response in: evidencebook's signed artifact response
+// member's carried response in: the book library's signed artifact response
 // without its artifact bytes. It carries `key_id` and `sig` (an Ed25519
 // signature, 128 lowercase hex) over the response's signing body, which
 // names the artifact by artifact_digest only, so it verifies without the
@@ -332,7 +332,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			// draw the refused case (PageGate). The signature check binds the
 			// refusal to the key it carries, so, as for a carried response,
 			// any other key fails the member (INVALID). Under the
-			// evidencebook profile key_id is outside the signed body, so the
+			// book-library profile key_id is outside the signed body, so the
 			// attribution rests on the composed block as carried (as every
 			// observer comparison here does), not on the signature alone;
 			// trusted keys are deployment policy and are not pinned here.

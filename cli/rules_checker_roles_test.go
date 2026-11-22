@@ -145,14 +145,14 @@ func TestMissingRolesNamesARoleWithoutADigest(t *testing.T) {
 }
 
 // Until the deal plugin checks per role, a profile holding roles without a
-// flat default would run unpinned, so it does not validate (remove with
-// evidencebook-deal#66).
+// flat default would run unpinned, so it does not validate (remove when
+// a plugin checks per role).
 func TestProfileWithRolesNeedsAFlatDefaultUntilTheDealPluginChecksPerRole(t *testing.T) {
 	p, _ := profileFixture(t)
 	p.RulesChecker = ProfileRulesChecker{Command: []string{"/x"}, Roles: map[string]ProfileRulesRole{"buyer": {Pack: "asg/x", DefinitionDigest: digestA}}}
 	err := p.validate()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "evidencebook-deal#66")
+	assert.Contains(t, err.Error(), "until a plugin checks per role")
 	p.RulesChecker.DefinitionDigest = digestB
 	assert.NoError(t, p.validate())
 }
@@ -170,13 +170,13 @@ func TestInstallCheckIgnoresRolesWhenNoneArePinned(t *testing.T) {
 }
 
 // Until the deal plugin checks per role, roles without a flat default would
-// run unpinned, so the pin file is refused (remove with evidencebook-deal#66).
+// run unpinned, so the pin file is refused (remove when a plugin checks per role).
 func TestRolesNeedAFlatDefaultUntilTheDealPluginChecksPerRole(t *testing.T) {
 	root := pluginRoot(t)
 	var p Profile
 	err := pinRulesChecker(&p, pinFile(t, root, `{"command":["CHECKER"],"roles":{"buyer":{"pack":"asg/x","definition_digest":"`+digestA+`"}}}`))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "evidencebook-deal#66")
+	assert.Contains(t, err.Error(), "until a plugin checks per role")
 }
 
 // A pin states the pack's kind; only a deal pack is shared with a counterparty.

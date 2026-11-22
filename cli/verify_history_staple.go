@@ -277,7 +277,7 @@ func subjectInScope(kind evidencerequest.SubjectKind) bool {
 }
 
 // cardForm checks the history_card/1 artifact (ER §8.1) has the card's
-// members and nothing else, as evidencebook builds it: anchor, derivation,
+// members and nothing else, as a producer builds it: anchor, derivation,
 // evidence_stream, history and subject, each history entry a hex checkpoint
 // and the consistency proof from the one before (null for the first). It
 // returns the checkpoint statements, the card's stream and a reason when

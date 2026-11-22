@@ -2,8 +2,7 @@ package cli
 
 import "errors"
 
-// The deal commands' error classes. The deal commands are the
-// capsulectl-deal plugin's, but their classes are the core's: SafeError
+// The error classes a plugin's commands share with the core: SafeError
 // prints them and ExitCode maps them, in the plugin's binary as in this one.
 var (
 	// ErrPaused is a deal step held for the user: nothing was sealed, and

@@ -45,7 +45,7 @@ import (
 // coverage_declaration (aac #312), and a claim's evidence[]
 // holding at least one record (aac #353), plus one later hunk: the optional
 // document members plan_ref and dataset_ref, which appear together or not
-// at all (spec section 7.3, aac #443 at 8c673d1, for evidencebook#107), and
+// at all (spec section 7.3, aac #443 at 8c673d1), and
 // the claim type `calibration` (aac #552 at 09c8b86: the ClaimType enum and
 // the descriptions that name it; its evidence-citation rule is a checker rule
 // the schema does not carry). Only those hunks are taken from 8c673d1 and

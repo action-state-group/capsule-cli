@@ -145,7 +145,7 @@ verbs:
       List trusted, handshake-valid capsulectl-* plugins discovered on the
       trusted plugin roots before invoking one by name. When a command says
       a plugin is not installed, stop and show the user the exact command it
-      prints (such as `capsulectl plugin install ./capsulectl-deal`); never run `plugin
+      prints (such as `capsulectl plugin install ./capsulectl-NAME`); never run `plugin
       install` or `plugin remove` yourself.
     emits: (no capsule — listing what is discovered is local inspection, not a consequential action)
     emission_mode: not-consequential
@@ -189,7 +189,7 @@ verbs:
     emits: (publish's own result IS the capsule; no wrapper)
     emission_mode: primary-action
 
-  # The four verbs below are [capsulectl-book-verbs-v0]'s no-book-required
+  # The four verbs below are the book-verbs design's no-book-required
   # half: the deterministic remainder of the retired capsule-judge harness
   # (judge_pin_digest, the drift check, the calibration fold), ported so the
   # prompting/scoring half can stay a skill instead. None needs --profile;

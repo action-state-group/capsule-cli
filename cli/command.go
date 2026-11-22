@@ -133,6 +133,7 @@ func unknownCommandError(root *cobra.Command, name string, err error) error {
 	if near := root.SuggestionsFor(word); len(near) > 0 {
 		msg += "; did you mean " + strings.Join(near, ", ")
 	}
+	msg += "; a plugin's verb needs its plugin: `" + name + " plugin ls` lists the installed ones and `" + name + " plugin install ./capsulectl-NAME` installs one"
 	return InputError(msg + "; " + help)
 }
 
@@ -764,12 +765,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 
 // ownedStoreMissHint explains a `get` miss on a profile whose sqlite store a
 // plugin owns: the artifact store holds no such id, and the plugin's own
-// commands read that profile's records. Only the deal plugin's pointer is
-// spelled out; any other owner is named without guessing its verbs.
+// commands read that profile's records. The core names the owner and no verb
+// of its own: a plugin's verbs are the plugin's to document.
 func ownedStoreMissHint(p Profile, id string) string {
-	msg := "the artifact store holds no capsule " + id + "; this profile's store is kept by the " + p.LogOwner() + " plugin, whose own commands read its records"
-	if p.LogOwner() == "deal" {
-		msg += " (`capsulectl deal export --deal ID --output FILE` writes an x-deal-v0 deal's records to FILE); " + dealReceiptPointer
-	}
-	return msg
+	return "the artifact store holds no capsule " + id + "; this profile's store is kept by the " + p.LogOwner() + " plugin, whose own commands read its records (see `capsulectl " + p.LogOwner() + " --help`)"
 }

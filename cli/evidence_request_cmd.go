@@ -29,7 +29,7 @@ type EvidenceRequestInput struct {
 	// WitnessDirectory is --witness-directory as given, set only with
 	// Response. The plugin reads it, after its own checks: a deal profile
 	// checks a deal copy's receipts under it, and a book counts the receipts
-	// an answer carries toward its witness standing (evidencebook#221).
+	// an answer carries toward its witness standing.
 	WitnessDirectory string
 	// Responder, Output and Route are the flags as given.
 	Responder, Output, Route string

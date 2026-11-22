@@ -1383,15 +1383,22 @@ func TestPluginInstallByNameIsRefused(t *testing.T) {
 	noLeftovers(t, root)
 }
 
-// A deal verb with no capsulectl-deal plugin installed names the plugin and
-// how to install it, not the suppressed generic line (capsule-cli#539).
-func TestAMissingDealPluginIsNamed(t *testing.T) {
+// A verb no installed plugin provides is an input error that names the verb
+// and how a plugin is installed, with no plugin's name in the core
+// (capsule-cli#539, capsule-cli#428): the core cannot know which plugin owns
+// which verb.
+func TestAMissingPluginVerbPointsToPluginInstall(t *testing.T) {
 	installHome(t)
-	_, err := invoke(t, "", "deal", "init", "--dir", "./store")
+	root := NewCommand()
+	root.SetArgs([]string{"deal", "init", "--dir", "./store"})
+	_, e := root.ExecuteC()
+	require.Error(t, e)
+	err := unknownCommandError(root, "capsulectl", e)
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, 2, ExitCode(err))
-	assert.Contains(t, SafeError(err), "capsulectl-deal plugin, which is not installed")
-	assert.Contains(t, SafeError(err), "capsulectl plugin install ./capsulectl-deal")
+	assert.Contains(t, SafeError(err), `unknown command "deal"`)
+	assert.Contains(t, SafeError(err), "plugin install ./capsulectl-NAME")
+	assert.NotContains(t, SafeError(err), "capsulectl-deal")
 }
 
 // An installed deal plugin keeps its verb: the placeholder only fills a gap.

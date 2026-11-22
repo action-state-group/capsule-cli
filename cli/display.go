@@ -29,7 +29,7 @@ func displayBytes(b []byte) any {
 }
 
 // openingOriginalPrefix names an evidence book's field openings among a
-// record's originals (evidencebook commitment.go: "opening.<field>"). An
+// record's originals (the book library writes "opening.<field>"). An
 // opening is a salted commitment's nonce and plain text, kept on the device
 // to prove the field later; a capsule never binds it, and `get` never prints
 // it (capsule-cli#242).

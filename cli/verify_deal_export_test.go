@@ -52,7 +52,7 @@ func TestGetMissOnPluginOwnedStore(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, 2, ExitCode(err))
 	assert.Contains(t, SafeError(err), "kept by the deal plugin")
-	assert.Contains(t, SafeError(err), "verify --bundle receipt.html")
+	assert.Contains(t, SafeError(err), "capsulectl deal --help")
 }
 
 func TestDealExportHintLeavesOtherInputAlone(t *testing.T) {
@@ -78,10 +78,12 @@ func TestDealExportHintLeavesOtherInputAlone(t *testing.T) {
 }
 
 func TestOwnedStoreMissHint(t *testing.T) {
-	deal := ownedStoreMissHint(Profile{Type: "sqlite", Namespace: "n", Log: "deal"}, "abc")
-	assert.Contains(t, deal, "kept by the deal plugin")
-	assert.Contains(t, deal, "verify --bundle receipt.html")
-	other := ownedStoreMissHint(Profile{Type: "sqlite", Namespace: "n", Log: "book"}, "abc")
-	assert.Contains(t, other, "kept by the book plugin")
-	assert.NotContains(t, other, "deal report")
+	// The hint names the profile's declared owner and no owner's verbs.
+	for _, owner := range []string{"deal", "book", "other"} {
+		hint := ownedStoreMissHint(Profile{Type: "sqlite", Namespace: "n", Log: owner}, "abc")
+		assert.Contains(t, hint, "kept by the "+owner+" plugin")
+		assert.Contains(t, hint, "capsulectl "+owner+" --help")
+		assert.NotContains(t, hint, "deal report")
+		assert.NotContains(t, hint, "x-deal-v0")
+	}
 }

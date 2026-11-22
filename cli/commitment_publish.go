@@ -175,7 +175,7 @@ func checkPublishInput(in publishInput) error {
 		}
 		for _, v := range values {
 			if !tokenForm.MatchString(v) || countLike(v) {
-				return InputError(name + " values are lowercase names, such as evidencebook/respond, and not numbers")
+				return InputError(name + " values are lowercase names, such as acme/respond, and not numbers")
 			}
 		}
 	}

@@ -299,12 +299,10 @@ another root.
 ## Plugins that keep a profile's log
 
 The core (capsule-cli#236, #428) keeps no evidence book and no deal store, and
-does not depend on the evidencebook library: an implementer needs neither to
+does not depend on an evidence-book library: an implementer needs neither to
 conform. A plugin keeps such a log, built and released from its own
-repository (capsule-cli#326): the evidence book plugin and the deal plugin
-(both in [evidencebook](https://github.com/action-state-group/evidencebook), the
-nested module `capsulectl/`, and released together as one `capsulectl/vX` release)
-are the ones the company ships. Each release publishes the plugins' binaries,
+repository (capsule-cli#326); the evidence book plugin and the deal plugin are
+the ones the company ships. Each release publishes the plugins' binaries,
 `SHA256SUMS` and a build attestation from that repository's workflow. A
 binary is built against one capsulectl release, which its handshake reports as
 `core_version` (see "Versions"). Download the one built for your capsulectl,

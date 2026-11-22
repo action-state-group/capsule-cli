@@ -148,7 +148,7 @@ appended_seq=$(jq -r .sequence "$work/cll-append-result.json")
 echo "$discover_capsule" >>"$capsules_file"
 echo "  appended discover scan (capsule $discover_capsule) at CLL sequence $appended_seq" >&2
 
-# Steps 9-11 exercise [capsulectl-book-verbs-v0]'s no-book-required half:
+# Steps 9-11 exercise the book-verbs design's no-book-required half:
 # the deterministic remainder of the retired capsule-judge harness. None
 # needs --profile, a store, or a signing key -- pure computation over
 # caller-supplied files, same as contract validate.

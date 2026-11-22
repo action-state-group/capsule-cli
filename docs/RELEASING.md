@@ -8,10 +8,10 @@ followed, written down once and generalised to rcNN. The tag runs
 outsider checks it, is in [RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md). This page does not
 repeat either; it says what to do, and in which order.
 
-> **The book plugin, the deal plugin and the deal skill all ship from one evidencebook
-> `capsulectl/vX.Y.Z` release, built against this one** (capsule-cli#326, evidencebook#610).
-> A capsulectl release that users install needs an evidencebook release whose `go.mod`
-> requires it; evidencebook's `capsulectl/RELEASING.md` is the procedure.
+> **Each plugin and skill a distribution installs ships from its own repository's release,
+> built against this one** (capsule-cli#326). A capsulectl release that users install needs
+> a plugin release whose `go.mod` requires it; that repository's own release procedure
+> governs it.
 
 **Provenance.** This is the rc10 cutover procedure, generalised. The verification standard is the
 one the rc9 and rc10 cuts used.
@@ -20,8 +20,8 @@ one the rc9 and rc10 cuts used.
 
 **The shipping unit is the release triple, not the tag.** It has three parts:
 1. capsulectl's binaries and their release assets;
-2. capsulectl-book, capsulectl-deal and the deal skill (`deal-skill-<tag>.tar.gz`), all from one
-   evidencebook `capsulectl/vX.Y.Z` release built against this capsulectl release;
+2. the plugins and skills the distribution installs, each from its own repository's release
+   built against this capsulectl release;
 3. the companion plugin and skill, if you serve them.
 
 A tag can be cut and published while installs stay on the previous triple. A release is shipped
@@ -30,8 +30,7 @@ when the install page moves to the new triple (step 7).
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
 | Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
-| capsulectl-book | an evidencebook `capsulectl/vX.Y.Z` release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
-| capsulectl-deal and the deal skill | the same evidencebook `capsulectl/vX.Y.Z` release, whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
+| Each plugin and its skill | the plugin repository's release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
 | The companion plugin and skill, if you serve them | their own release, built separately | their own published SHA-256 files, served byte for byte |
 
 ## Before the tag
@@ -106,9 +105,9 @@ never asks for credentials or a token with which it could.
    ```
 
    Record the tag, its commit, each binary's SHA-256 and the attestation bundle's. The install
-   page and the companion releases compare against these values, not against a build. The book
-   and deal plugins and the deal skill are verified the same way from their one release
-   (evidencebook's `capsulectl/RELEASING.md`).
+   page and the companion releases compare against these values, not against a build. Each
+   plugin and skill is verified the same way from its own release (that repository's release
+   procedure).
 5. **Publish the reviewed release notes, the upgrade note and security first.** When the release
    cannot be undone on an existing store, its upgrade note opens the notes: it is what a reader
    must act on before installing. A fix that changes what verification accepts or what a record
@@ -118,8 +117,7 @@ never asks for credentials or a token with which it could.
 
 ## After the tag
 
-6. **Release capsulectl-book and capsulectl-deal against this tag** (one release, in evidencebook's
-   `capsulectl/`: bump `go.mod` to the tag, merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
+6. **Release each plugin against this tag** (in its own repository: bump `go.mod` to the tag, merge, tag), and **re-cut the companion plugin and skill, if you serve them,** from their own
    source. Hand over
    each release's `.sha256` files with them, unregenerated, so the install page can compare them byte for
    byte.
