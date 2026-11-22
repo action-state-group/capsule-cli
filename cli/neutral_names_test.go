@@ -18,23 +18,49 @@ import (
 // profile type, a deal), so for them only code that picks a plugin by its
 // short name is refused.
 var (
-	companyPluginNames = regexp.MustCompile(`(?i)capsulectl-book|capsulectl-deal|evidencebook`)
-	shortNameDispatch  = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|firstPartyVerbs`)
+	companyPluginNames = regexp.MustCompile(`(?i)capsulectl-book|capsulectl-deal|evidencebook|"capsulectl-"\s*\+\s*"(book|deal)"`)
+	shortNameDispatch  = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|case "(book|deal)"|firstPartyVerbs`)
 )
 
-// neutralNamesAllowed is every file that may still name a company plugin, each
-// with its reason. A new entry is a decision, not a convenience: the issue
-// allows only these.
-var neutralNamesAllowed = map[string]string{
+// neutralNamesAllowed lists, per file, the lines that may still name a company
+// plugin, each pattern with its reason; every other line of the file is still
+// checked. A new entry is a decision, not a convenience: the issue allows only
+// these.
+var neutralNamesAllowed = map[string][]*regexp.Regexp{
 	// Sealed vocabulary: written into bundles that core verify checks without the plugin.
-	"cli/commitment_publish_cmd.go": "the --binding default is written into a signed commitment",
-	"cli/composed.go":               "signature profile ids evidencebook-refusal and evidencebook-artifact-response, sealed in composed bundles",
-	"cli/deal_sealed_report.go":     "action id capsulectl-deal-report, and the NOT_CHECKED note's for-example hook (capsule-cli#599)",
-	"cli/deal_history.go":           "action id capsulectl-deal-history, sealed in history bundles",
+	"cli/composed.go":           {regexp.MustCompile(`EvidenceBookRefusalProfile|verifyEvidenceBookRefusal|"evidencebook-(refusal|artifact-response)"|book-library profile`)}, // signature profile ids sealed in composed bundles
+	"cli/deal_sealed_report.go": {regexp.MustCompile(`"capsulectl-deal-report"|with capsulectl-deal installed`)},                                                              // the action id, and the NOT_CHECKED note's for-example hook (capsule-cli#599)
+	"cli/deal_history.go":       {regexp.MustCompile(`"capsulectl-deal-history"`)},                                                                                            // the action id sealed in history bundles
 	// The neutrality guards name what they guard against.
-	".github/workflows/ci.yml":      "the core go.mod must not require the company library",
-	"scripts/check-neutral-deps.sh": "lists the company library as a refused dependency",
-	"scripts/test-weights":          "test names",
+	".github/workflows/ci.yml":      {regexp.MustCompile(`grep -n evidencebook go.mod|requires evidencebook`)},
+	"scripts/check-neutral-deps.sh": {regexp.MustCompile(`company-OSS module \(evidencebook`)},
+	"scripts/test-weights":          {regexp.MustCompile(`TestEvidenceBookRefusalSignature`)}, // a test name
+}
+
+func lineAllowed(rel, line string) bool {
+	for _, re := range neutralNamesAllowed[rel] {
+		if re.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+// The patterns catch what a reviewer would: a name, a name split by a
+// concatenation, and a short-name dispatch. They are a tripwire, not a parser.
+func TestNeutralNamesPatternsCatchTheShapes(t *testing.T) {
+	for _, line := range []string{
+		`x := "capsulectl-deal"`,
+		`x := "capsulectl-" + "deal"`,
+		`switch p.LogOwner() { case "deal": }`,
+		`if owner == "book" {`,
+		`var firstPartyVerbs = []string{"deal"}`,
+	} {
+		assert.True(t, companyPluginNames.MatchString(line) || shortNameDispatch.MatchString(line), line)
+	}
+	for _, line := range []string{`"capsulectl-" + name`, `Kind: "deal"`} {
+		assert.False(t, companyPluginNames.MatchString(line) || shortNameDispatch.MatchString(line), line)
+	}
 }
 
 func TestCoreNamesNoCompanyPlugin(t *testing.T) {
@@ -63,10 +89,7 @@ func TestCoreNamesNoCompanyPlugin(t *testing.T) {
 		}
 		seen++
 		for i, line := range strings.Split(string(raw), "\n") {
-			if _, ok := neutralNamesAllowed[rel]; ok {
-				continue
-			}
-			if m := companyPluginNames.FindString(line); m != "" {
+			if m := companyPluginNames.FindString(line); m != "" && !lineAllowed(rel, line) {
 				assert.Failf(t, "company plugin name in the core", "%s:%d names %q; the core is neutral (capsule-cli#428): say \"a plugin\" or add the file to neutralNamesAllowed with a reason", rel, i+1, m)
 			}
 			if strings.HasSuffix(rel, ".go") && shortNameDispatch.MatchString(line) {

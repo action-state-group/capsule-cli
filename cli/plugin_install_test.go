@@ -1397,7 +1397,7 @@ func TestAMissingPluginVerbPointsToPluginInstall(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, 2, ExitCode(err))
 	assert.Contains(t, SafeError(err), `unknown command "deal"`)
-	assert.Contains(t, SafeError(err), "plugin install ./capsulectl-NAME")
+	assert.Contains(t, SafeError(err), "plugin install ./<plugin file>")
 	assert.NotContains(t, SafeError(err), "capsulectl-deal")
 }
 

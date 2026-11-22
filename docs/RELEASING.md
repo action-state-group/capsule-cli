@@ -8,9 +8,10 @@ followed, written down once and generalised to rcNN. The tag runs
 outsider checks it, is in [RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md). This page does not
 repeat either; it says what to do, and in which order.
 
-> **Each plugin and skill a distribution installs ships from its own repository's release,
-> built against this one** (capsule-cli#326). A capsulectl release that users install needs
-> a plugin release whose `go.mod` requires it; that repository's own release procedure
+> **The plugins and skills a distribution installs ship from their own repository's release,
+> built against this one** (capsule-cli#326). Plugins that ship together from one release are
+> built, pinned and verified from that one release. A capsulectl release that users install
+> needs a plugin release whose `go.mod` requires it; that repository's own release procedure
 > governs it.
 
 **Provenance.** This is the rc10 cutover procedure, generalised. The verification standard is the
@@ -30,7 +31,7 @@ when the install page moves to the new triple (step 7).
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
 | Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
-| Each plugin and its skill | the plugin repository's release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
+| Each plugin and its skill (plugins released together share one release and one `go.mod` pin) | the plugin repository's release whose `go.mod` requires this tag | its own `SHA256SUMS` and attestation; the plugin's handshake reports this tag as `core_version` |
 | The companion plugin and skill, if you serve them | their own release, built separately | their own published SHA-256 files, served byte for byte |
 
 ## Before the tag

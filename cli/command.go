@@ -133,7 +133,7 @@ func unknownCommandError(root *cobra.Command, name string, err error) error {
 	if near := root.SuggestionsFor(word); len(near) > 0 {
 		msg += "; did you mean " + strings.Join(near, ", ")
 	}
-	msg += "; a plugin's verb needs its plugin: `" + name + " plugin ls` lists the installed ones and `" + name + " plugin install ./capsulectl-NAME` installs one"
+	msg += "; a plugin's verb needs its plugin: `" + name + " plugin ls` lists the installed ones and `" + name + " plugin install ./<plugin file>` installs one"
 	return InputError(msg + "; " + help)
 }
 

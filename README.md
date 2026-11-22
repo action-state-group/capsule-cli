@@ -14,8 +14,7 @@ included.
 ## The outcome report
 
 The maintained zero-to-verified-report guide lives with the skill pack that
-produces it; [docs/PLUGINS.md](docs/PLUGINS.md) says where plugins and their
-packs are published.
+produces it, not in this repository.
 
 ## Prebuilt binaries
 
@@ -294,7 +293,7 @@ capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
-capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --out DIR [--yes --to ard|a2a|nostr ...]
+capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --binding acme/respond --out DIR [--yes --to ard|a2a|nostr ...]
 capsulectl mailbox key new --output MAILBOX.key
 capsulectl mailbox ask --commitment COMMITMENT.json --node-key HEX --request REQUEST.json
 capsulectl mailbox poll --commitment COMMITMENT.json --node-key HEX --request REQUEST.json --request-event ID --output ANSWER.json
@@ -1213,7 +1212,7 @@ and for a `history_card/2` the card's checkpoint chain is agent-action-capsule's
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
 capsulectl commitment publish --profile NAME --staple staple.json --community goose \
-  --commitment-uri https://seller.example/commitments/alder.json \
+  --binding acme/respond --commitment-uri https://seller.example/commitments/alder.json \
   --ard-entry listing.json --mailbox-key mailbox.key --nostr-relay wss://relay.example \
   --out ./draft
 ```
