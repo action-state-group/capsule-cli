@@ -108,7 +108,7 @@ export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc 
 ```
 
 The evidence book and the deal store are plugins, each with its own release
-(see [docs/PLUGINS.md](docs/PLUGINS.md) for where). Download the plugin file
+(see [docs/PLUGINS.md](docs/PLUGINS.md)). Download the plugin file
 built for this capsulectl release, check it as you checked the binary
 (`sha256sum -c SHA256SUMS`, and `gh attestation verify` against the plugin's
 own repository), then install the file:

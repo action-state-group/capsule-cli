@@ -145,7 +145,7 @@ verbs:
       List trusted, handshake-valid capsulectl-* plugins discovered on the
       trusted plugin roots before invoking one by name. When a command says
       a plugin is not installed, stop and show the user the exact command it
-      prints (such as `capsulectl plugin install ./capsulectl-NAME`); never run `plugin
+      prints (such as `capsulectl plugin install ./<plugin file>`); never run `plugin
       install` or `plugin remove` yourself.
     emits: (no capsule — listing what is discovered is local inspection, not a consequential action)
     emission_mode: not-consequential

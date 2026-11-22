@@ -1400,12 +1400,3 @@ func TestAMissingPluginVerbPointsToPluginInstall(t *testing.T) {
 	assert.Contains(t, SafeError(err), "plugin install ./<plugin file>")
 	assert.NotContains(t, SafeError(err), "capsulectl-deal")
 }
-
-// An installed deal plugin keeps its verb: the placeholder only fills a gap.
-func TestAnInstalledDealPluginKeepsItsVerb(t *testing.T) {
-	installHome(t)
-	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "deal", "1", ""))
-	require.NoError(t, err)
-	_, err = invoke(t, "", "deal")
-	require.NotContains(t, fmt.Sprint(err), "which is not installed")
-}

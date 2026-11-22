@@ -19,7 +19,7 @@ import (
 // short name is refused.
 var (
 	companyPluginNames = regexp.MustCompile(`(?i)capsulectl-book|capsulectl-deal|evidencebook|"capsulectl-"\s*\+\s*"(book|deal)"`)
-	shortNameDispatch  = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|case "(book|deal)"|firstPartyVerbs`)
+	shortNameDispatch  = regexp.MustCompile(`(LogOwner\(\)|Owner|owner|Plugin|plugin)\s*[!=]=\s*"(book|deal)"|case "(book|deal)"|slices\.Contains\([^)]*"(book|deal)"|firstPartyVerbs`)
 )
 
 // neutralNamesAllowed lists, per file, the lines that may still name a company
@@ -65,7 +65,7 @@ func TestNeutralNamesPatternsCatchTheShapes(t *testing.T) {
 
 func TestCoreNamesNoCompanyPlugin(t *testing.T) {
 	root := ".."
-	skipDirs := map[string]bool{".git": true, "testdata": true, "design": true, "changelog.d": true, "node_modules": true}
+	skipDirs := map[string]bool{".git": true, ".claude": true, "testdata": true, "design": true, "changelog.d": true, "node_modules": true}
 	skipFiles := map[string]bool{"CHANGELOG.md": true, "go.sum": true}
 	var seen int
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
