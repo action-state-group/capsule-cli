@@ -3,7 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"maps"
+	"reflect"
 	"slices"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -142,12 +142,14 @@ func applyReader(env *assessEnv, reader ExtensionReader, ctx *ExtensionContext, 
 	if !env.guard("Name", func() { name = reader.Name() }) {
 		return entries, claims, nil, nil
 	}
-	ctx.Result.Extensions = slices.Clone(listed)
-	ctx.Receipts = slices.Clone(ctx.Receipts)
-	for i, r := range ctx.Receipts {
-		ctx.Receipts[i] = maps.Clone(r)
-	}
-	ctx.SignatureStates = maps.Clone(ctx.SignatureStates)
+	// The reader gets its own copy of everything the core reported or still
+	// reads (the member bundle a composed container checks after this call
+	// included), so nothing it does can change what the core found.
+	ctx.Value = deepCopy(ctx.Value).(map[string]interface{})
+	ctx.Result = deepCopy(ctx.Result).(aacbundle.VerificationResult)
+	ctx.Witnesses = deepCopy(ctx.Witnesses).(aacbundle.ClaimResult)
+	ctx.Receipts = deepCopy(ctx.Receipts).([]map[string]any)
+	ctx.SignatureStates = deepCopy(ctx.SignatureStates).(map[string]string)
 	var reported []map[string]any
 	add := func(from []aacbundle.ClaimResult) []map[string]any {
 		out := readerClaims(name, from, &claims)
@@ -206,6 +208,64 @@ func applyReader(env *assessEnv, reader ExtensionReader, ctx *ExtensionContext, 
 		add(finishClaims)
 	}
 	return entries, claims, witnesses, reported
+}
+
+// deepCopy is v with every map, slice, pointer and interface value copied, so
+// the copy shares no memory with v (unexported struct fields keep their
+// shallow copy).
+func deepCopy(v any) any {
+	if v == nil {
+		return nil
+	}
+	return deepCopyValue(reflect.ValueOf(v)).Interface()
+}
+
+func deepCopyValue(v reflect.Value) reflect.Value {
+	switch v.Kind() {
+	case reflect.Pointer:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.New(v.Type().Elem())
+		out.Elem().Set(deepCopyValue(v.Elem()))
+		return out
+	case reflect.Interface:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.New(v.Type()).Elem()
+		out.Set(deepCopyValue(v.Elem()))
+		return out
+	case reflect.Map:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.MakeMapWithSize(v.Type(), v.Len())
+		for _, k := range v.MapKeys() {
+			out.SetMapIndex(k, deepCopyValue(v.MapIndex(k)))
+		}
+		return out
+	case reflect.Slice:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		for i := 0; i < v.Len(); i++ {
+			out.Index(i).Set(deepCopyValue(v.Index(i)))
+		}
+		return out
+	case reflect.Struct:
+		out := reflect.New(v.Type()).Elem()
+		out.Set(v)
+		for i := 0; i < v.NumField(); i++ {
+			if out.Field(i).CanSet() {
+				out.Field(i).Set(deepCopyValue(v.Field(i)))
+			}
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // readerClaims folds a reader's claims into the verdict and reports them with

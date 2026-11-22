@@ -293,22 +293,24 @@ func TestAssessBundleReaderReachesComposedMembers(t *testing.T) {
 	for _, r := range built {
 		assert.Equal(t, 1, r.finishes)
 	}
-	var composed map[string]any
-	for _, x := range report["extensions"].([]map[string]any) {
-		if x["kind"] == "composed/v1" {
-			composed = x["composed"].(map[string]any)
-		}
-	}
-	for _, m := range composed["members"].([]map[string]any) {
+	for _, m := range composedMembers(t, report) {
 		extensions := m["bundle"].(map[string]any)["extensions"].([]map[string]any)
 		assert.Equal(t, "member-reader", extensions[0]["read_by"])
 	}
 
 	// A withheld member claim does not fail the container; a failing one in
 	// the second member alone does, in both verdicts.
-	verdict, page, _, _, _ = run(two, func(int) []aacbundle.ClaimResult { return []aacbundle.ClaimResult{{Status: "withheld"}} })
+	verdict, page, _, _, withheldReport := run(two, func(int) []aacbundle.ClaimResult { return []aacbundle.ClaimResult{{Status: "withheld"}} })
 	assert.NotEqual(t, "INVALID", verdict)
 	assert.NotEqual(t, "INVALID", page)
+	for i, m := range composedMembers(t, withheldReport) {
+		memberReport := m["bundle"].(map[string]any)
+		assert.Equal(t, "INCOMPLETE", memberReport["verdict"], "member %d: a withheld reader claim is not a pass", i)
+		assert.Equal(t, []map[string]any{{"read_by": "member-reader", "status": "withheld", "findings": []string{}}}, memberReport["reader_claims"])
+	}
+	for i, m := range composedMembers(t, report) {
+		assert.Equal(t, "VALID", m["bundle"].(map[string]any)["verdict"], "member %d with passing claims keeps the core's verdict", i)
+	}
 	verdict, page, _, _, _ = run(two, func(i int) []aacbundle.ClaimResult {
 		if i == 1 {
 			return []aacbundle.ClaimResult{{Status: "fail", Findings: []string{"member_rule_failed"}}}
@@ -387,18 +389,30 @@ func TestCoreNeverPassesAReader(t *testing.T) {
 	}
 }
 
-// A reader that changes what it was handed cannot change what the core found.
+// A reader that changes what it was handed cannot change what the core found:
+// the whole report is the core's own, on every kind of bundle, whatever the
+// reader edits in its context (the bundle value, the result's digest and
+// findings, the receipts, the extensions).
 func TestAssessBundleAReaderCannotChangeTheCoresFindings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	container := composedVectors(t)[0].Container
-	coreVerdict, corePage, coreReport := bundleAssessment(container, &assessEnv{})
-	meddler := &meddlingReader{}
-	verdict, page, report, err := AssessBundle(container, nil, func() ExtensionReader { return meddler })
-	require.NoError(t, err)
-	assert.Equal(t, coreVerdict, verdict)
-	assert.Equal(t, corePage, page)
-	assert.Equal(t, marshal(t, coreReport["witnesses"]), marshal(t, report["witnesses"]))
-	assert.True(t, meddler.ran)
+	values := map[string]map[string]interface{}{"plain": bundleWithExtensions(t, "x-vendor/1")}
+	for i, v := range composedVectors(t) {
+		values["composed "+string(rune('0'+i))] = v.Container
+	}
+	for name, value := range values {
+		t.Run(name, func(t *testing.T) {
+			coreVerdict, corePage, coreReport := bundleAssessment(value, &assessEnv{})
+			coreJSON := marshal(t, coreReport)
+			meddler := &meddlingReader{}
+			verdict, page, report, err := AssessBundle(value, nil, func() ExtensionReader { return meddler })
+			require.NoError(t, err)
+			assert.True(t, meddler.ran)
+			assert.Equal(t, coreVerdict, verdict)
+			assert.Equal(t, corePage, page)
+			assert.Equal(t, coreJSON, marshal(t, report), "the whole report is the core's own")
+			assert.Equal(t, coreJSON, marshal(t, func() map[string]any { _, _, r := bundleAssessment(value, &assessEnv{}); return r }()), "and the caller's value is untouched")
+		})
+	}
 }
 
 type meddlingReader struct {
@@ -411,11 +425,28 @@ func (m *meddlingReader) Witnesses(ctx *ExtensionContext) (aacbundle.ClaimResult
 	m.ran = true
 	for i := range ctx.Result.Extensions {
 		ctx.Result.Extensions[i].Composed = nil
+		ctx.Result.Extensions[i].Status = "pass"
+	}
+	if ctx.Result.BundleDigest != nil {
+		*ctx.Result.BundleDigest = "replacement"
+	}
+	for _, c := range []*aacbundle.ClaimResult{&ctx.Result.GraphClosure, &ctx.Result.IntervalCoverage, &ctx.Result.PerRecordMembership, &ctx.Witnesses} {
+		c.Status = "pass"
+		for i := range c.Findings {
+			c.Findings[i] = "edited"
+		}
 	}
 	for _, r := range ctx.Receipts {
 		r["status"] = "pass"
 	}
-	ctx.Receipts = append(ctx.Receipts, map[string]any{"status": "pass"})
+	delete(ctx.Value, "checkpoint")
+	delete(ctx.Value, "records")
+	if exts, ok := ctx.Value["extensions"].(map[string]interface{}); ok {
+		delete(exts, "composed/v1")
+	}
+	for k := range ctx.SignatureStates {
+		ctx.SignatureStates[k] = "authored"
+	}
 	return aacbundle.ClaimResult{}, nil, false
 }
 
@@ -496,4 +527,16 @@ func TestVerifyNarrationIsExportedForAPluginsVerb(t *testing.T) {
 		assert.Equal(t, verifyNarration(&cobra.Command{}, result, err), VerifyNarration(&cobra.Command{}, result, err))
 	}
 	assert.Contains(t, VerifyNarration(&cobra.Command{}, result, nil).Say, "Not checked here: x-vendor/1")
+}
+
+// composedMembers are the member reports of a container report.
+func composedMembers(t *testing.T, report map[string]any) []map[string]any {
+	t.Helper()
+	for _, x := range report["extensions"].([]map[string]any) {
+		if x["kind"] == "composed/v1" {
+			return x["composed"].(map[string]any)["members"].([]map[string]any)
+		}
+	}
+	t.Fatal("no composed/v1 entry")
+	return nil
 }
