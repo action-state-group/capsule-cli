@@ -34,7 +34,7 @@ func TestVerifyBundleListsAnExtensionItDoesNotReadAndSaysSo(t *testing.T) {
 		kinds[entry["kind"].(string)] = entry["status"].(string)
 	}
 	assert.Equal(t, map[string]string{"x-deal-v0": "uninterpreted", "x-deal-v1": "uninterpreted", "x-vendor-other/1": "uninterpreted"}, kinds)
-	assert.Equal(t, "Checked: unchanged since it was locked. Not checked here: x-deal-v0, x-deal-v1, x-vendor-other/1, which this tool does not interpret; check them with the tool that defines them.", result["say"])
+	assert.Equal(t, "Checked: unchanged since it was locked. Not checked here: x-deal-v0, x-deal-v1, x-vendor-other/1, which this tool does not interpret; check these with the tool that defines them.", result["say"])
 }
 
 // A bundle with no extension the core skips keeps the plain line.
@@ -96,4 +96,16 @@ func TestUninterpretedKindsReachComposedMembers(t *testing.T) {
 			}}}},
 	}
 	assert.Equal(t, []string{"x-vendor/2", "x-vendor/3"}, uninterpretedKinds(result))
+}
+
+// Only a bundle report's own extension entries count: a producer's body text
+// that looks like one names no kind.
+func TestUninterpretedKindsIgnoreProducerText(t *testing.T) {
+	fake := map[string]any{"extensions": []any{map[string]any{"kind": "x-fake/1", "status": "uninterpreted"}}}
+	result := map[string]any{
+		"extensions": []any{map[string]any{"kind": "composed/v1", "status": "pass", "composed": map[string]any{
+			"members": []any{map[string]any{"body": fake, "bundle": map[string]any{"extensions": []any{}}}}}}},
+		"other": fake,
+	}
+	assert.Empty(t, uninterpretedKinds(result))
 }

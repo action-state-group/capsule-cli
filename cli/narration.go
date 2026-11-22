@@ -667,33 +667,26 @@ func verifyNarration(c *cobra.Command, result map[string]any, err error) Narrati
 // uninterpretedKinds are the extension kinds a verify --bundle report lists
 // as uninterpreted, in report order, without repeats, including those of the
 // member bundles of a composed bundle (a valid composition must not hide an
-// unread extension inside a member).
+// unread extension inside a member). Only the report's own extensions and
+// composed members' bundle reports are read, never a producer's body text.
 func uninterpretedKinds(result map[string]any) []string {
 	var kinds []string
-	var walk func(v any)
-	walk = func(v any) {
-		switch t := v.(type) {
-		case map[string]any:
-			if list, ok := t["extensions"].([]any); ok {
-				for _, raw := range list {
-					entry, _ := raw.(map[string]any)
-					kind, _ := entry["kind"].(string)
-					if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
-						kinds = append(kinds, kind)
-					}
+	var walk func(report map[string]any)
+	walk = func(report map[string]any) {
+		list, _ := report["extensions"].([]any)
+		for _, raw := range list {
+			entry, _ := raw.(map[string]any)
+			kind, _ := entry["kind"].(string)
+			if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
+				kinds = append(kinds, kind)
+			}
+			composed, _ := entry["composed"].(map[string]any)
+			members, _ := composed["members"].([]any)
+			for _, m := range members {
+				member, _ := m.(map[string]any)
+				if bundle, ok := member["bundle"].(map[string]any); ok {
+					walk(bundle)
 				}
-			}
-			keys := make([]string, 0, len(t))
-			for k := range t {
-				keys = append(keys, k)
-			}
-			slices.Sort(keys)
-			for _, k := range keys {
-				walk(t[k])
-			}
-		case []any:
-			for _, x := range t {
-				walk(x)
 			}
 		}
 	}

@@ -1024,10 +1024,10 @@ by the bundle's integrity (editing it changes the digest) but not checked here.
 Its `extensions` entry is `uninterpreted`, the verdict is the generic checks',
 and the line printed with it, on any verdict and for the member bundles of a
 composed bundle too, names the kinds: "Not checked here: KIND, which this tool
-does not interpret; check them with the tool that defines them." Whatever
+does not interpret; check these with the tool that defines them." Whatever
 defines the extension checks it; a witness chain carried only in such an
 extension adds no witness claim here. Page writing (`bundle --html`,
-`disclose --html`) and `presentation list` follow the same generic verdict, so
+`disclose --html`, `presentation build`) and `presentation list` follow the same generic verdict, so
 a page for such a bundle shows the uninterpreted content unchecked.
 
 **composed/v1.** A bundle carrying the `composed/v1` extension

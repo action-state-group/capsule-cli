@@ -28,7 +28,7 @@
     "say.verify.history_answers_no_request": "This card checks out, but it wasn't sent in answer to a request from you, so it isn't accepted as one. To get an answer, send the agent a request.",
     "say.verify.history_checks_not_run": "Nothing failed, but some checks couldn't run: {checks}. Give the keys you hold for this agent to run them.",
     "say.verify.history_not_accepted": "This history wasn't accepted. The findings list the checks that didn't pass.",
-    "say.verify.not_read": "Not checked here: {kinds}, which this tool does not interpret; check them with the tool that defines them.",
+    "say.verify.not_read": "Not checked here: {kinds}, which this tool does not interpret; check these with the tool that defines them.",
     "say.verify.refused": "Part of this was refused, and the refusal is signed, so it isn't complete. Everything else in it checked out.",
     "say.verify.unable": "I couldn't check this file here.",
     "say.verify.unchanged": "Checked: unchanged since it was locked."
