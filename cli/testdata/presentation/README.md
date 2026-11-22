@@ -96,7 +96,7 @@ copied here, where the core's tests read it.
 ## The presentation pass
 
 `TestPresentationPass` and its siblings (evidencebook's
-`internal/deal/presentation_pass_test.go`, CI job `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
+`capsulectl/internal/deal/presentation_pass_test.go`, CI job `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
 the one registry, shell and builder capsulectl has, with no plugin installed:
 
 - **One page per (bundle, audience), for audiences `*` and `counterparty`.** The html page is
