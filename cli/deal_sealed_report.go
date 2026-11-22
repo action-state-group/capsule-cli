@@ -95,7 +95,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		return fail
 	}
 	key, ok := verifiedProducerKey(record)
-	if !ok || key != DealLastStepKey(value) {
+	if !ok || key != DealLastStepKey(value) || profile == DealProfileV1 && hasUnclassifiedRecord(value) {
 		return fail
 	}
 	if checked := agentInputDisclosure(record, input); !checked.OK() || checked.DisclosuresMatched() != 1 {
@@ -196,7 +196,7 @@ func dealReportAsOf(value map[string]interface{}, witnesses aacbundle.ClaimResul
 	}
 	basis := "the deal's checkpoint"
 	if last := lastStepRecord(value); last != nil {
-		header, _ := last["evidence_record_header"].(map[string]interface{})
+		header := stepHeader(value, last)
 		if stepAt, err := time.Parse(time.RFC3339Nano, fmt.Sprint(header["committed_at"])); err == nil && stepAt.Equal(at) {
 			basis = "the deal's last step"
 		}
@@ -249,8 +249,62 @@ func DealLastStepKey(value map[string]interface{}) string {
 	return key
 }
 
+// recordHeader is a record's evidence record header: nil when it has none
+// that can be trusted. An x-deal-v0 record embeds it as
+// evidence_record_header. An x-deal-v1 book's record does not: its header is
+// its agent_input, which the bundle carries in
+// disclosures[<capsule_id>].agent_input. That disclosed header is read only
+// when it matches the agent_input digest the record's Capsule commits, so a
+// header is never taken on trust; one that is withheld or does not match is
+// nil, and the record is then unclassified. An embedded header is taken as
+// the bundle states it: that the Capsule commits it is the full verify's
+// capsule_id check, not this one's (as before for x-deal-v0).
+func recordHeader(value, record map[string]interface{}) map[string]interface{} {
+	if header, _ := record["evidence_record_header"].(map[string]interface{}); header != nil {
+		return header
+	}
+	id, _ := record["capsule_id"].(string)
+	disclosures, _ := value["disclosures"].(map[string]interface{})
+	d, _ := disclosures[id].(map[string]interface{})
+	disclosed, _ := d["agent_input"].(map[string]interface{})
+	if id == "" || disclosed == nil {
+		return nil
+	}
+	if checked := agentInputDisclosure(record, disclosed); !checked.OK() || checked.DisclosuresMatched() != 1 {
+		return nil
+	}
+	return disclosed
+}
+
+// stepHeader is a record's header (see recordHeader) when it is a deal
+// step's, else nil.
+func stepHeader(value, record map[string]interface{}) map[string]interface{} {
+	header := recordHeader(value, record)
+	if rt, _ := header["record_type"].(string); !dealStepRecordTypes[rt] {
+		return nil
+	}
+	return header
+}
+
+// hasUnclassifiedRecord is whether a record of the bundle has no header that
+// can be trusted. A v1 book's log holds only its own records, so for a v1
+// report the last step cannot be proved while one is unclassified: a copy
+// that withheld a later step's header would otherwise leave an earlier step,
+// and its signer, as the last.
+func hasUnclassifiedRecord(value map[string]interface{}) bool {
+	records, _ := value["records"].([]interface{})
+	for _, raw := range records {
+		r, _ := raw.(map[string]interface{})
+		if recordHeader(value, r) == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // lastStepRecord is a deal's last step in a bundle: the record at the
-// highest log position whose evidence record header is a step's.
+// highest log position whose evidence record header (see stepHeader) is a
+// step's.
 func lastStepRecord(value map[string]interface{}) map[string]interface{} {
 	cert, _ := value["completeness_certificate"].(map[string]interface{})
 	memberships, _ := cert["memberships"].(map[string]interface{})
@@ -259,9 +313,7 @@ func lastStepRecord(value map[string]interface{}) map[string]interface{} {
 	var lastSeq uint64
 	for _, raw := range records {
 		r, _ := raw.(map[string]interface{})
-		header, _ := r["evidence_record_header"].(map[string]interface{})
-		rt, _ := header["record_type"].(string)
-		if !dealStepRecordTypes[rt] {
+		if stepHeader(value, r) == nil {
 			continue
 		}
 		id, _ := r["capsule_id"].(string)
@@ -276,13 +328,12 @@ func lastStepRecord(value map[string]interface{}) map[string]interface{} {
 }
 
 // holdsDealSteps is whether a bundle's records include a deal step on a
-// book (an evidence record header of a step's type).
+// book (an evidence record header, see stepHeader, of a step's type).
 func holdsDealSteps(value map[string]interface{}) bool {
 	records, _ := value["records"].([]interface{})
 	for _, raw := range records {
 		r, _ := raw.(map[string]interface{})
-		header, _ := r["evidence_record_header"].(map[string]interface{})
-		if rt, _ := header["record_type"].(string); dealStepRecordTypes[rt] {
+		if stepHeader(value, r) != nil {
 			return true
 		}
 	}
