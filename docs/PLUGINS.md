@@ -419,6 +419,18 @@ core's verdict -- never folded into it. A relying party who runs
 repository's code and nothing else, regardless of which plugins happen to
 be installed on the machine that ran it.
 
+**A plugin that defines an extension reads it in its own verb.** `capsulectl
+verify --bundle` lists an extension it does not read as uninterpreted ("Not
+checked here: KIND ..."). A plugin that defines such an extension checks it in
+its own top-level verb, with the core's assessor around it, through the Go API
+`AssessBundle`, `PageGateWith` and `VerifyBundleFileWith`, which take an
+`ExtensionReader` factory (`VerifyNarration` gives the verb the same say line).
+Two rules keep that boundary: a reader only adds to the core's result (its
+witness claim is reported beside the core's, its entries are for kinds the core
+does not read, and each carries `read_by`), and the core's own commands never
+install one. The API carries agent-action-capsule Go types, so a plugin's
+agent-action-capsule version must match the core's.
+
 ## Writing a plugin without reading `capsule-engine`
 
 Everything above is the whole contract: name your executable

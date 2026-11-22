@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -47,7 +48,10 @@ type ExtensionReader interface {
 // its state per bundle and the core keeps none of it.
 type ExtensionReaderFactory func() ExtensionReader
 
-// ExtensionContext is what the core has computed when it calls a reader.
+// ExtensionContext is what the core has computed when it calls a reader. The
+// core has finished its own reading by then and hands over copies of the slices
+// it reports; every field is read-only for the reader (Value is the caller's
+// own bundle, which the reader must not edit).
 type ExtensionContext struct {
 	Value           map[string]interface{}
 	Result          aacbundle.VerificationResult
@@ -66,6 +70,11 @@ type ExtensionContext struct {
 // verifier lists them uninterpreted; they never reach a reader.
 var coreReadKinds = []string{aacbundle.ParentLogWitnessKind}
 
+// coreOwnedKinds are the kinds no reader may supply an entry for, whether or not
+// the bundle carries them: the core's own (coreReadKinds) and the ones AAC's
+// verifier interprets.
+var coreOwnedKinds = []string{aacbundle.ParentLogWitnessKind, aacbundle.ComposedKind}
+
 // assessEnv carries what one assessment needs through composed members: the
 // witness directory, the optional reader factory, and the reader bugs found
 // (a refused entry), which AssessBundle returns as its error.
@@ -75,11 +84,30 @@ type assessEnv struct {
 	readerError error
 }
 
-func (e *assessEnv) reader() ExtensionReader {
+func (e *assessEnv) reader() (reader ExtensionReader) {
 	if e == nil || e.newReader == nil {
 		return nil
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			e.fail("the factory panicked: %v", r)
+			reader = nil
+		}
+	}()
 	return e.newReader()
+}
+
+// guard runs one reader call; a panic is a reader bug returned to the caller,
+// not a crash of the verification.
+func (e *assessEnv) guard(what string, call func()) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			e.fail("%s panicked: %v", what, r)
+			ok = false
+		}
+	}()
+	call()
+	return true
 }
 
 func (e *assessEnv) fail(format string, args ...any) {
@@ -103,13 +131,90 @@ func readsKind(kind, status string) bool {
 	return status == "uninterpreted" && !slices.Contains(coreReadKinds, kind)
 }
 
+// applyReader runs the reader over a bundle the core has assessed: it returns
+// the extension entries with the reader's replacements and additions, the
+// claims with the reader's, the reader's witness claim (nil when it added
+// none) and every reader claim, reported with the reader's name. The context
+// carries copies of what the core reported, so nothing the reader does changes
+// the core's result.
+func applyReader(env *assessEnv, reader ExtensionReader, ctx *ExtensionContext, listed []aacbundle.ExtensionResult, entries []map[string]any, claims []aacbundle.ClaimResult) ([]map[string]any, []aacbundle.ClaimResult, map[string]any, []map[string]any) {
+	var name string
+	if !env.guard("Name", func() { name = reader.Name() }) {
+		return entries, claims, nil, nil
+	}
+	ctx.Result.Extensions = slices.Clone(listed)
+	ctx.Receipts = slices.Clone(ctx.Receipts)
+	for i, r := range ctx.Receipts {
+		ctx.Receipts[i] = maps.Clone(r)
+	}
+	ctx.SignatureStates = maps.Clone(ctx.SignatureStates)
+	var reported []map[string]any
+	add := func(from []aacbundle.ClaimResult) []map[string]any {
+		out := readerClaims(name, from, &claims)
+		reported = append(reported, out...)
+		return out
+	}
+	var witnesses map[string]any
+	var witnessClaim aacbundle.ClaimResult
+	var receipts []map[string]any
+	var ok bool
+	if env.guard("Witnesses", func() { witnessClaim, receipts, ok = reader.Witnesses(ctx) }) && ok {
+		ctx.Anchored = true
+		witnesses = map[string]any{"read_by": name, "status": witnessClaim.Status, "findings": nonNilStrings(witnessClaim.Findings), "receipts": receipts}
+		// As for the checkpoint's own receipts, only a failing claim changes the verdict.
+		if witnessClaim.Status == "fail" {
+			claims = append(claims, witnessClaim)
+			reported = append(reported, map[string]any{"read_by": name, "status": witnessClaim.Status, "findings": nonNilStrings(witnessClaim.Findings)})
+		}
+	}
+	for i, x := range listed {
+		if !readsKind(x.Kind, x.Status) {
+			continue
+		}
+		var entry map[string]any
+		var readClaims []aacbundle.ClaimResult
+		var read bool
+		if !env.guard("Read("+x.Kind+")", func() { entry, readClaims, read = reader.Read(ctx, x.Kind) }) || !read {
+			continue
+		}
+		if entry == nil {
+			env.fail("%s read %s and returned no entry", name, x.Kind)
+			continue
+		}
+		entry["kind"], entry["read_by"] = x.Kind, name
+		entry["claims"] = add(readClaims)
+		entries[i] = entry
+	}
+	var finished []map[string]any
+	var finishClaims []aacbundle.ClaimResult
+	if env.guard("Finish", func() { finished, finishClaims = reader.Finish(ctx) }) {
+		present := map[string]bool{}
+		for _, x := range listed {
+			if !readsKind(x.Kind, x.Status) {
+				present[x.Kind] = true
+			}
+		}
+		for _, entry := range finished {
+			kind, _ := entry["kind"].(string)
+			if kind == "" || present[kind] || slices.Contains(coreOwnedKinds, kind) {
+				env.fail("%s finished with an entry for kind %q, which the core reads or no kind", name, kind)
+				continue
+			}
+			entry["read_by"] = name
+			entries = append(entries, entry)
+		}
+		add(finishClaims)
+	}
+	return entries, claims, witnesses, reported
+}
+
 // readerClaims folds a reader's claims into the verdict and reports them with
 // the reader's name.
-func readerClaims(reader ExtensionReader, claims []aacbundle.ClaimResult, into *[]aacbundle.ClaimResult) []map[string]any {
+func readerClaims(name string, claims []aacbundle.ClaimResult, into *[]aacbundle.ClaimResult) []map[string]any {
 	reported := make([]map[string]any, 0, len(claims))
 	for _, c := range claims {
 		*into = append(*into, c)
-		reported = append(reported, map[string]any{"read_by": reader.Name(), "status": c.Status, "findings": nonNilStrings(c.Findings)})
+		reported = append(reported, map[string]any{"read_by": name, "status": c.Status, "findings": nonNilStrings(c.Findings)})
 	}
 	return reported
 }

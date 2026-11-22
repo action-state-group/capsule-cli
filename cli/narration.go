@@ -620,6 +620,13 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 	return cmd
 }
 
+// VerifyNarration is verifyNarration for a plugin's own verify verb
+// (NarrateByOutcome(verb, VerifyNarration)): the same words for the verdict, a
+// served refusal and the extensions not read here.
+func VerifyNarration(c *cobra.Command, result map[string]any, err error) Narration {
+	return verifyNarration(c, result, err)
+}
+
 // verifyNarration is verify's report line: unchanged when every check
 // passed, unable when something could not be checked here (exit 3), refused
 // when the only gap is a refusal the other side signed (also exit 3), changed

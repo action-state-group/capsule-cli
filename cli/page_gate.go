@@ -71,6 +71,15 @@ func UnmetClaims(result map[string]any) []string {
 		}
 		unmet = append(unmet, name+" "+c.Status)
 	}
+	// A reader's claims that did not pass, named by the reader.
+	readerClaims, _ := result["reader_claims"].([]map[string]any)
+	for _, c := range readerClaims {
+		if status, _ := c["status"].(string); status != "pass" {
+			name, _ := c["read_by"].(string)
+			findings, _ := c["findings"].([]string)
+			unmet = append(unmet, strings.TrimSpace(name+" "+status+" "+strings.Join(findings, ",")))
+		}
+	}
 	sort.Strings(unmet)
 	if len(unmet) == 0 {
 		unmet = []string{"a record or disclosure did not check out"}
