@@ -8,6 +8,9 @@ evidencebook branch `claude/v1-report-bundle` at 2824aba8 on 2026-11-22 (test
 of its temp dir). The test keys are throwaway. Its one step record has no
 `evidence_record_header`; the header is its disclosed `agent_input`.
 
+The branch is not merged yet (no PR when this was written); once it merges,
+point this at the merged commit.
+
 To regenerate, copy the bundle file that test writes over `bundle.json`.
 
 The bytes are neutral to the verifier: public keys and digests only, no

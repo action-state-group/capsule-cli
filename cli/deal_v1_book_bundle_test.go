@@ -141,3 +141,20 @@ func TestV1BookBundleWithoutItsReportIsAStrippedCopy(t *testing.T) {
 	assert.Equal(t, []string{"sealed_report_not_named"}, entry["findings"])
 	assert.ErrorIs(t, CheckDealStandaloneReport(value), ErrBundleInvalid)
 }
+
+// The whole verify --bundle verdict on the real bytes: with no report rule
+// registered the neutral checks pass and the bundle is INCOMPLETE on the
+// rule it did not run; with a rule registered that accepts, it is VALID.
+func TestV1BookBundleVerdict(t *testing.T) {
+	SetDealV1ReportVerifier(nil)
+	verdict, _ := BundleVerdict(v1BookBundle(t), nil)
+	assert.Equal(t, "INCOMPLETE", verdict)
+
+	var gotReport, gotExt []byte
+	SetDealV1ReportVerifier(func(report, ext []byte) error { gotReport, gotExt = report, ext; return nil })
+	t.Cleanup(func() { SetDealV1ReportVerifier(nil) })
+	verdict, _ = BundleVerdict(v1BookBundle(t), nil)
+	assert.Equal(t, "VALID", verdict)
+	assert.NotEmpty(t, gotReport)
+	assert.NotEmpty(t, gotExt)
+}

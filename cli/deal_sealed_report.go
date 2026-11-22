@@ -256,7 +256,9 @@ func DealLastStepKey(value map[string]interface{}) string {
 // disclosures[<capsule_id>].agent_input. That disclosed header is read only
 // when it matches the agent_input digest the record's Capsule commits, so a
 // header is never taken on trust; one that is withheld or does not match is
-// nil, and the record is then unclassified.
+// nil, and the record is then unclassified. An embedded header is taken as
+// the bundle states it: that the Capsule commits it is the full verify's
+// capsule_id check, not this one's (as before for x-deal-v0).
 func recordHeader(value, record map[string]interface{}) map[string]interface{} {
 	if header, _ := record["evidence_record_header"].(map[string]interface{}); header != nil {
 		return header
