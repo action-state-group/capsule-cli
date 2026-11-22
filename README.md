@@ -1022,9 +1022,13 @@ extension, and any countersignature, is listed as carried but not checked. Exit 
 does not interpret, such as a plugin's profile for its own records, is covered
 by the bundle's integrity (editing it changes the digest) but not checked here.
 Its `extensions` entry is `uninterpreted`, the verdict is the generic checks',
-and the line printed with it names the kinds: "Not checked here: KIND, which
-this tool does not interpret." Whatever defines the extension checks it; a
-witness chain carried only in such an extension adds no witness claim here.
+and the line printed with it, on any verdict and for the member bundles of a
+composed bundle too, names the kinds: "Not checked here: KIND, which this tool
+does not interpret; check them with the tool that defines them." Whatever
+defines the extension checks it; a witness chain carried only in such an
+extension adds no witness claim here. Page writing (`bundle --html`,
+`disclose --html`) and `presentation list` follow the same generic verdict, so
+a page for such a bundle shows the uninterpreted content unchecked.
 
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
@@ -1129,8 +1133,7 @@ flags conflict. A stapled commitment
 missing from the file (the findings list it), 3 when nothing failed but some checks could not run because a key was not
 given (the line names them), and 3 when every check passes except
 `request_binding` (`NOT_PRESENT`) and `caller_invariance` (`NOT_CHECKED`): the
-card checks out but was not sent in answer to a request of yours. A
-released `x-history-selection/v0` file still verifies with `verify --bundle`.
+card checks out but was not sent in answer to a request of yours.
 
 ### Find an advertised commitment before you ask or pay
 

@@ -132,7 +132,7 @@ launcher can assert at runtime which contract version invoked it, and
 `CAPSULECTL_BIN`, the path of the `capsulectl` that invoked it (symlinks
 resolved), unless the caller's environment already sets it to a value. A launcher that
 calls core back uses that path rather than a bare `capsulectl`, which is not
-on PATH on every host (a Muse chat never has `~/.local/bin` on it).
+on PATH on every host (a hosted chat never has `~/.local/bin` on it).
 
 The launcher's exit code is propagated as `capsulectl`'s own exit code, and
 `capsulectl` prints nothing of its own after a launcher that failed: the
@@ -222,7 +222,7 @@ From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
 
 **When a host loosens the chain again.** Some hosts reset these modes later:
-a Muse VM replacement recreates the home as `2770`. The walk then refuses
+a hosted VM replacement recreates the home as `2770`. The walk then refuses
 every plugin in the per-user root. Two commands put back the `chmod go-w`
 that install required: `cll checkpoint cadence`, when it finds no deal
 plugin to run because the per-user one is refused, and `doctor`. They (and

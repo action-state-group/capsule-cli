@@ -634,13 +634,6 @@ func verifyNarration(c *cobra.Command, result map[string]any, err error) Narrati
 	var notRun errChecksNotRun
 	switch {
 	case err == nil:
-		// A VALID bundle says, on the same line, which extensions this
-		// verifier did not interpret: VALID is what it checked, not
-		// everything the file carries (capsule-cli#428).
-		if kinds := uninterpretedKinds(result); len(kinds) > 0 {
-			key = "say.verify.unchanged_unread"
-			vals["kinds"] = strings.Join(kinds, ", ")
-		}
 	case errors.As(err, &notRun):
 		key = "say.verify.history_checks_not_run"
 		vals["checks"] = strings.Join(notRun.checks, ", ")
@@ -655,21 +648,56 @@ func verifyNarration(c *cobra.Command, result map[string]any, err error) Narrati
 	default:
 		key = "say.verify.changed"
 	}
-	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, vals)} })
+	// Whatever the verdict, the line says which extensions this verifier did
+	// not interpret: VALID is what it checked, not everything the file
+	// carries, and a reader of an INCOMPLETE one must know what was never
+	// looked at (capsule-cli#428).
+	kinds := uninterpretedKinds(result)
+	return NarrateWith(c, func(w Wording) Narration {
+		say := w.Line(key, vals)
+		if len(kinds) > 0 && say != "" {
+			if more := w.Line("say.verify.not_read", V{"kinds": strings.Join(kinds, ", ")}); more != "" {
+				say += " " + more
+			}
+		}
+		return Narration{Voice: VoiceReport, Say: say}
+	})
 }
 
 // uninterpretedKinds are the extension kinds a verify --bundle report lists
-// as uninterpreted, in report order, without repeats.
+// as uninterpreted, in report order, without repeats, including those of the
+// member bundles of a composed bundle (a valid composition must not hide an
+// unread extension inside a member).
 func uninterpretedKinds(result map[string]any) []string {
 	var kinds []string
-	list, _ := result["extensions"].([]any)
-	for _, raw := range list {
-		entry, _ := raw.(map[string]any)
-		kind, _ := entry["kind"].(string)
-		if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
-			kinds = append(kinds, kind)
+	var walk func(v any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case map[string]any:
+			if list, ok := t["extensions"].([]any); ok {
+				for _, raw := range list {
+					entry, _ := raw.(map[string]any)
+					kind, _ := entry["kind"].(string)
+					if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
+						kinds = append(kinds, kind)
+					}
+				}
+			}
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			slices.Sort(keys)
+			for _, k := range keys {
+				walk(t[k])
+			}
+		case []any:
+			for _, x := range t {
+				walk(x)
+			}
 		}
 	}
+	walk(result)
 	return kinds
 }
 

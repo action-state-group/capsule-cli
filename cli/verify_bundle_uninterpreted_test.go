@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +34,7 @@ func TestVerifyBundleListsAnExtensionItDoesNotReadAndSaysSo(t *testing.T) {
 		kinds[entry["kind"].(string)] = entry["status"].(string)
 	}
 	assert.Equal(t, map[string]string{"x-deal-v0": "uninterpreted", "x-deal-v1": "uninterpreted", "x-vendor-other/1": "uninterpreted"}, kinds)
-	assert.Equal(t, "Checked: unchanged since it was locked. Not checked here: x-deal-v0, x-deal-v1, x-vendor-other/1, which this tool does not interpret.", result["say"])
+	assert.Equal(t, "Checked: unchanged since it was locked. Not checked here: x-deal-v0, x-deal-v1, x-vendor-other/1, which this tool does not interpret; check them with the tool that defines them.", result["say"])
 }
 
 // A bundle with no extension the core skips keeps the plain line.
@@ -70,4 +72,28 @@ func decodeResult(t *testing.T, out string) map[string]interface{} {
 	var result map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(out), &result), out)
 	return result
+}
+
+// The line names what was not read on a verdict that is not VALID too.
+func TestVerifyNarrationNamesUninterpretedKindsOnEveryVerdict(t *testing.T) {
+	result := map[string]any{"extensions": []any{map[string]any{"kind": "x-vendor/1", "status": "uninterpreted"}, map[string]any{"kind": "x-vendor/1", "status": "uninterpreted"}, map[string]any{"kind": "composed/v1", "status": "pass"}}}
+	for _, err := range []error{ErrPartial, ErrBundleInvalid} {
+		n := verifyNarration(&cobra.Command{}, result, err)
+		assert.Contains(t, n.Say, "Not checked here: x-vendor/1, which this tool does not interpret", err.Error())
+		assert.Equal(t, 1, strings.Count(n.Say, "x-vendor/1"), "each kind once")
+	}
+	assert.NotContains(t, verifyNarration(&cobra.Command{}, map[string]any{}, ErrPartial).Say, "Not checked here")
+}
+
+// An unread extension inside a composed member is named too: a valid
+// composition must not hide it.
+func TestUninterpretedKindsReachComposedMembers(t *testing.T) {
+	result := map[string]any{
+		"extensions": []any{map[string]any{"kind": "composed/v1", "status": "pass", "composed": map[string]any{
+			"members": []any{
+				map[string]any{"bundle": map[string]any{"extensions": []any{map[string]any{"kind": "x-vendor/2", "status": "uninterpreted"}}}},
+				map[string]any{"bundle": map[string]any{"extensions": []any{map[string]any{"kind": "x-vendor/2", "status": "uninterpreted"}, map[string]any{"kind": "x-vendor/3", "status": "uninterpreted"}}}},
+			}}}},
+	}
+	assert.Equal(t, []string{"x-vendor/2", "x-vendor/3"}, uninterpretedKinds(result))
 }

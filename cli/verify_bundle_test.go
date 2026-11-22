@@ -244,7 +244,7 @@ func TestVerifyBundleCheckpointIntegersAndCOSEKeepTheirType(t *testing.T) {
 }
 
 // A checkpoint claim that fails returns no statement, so nothing (witness
-// receipts, a deal's cadence chain, a History's log check) is checked
+// receipts) is checked
 // against it (capsule-cli#438).
 func TestCheckpointClaimReturnsNoStatementWhenItFails(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -773,8 +773,7 @@ func TestCategoryCoverageClaim(t *testing.T) {
 	}
 
 	// A FAIL under an INVALID verdict fails the claim even when another claim
-	// or the witnesses failed too, so a cadence-anchored bundle's swapped
-	// witness claim cannot hide it.
+	// or the witnesses failed too, so a swapped witness claim cannot hide it.
 	for name, strict := range map[string]aacbundle.StrictResult{
 		"a claim failed": {CategoryCoverage: failed, Verdict: aacbundle.VerdictInvalid,
 			Claims: []aacbundle.NamedClaim{{Name: "records", ClaimResult: aacbundle.ClaimResult{Status: "fail"}}}},
