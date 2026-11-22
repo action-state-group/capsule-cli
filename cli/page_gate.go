@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// A page that checks itself (`bundle --html`, `disclose --html`, `deal report
-// --html`) carries a verdict its reader takes at face value. The page
+// A page that checks itself (`bundle --html`, `disclose --html`, a plugin's
+// report page) carries a verdict its reader takes at face value. The page
 // runtime's banner says the bundle passed whenever its own checks pass, which
 // is more than `verify --bundle` may say about the same bundle, and it shows
 // no rows, without failing, when the report the bundle carries cannot be
@@ -23,6 +23,13 @@ import (
 // `verify --bundle` reads it from a file (its JSON, decoded the same way), so
 // the page and the file can never get different verdicts.
 func PageGate(value map[string]interface{}) error {
+	return PageGateWith(value, nil)
+}
+
+// PageGateWith is PageGate with an optional factory of readers for the
+// extensions the core does not read (see ExtensionReader), so a caller's own
+// gate judges a page as its own verb judges the file. The core's gate passes nil.
+func PageGateWith(value map[string]interface{}, newReader ExtensionReaderFactory) error {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -30,7 +37,11 @@ func PageGate(value map[string]interface{}) error {
 	if value, err = DecodeBundleJSON(raw); err != nil {
 		return err
 	}
-	_, pageVerdict, result := bundleAssessment(value, nil)
+	env := &assessEnv{newReader: newReader}
+	_, pageVerdict, result := bundleAssessment(value, env)
+	if env.readerError != nil {
+		return env.readerError
+	}
 	// A composed/v1 refusal whose signature verifies is the observer's served
 	// answer: the verdict stays INCOMPLETE (not served) but the page draws the
 	// refused case and its banner says so (Sherlock2, capsule-cli#511).

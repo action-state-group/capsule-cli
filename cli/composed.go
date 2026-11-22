@@ -12,7 +12,6 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
-	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
 // RefusalSignatureProfile names the one refusal signature form this CLI
@@ -273,7 +272,7 @@ func interopAnchorBound(response, bundle map[string]interface{}) bool {
 // than its member's observer fails (INVALID), as does an interop response
 // whose anchor.digest is not the member bundle's checkpoint
 // (response_anchor_not_checkpoint).
-func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string, int) {
+func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, env *assessEnv) (map[string]any, []string, int) {
 	out := map[string]any{
 		"status":   result.Status,
 		"findings": nonNilStrings(result.Findings),
@@ -302,7 +301,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		}
 		if m.Bundle != nil {
 			raw, _ := composedMemberBundle(container, m.ID)
-			report, verdict, _ := assessBundle(raw, *m.Bundle, directory)
+			report, verdict, _ := assessBundle(raw, *m.Bundle, env)
 			member["bundle"] = report
 			verdicts = append(verdicts, verdict)
 		}

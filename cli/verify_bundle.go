@@ -67,6 +67,14 @@ func claim(result aacbundle.ClaimResult) claimOutput {
 // network. Exit 0 when every claim passes, 3 (ErrPartial) when nothing failed
 // but something is not shown, 1 (ErrBundleInvalid) when a claim failed.
 func verifyBundleFile(c *cobra.Command, path string) error {
+	return VerifyBundleFileWith(c, path, nil)
+}
+
+// VerifyBundleFileWith is verifyBundleFile with an optional factory of readers
+// for the extensions the core does not read (see ExtensionReader): a caller's
+// own verb reuses the page-file extraction, the exit codes and the report.
+// The core's verb passes nil.
+func VerifyBundleFileWith(c *cobra.Command, path string, newReader ExtensionReaderFactory) error {
 	var directory *witness.Directory
 	if directoryPath, _ := c.Flags().GetString("witness-directory"); directoryPath != "" {
 		rows, err := LoadWitnessDirectory(directoryPath)
@@ -93,7 +101,10 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return InputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
-	verdict, pageVerdict, report := bundleAssessment(value, directory)
+	verdict, pageVerdict, report, err := AssessBundle(value, directory, newReader)
+	if err != nil {
+		return err
+	}
 	if err := Output(c, report); err != nil {
 		return err
 	}
@@ -133,7 +144,7 @@ func verdictError(verdict string) error {
 // refused case the page draws), so a page claims no more than verify
 // --bundle does about the bundle it carries.
 func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (string, map[string]any) {
-	verdict, _, report := bundleAssessment(value, directory)
+	verdict, _, report := bundleAssessment(value, &assessEnv{directory: directory})
 	return verdict, report
 }
 
@@ -144,9 +155,9 @@ func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (
 // draws as refused cases (PageGate); otherwise it equals verdict. It reads
 // served refusals of the top-level composed block only: a composed member's
 // own bundle is assessed for its verdict alone.
-func bundleAssessment(value map[string]interface{}, directory *witness.Directory) (verdict, pageVerdict string, report map[string]any) {
+func bundleAssessment(value map[string]interface{}, env *assessEnv) (verdict, pageVerdict string, report map[string]any) {
 	result := aacbundle.VerifyBundleWithOptions(value, bundleOptions)
-	report, verdict, pageVerdict = assessBundle(value, result, directory)
+	report, verdict, pageVerdict = assessBundle(value, result, env)
 	return verdict, pageVerdict, report
 }
 
@@ -180,7 +191,8 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // on their member; their claims are never merged into the containing
 // Bundle's, but a failed member or block fails the verdict, and one with
 // something not shown makes it INCOMPLETE.
-func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string, string) {
+func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, env *assessEnv) (map[string]any, string, string) {
+	directory := env.directory
 	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
 	result = withSelection(value, result, strict)
 	records := map[string]string{}
@@ -243,11 +255,42 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	if coverageClaim.Status == "fail" {
 		claims = append(claims, coverageClaim)
 	}
+	// An optional reader of the extensions the core does not read (see
+	// ExtensionReader): it adds to this result and never weakens it.
+	reader := env.reader()
+	ctx := &ExtensionContext{Value: value, Result: result, SignatureStates: signatureStates, Directory: directory, Statement: statement, Witnesses: witnesses, Receipts: witnessReceipts}
+	var readerWitnesses map[string]any
+	if reader != nil {
+		if claim, receipts, ok := reader.Witnesses(ctx); ok {
+			ctx.Anchored = true
+			readerWitnesses = map[string]any{"read_by": reader.Name(), "status": claim.Status, "findings": nonNilStrings(claim.Findings), "receipts": receipts}
+			// As for the checkpoint's own receipts, only a failing claim
+			// changes the verdict.
+			if claim.Status == "fail" {
+				claims = append(claims, claim)
+			}
+		}
+	}
 	extensions := make([]map[string]any, 0, len(result.Extensions))
+	coreKinds := map[string]bool{}
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		if !readsKind(x.Kind, x.Status) {
+			coreKinds[x.Kind] = true
+		}
+		if reader != nil && readsKind(x.Kind, x.Status) {
+			if read, readClaims, ok := reader.Read(ctx, x.Kind); ok {
+				if read == nil {
+					env.fail("%s read %s and returned no entry", reader.Name(), x.Kind)
+				} else {
+					entry = read
+					entry["kind"], entry["read_by"] = x.Kind, reader.Name()
+					entry["claims"] = readerClaims(reader, readClaims, &claims)
+				}
+			}
+		}
 		if x.Composed != nil {
-			composed, memberVerdicts, served := composedOutput(value, x.Composed, directory)
+			composed, memberVerdicts, served := composedOutput(value, x.Composed, env)
 			entry["composed"] = composed
 			claims = append(claims, aacbundle.ClaimResult{Status: x.Composed.Status, Findings: x.Composed.Findings})
 			for _, memberVerdict := range memberVerdicts {
@@ -256,6 +299,19 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			servedRefusals += served
 		}
 		extensions = append(extensions, entry)
+	}
+	if reader != nil {
+		finished, finishClaims := reader.Finish(ctx)
+		for _, entry := range finished {
+			kind, _ := entry["kind"].(string)
+			if kind == "" || coreKinds[kind] {
+				env.fail("%s finished with an entry for kind %q, which the core reads or no kind", reader.Name(), kind)
+				continue
+			}
+			entry["read_by"] = reader.Name()
+			extensions = append(extensions, entry)
+		}
+		readerClaims(reader, finishClaims, &claims)
 	}
 	// The page verdict leaves out the served refusals: each is a withheld
 	// claim for the verdict (what was asked for was not served) that PageGate
@@ -293,6 +349,9 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	// bundle's output changes.
 	if categoryCoverage != nil {
 		report["category_coverage"] = categoryCoverage
+	}
+	if readerWitnesses != nil {
+		report["reader_witnesses"] = readerWitnesses
 	}
 	return report, verdict, pageVerdict
 }

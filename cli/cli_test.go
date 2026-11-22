@@ -289,12 +289,12 @@ func TestBundleInputBound(t *testing.T) {
 }
 
 // Only the commands that verify or render a whole bundle read with
-// MaxBundleInput: verify --bundle (verifyBundleFile), presentation build
+// MaxBundleInput: verify --bundle (VerifyBundleFileWith), presentation build
 // (presentationCommands) and presentation list (presentationListCommand).
 // book report build is the plugin's (TestReportBuildReadsABundle). Every
 // other input keeps MaxInput.
 func TestBundleInputCallers(t *testing.T) {
-	assert.Equal(t, map[string]int{"verifyBundleFile": 1, "presentationCommands": 1, "presentationListCommand": 1}, callersOf(t, "ReadBundleInput"))
+	assert.Equal(t, map[string]int{"VerifyBundleFileWith": 1, "presentationCommands": 1, "presentationListCommand": 1}, callersOf(t, "ReadBundleInput"))
 }
 
 // callersOf counts, per top-level function in this package's non-test
