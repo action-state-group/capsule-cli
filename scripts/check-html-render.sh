@@ -147,7 +147,7 @@ render incomplete.html
 check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
 check "incomplete-bundle: the page never says the bundle verified" lacks incomplete.html.dom 'class="cv-pill" data-verify="verified"'
 
-# A deal receipt's page (the deal plugin's) is checked in evidencebook-deal
-# (scripts/check-deal-pages.sh) since the plugin moved there (capsule-cli#326).
+# A deal receipt's page (the deal plugin's) is checked in evidencebook
+# (capsulectl/scripts/check-deal-pages.sh) since the plugin moved there (capsule-cli#326).
 
 exit "$fail"

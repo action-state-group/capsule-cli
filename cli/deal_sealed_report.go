@@ -158,7 +158,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		return map[string]any{
 			"kind": profile, "status": "pass", DealReportPointer: id, "report": "standalone", "as_of": dealReportAsOfV1(asOf),
 			"findings": []string{DealV1ReportRuleNotChecked},
-			"note":     "NOT_CHECKED: the x-deal-v1 report rule (xdealv1.VerifyReportBundle: the report's structure, its rows' rulings, the seq 1 agreement and the records its rows rely on) is run by the deal plugin (capsulectl-deal), not by this verifier",
+			"note":     "NOT_CHECKED: this verifier does not run the x-deal-v1 report rule (xdealv1.VerifyReportBundle); a verifier for that profile does. For example, with capsulectl-deal installed, run: capsulectl deal verify --bundle <file>",
 		}
 	}
 	report, _ := input["report"].(map[string]interface{})

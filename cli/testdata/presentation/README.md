@@ -3,7 +3,7 @@
 Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`. The pages and snapshots
 are those of capsule-viewer v0.3.0 (fixtures 4 and 5: v0.7.0) (`go/pageruntime`, the runtime `go.mod`'s capsule-viewer/go
-carries; its banner reads a bundle with unsigned records as incomplete). evidencebook-deal
+carries; its banner reads a bundle with unsigned records as incomplete). evidencebook
 rebuilds them for each new viewer and they are copied here then.
 
 **Here, in the core,** they are committed test data: `TestPresentationGoldensCiteWhatTheyCarry`
@@ -12,7 +12,7 @@ each bundle cites and that each bundle and page verifies to its `meta.json` verd
 core alone, and the `presentation build` and `list` tests read them.
 
 **The rendering checks below run where the pages are built** (capsule-cli#326):
-evidencebook-deal's `TestPresentationGoldens` (`internal/deal/presentation_golden_test.go`), on
+evidencebook's `TestPresentationGoldens` (`capsulectl/internal/deal/presentation_golden_test.go`), on
 its own copy of these fixtures, and, for the two pages `book report build` writes
 (`4-monthly-outcome`, `5-monthly-compliance`), evidencebook's `TestReportBuildGoldens`
 (`capsulectl/internal/book/presentation_golden_test.go`). They hold every later viewer to them:
@@ -25,7 +25,7 @@ its own copy of these fixtures, and, for the two pages `book report build` write
   page fails the test, whether the page, one of its iframes or workers, or a WebSocket
   makes it. At 1280px its DOM must match `snapshot.json`: the verification state, the
   views, the evidence identifiers, and the words in order. Layout is not compared.
-- **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (evidencebook-deal's CI only), the
+- **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (evidencebook's CI only), the
   browser must be the Chrome its `known-overflow.json` names. At 390px, 1280px and in print, each page is held
   to that file:
   - an overflow it does not list fails;
@@ -34,10 +34,10 @@ its own copy of these fixtures, and, for the two pages `book report build` write
 
   Widths depend on the browser and the fonts, so CI pins both: Chrome for Testing at
   the named version, and DejaVu as the only fonts (its `fonts.conf`). Elsewhere widths
-  are logged, not compared. Both files are evidencebook-deal's.
+  are logged, not compared. Both files are evidencebook's.
 
 Every fixture is synthetic: example operators, example cases, example criteria,
-generated keys. evidencebook-deal's `scripts/presentation-goldens/build-fixtures.sh`
+generated keys. evidencebook's `capsulectl/scripts/presentation-goldens/build-fixtures.sh`
 rebuilds them through the real CLI and plugins; a fixture changed there on purpose is
 copied here, where the core's tests read it.
 
@@ -85,7 +85,7 @@ copied here, where the core's tests read it.
   2267px wide at 1280px and 2091px in print, because its members table holds unbroken
   64-hex ids (capsule-viewer#57); it fits at 390px. It was 2091px at 1280px too until
   capsule-viewer's page shell gave every page a 60rem frame (capsule-viewer#60).
-  evidencebook-deal's `known-overflow.json` lists those two views. No other page overflows. Four did when the fixtures were taken: the
+  evidencebook's `capsulectl/testdata/presentation/known-overflow.json` lists those two views. No other page overflows. Four did when the fixtures were taken: the
   compliance page (793px), the fallback page (686px, fixtures 6 and 6-unknown-extension),
   the rules comparison (682px) and the outcome report (421px, fixed in
   agent-action-capsule#323; capsule-cli#150).
@@ -95,8 +95,8 @@ copied here, where the core's tests read it.
 
 ## The presentation pass
 
-`TestPresentationPass` and its siblings (evidencebook-deal's
-`internal/deal/presentation_pass_test.go`, CI job `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
+`TestPresentationPass` and its siblings (evidencebook's
+`capsulectl/internal/deal/presentation_pass_test.go`, CI job `presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
 the one registry, shell and builder capsulectl has, with no plugin installed:
 
 - **One page per (bundle, audience), for audiences `*` and `counterparty`.** The html page is

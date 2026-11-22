@@ -10,7 +10,7 @@ import (
 
 // The x-deal-v0 names verify reads deal bundles by. EvidenceBook's
 // dealprofile package defines the profile (evidencebook#93), and the
-// capsulectl-deal plugin (evidencebook-deal) builds its records. The core
+// capsulectl-deal plugin (evidencebook, capsulectl/) builds its records. The core
 // may not depend on EvidenceBook (scripts/check-neutral-deps.sh), so it keeps
 // only the names its verifier reads, here and beside the code that reads
 // them; the plugin, which depends on both, tests that each equals the
