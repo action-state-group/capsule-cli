@@ -128,7 +128,7 @@ refused() { # name, words the refusal must carry
 }
 
 # A jsonl (book) profile's page refusal needs the book plugin; its tests
-# check it (evidencebook's TestPageGateRefusesAJSONLProfilesPage).
+# check it (the book plugin's TestPageGateRefusesAJSONLProfilesPage).
 
 # zero-rows: a VALID bundle whose report row cites a record it does not carry.
 variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
@@ -147,7 +147,7 @@ render incomplete.html
 check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
 check "incomplete-bundle: the page never says the bundle verified" lacks incomplete.html.dom 'class="cv-pill" data-verify="verified"'
 
-# A deal receipt's page (the deal plugin's) is checked in evidencebook
-# (capsulectl/scripts/check-deal-pages.sh) since the plugin moved there (capsule-cli#326).
+# A deal receipt's page (the deal plugin's) is checked by the plugin's own
+# page script since the plugin moved there (capsule-cli#326).
 
 exit "$fail"

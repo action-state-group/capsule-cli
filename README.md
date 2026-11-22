@@ -2,10 +2,9 @@
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
 artifact SDK and `cll-go`. Plugins extend it: the first-party ones,
-`capsulectl-book` (the `evidencebook` Go library's evidence book) and
-`capsulectl-deal` (the deal store), build and release from their own
-repositories ([docs/PLUGINS.md](docs/PLUGINS.md)). The core builds without
-evidencebook. Applications import those libraries, not this CLI: the `cli`
+the book plugin (an evidence book) and the deal plugin (a deal store), build
+and release from their own repositories ([docs/PLUGINS.md](docs/PLUGINS.md)).
+The core builds without either. Applications import their libraries, not this CLI: the `cli`
 package is the plugins' host package, with no compatibility promise before
 v1. This repository is a command-line tool, not an SDK.
 No application-specific (investigation/evaluation) semantics, database
@@ -14,9 +13,8 @@ included.
 
 ## The outcome report
 
-The maintained zero-to-verified-report guide lives with the pack that produces
-it, in
-[evidencebook-skills](https://github.com/action-state-group/evidencebook-skills/blob/main/docs/OUTCOME-REPORT-QUICKSTART.md).
+The maintained zero-to-verified-report guide lives with the skill pack that
+produces it, not in this repository.
 
 ## Prebuilt binaries
 
@@ -110,15 +108,14 @@ export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc 
 ```
 
 The evidence book and the deal store are plugins, each with its own release
-(see [docs/PLUGINS.md](docs/PLUGINS.md) for where). Download the plugin file
+(see [docs/PLUGINS.md](docs/PLUGINS.md)). Download the plugin file
 built for this capsulectl release, check it as you checked the binary
 (`sha256sum -c SHA256SUMS`, and `gh attestation verify` against the plugin's
 own repository), then install the file:
 
 ```bash
-# BV, DV: the capsulectl-book and capsulectl-deal releases built for $V.
-capsulectl plugin install ./capsulectl-book-$BV-$OS-$ARCH   # book profiles: close, reconcile, result, report, ...
-capsulectl plugin install ./capsulectl-deal-$DV-$OS-$ARCH   # deal profiles: capsulectl deal ...
+# PLUGIN, PV: a plugin's name and its release built for $V.
+capsulectl plugin install ./capsulectl-$PLUGIN-$PV-$OS-$ARCH   # the plugin's verbs appear under capsulectl $PLUGIN ...
 ```
 
 Install runs the plugin's handshake, checks it is built for this capsulectl
@@ -296,7 +293,7 @@ capsulectl verify --profile NAME   # no file flag: verify the profile's store
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl commitment find --directory URL|--a2a-card URL|--nostr-relay WSS_URL --node-id HEX|--file COMMITMENT.json [--node-key HEX]
-capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --out DIR [--yes --to ard|a2a|nostr ...]
+capsulectl commitment publish --profile NAME --staple STAPLE.json --community goose --binding acme/respond --out DIR [--yes --to ard|a2a|nostr ...]
 capsulectl mailbox key new --output MAILBOX.key
 capsulectl mailbox ask --commitment COMMITMENT.json --node-key HEX --request REQUEST.json
 capsulectl mailbox poll --commitment COMMITMENT.json --node-key HEX --request REQUEST.json --request-event ID --output ANSWER.json
@@ -329,7 +326,7 @@ capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.jso
 capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
 capsulectl profile update --profile NAME --countersign-directory URL_OR_FILE   # the one directory a plugin's stored countersignatures resolve against
 capsulectl book request --profile NAME --request FILE --responder NAME --output FILE
-capsulectl book request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE] | --absent-until TIME)   # --witness-directory: a deal profile; a book from the first capsulectl-book release after rc24 (evidencebook#221)
+capsulectl book request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE] | --absent-until TIME)   # --witness-directory: a deal profile
 capsulectl book respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
 capsulectl book close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
 capsulectl book reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
@@ -435,8 +432,7 @@ default profile reads signed, not witnessed: the default profile names no Transp
 Service, so no witness Receipt covers the card's anchor. A holder who sets
 `checkpoint.endpoint` to a `scrapi+https://` Transparency Service gets witnessed cards. A
 cadence tick is one checkpoint of hashes, at the profile's `cadence.interval` (the
-deal plugin sets its default; see [Witness cadence](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/skills/deal/README.md#witness-cadence)
-in the deal skill), whether or not anything happened, never on activity.
+plugin that keeps the log sets its default; its skill documents the witness cadence), whether or not anything happened, never on activity.
 `cll checkpoint cadence --wait-up-to D`, scheduled every D (D is a duration
 you choose, not a protocol value), is its poll: a run with no tick due
 publishes nothing.
@@ -446,8 +442,7 @@ deal plugin's repository.
 
 The book verbs (`capsulectl book close`, `reconcile`, `request`, `respond`)
 and a book profile's log (`publish`, `cll append`, `cll list`) run over an
-evidence book from the `evidencebook` Go library, in the `capsulectl-book`
-plugin. The CLI does not
+evidence book from the book library, in the book plugin. The CLI does not
 implement an evidence book of its own: it chooses windows, reads files and
 writes results, and the library composes every proof. A profile declares
 whether its log is the core's CLL (`log: cll`) or an evidence book
@@ -1031,9 +1026,9 @@ checks apply, except that a v1 report has no `lifecycle`: its `as_of` member
 `as_of` line shows it as the holder's time, not the checkpoint's; no witness
 attests it. This verifier checks the neutral part (the signature, that the report's key is the deal's
 last step's, its digest, the checkpoint and book it rests on, the profile and the `as_of` form) and reports the
-profile's own report rule (the report's structure, its rows' rulings, the seq 1 agreement and the records its rows rely on, EvidenceBook's
-`xdealv1.VerifyReportBundle`) as `report_rule_not_checked`, naming the deal plugin that runs it; the verdict is
-INCOMPLETE, never VALID, until then. A plugin that registers the rule (`cli.SetDealV1ReportVerifier`, as capsulectl-deal does) has it run here instead: the bundle's report pair and its `x-deal-v1` extension (`sealed_report` and the `book` carrying the seq 1 agreement and the records the rows rely on) go to it, the core reading none of the book, an accepted report passes with no finding, and a refused one fails with `report_rule_failed`. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
+profile's own report rule (the report's structure, its rows' rulings, the seq 1 agreement and the records its rows rely on, the plugin's
+report-bundle verifier) as `report_rule_not_checked`, naming the deal plugin that runs it; the verdict is
+INCOMPLETE, never VALID, until then. A plugin that registers the rule (`cli.SetDealV1ReportVerifier`) has it run here instead: the bundle's report pair and its `x-deal-v1` extension (`sealed_report` and the `book` carrying the seq 1 agreement and the records the rows rely on) go to it, the core reading none of the book, an accepted report passes with no finding, and a refused one fails with `report_rule_failed`. A bundle carrying both `x-deal-v0` and `x-deal-v1`, a pointer
 without the standalone report (or the report without the pointer), a payload
 whose profile is not the extension's, or a copy holding deal steps whose
 `x-deal-v1` section names no report, is INVALID.
@@ -1217,7 +1212,7 @@ and for a `history_card/2` the card's checkpoint chain is agent-action-capsule's
 ```
 capsulectl deal standard-history staple --profile NAME --derivation history_card/1 > staple.json
 capsulectl commitment publish --profile NAME --staple staple.json --community goose \
-  --commitment-uri https://seller.example/commitments/alder.json \
+  --binding acme/respond --commitment-uri https://seller.example/commitments/alder.json \
   --ard-entry listing.json --mailbox-key mailbox.key --nostr-relay wss://relay.example \
   --out ./draft
 ```

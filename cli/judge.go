@@ -1,10 +1,10 @@
 // Package cli: the deterministic half of the retired capsule-judge harness,
 // ported as three verbs -- `judge pin`, `judge drift`, `calibration
-// summarize` -- per [capsulectl-book-verbs-v0]. These need no EvidenceBook:
+// summarize` -- per the book-verbs design. These need no evidence book library:
 // each reads plain JSON files the caller supplies and prints a result: no
 // `--profile`, no store, no signing. The prompting/scoring half of
 // capsule-judge stays a skill (an LLM call), never ported here -- "nothing
-// that judges lives in Go" (evidencebook-skills-v0 design doc).
+// that judges lives in Go" (the skills design doc).
 //
 // The pin's own identity intentionally excludes point-in-time
 // measured/policy fields (adjudication sampling rate, measured agreement

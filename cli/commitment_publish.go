@@ -171,11 +171,11 @@ func checkPublishInput(in publishInput) error {
 	}
 	for name, values := range map[string][]string{"--binding": in.Bindings, "--subject": in.Subjects, "--derivation": in.Derivs} {
 		if len(values) == 0 {
-			return InputError(name + " needs at least one value")
+			return InputError(name + " needs at least one value" + bindingExample(name))
 		}
 		for _, v := range values {
 			if !tokenForm.MatchString(v) || countLike(v) {
-				return InputError(name + " values are lowercase names, such as evidencebook/respond, and not numbers")
+				return InputError(name + " values are lowercase names, such as acme/respond, and not numbers")
 			}
 		}
 	}
@@ -542,4 +542,14 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(f.Name(), path)
+}
+
+// bindingExample says what a --binding value looks like, since the core has no
+// default binding: a default would put one library's name into every signed
+// commitment (capsule-cli#428).
+func bindingExample(flag string) string {
+	if flag == "--binding" {
+		return ", such as acme/respond"
+	}
+	return ""
 }

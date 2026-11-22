@@ -4,7 +4,5 @@
 *.test
 coverage.out
 /capsulectl
-/capsulectl-book
-/capsulectl-deal
 /capsule
 .DS_Store

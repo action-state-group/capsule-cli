@@ -152,7 +152,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		}
 		// What this verifier checked is the neutral part: the bindings, the
 		// signature, the profile and the as_of form. The profile's own report
-		// rule (xdealv1.VerifyReportBundle) is EvidenceBook's, which the core may not
+		// rule (xdealv1.VerifyReportBundle) is the plugin library's, which the core may not
 		// import, so it is reported as not checked and the bundle INCOMPLETE
 		// until the deal plugin runs it.
 		return map[string]any{
@@ -177,7 +177,7 @@ const DealV1ReportRuleNotChecked = "report_rule_not_checked"
 
 // dealReportAsOfV1 words a v1 report's as_of: the time the holder computed
 // the report at, which is the producer's own and which no witness attests
-// (evidencebook design note 461-deal-profile.md §9, "as_of"). It is not the
+// (the deal profile design note, §9 "as_of"). It is not the
 // checkpoint's time, so no witness claim is read into it.
 func dealReportAsOfV1(asOf string) string {
 	return "as of " + asOf + " (the holder's time, when it computed the report; no witness attests it)"
@@ -310,7 +310,7 @@ const DealV1ReportRuleFailed = "report_rule_failed"
 var dealV1ReportVerifier func(report, ext []byte) error
 
 // SetDealV1ReportVerifier registers the x-deal-v1 report rule for
-// `verify --bundle` (capsule-cli#587). The core may not import EvidenceBook, so
+// `verify --bundle` (capsule-cli#587). The core may not import the plugin library, so
 // the deal plugin supplies it: report is the standalone report pair
 // {"record": the report Capsule with signature and key_id, "agent_input": its
 // payload}, and ext is the bundle's x-deal-v1 extension exactly as the bundle

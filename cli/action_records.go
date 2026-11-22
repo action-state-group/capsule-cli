@@ -19,7 +19,7 @@ package cli
 // contract's fields differ.
 
 // TypeTaskAuthority is the one typed record type verify reads (a sale's
-// thread registration); the profile's full set is EvidenceBook's dealprofile.
+// thread registration); the profile's full set belongs to the plugin that owns the profile.
 const TypeTaskAuthority = "task-authority/v0"
 
 // Materiality modes an evaluation states, so that no predicate is told apart

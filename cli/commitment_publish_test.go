@@ -82,9 +82,19 @@ func newPublishFixtureFrom(t *testing.T, source func(*testing.T) (string, json.R
 
 func (f publishFixture) publish(t *testing.T, extra ...string) (string, error) {
 	t.Helper()
-	args := append([]string{"commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "goose",
+	args := append([]string{"commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "goose", "--binding", "acme/respond",
 		"--out", filepath.Join(f.dir, "out")}, extra...)
 	return invoke(t, "", args...)
+}
+
+// The core has no default binding: a default would sign one library's name
+// into every commitment (capsule-cli#428).
+func TestPublishNeedsABinding(t *testing.T) {
+	f := newPublishFixture(t)
+	_, err := invoke(t, "", "commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "goose",
+		"--out", filepath.Join(f.dir, "out"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--binding needs at least one value, such as acme/respond")
 }
 
 func TestPublishWritesADraftThatFindAccepts(t *testing.T) {

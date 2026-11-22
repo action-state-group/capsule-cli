@@ -502,8 +502,8 @@ func nonNilStrings(values []string) []string {
 //
 // For an x-deal-v1 copy, nil covers only the neutral checks (the entry carries
 // report_rule_not_checked) unless the process registered the profile's rule
-// (SetDealV1ReportVerifier); otherwise the caller must still run EvidenceBook's
-// xdealv1.VerifyReportBundle over the report pair and the x-deal-v1 section, which the core may not import.
+// (SetDealV1ReportVerifier); otherwise the caller must still run the profile's own
+// report-bundle verifier over the report pair and the x-deal-v1 section, which the core may not import.
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
 	entry := DealReportEntry(value, aacbundle.VerificationResult{})

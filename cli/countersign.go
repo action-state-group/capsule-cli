@@ -306,7 +306,7 @@ func getJSON(ctx context.Context, client *http.Client, target string, out any) e
 
 // refuseReproducedBundle refuses a bundle in which any record's digested
 // header carries the `reproduction` member. A reproduced scratch book stamps
-// caller-given times (evidencebook#232, guard 2), so it can be compared but
+// caller-given times, so it can be compared but
 // never vouched; the marker sits in the digested header, so it cannot be
 // stripped without changing the record's identity.
 func refuseReproducedBundle(bundle map[string]interface{}) error {

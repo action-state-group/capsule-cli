@@ -199,7 +199,7 @@ func commitmentPublishCommand() *cobra.Command {
 	f.String("community", "", "The card's community: mesh-llm, muse or goose")
 	f.String("node-id", "", "The node's id, 64 lowercase hex (default: the signing key)")
 	f.String("endpoint", "", "ask.endpoint, how the node is asked (default: book:<the card's stream>)")
-	f.StringSlice("binding", []string{"evidencebook/respond"}, "ask.bindings: the bindings the node answers on (repeat for each)")
+	f.StringSlice("binding", nil, "ask.bindings: the bindings the node answers on, such as acme/respond (required; repeat for each)")
 	f.StringSlice("subject", []string{"checkpoints"}, "answers.subjects the node answers (repeat for each)")
 	f.StringSlice("derivation", []string{"history_card/1"}, "answers.derivations the node answers (repeat for each); must include the stapled card's derivation, so --derivation history_card/2 with a /2 staple")
 	f.StringSlice("predicate-class", []string{"performed:counterparty_half"}, "lcap.predicate_classes, <class>:<name> (repeat for each)")

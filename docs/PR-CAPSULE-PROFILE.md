@@ -118,7 +118,7 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
 
 A PR capsule is ordinary evidence. `capsule_id` commits the payload, not the signing key, so
 publishing the request (the action's `request-path` output) on a plain profile gives the same id
-that the PR comment names. An evidence book (a book profile, capsulectl-book) seals the request as
+that the PR comment names. An evidence book (a book profile, kept by the book plugin) seals the request as
 its own capsule, which also carries its record header and so has an id of its own. `publish`
 reports both: `capsule_id` (the record's id) and `sealed_id` (the id the PR comment names, kept as
 the record's `subject_ref`). On a book profile, claims cite the `capsule_id`:

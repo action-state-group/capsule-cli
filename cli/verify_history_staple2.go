@@ -15,7 +15,7 @@ import (
 // §8.1.2): the card names its own subject, derivation, anchor and stream, and
 // each history entry's checkpoint is hex. Everything about the window, the
 // positions, the proofs and the receipts is AAC's CheckHistoryCard2 (see
-// card2Checks). The card has the members evidencebook builds and no others
+// card2Checks). The card has the members a producer builds and no others
 // (its vectors reject a card or an entry with another member), though AAC's
 // check alone would ignore them.
 func card2Form(e *evidencerequest.Envelope) ([][]byte, [][]byte, string, string) {
