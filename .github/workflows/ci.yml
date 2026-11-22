@@ -57,8 +57,8 @@ jobs:
             exit 1
           fi
       - name: Nothing points into the trees that moved out
-        # The first-party plugins and the deal skill live in evidencebook and
-        # evidencebook-deal (capsule-cli#326): their trees are gone, and no
+        # The first-party plugins and the deal skill live in evidencebook
+        # (capsule-cli#326, evidencebook#610): their trees are gone, and no
         # file here names a path in them.
         run: bash scripts/check-moved-paths.sh --fail
       - name: The test sharding script splits every test once

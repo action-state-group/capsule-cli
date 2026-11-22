@@ -89,7 +89,9 @@ func TestDealV1StandaloneReportPasses(t *testing.T) {
 	assert.Equal(t, "standalone", entry["report"])
 	// The profile's report rule is the plugin's: never a clean pass here.
 	assert.Equal(t, []string{DealV1ReportRuleNotChecked}, entry["findings"])
-	assert.Contains(t, entry["note"], "capsulectl-deal")
+	// The wording Sherlock2 settled (capsule-cli#599): a hook plus an example, not a claim
+	// that the plugin is missing.
+	assert.Equal(t, "NOT_CHECKED: this verifier does not run the x-deal-v1 report rule (xdealv1.VerifyReportBundle); a verifier for that profile does. For example, with capsulectl-deal installed, run: capsulectl deal verify --bundle <file>", entry["note"])
 	assert.Equal(t, "as of 2026-10-21T08:30:00Z (the holder's time, when it computed the report; no witness attests it)", entry["as_of"])
 }
 

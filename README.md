@@ -435,7 +435,7 @@ default profile reads signed, not witnessed: the default profile names no Transp
 Service, so no witness Receipt covers the card's anchor. A holder who sets
 `checkpoint.endpoint` to a `scrapi+https://` Transparency Service gets witnessed cards. A
 cadence tick is one checkpoint of hashes, at the profile's `cadence.interval` (the
-deal plugin sets its default; see [Witness cadence](https://github.com/action-state-group/evidencebook-deal/blob/main/skills/deal/README.md#witness-cadence)
+deal plugin sets its default; see [Witness cadence](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/skills/deal/README.md#witness-cadence)
 in the deal skill), whether or not anything happened, never on activity.
 `cll checkpoint cadence --wait-up-to D`, scheduled every D (D is a duration
 you choose, not a protocol value), is its poll: a run with no tick due
