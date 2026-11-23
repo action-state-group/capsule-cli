@@ -437,32 +437,39 @@ plugin that keeps the log sets its default; its skill documents the witness cade
 you choose, not a protocol value), is its poll: a run with no tick due
 publishes nothing.
 
+`deal audit-host` reads the host's execution records afterwards and lists
+consequential actions that have no deal record; see the deal skill, in the
+deal plugin's repository.
+
 **Keeping the poll running.** capsulectl has no scheduler or daemon of its own: nothing
-runs the poll unless the machine does, and without it new receipts stay "not witnessed"
-and publishing stops. Run the same command every D (use the same D for `--wait-up-to`)
+runs the poll unless the machine does, and without it no cadence checkpoint is published,
+so nothing new is witnessed (a profile with no `checkpoint.endpoint` stays signed, not
+witnessed, either way). Run the same command every D (use the same D for `--wait-up-to`)
 from whatever the machine has, naming capsulectl by its full path and `--profile` as
 the install wrote it:
 
-- cron: `*/5 * * * * '/home/you/.local/bin/capsulectl' --profile deal cll checkpoint cadence --wait-up-to 5m >> "$HOME/checkpoint-cadence.log"`
-- launchd (macOS): a LaunchAgent whose `ProgramArguments` are that command and whose
-  `StartInterval` is 300.
-- systemd (Linux): a user `.service` that runs that command and a `.timer` with
-  `OnUnitActiveSec=5min`, enabled with `systemctl --user enable --now NAME.timer`
+- cron: `*/5 * * * * "$HOME/.local/bin/capsulectl" --profile deal cll checkpoint cadence --wait-up-to 5m >> "$HOME/checkpoint-cadence.log" 2>&1`
+- launchd (macOS): a LaunchAgent whose `ProgramArguments` are that command without the
+  redirect (launchd runs no shell, so give the absolute path), whose `StartInterval` is
+  300, and whose `StandardOutPath` and `StandardErrorPath` name the log file.
+- systemd (Linux): a user `.service` that runs that command, and a `.timer` with
+  `OnActiveSec=0`, `OnUnitActiveSec=5min` and `[Install] WantedBy=timers.target`,
+  enabled with `systemctl --user enable --now NAME.timer`
   (`loginctl enable-linger` keeps it running when you log out).
 - a container or box with none of these (a plain Ubuntu container): make the loop the
-  container's entrypoint, or run it under any supervisor you already have:
+  container's entrypoint, or run it under any supervisor you already have. The `sleep`
+  runs beside the poll so a run starts every 300 seconds, not 300 seconds after the last
+  one ends:
 
   ```
   while true; do
-    '/home/you/.local/bin/capsulectl' --profile deal cll checkpoint cadence --wait-up-to 5m >> "$HOME/checkpoint-cadence.log"
-    sleep 300
+    sleep 300 &
+    "$HOME/.local/bin/capsulectl" --profile deal cll checkpoint cadence --wait-up-to 5m >> "$HOME/checkpoint-cadence.log" 2>&1
+    wait
   done
   ```
 
   A loop run in a terminal stops when that terminal closes, and so do the checkpoints.
-`deal audit-host` reads the host's execution records afterwards and lists
-consequential actions that have no deal record; see the deal skill, in the
-deal plugin's repository.
 
 The book verbs (`capsulectl book close`, `reconcile`, `request`, `respond`)
 and a book profile's log (`publish`, `cll append`, `cll list`) run over an
