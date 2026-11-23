@@ -325,7 +325,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 		}
 		if m.Outcome == "refusal" {
 			// What was asked for was not served, so the member reads
-			// INCOMPLETE (Steven, u947 (3)), whatever the refusal's signature.
+			// INCOMPLETE, whatever the refusal's signature.
 			// A refusal whose signature verifies under the observer's own key
 			// is also the observer's answer: served_answer lets the deal page
 			// draw the refused case (PageGate). The signature check binds the

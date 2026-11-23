@@ -343,8 +343,8 @@ func sampleRefusalBundle(t *testing.T, mutate func(refusal map[string]interface{
 }
 
 // A refusal member whose signature verifies is the observer's served answer
-// (capsule-cli#511): it stays INCOMPLETE for the verdict (Steven, u947 (3):
-// what was asked for was not served) and says served_answer, and the deal
+// (capsule-cli#511): it stays INCOMPLETE for the verdict (what was
+// asked for was not served) and says served_answer, and the deal
 // page is written; an unsigned refusal draws no page, and a badly signed one
 // is INVALID.
 func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {

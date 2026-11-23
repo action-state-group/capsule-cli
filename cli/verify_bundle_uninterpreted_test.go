@@ -13,8 +13,8 @@ import (
 // An extension kind the core does not read, a plugin's deal profile included
 // (capsule-cli#428 step 5), is integrity-covered and listed uninterpreted. It
 // adds no claim, so the verdict is the generic checks', and the line that says
-// so names the kinds next to it (Sherlock2: VALID is what this verifier
-// checked, never alone).
+// so names the kinds next to it (VALID is what this verifier checked, never
+// alone).
 func TestVerifyBundleListsAnExtensionItDoesNotReadAndSaysSo(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	path := producedBundle(t, func(v map[string]interface{}) {
@@ -48,7 +48,7 @@ func TestVerifyBundleSaysNothingExtraWithoutUninterpretedExtensions(t *testing.T
 // The cadence chain (x-cadence-witness/v0) is plugin-local: the core reads no
 // witness or as-of claim from it. The extension is listed uninterpreted, and
 // the witness claim stays what it is for a bundle with no receipt, never a
-// pass (Sherlock2, capsule-cli#428 step 5; the neutral form is
+// pass (capsule-cli#428 step 5; the neutral form is
 // parent-log-witness/v1, capsule-cli#608).
 func TestVerifyBundleReadsNoWitnessClaimFromACadenceChain(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
