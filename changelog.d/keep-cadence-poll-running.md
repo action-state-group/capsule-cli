@@ -1,0 +1,1 @@
+- docs(readme): how to keep `cll checkpoint cadence --wait-up-to D` running on a machine with no cron or host scheduler (launchd, a systemd timer, a container entrypoint loop); capsulectl adds no scheduler or daemon (#600, part 1).
