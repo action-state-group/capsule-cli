@@ -46,6 +46,28 @@ type LogBackend interface {
 	WitnessStore(p Profile) cll.WitnessStateStore
 }
 
+// LogIDOwner is an optional LogBackend method for a backend that keeps more
+// than one log for a profile. OwnsLogID reports whether logID is one of the
+// profile's logs besides p.LogID; VerifyCheckpoint then accepts its
+// checkpoints, with the signature, trusted-key and size checks unchanged. A
+// backend that declares a log id vouches that it belongs to the profile: the
+// core does not check the claim beyond requiring the id to read
+// "<log_id>/<suffix>", so a log of another profile cannot be declared. A
+// backend without the method, and a process with no in-process backend,
+// accept only p.LogID.
+type LogIDOwner interface {
+	OwnsLogID(p Profile, logID string) bool
+}
+
+// backendOwnsLogID is whether p's in-process backend declares logID.
+func backendOwnsLogID(p Profile, logID string) bool {
+	if !strings.HasPrefix(logID, p.LogID+"/") {
+		return false
+	}
+	b, ok := backendFor(p).(LogIDOwner)
+	return ok && b.OwnsLogID(p, logID)
+}
+
 // OwnedLog is one open log of a plugin-kept profile.
 type OwnedLog interface {
 	// Publish seals the request as a capsule of the book, carrying its

@@ -372,8 +372,9 @@ func TestCheckpointProof(t *testing.T) {
 	require.NoError(t, e)
 	path := filepath.Join(t.TempDir(), "proof.json")
 	require.NoError(t, os.WriteFile(path, raw, 0600))
-	_, e = invoke(t, "", "cll", "verify", "--profile", p.Name, "--proof", path)
+	out, e := invoke(t, "", "cll", "verify", "--profile", p.Name, "--proof", path)
 	require.NoError(t, e)
+	assert.Contains(t, out, `"checkpoint_log_id":"test-log"`, "the output names the checkpoint's own log")
 	p.LogID = "wrong-log"
 	_, e = VerifyCheckpoint(p, state.Checkpoint.Bytes)
 	require.ErrorIs(t, e, ErrConflict)
