@@ -162,9 +162,9 @@ func TestWitnessRefusedDeliveryIsRetried(t *testing.T) {
 	assert.False(t, saved.Permanent, "a 403 is retried")
 	assert.NotContains(t, saved.LastError, "blocked by policy", "the response body is never kept")
 	assert.NotContains(t, saved.LastError, "the witness answered")
-	reason, text := WitnessPendingReason(saved, DealDefaultWitness)
+	reason, text := WitnessPendingReason(saved, testWitness)
 	assert.Equal(t, "refused", reason)
-	assert.Equal(t, "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; "+WitnessRetryText()+" "+WitnessGrantText(DealDefaultWitness), text)
+	assert.Equal(t, "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; "+WitnessRetryText()+" "+WitnessGrantText(testWitness), text)
 
 	// Once the host grants the site, the next attempt after the backoff
 	// delivers it.
@@ -197,7 +197,7 @@ func TestRearmRefusedDelivery(t *testing.T) {
 	stored.Attempts, stored.Permanent, stored.NextAttemptAt = 1, true, now.Add(time.Hour)
 	stored.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 403); response details suppressed"
 	require.NoError(t, store.CommitWitness(t.Context(), due.Attempts, stored))
-	reason, _ := WitnessPendingReason(stored, DealDefaultWitness)
+	reason, _ := WitnessPendingReason(stored, testWitness)
 	assert.Equal(t, "refused", reason, "a stored 403 is not said as the witness's answer")
 
 	require.NoError(t, RearmRefusedLog(t.Context(), store, "service-test", now))
@@ -223,7 +223,7 @@ func TestRearmRefusedDelivery(t *testing.T) {
 	kept, e := RearmRefused(t.Context(), store, conflict, now)
 	require.NoError(t, e)
 	assert.True(t, kept.Permanent)
-	reason, text := WitnessPendingReason(conflict, DealDefaultWitness)
+	reason, text := WitnessPendingReason(conflict, testWitness)
 	assert.Equal(t, "witness_error", reason)
 	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.", text)
 }
@@ -263,14 +263,14 @@ func TestWitnessProxyAuthIsNotReached(t *testing.T) {
 	saved, e := store.GetWitness(t.Context(), "service-test", 1)
 	require.NoError(t, e)
 	assert.False(t, saved.Permanent)
-	reason, _ := WitnessPendingReason(saved, DealDefaultWitness)
+	reason, _ := WitnessPendingReason(saved, testWitness)
 	assert.Equal(t, "network_consent_needed", reason)
 	server.Close()
 	_, e = witnessDelivery(t, store, public, server).RunOnce(t.Context(), time.Now().UTC().Add(48*time.Hour), 1)
 	require.NoError(t, e)
 	saved, e = store.GetWitness(t.Context(), "service-test", 1)
 	require.NoError(t, e)
-	reason, _ = WitnessPendingReason(saved, DealDefaultWitness)
+	reason, _ = WitnessPendingReason(saved, testWitness)
 	assert.Equal(t, "network_consent_needed", reason, "a transport error did not reach the witness")
 }
 
@@ -282,10 +282,10 @@ func TestWitnessRetryTextFollowsBackoffCap(t *testing.T) {
 	assert.Contains(t, WitnessRetryText(), "a wait that grows up to an hour")
 	assert.NotContains(t, WitnessRetryText(), "every tick")
 	for _, state := range []cll.WitnessState{{Attempts: 1, LastError: "boom"}, {Attempts: 1, LastError: WitnessFailureBody(500)}} {
-		_, text := WitnessPendingReason(state, DealDefaultWitness)
+		_, text := WitnessPendingReason(state, testWitness)
 		assert.Contains(t, text, WitnessRetryText())
 	}
-	_, text := WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: WitnessFailureBody(500)}, DealDefaultWitness)
+	_, text := WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: WitnessFailureBody(500)}, testWitness)
 	assert.Contains(t, text, "HTTP 500")
 }
 

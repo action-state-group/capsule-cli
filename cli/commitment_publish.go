@@ -45,7 +45,6 @@ var (
 	classForm    = regexp.MustCompile(`^[a-z][a-z0-9_]*:[a-z0-9][a-z0-9_./-]*$`)
 	// publisherForm is a fully qualified domain name (ARD Appendix C).
 	publisherForm = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
-	communities   = []string{"mesh-llm", "muse", "goose"}
 )
 
 // publishInput is what `commitment publish` read, checked.
@@ -94,7 +93,7 @@ type publishPlan struct {
 	Announce   *nostrEvent
 }
 
-// printedCardStaple is `deal standard-history staple` as it prints: {derivation,
+// printedCardStaple is a staple as a plugin's staple command prints it: {derivation,
 // staple: {request, reply}}.
 type printedCardStaple struct {
 	Derivation string `json:"derivation"`
@@ -113,7 +112,7 @@ type printedCardStaple struct {
 func stapledReply(raw []byte) (octets []byte, derivation string, err error) {
 	var f printedCardStaple
 	if err := json.Unmarshal(raw, &f); err != nil || f.Staple == nil || len(f.Staple.Reply) == 0 {
-		return nil, "", InputError("--staple is the output of `deal standard-history staple --derivation history_card/1` (or history_card/2): {derivation, staple: {request, reply}}")
+		return nil, "", InputError("--staple is a printed staple, {derivation, staple: {request, reply}}, of a history_card/1 or history_card/2")
 	}
 	if !isStapleCard(f.Derivation) {
 		return nil, "", InputError("--staple holds a " + f.Derivation + " staple; a commitment staples history_card/1 or history_card/2")
@@ -152,8 +151,8 @@ func cardOf(octets []byte, key string) (derivation, stream string, latest []byte
 // the caller set.
 func checkPublishInput(in publishInput) error {
 	switch {
-	case !slices.Contains(communities, in.Community):
-		return InputError("--community is one of " + strings.Join(communities, ", "))
+	case !tokenForm.MatchString(in.Community):
+		return InputError("--community is a lowercase token, such as acme-loop")
 	case !lowerHex64.MatchString(in.NodeID):
 		return InputError("--node-id is 64 lowercase hex characters")
 	case !durationForm.MatchString(in.AnswersWithin) || in.AnswersWithin == "P" || strings.HasSuffix(in.AnswersWithin, "T"):

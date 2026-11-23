@@ -145,7 +145,7 @@ func (m carried) message() (evidencerequest.Message, error) {
 	return evidencerequest.Message{}, errors.New("not {media_type, octets_text} for JSON or {media_type, octets_hex} for CBOR")
 }
 
-// readPrintedStaple rewrites a staple as `deal standard-history staple`
+// readPrintedStaple rewrites a staple as a plugin's staple command
 // prints it, {derivation, staple: {request, reply}} with the request and the
 // reply as embedded JSON values, into the carried form
 // {history, request, reply} the readers take. An embedded value is the whole

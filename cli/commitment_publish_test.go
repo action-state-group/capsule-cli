@@ -17,7 +17,7 @@ import (
 )
 
 // publishFixture is a profile with a fresh signing key and a printed
-// `deal standard-history staple` whose card is the real fixture's, signed again
+// a plugin's staple command whose card is the real fixture's, signed again
 // under that key as a real node's own staple is.
 type publishFixture struct {
 	profile string
@@ -82,7 +82,7 @@ func newPublishFixtureFrom(t *testing.T, source func(*testing.T) (string, json.R
 
 func (f publishFixture) publish(t *testing.T, extra ...string) (string, error) {
 	t.Helper()
-	args := append([]string{"commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "goose", "--binding", "acme/respond",
+	args := append([]string{"commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", "acme-loop", "--binding", "acme/respond",
 		"--out", filepath.Join(f.dir, "out")}, extra...)
 	return invoke(t, "", args...)
 }
@@ -95,6 +95,23 @@ func TestPublishNeedsABinding(t *testing.T) {
 		"--out", filepath.Join(f.dir, "out"))
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "--binding needs at least one value, such as acme/respond")
+}
+
+// The community is a lowercase token the caller names, not one of a list the
+// core holds (capsule-cli#428): any token publishes, anything else is refused.
+func TestPublishChecksTheCommunityAsAToken(t *testing.T) {
+	f := newPublishFixture(t)
+	for _, community := range []string{"Not A Token", "", "UPPER"} {
+		_, err := invoke(t, "", "commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", community,
+			"--binding", "acme/respond", "--out", filepath.Join(f.dir, "out"))
+		require.ErrorIs(t, err, ErrInput, community)
+		assert.Contains(t, SafeError(err), "--community is a lowercase token", community)
+	}
+	for _, community := range []string{"acme-loop", "goose"} {
+		out, err := invoke(t, "", "commitment", "publish", "--profile", f.profile, "--staple", f.staple, "--community", community,
+			"--binding", "acme/respond", "--out", filepath.Join(f.dir, "out-"+community))
+		require.NoError(t, err, out)
+	}
 }
 
 func TestPublishWritesADraftThatFindAccepts(t *testing.T) {

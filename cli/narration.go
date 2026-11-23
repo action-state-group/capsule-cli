@@ -620,6 +620,13 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 	return cmd
 }
 
+// VerifyNarration is verifyNarration for a plugin's own verify verb
+// (NarrateByOutcome(verb, VerifyNarration)): the same words for the verdict, a
+// served refusal and the extensions not read here.
+func VerifyNarration(c *cobra.Command, result map[string]any, err error) Narration {
+	return verifyNarration(c, result, err)
+}
+
 // verifyNarration is verify's report line: unchanged when every check
 // passed, unable when something could not be checked here (exit 3), refused
 // when the only gap is a refusal the other side signed (also exit 3), changed
@@ -628,7 +635,7 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 // no request has another, and one where nothing failed but a key was not given
 // names the checks that could not run (both exit 3; the verdict stays
 // NOT_ACCEPTED).
-func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
+func verifyNarration(c *cobra.Command, result map[string]any, err error) Narration {
 	key := "say.verify.unchanged"
 	vals := V{}
 	var notRun errChecksNotRun
@@ -648,7 +655,50 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	default:
 		key = "say.verify.changed"
 	}
-	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, vals)} })
+	// Whatever the verdict, the line says which extensions this verifier did
+	// not interpret: VALID is what it checked, not everything the file
+	// carries, and a reader of an INCOMPLETE one must know what was never
+	// looked at (capsule-cli#428).
+	kinds := uninterpretedKinds(result)
+	return NarrateWith(c, func(w Wording) Narration {
+		say := w.Line(key, vals)
+		if len(kinds) > 0 && say != "" {
+			if more := w.Line("say.verify.not_read", V{"kinds": strings.Join(kinds, ", ")}); more != "" {
+				say += " " + more
+			}
+		}
+		return Narration{Voice: VoiceReport, Say: say}
+	})
+}
+
+// uninterpretedKinds are the extension kinds a verify --bundle report lists
+// as uninterpreted, in report order, without repeats, including those of the
+// member bundles of a composed bundle (a valid composition must not hide an
+// unread extension inside a member). Only the report's own extensions and
+// composed members' bundle reports are read, never a producer's body text.
+func uninterpretedKinds(result map[string]any) []string {
+	var kinds []string
+	var walk func(report map[string]any)
+	walk = func(report map[string]any) {
+		list, _ := report["extensions"].([]any)
+		for _, raw := range list {
+			entry, _ := raw.(map[string]any)
+			kind, _ := entry["kind"].(string)
+			if status, _ := entry["status"].(string); status == "uninterpreted" && kind != "" && !slices.Contains(kinds, kind) {
+				kinds = append(kinds, kind)
+			}
+			composed, _ := entry["composed"].(map[string]any)
+			members, _ := composed["members"].([]any)
+			for _, m := range members {
+				member, _ := m.(map[string]any)
+				if bundle, ok := member["bundle"].(map[string]any); ok {
+					walk(bundle)
+				}
+			}
+		}
+	}
+	walk(result)
+	return kinds
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with

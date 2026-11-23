@@ -402,7 +402,12 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 			case c.served && c.verdict == "INCOMPLETE" && c.pageable:
 				say = "say.verify.refused"
 			}
-			assert.Equal(t, BuiltinWording().Entries[say], result["say"])
+			// Every extension the verifier lists uninterpreted is named after it.
+			want := BuiltinWording().Entries[say]
+			if kinds := uninterpretedKinds(result); len(kinds) > 0 {
+				want += " " + BuiltinWording().Line("say.verify.not_read", V{"kinds": strings.Join(kinds, ", ")})
+			}
+			assert.Equal(t, want, result["say"])
 			var composed map[string]interface{}
 			for _, x := range result["extensions"].([]interface{}) {
 				if entry := x.(map[string]interface{}); entry["kind"] == "composed/v1" {

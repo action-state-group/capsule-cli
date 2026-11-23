@@ -18,8 +18,8 @@ package cli
 // sets commit to the same facts: only the header, the names and the check
 // contract's fields differ.
 
-// TypeTaskAuthority is the one typed record type verify reads (a sale's
-// thread registration); the profile's full set belongs to the plugin that owns the profile.
+// TypeTaskAuthority names the task-authority record type, which a plugin
+// reads; the profile's full set belongs to the plugin that owns the profile.
 const TypeTaskAuthority = "task-authority/v0"
 
 // Materiality modes an evaluation states, so that no predicate is told apart

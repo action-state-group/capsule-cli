@@ -118,8 +118,9 @@ Action ids `capsulectl-deal-report` and `capsulectl-deal-history`,
 `deal-history/` and the module id `capsulectl.deal-view/v0` are written into
 bundles that core verify checks without the plugin. This note removes
 plugin-name dispatch and hooks, not sealed values. Moving the verify code is
-step 5. `CheckDealStandaloneReport`, `DealReportActionID` and `HistoryActionID`
-stay until step 5 decides.
+step 5, which deleted `CheckDealStandaloneReport`, `DealReportActionID`,
+`HistoryActionID` and the verifiers behind them (capsule-cli#609): core verify
+now lists those extensions uninterpreted, and the plugin checks them.
 
 ## 6. The rest of steps 1 and 2
 

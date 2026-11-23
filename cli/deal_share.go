@@ -1,6 +1,6 @@
 package cli
 
-// A deal receipt is the user's file. `deal report --html` writes the user's
+// A deal receipt is the user's file. The plugin's report command writes the user's
 // own copy (audience keep: nothing withheld). `--share counterparty|adjudicator`
 // writes a copy for someone else, and sharing is a disclose act: the copy
 // withholds what that audience must not get, and a disclosure record naming

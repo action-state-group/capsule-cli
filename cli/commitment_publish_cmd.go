@@ -194,9 +194,9 @@ func commitmentPublishCommand() *cobra.Command {
 		return nil
 	}}
 	f := cmd.Flags()
-	f.String("staple", "", "The history card (history_card/1 or history_card/2) to staple: the output of `deal standard-history staple --derivation history_card/1` or `--derivation history_card/2` (a file, or - for stdin); the card must be signed by this profile's signing key")
+	f.String("staple", "", "The history card (history_card/1 or history_card/2) to staple: a printed staple, {derivation, staple: {request, reply}}, for history_card/1 or history_card/2 (a file, or - for stdin); the card must be signed by this profile's signing key")
 	f.String("out", "", "The directory the draft is written to: <node-id>.json (the commitment, exactly the octets every digest covers), policies/<node-id>.json, and the carrier entries")
-	f.String("community", "", "The card's community: mesh-llm, muse or goose")
+	f.String("community", "", "The card's community, a lowercase token")
 	f.String("node-id", "", "The node's id, 64 lowercase hex (default: the signing key)")
 	f.String("endpoint", "", "ask.endpoint, how the node is asked (default: book:<the card's stream>)")
 	f.StringSlice("binding", nil, "ask.bindings: the bindings the node answers on, such as acme/respond (required; repeat for each)")

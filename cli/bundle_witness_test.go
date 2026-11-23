@@ -630,37 +630,24 @@ func TestVerifyBundleFailsANonCanonicalReceiptWithoutARow(t *testing.T) {
 	assert.Empty(t, result["witnesses"].(map[string]interface{})["receipts"])
 }
 
-// A cadence checkpoint's receipts are AAC's witness.VerifyReceipts results:
+// A checkpoint's receipts are AAC's witness.VerifyReceipts results:
 // with no verified statement, or no receipts, nothing is checked.
 func TestReceiptsClaimIsAACsVerifyReceipts(t *testing.T) {
 	entries := []interface{}{map[string]interface{}{"ts_url": testWitness, "entry_hash": "ab", "receipt_b64": "AA==", "leaf_index": 0, "tree_size": 1}}
-	claim, receipts := receiptsClaim(entries, nil, nil, "cadence")
+	claim, receipts := receiptsClaim(entries, nil, nil)
 	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
 	assert.Empty(t, receipts)
 
-	claim, receipts = receiptsClaim(nil, nil, nil, "cadence")
+	claim, receipts = receiptsClaim(nil, nil, nil)
 	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, claim)
 	assert.Empty(t, receipts)
 }
 
-// A deal's cadence chain is checked only against the deal checkpoint whose
-// claim passed: with no authenticated statement it is withheld with no
-// receipts (capsule-cli#438).
-func TestCadenceClaimWithholdsAChainWithoutAVerifiedCheckpoint(t *testing.T) {
-	value := map[string]interface{}{"extensions": map[string]interface{}{
-		DealCadenceExtension: map[string]interface{}{"state": "witnessed"},
-	}}
-	claim, receipts, present := cadenceClaim(value, nil, nil)
-	assert.True(t, present)
-	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, claim)
-	assert.Empty(t, receipts)
-}
-
-// The cadence chain's receipts go through the same mapping of AAC's
+// A checkpoint's receipts go through the same mapping of AAC's
 // witness.VerifyReceipts: against a verified statement, a receipt whose
 // receipt_b64 is not canonical base64 is malformed and fails with no
 // directory at all, and is not listed (capsule-cli#438, AAC go/v0.13.1).
-func TestReceiptsClaimFailsANonCanonicalCadenceReceiptWithoutADirectory(t *testing.T) {
+func TestReceiptsClaimFailsANonCanonicalReceiptWithoutADirectory(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -673,11 +660,11 @@ func TestReceiptsClaimFailsANonCanonicalCadenceReceiptWithoutADirectory(t *testi
 	entry := witnessEntry(value)
 	encoded := entry["receipt_b64"].(string)
 
-	claim, _ := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	claim, _ := receiptsClaim([]interface{}{entry}, statement, nil)
 	assert.Equal(t, aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_unverified:" + testWitness}}, claim, "a canonical receipt with no directory is only not checked")
 
 	entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
-	claim, receipts := receiptsClaim([]interface{}{entry}, statement, nil, "cadence")
+	claim, receipts := receiptsClaim([]interface{}{entry}, statement, nil)
 	assert.Equal(t, aacbundle.ClaimResult{Status: "fail", Findings: []string{"witness_receipt_malformed:0"}}, claim)
 	assert.Empty(t, receipts)
 }
@@ -763,7 +750,7 @@ func TestVerifyBundleReportsNoRegistrationTimeUnderAKeyNotInTheDirectory(t *test
 	}
 }
 
-// A cadence checkpoint's receipts carry the same fields as a bundle's.
+// A receipt carries the same fields in a bundle's report.
 func TestReceiptsClaimReportsTheRegistrationTimeOfACadenceReceipt(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -778,10 +765,9 @@ func TestReceiptsClaimReportsTheRegistrationTimeOfACadenceReceipt(t *testing.T) 
 	directory, err := LoadWitnessDirectory(writeDirectory(t, rawKeyRow(testWitness, public)))
 	require.NoError(t, err)
 
-	claim, receipts := receiptsClaim([]interface{}{witnessEntry(value)}, statement, &directory, "cadence")
+	claim, receipts := receiptsClaim([]interface{}{witnessEntry(value)}, statement, &directory)
 	assert.Equal(t, "pass", claim.Status)
 	require.Len(t, receipts, 1)
-	assert.Equal(t, "cadence", receipts[0]["via"])
 	require.NotNil(t, receipts[0]["registration_time"])
 	assert.Equal(t, iat, *receipts[0]["registration_time"].(*int64))
 }

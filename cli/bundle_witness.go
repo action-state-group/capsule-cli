@@ -59,16 +59,15 @@ func LoadWitnessDirectory(path string) (witness.Directory, error) {
 // of directory's row for the receipt's witness.
 func witnessClaim(value map[string]interface{}, statement []byte, directory *witness.Directory) (aacbundle.ClaimResult, []map[string]any) {
 	stated, _ := value["checkpoint"].(map[string]interface{})
-	return receiptsClaim(stated["witnesses"], statement, directory, "")
+	return receiptsClaim(stated["witnesses"], statement, directory)
 }
 
 // receiptsClaim is agent-action-capsule's witness.VerifyReceipts on one
 // checkpoint's receipts, in this CLI's report shape. statement is the
 // checkpoint's COSE statement, nil when it did not verify; trusted is the
-// witness directory, nil when none was given (no witness is trusted); via,
-// when set, is added to each receipt. The claim, its findings (malformed
+// witness directory, nil when none was given (no witness is trusted). The claim, its findings (malformed
 // entries first) and each receipt's status and reason are AAC's.
-func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory, via string) (aacbundle.ClaimResult, []map[string]any) {
+func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory) (aacbundle.ClaimResult, []map[string]any) {
 	var signed *witness.SignedCheckpoint
 	if statement != nil {
 		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
@@ -86,9 +85,6 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 			"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": r.Reason,
 			"key_id": r.KeyID, "registration_time": r.RegistrationTime, "registration_time_reason": r.RegistrationTimeReason,
 			"registration_time_text": registrationTimeText(r),
-		}
-		if via != "" {
-			receipt["via"] = via
 		}
 		receipts = append(receipts, receipt)
 	}
