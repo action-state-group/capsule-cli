@@ -322,7 +322,7 @@ func TestVerifyCheckpointAcceptsABackendsDeclaredLogID(t *testing.T) {
 	RegisterLogBackend("ledger", fakeBackend{})
 	_, e = VerifyCheckpoint(p, raw)
 	require.ErrorIs(t, e, ErrConflict, "a backend without OwnsLogID keeps today's rule")
-	assert.Contains(t, e.Error(), "plugin's backend is installed")
+	assert.Contains(t, e.Error(), `neither the profile's log_id "test-log" nor a log under it`)
 
 	RegisterLogBackend("ledger", ownerBackend{owned: child})
 	r, e := VerifyCheckpoint(p, raw)

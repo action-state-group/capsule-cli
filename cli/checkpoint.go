@@ -38,7 +38,7 @@ func VerifyCheckpoint(p Profile, raw []byte) (checkpoint.Record, error) {
 	}
 	if r.LogID != p.LogID && !backendOwnsLogID(p, r.LogID) {
 		if p.HasPluginLog() {
-			return r, fmt.Errorf("%w: checkpoint log id %q is not the profile's log_id; a log id a plugin keeps for the profile is accepted only where that plugin's backend is installed", ErrConflict, r.LogID)
+			return r, fmt.Errorf("%w: checkpoint log id %q is neither the profile's log_id %q nor a log under it (\"%s/<suffix>\") that the profile's backend plugin declares", ErrConflict, r.LogID, p.LogID, p.LogID)
 		}
 		return r, ErrConflict
 	}
@@ -410,6 +410,9 @@ func addCheckpointCommands(logs *cobra.Command) {
 			return e
 		}
 		checks := map[string]string{"checkpoint_signature_and_trust": "passed", "log_id": "passed", "embedded_consistency": "passed", "inclusion": "not_performed", "witness_receipt": "not_performed", "producer_signature": "not_performed", "checkpoint_log_id": r.LogID}
+		if r.LogID != p.LogID {
+			checks["log_id"] = "passed (declared by the backend)"
+		}
 		if proof.CapsuleID != "" {
 			if proof.InclusionProof == nil {
 				return InputError("proof is missing inclusion_proof; a proof minted before the structured-proof format (leaf_index + path) is no longer accepted — re-mint it")

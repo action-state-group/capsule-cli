@@ -52,7 +52,7 @@ type LogBackend interface {
 // checkpoints, with the signature, trusted-key and size checks unchanged. A
 // backend that declares a log id vouches that it belongs to the profile: the
 // core does not check the claim beyond requiring the id to read
-// "<log_id>/<suffix>", so a log of another profile cannot be declared. A
+// "<log_id>/<suffix>", so a declared id always reads as a child of the profile's log_id. A
 // backend without the method, and a process with no in-process backend,
 // accept only p.LogID.
 type LogIDOwner interface {
