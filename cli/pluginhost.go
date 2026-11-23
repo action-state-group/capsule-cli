@@ -61,7 +61,7 @@ type LogIDOwner interface {
 
 // backendOwnsLogID is whether p's in-process backend declares logID.
 func backendOwnsLogID(p Profile, logID string) bool {
-	if !strings.HasPrefix(logID, p.LogID+"/") {
+	if !strings.HasPrefix(logID, p.LogID+"/") || len(logID) == len(p.LogID)+1 {
 		return false
 	}
 	b, ok := backendFor(p).(LogIDOwner)

@@ -338,6 +338,12 @@ func TestVerifyCheckpointAcceptsABackendsDeclaredLogID(t *testing.T) {
 	_, e = VerifyCheckpoint(p, foreign)
 	require.ErrorIs(t, e, ErrConflict, "a declared id outside <log_id>/ is refused")
 
+	for _, id := range []string{"test-log/", "test-log2/x"} {
+		RegisterLogBackend("ledger", ownerBackend{owned: id})
+		_, e = VerifyCheckpoint(p, mintCheckpoint(t, key, id))
+		require.ErrorIs(t, e, ErrConflict, "%q is not <log_id>/<suffix>", id)
+	}
+
 	RegisterLogBackend("ledger", ownerBackend{owned: child})
 	p.Checkpoint.TrustedKeys = []string{strings.Repeat("00", 32)}
 	_, e = VerifyCheckpoint(p, raw)
