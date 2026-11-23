@@ -155,6 +155,10 @@ func TestTermsPayerBuildsAndRefuses(t *testing.T) {
 			in.PaymentRef = &PaymentRef{Type: "other.rail", Value: "x", Qualifiers: map[string]string{"assetCode": testPayer}}
 			in.AccountIDs = []string{testPayer}
 		},
+		"account hidden behind an assetCode and an assetScale qualifier": func(in *Terms) {
+			in.PaymentRef = &PaymentRef{Type: "other.rail", Value: "x", Qualifiers: map[string]string{"assetCode": testPayer, "assetScale": "6"}}
+			in.AccountIDs = []string{testPayer}
+		},
 		"account in the ref": func(in *Terms) {
 			in.PaymentRef.Value = "to " + testPayer
 			in.AccountIDs = []string{testPayer}

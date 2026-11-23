@@ -423,39 +423,56 @@ func (b Built) check() error {
 	return NeverEnters(b.Member, b.AccountIDs)
 }
 
-// NeverEnters refuses a settlement member in which any value other than an
-// amount's assetCode (the assetCode of an object that is an amount: it has an
-// assetScale) equals or contains one of the account identifiers.
+// amountMembers are the settlement members that hold an amount (§6).
+var amountMembers = map[string]bool{"amount": true, "routing_fee": true, "received": true, "receive_fee": true}
+
+// NeverEnters refuses a settlement member in which any value other than the
+// assetCode of its own amount members (amount, routing_fee, received,
+// receive_fee) equals or contains one of the account identifiers. The
+// exemption is by location, never by name: a qualifier or any other member
+// named assetCode is not exempt.
 func NeverEnters(member map[string]any, accounts []string) error {
-	var walk func(value any, key string, inAmount bool) error
-	walk = func(value any, key string, inAmount bool) error {
+	var walk func(value any) error
+	walk = func(value any) error {
 		switch typed := value.(type) {
 		case string:
-			if key == "assetCode" && inAmount {
-				return nil
-			}
 			for _, account := range accounts {
 				if account != "" && strings.Contains(strings.ToLower(typed), strings.ToLower(account)) {
 					return errors.New("refusing to seal: the leg would carry an account identifier in clear")
 				}
 			}
 		case map[string]any:
-			_, amount := typed["assetScale"]
-			for name, item := range typed {
-				if err := walk(item, name, amount); err != nil {
+			for _, item := range typed {
+				if err := walk(item); err != nil {
 					return err
 				}
 			}
 		case []any:
 			for _, item := range typed {
-				if err := walk(item, key, false); err != nil {
+				if err := walk(item); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	return walk(member, "", false)
+	for name, item := range member {
+		amount, isAmount := item.(map[string]any)
+		if !amountMembers[name] || !isAmount {
+			if err := walk(item); err != nil {
+				return err
+			}
+			continue
+		}
+		for field, value := range amount {
+			if field != "assetCode" {
+				if err := walk(value); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func nonEmpty(values ...string) []string {
