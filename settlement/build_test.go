@@ -144,6 +144,8 @@ func TestNeverEntersExemptsOnlyTheAssetCode(t *testing.T) {
 	assert.NoError(t, NeverEnters(member, []string{contract}), "a CAIP-19 code names the token contract, not an account")
 	member["payment_ref"] = map[string]any{"value": "paid to " + strings.ToUpper(contract[2:])}
 	assert.Error(t, NeverEnters(member, []string{contract[2:]}))
+	assert.Error(t, NeverEnters(map[string]any{"payment_ref": map[string]any{"assetCode": contract}}, []string{contract}), "assetCode is exempt in an amount member only")
+	assert.Error(t, NeverEnters(map[string]any{"received": map[string]any{"assetCode": "x", "note": contract}}, []string{contract}), "no other member of an amount is exempt")
 	assert.Error(t, NeverEnters(map[string]any{"wrapped": []any{map[string]any{"note": testPayTo}}}, []string{testPayTo}))
 	assert.NoError(t, NeverEnters(map[string]any{"x": "y"}, []string{""}))
 }

@@ -1,5 +1,5 @@
-// Package settlement builds the settlement leg records the payee seals and
-// reports the verifier's reading of a set of legs, both for
+// Package settlement builds the settlement leg records the payee and the
+// payer seal and reports the verifier's reading of a set of legs, both for
 // draft-mih-agent-settlement-records-00.
 //
 // Verification and state derivation are agent-action-capsule's

@@ -13,8 +13,9 @@ import (
 	aacsettlement "github.com/action-state-group/agent-action-capsule/go/settlement"
 )
 
-// This file builds the two legs the payee seals: payee_observed, from the
-// rail's own objects, and delivered (sent). Every leg it returns passes the
+// This file builds the legs a payee seals (payee_observed, from the rail's own
+// objects, and delivered sent) and the legs a payer seals (terms,
+// payer_observed and delivered received). Every leg it returns passes the
 // structure checks the verifier applies (agent-action-capsule's
 // settlement.StructureFailures), so a leg that a verifier would report
 // settlement_malformed is never sealed.
@@ -87,14 +88,64 @@ var valuePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
 // the caller: payment_ref and status from the settlement response, received
 // from the payee's own requirements. It requests and moves nothing.
 func PayeeObservedX402(in X402Receipt) (Built, error) {
+	x, err := readX402(in.SettleResponse, in.Requirements, in.AssetScale)
+	if err != nil {
+		return Built{}, err
+	}
+	fee := "0"
+	switch {
+	case in.ReceiveFee != nil:
+		if x.scheme == "exact" && *in.ReceiveFee != "0" {
+			return Built{}, errors.New("the x402 exact scheme transfers exactly the amount: it has no receive fee")
+		}
+		fee = *in.ReceiveFee
+	case x.scheme != "exact":
+		return Built{}, errors.New("a receive fee may apply for the " + x.scheme + " scheme: give the fee the payee's system reported (0 if none)")
+	}
+	if !valuePattern.MatchString(fee) {
+		return Built{}, errors.New("the receive fee must be an integer string in the asset's atomic units")
+	}
+	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(x.payTo, x.payer)}
+	wrapped := []any{b.wrap("x402.settle-response", in.SettleResponse)}
+	if len(in.Receipt) > 0 {
+		wrapped = append(wrapped, b.wrap("x402.receipt", in.Receipt))
+	}
+	b.Member = map[string]any{
+		"version": Version, "leg": LegPayeeObserved, "sealer_role": RolePayee, "terms_ref": in.TermsRef,
+		"received": x.amountOf(x.amount), "receive_fee": x.amountOf(fee),
+		"payment_ref": x.paymentRef(),
+		"status":      x.status, "observed_at": in.ObservedAt, "wrapped": wrapped,
+	}
+	return b, b.check()
+}
+
+// x402Facts is what both sides read from the same two x402 objects: the
+// facilitator's settlement response and the payment requirements.
+type x402Facts struct {
+	scheme, network, amount, assetCode, payTo, payer, transaction, status string
+	scale                                                                 int
+}
+
+func (x x402Facts) amountOf(value string) map[string]any {
+	return map[string]any{"value": value, "assetCode": x.assetCode, "assetScale": json.Number(fmt.Sprint(x.scale))}
+}
+
+func (x x402Facts) paymentRef() map[string]any {
+	return map[string]any{"type": "x402.transaction", "value": x.transaction, "network": x.network}
+}
+
+// readX402 reads every value a leg records from the rail's objects, never
+// from the caller; both builders share it so the two legs of one payment
+// normalize identically (the payer's amount is the payee's received).
+func readX402(settleResponse, requirements []byte, assetScale *int) (x402Facts, error) {
 	var settle struct {
 		Success     *bool  `json:"success"`
 		Transaction string `json:"transaction"`
 		Network     string `json:"network"`
 		Payer       string `json:"payer"`
 	}
-	if err := strictUnmarshal(in.SettleResponse, &settle); err != nil || settle.Success == nil {
-		return Built{}, errors.New("the settlement response is not an x402 settlement response (success, transaction, network)")
+	if err := strictUnmarshal(settleResponse, &settle); err != nil || settle.Success == nil {
+		return x402Facts{}, errors.New("the settlement response is not an x402 settlement response (success, transaction, network)")
 	}
 	var req struct {
 		Scheme            string `json:"scheme"`
@@ -104,8 +155,8 @@ func PayeeObservedX402(in X402Receipt) (Built, error) {
 		Asset             string `json:"asset"`
 		PayTo             string `json:"payTo"`
 	}
-	if err := strictUnmarshal(in.Requirements, &req); err != nil {
-		return Built{}, errors.New("the payment requirements are not JSON")
+	if err := strictUnmarshal(requirements, &req); err != nil {
+		return x402Facts{}, errors.New("the payment requirements are not JSON")
 	}
 	amount := req.Amount
 	if amount == "" {
@@ -113,42 +164,29 @@ func PayeeObservedX402(in X402Receipt) (Built, error) {
 	}
 	switch {
 	case req.Scheme == "" || req.Asset == "" || req.PayTo == "":
-		return Built{}, errors.New("the payment requirements need scheme, network, amount, asset and payTo")
+		return x402Facts{}, errors.New("the payment requirements need scheme, network, amount, asset and payTo")
 	case !caip2Pattern.MatchString(req.Network):
-		return Built{}, errors.New("the payment requirements' network must be a CAIP-2 identifier (for example eip155:8453)")
+		return x402Facts{}, errors.New("the payment requirements' network must be a CAIP-2 identifier (for example eip155:8453)")
 	case settle.Network != req.Network:
-		return Built{}, errors.New("the settlement response is for another network than the payment requirements")
+		return x402Facts{}, errors.New("the settlement response is for another network than the payment requirements")
 	case settle.Transaction == "":
-		return Built{}, errors.New("the settlement response names no transaction: a leg joins on it, so there is nothing to record")
+		return x402Facts{}, errors.New("the settlement response names no transaction: a leg joins on it, so there is nothing to record")
 	case !valuePattern.MatchString(amount):
-		return Built{}, errors.New("the payment requirements' amount must be an integer string in the asset's atomic units")
+		return x402Facts{}, errors.New("the payment requirements' amount must be an integer string in the asset's atomic units")
 	}
 	assetCode := req.Network + "/erc20:" + strings.ToLower(req.Asset)
 	if !strings.HasPrefix(req.Network, "eip155:") {
 		assetCode = req.Network + "/token:" + req.Asset
 	}
 	scale, known := knownAssetScales[assetCode]
-	if in.AssetScale != nil {
-		if known && *in.AssetScale != scale {
-			return Built{}, fmt.Errorf("the asset's scale is %d, not %d", scale, *in.AssetScale)
+	if assetScale != nil {
+		if known && *assetScale != scale {
+			return x402Facts{}, fmt.Errorf("the asset's scale is %d, not %d", scale, *assetScale)
 		}
-		scale, known = *in.AssetScale, true
+		scale, known = *assetScale, true
 	}
 	if !known || scale < 0 || scale > 255 {
-		return Built{}, errors.New("the asset's scale (its decimals, 0 to 255) is needed for this asset")
-	}
-	fee := "0"
-	switch {
-	case in.ReceiveFee != nil:
-		if req.Scheme == "exact" && *in.ReceiveFee != "0" {
-			return Built{}, errors.New("the x402 exact scheme transfers exactly the amount: it has no receive fee")
-		}
-		fee = *in.ReceiveFee
-	case req.Scheme != "exact":
-		return Built{}, errors.New("a receive fee may apply for the " + req.Scheme + " scheme: give the fee the payee's system reported (0 if none)")
-	}
-	if !valuePattern.MatchString(fee) {
-		return Built{}, errors.New("the receive fee must be an integer string in the asset's atomic units")
+		return x402Facts{}, errors.New("the asset's scale (its decimals, 0 to 255) is needed for this asset")
 	}
 	ref := settle.Transaction
 	if strings.HasPrefix(req.Network, "eip155:") {
@@ -158,24 +196,13 @@ func PayeeObservedX402(in X402Receipt) (Built, error) {
 	if *settle.Success {
 		status = "settled"
 	}
-	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(req.PayTo, settle.Payer)}
-	wrapped := []any{b.wrap("x402.settle-response", in.SettleResponse)}
-	if len(in.Receipt) > 0 {
-		wrapped = append(wrapped, b.wrap("x402.receipt", in.Receipt))
-	}
-	amountOf := func(value string) map[string]any {
-		return map[string]any{"value": value, "assetCode": assetCode, "assetScale": json.Number(fmt.Sprint(scale))}
-	}
-	b.Member = map[string]any{
-		"version": Version, "leg": LegPayeeObserved, "sealer_role": RolePayee, "terms_ref": in.TermsRef,
-		"received": amountOf(amount), "receive_fee": amountOf(fee),
-		"payment_ref": map[string]any{"type": "x402.transaction", "value": ref, "network": req.Network},
-		"status":      status, "observed_at": in.ObservedAt, "wrapped": wrapped,
-	}
-	return b, b.check()
+	return x402Facts{scheme: req.Scheme, network: req.Network, amount: amount, assetCode: assetCode, payTo: req.PayTo,
+		payer: settle.Payer, transaction: ref, status: status, scale: scale}, nil
 }
 
-// Delivery is what the payee handed over or performed under the terms.
+// Delivery is what was handed over or performed under the terms: the
+// payee's statement for DeliveredSent, the payer's observation of what it
+// received for DeliveredReceived.
 type Delivery struct {
 	TermsRef   string
 	ObservedAt string
@@ -191,12 +218,24 @@ type Delivery struct {
 	// Proof is a carrier's proof-of-delivery document: wrapped by digest as
 	// delivery.proof, an external party's document, never verified here.
 	Proof []byte
+	// AccountIDs are account identifiers the caller knows (a shipping or
+	// wallet address, say); the leg is refused if any enters it in clear.
+	AccountIDs []string
 }
 
 // DeliveredSent builds the payee's delivered leg (§5.4): direction sent. It
 // is the seller's statement of a handoff, never proof of receipt.
-func DeliveredSent(in Delivery) (Built, error) {
-	d := map[string]any{"direction": "sent"}
+func DeliveredSent(in Delivery) (Built, error) { return delivered(in, "sent", RolePayee) }
+
+// DeliveredReceived builds the payer's delivered leg (§5.4): direction
+// received, the buyer's statement of what it received, sealed by a payer
+// that itself observes delivery (a producer like SRC-A). It is not for a
+// producer whose delivery record is another record, such as x-deal-v1's
+// perform: sealing this beside it would add a second delivery record.
+func DeliveredReceived(in Delivery) (Built, error) { return delivered(in, "received", RolePayer) }
+
+func delivered(in Delivery, direction, role string) (Built, error) {
+	d := map[string]any{"direction": direction}
 	set := func(name, value string) {
 		if value != "" {
 			d[name] = value
@@ -208,13 +247,158 @@ func DeliveredSent(in Delivery) (Built, error) {
 	set("shipped_at", in.ShippedAt)
 	set("delivered_at", in.DeliveredAt)
 	set("tracking_digest", in.TrackingDigest)
-	b := Built{Objects: map[string][]byte{}}
+	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(in.AccountIDs...)}
 	b.Member = map[string]any{
-		"version": Version, "leg": LegDelivered, "sealer_role": RolePayee, "terms_ref": in.TermsRef,
+		"version": Version, "leg": LegDelivered, "sealer_role": role, "terms_ref": in.TermsRef,
 		"observed_at": in.ObservedAt, "delivery": d,
 	}
 	if len(in.Proof) > 0 {
 		b.Member["wrapped"] = []any{b.wrap("delivery.proof", in.Proof)}
+	}
+	return b, b.check()
+}
+
+// Amount is an exact amount (§6): a value in the asset's atomic units, its
+// CAIP-19 asset code and the asset's decimals.
+type Amount struct {
+	Value      string
+	AssetCode  string
+	AssetScale int
+}
+
+func (a Amount) member() map[string]any {
+	return map[string]any{"value": a.Value, "assetCode": a.AssetCode, "assetScale": json.Number(fmt.Sprint(a.AssetScale))}
+}
+
+// PaymentRef names the payment a terms leg expects, as the registered type's
+// own members: Qualifiers carries the type's qualifiers (the network of an
+// x402.transaction, say).
+type PaymentRef struct {
+	Type       string
+	Value      string
+	Qualifiers map[string]string
+}
+
+// Terms is the agreed terms the payer states (§4.2): an amount, and
+// optionally the payment reference, the deliverable and a validity time.
+type Terms struct {
+	Amount     Amount
+	PaymentRef *PaymentRef
+	// ContentDigest and DescriptionDigest are the deliverable's (§5.1).
+	ContentDigest     string
+	DescriptionDigest string
+	ValidUntil        string
+	AccountIDs        []string
+}
+
+// TermsPayer builds the terms leg the payer seals. A terms leg that no
+// counterparty leg cites is one party's statement of the terms, not an
+// agreement on them (§5.5).
+func TermsPayer(in Terms) (Built, error) {
+	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(in.AccountIDs...)}
+	b.Member = map[string]any{"version": Version, "leg": LegTerms, "sealer_role": RolePayer, "amount": in.Amount.member()}
+	if r := in.PaymentRef; r != nil {
+		ref := map[string]any{"type": r.Type, "value": r.Value}
+		for name, value := range r.Qualifiers {
+			if name == "type" || name == "value" {
+				return Built{}, errors.New("a payment reference qualifier cannot be named " + name + ": it would replace the reference's own member")
+			}
+			ref[name] = value
+		}
+		b.Member["payment_ref"] = ref
+	}
+	deliverable := map[string]any{}
+	if in.ContentDigest != "" {
+		deliverable["content_digest"] = in.ContentDigest
+	}
+	if in.DescriptionDigest != "" {
+		deliverable["description_digest"] = in.DescriptionDigest
+	}
+	if len(deliverable) > 0 {
+		b.Member["deliverable"] = deliverable
+	}
+	if in.ValidUntil != "" {
+		b.Member["valid_until"] = in.ValidUntil
+	}
+	return b, b.check()
+}
+
+// X402Payment is what the buyer's own system holds for one x402 payment: the
+// facilitator's settlement response, the payment requirements it paid
+// against, and optionally the payment payload it signed.
+type X402Payment struct {
+	TermsRef       string
+	SettleResponse []byte
+	Requirements   []byte
+	// PaymentPayload is the x402 payment payload the payer signed. It is a
+	// transfer authorization, a bearer instrument until it settles: it is
+	// wrapped by digest only, and its contents and signature never enter the
+	// leg.
+	PaymentPayload []byte
+	AssetScale     *int
+	// RoutingFee is what the payer's system reports paid to an intermediary,
+	// in the amount's asset. Optional: it is no part of the amount rule.
+	RoutingFee *string
+	ObservedAt string
+	AccountIDs []string
+}
+
+// PayerObservedX402 builds the payer-observed leg for an x402 payment
+// (§5.2, §7.2) from the buyer's own objects. The amount is what the payment
+// requirements name, so only the exact scheme (which transfers exactly that
+// amount) is built: for another scheme the paid amount is not in these
+// objects. The status comes from the facilitator's settlement response only;
+// without one there is no transaction for payment_ref, so nothing is sealed,
+// never a settled leg.
+func PayerObservedX402(in X402Payment) (Built, error) {
+	x, err := readX402(in.SettleResponse, in.Requirements, in.AssetScale)
+	if err != nil {
+		return Built{}, err
+	}
+	if x.scheme != "exact" {
+		return Built{}, errors.New("the " + x.scheme + " scheme's paid amount is not in the payment requirements: only the exact scheme is built")
+	}
+	if in.RoutingFee != nil && !valuePattern.MatchString(*in.RoutingFee) {
+		return Built{}, errors.New("the routing fee must be an integer string in the asset's atomic units")
+	}
+	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(append([]string{x.payTo, x.payer}, in.AccountIDs...)...)}
+	wrapped := []any{b.wrap("x402.settle-response", in.SettleResponse)}
+	if len(in.PaymentPayload) > 0 {
+		if x.status != "settled" {
+			// The octets stay with the sealer for disclosure, and an
+			// authorization of a payment that did not settle may still be
+			// valid until it expires: it is never kept.
+			return Built{}, errors.New("a payment payload is a live authorization until the payment settles: give it only for a settled payment")
+		}
+		var payload struct {
+			Accepted struct {
+				Scheme string `json:"scheme"`
+			} `json:"accepted"`
+			Payload struct {
+				Authorization struct {
+					From string `json:"from"`
+					To   string `json:"to"`
+				} `json:"authorization"`
+			} `json:"payload"`
+		}
+		// Best effort: reads the EIP-3009 shape (authorization from and to) to
+		// widen the account guard, and refuses a payload that says it is
+		// another scheme than the requirements (the verifier reads the scheme
+		// from the payload).
+		_ = json.Unmarshal(in.PaymentPayload, &payload)
+		if payload.Accepted.Scheme != "" && payload.Accepted.Scheme != x.scheme {
+			return Built{}, errors.New("the payment payload is for another scheme than the payment requirements")
+		}
+		b.AccountIDs = append(b.AccountIDs, nonEmpty(payload.Payload.Authorization.From, payload.Payload.Authorization.To)...)
+		wrapped = append(wrapped, b.wrap("x402.payment-payload", in.PaymentPayload))
+	}
+	b.Member = map[string]any{
+		"version": Version, "leg": LegPayerObserved, "sealer_role": RolePayer, "terms_ref": in.TermsRef,
+		"amount": x.amountOf(x.amount), "payment_ref": x.paymentRef(),
+		"status": x.status, "observed_at": in.ObservedAt, "wrapped": wrapped,
+	}
+	if in.RoutingFee != nil {
+		b.Member["routing_fee"] = x.amountOf(*in.RoutingFee)
 	}
 	return b, b.check()
 }
@@ -239,37 +423,56 @@ func (b Built) check() error {
 	return NeverEnters(b.Member, b.AccountIDs)
 }
 
-// NeverEnters refuses a settlement member in which any value other than an
-// amount's assetCode equals or contains one of the account identifiers.
+// amountMembers are the settlement members that hold an amount (§6).
+var amountMembers = map[string]bool{"amount": true, "routing_fee": true, "received": true, "receive_fee": true}
+
+// NeverEnters refuses a settlement member in which any value other than the
+// assetCode of its own amount members (amount, routing_fee, received,
+// receive_fee) equals or contains one of the account identifiers. The
+// exemption is by location, never by name: a qualifier or any other member
+// named assetCode is not exempt.
 func NeverEnters(member map[string]any, accounts []string) error {
-	var walk func(value any, key string) error
-	walk = func(value any, key string) error {
+	var walk func(value any) error
+	walk = func(value any) error {
 		switch typed := value.(type) {
 		case string:
-			if key == "assetCode" {
-				return nil
-			}
 			for _, account := range accounts {
 				if account != "" && strings.Contains(strings.ToLower(typed), strings.ToLower(account)) {
 					return errors.New("refusing to seal: the leg would carry an account identifier in clear")
 				}
 			}
 		case map[string]any:
-			for name, item := range typed {
-				if err := walk(item, name); err != nil {
+			for _, item := range typed {
+				if err := walk(item); err != nil {
 					return err
 				}
 			}
 		case []any:
 			for _, item := range typed {
-				if err := walk(item, key); err != nil {
+				if err := walk(item); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	return walk(member, "")
+	for name, item := range member {
+		amount, isAmount := item.(map[string]any)
+		if !amountMembers[name] || !isAmount {
+			if err := walk(item); err != nil {
+				return err
+			}
+			continue
+		}
+		for field, value := range amount {
+			if field != "assetCode" {
+				if err := walk(value); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func nonEmpty(values ...string) []string {
