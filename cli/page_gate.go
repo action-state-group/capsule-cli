@@ -44,7 +44,7 @@ func PageGateWith(value map[string]interface{}, newReader ExtensionReaderFactory
 	}
 	// A composed/v1 refusal whose signature verifies is the observer's served
 	// answer: the verdict stays INCOMPLETE (not served) but the page draws the
-	// refused case and its banner says so (Sherlock2, capsule-cli#511).
+	// refused case and its banner says so (capsule-cli#511).
 	if pageVerdict != "VALID" {
 		reason := "verification incomplete"
 		class := ErrPartial

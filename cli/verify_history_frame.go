@@ -31,8 +31,8 @@ var historyInstances = map[string]historyInstance{
 	standardhistory.Derivation3: {},
 	standardhistory.Derivation4: {},
 	outcomeInstance:             {reader: verifyOutcomeHistory},
-	// A staple is a derivation row, not a History instance (Sherlock2, Buzz
-	// 71efdf5a): the reader is chosen by the file's own id.
+	// A staple is a derivation row, not a History instance (REGISTRY.md and
+	// history-frame-v0 §6): the reader is chosen by the file's own id.
 	stapleCommitment:  {staple: true},
 	stapleCard:        {staple: true},
 	stapleCard2:       {staple: true},

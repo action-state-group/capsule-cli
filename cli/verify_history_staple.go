@@ -23,8 +23,8 @@ import (
 
 // A stapled card is read as the derivation it is, history_card/1 (ER §8.1),
 // never as a History frame instance and never as standard_history/1: it
-// carries no record content and no counts (Sherlock2, Buzz 71efdf5a, from
-// REGISTRY.md and history-frame-v0 §6). The file names it by its own id:
+// carries no record content and no counts (REGISTRY.md and
+// history-frame-v0 §6). The file names it by its own id:
 // an evidence-commitment/1 that staples cards, or {history, request, reply}
 // with history "history_card/1".
 const (
@@ -49,8 +49,7 @@ const (
 
 // stapleMustPass are the properties a staple needs before it is ACCEPTED.
 // request_binding is NOT_PRESENT for a commitment, which staples the reply
-// octets only, so a commitment is never ACCEPTED (Sherlock2's finding on a
-// real staple): it reports what it can and says why.
+// octets only, so a commitment is never ACCEPTED: it reports what it can and says why.
 var stapleMustPass = []string{"envelope_signature", "responder_trust", "request_binding", "card_form", "subject_scope", "checkpoint_anchor", "checkpoint_signature", "checkpoint_key", "checkpoint_consistency"}
 
 // stapleRow is one stapled card's checks.
@@ -252,7 +251,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 	// ER §8.1 defines history_card/1 "for the named evidence stream" and does
 	// not restrict the subject, so a staple over checkpoints or full_history
 	// (what the mesh plugin's probe and loop's reporter ask) is in scope;
-	// any other subject is outside it (Sherlock2, Buzz 0d760ea3, on AAC#430).
+	// any other subject is outside it (agent-action-capsule#430).
 	if subjectInScope(e.Subject.Kind) {
 		row.set("subject_scope", statusPass, "")
 	} else {
