@@ -140,7 +140,7 @@ func TestDeliveredSentIsTheSellersHandoff(t *testing.T) {
 
 func TestNeverEntersExemptsOnlyTheAssetCode(t *testing.T) {
 	contract := "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-	member := map[string]any{"received": map[string]any{"assetCode": "eip155:8453/erc20:" + contract}}
+	member := map[string]any{"received": map[string]any{"assetCode": "eip155:8453/erc20:" + contract, "assetScale": json.Number("6")}}
 	assert.NoError(t, NeverEnters(member, []string{contract}), "a CAIP-19 code names the token contract, not an account")
 	member["payment_ref"] = map[string]any{"value": "paid to " + strings.ToUpper(contract[2:])}
 	assert.Error(t, NeverEnters(member, []string{contract[2:]}))

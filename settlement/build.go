@@ -300,6 +300,9 @@ func TermsPayer(in Terms) (Built, error) {
 	if r := in.PaymentRef; r != nil {
 		ref := map[string]any{"type": r.Type, "value": r.Value}
 		for name, value := range r.Qualifiers {
+			if name == "type" || name == "value" {
+				return Built{}, errors.New("a payment reference qualifier cannot be named " + name + ": it would replace the reference's own member")
+			}
 			ref[name] = value
 		}
 		b.Member["payment_ref"] = ref
@@ -361,7 +364,16 @@ func PayerObservedX402(in X402Payment) (Built, error) {
 	b := Built{Objects: map[string][]byte{}, AccountIDs: nonEmpty(append([]string{x.payTo, x.payer}, in.AccountIDs...)...)}
 	wrapped := []any{b.wrap("x402.settle-response", in.SettleResponse)}
 	if len(in.PaymentPayload) > 0 {
+		if x.status != "settled" {
+			// The octets stay with the sealer for disclosure, and an
+			// authorization of a payment that did not settle may still be
+			// valid until it expires: it is never kept.
+			return Built{}, errors.New("a payment payload is a live authorization until the payment settles: give it only for a settled payment")
+		}
 		var payload struct {
+			Accepted struct {
+				Scheme string `json:"scheme"`
+			} `json:"accepted"`
 			Payload struct {
 				Authorization struct {
 					From string `json:"from"`
@@ -369,7 +381,14 @@ func PayerObservedX402(in X402Payment) (Built, error) {
 				} `json:"authorization"`
 			} `json:"payload"`
 		}
-		_ = json.Unmarshal(in.PaymentPayload, &payload) // best effort: only widens the account guard
+		// Best effort: reads the EIP-3009 shape (authorization from and to) to
+		// widen the account guard, and refuses a payload that says it is
+		// another scheme than the requirements (the verifier reads the scheme
+		// from the payload).
+		_ = json.Unmarshal(in.PaymentPayload, &payload)
+		if payload.Accepted.Scheme != "" && payload.Accepted.Scheme != x.scheme {
+			return Built{}, errors.New("the payment payload is for another scheme than the payment requirements")
+		}
 		b.AccountIDs = append(b.AccountIDs, nonEmpty(payload.Payload.Authorization.From, payload.Payload.Authorization.To)...)
 		wrapped = append(wrapped, b.wrap("x402.payment-payload", in.PaymentPayload))
 	}
@@ -405,13 +424,14 @@ func (b Built) check() error {
 }
 
 // NeverEnters refuses a settlement member in which any value other than an
-// amount's assetCode equals or contains one of the account identifiers.
+// amount's assetCode (the assetCode of an object that is an amount: it has an
+// assetScale) equals or contains one of the account identifiers.
 func NeverEnters(member map[string]any, accounts []string) error {
-	var walk func(value any, key string) error
-	walk = func(value any, key string) error {
+	var walk func(value any, key string, inAmount bool) error
+	walk = func(value any, key string, inAmount bool) error {
 		switch typed := value.(type) {
 		case string:
-			if key == "assetCode" {
+			if key == "assetCode" && inAmount {
 				return nil
 			}
 			for _, account := range accounts {
@@ -420,21 +440,22 @@ func NeverEnters(member map[string]any, accounts []string) error {
 				}
 			}
 		case map[string]any:
+			_, amount := typed["assetScale"]
 			for name, item := range typed {
-				if err := walk(item, name); err != nil {
+				if err := walk(item, name, amount); err != nil {
 					return err
 				}
 			}
 		case []any:
 			for _, item := range typed {
-				if err := walk(item, key); err != nil {
+				if err := walk(item, key, false); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	return walk(member, "")
+	return walk(member, "", false)
 }
 
 func nonEmpty(values ...string) []string {

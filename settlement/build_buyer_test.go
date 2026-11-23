@@ -145,6 +145,16 @@ func TestTermsPayerBuildsAndRefuses(t *testing.T) {
 		"bad deliverable":     func(in *Terms) { in.ContentDigest = "abc" },
 		"local validity time": func(in *Terms) { in.ValidUntil = "2026-10-02T00:00:00+02:00" },
 		"missing qualifier":   func(in *Terms) { in.PaymentRef.Qualifiers = nil },
+		"qualifier replaces the value": func(in *Terms) {
+			in.PaymentRef.Qualifiers = map[string]string{"network": "eip155:8453", "value": "other"}
+		},
+		"qualifier replaces the type": func(in *Terms) {
+			in.PaymentRef.Qualifiers = map[string]string{"network": "eip155:8453", "type": "ln.payment_hash"}
+		},
+		"account hidden as an assetCode qualifier": func(in *Terms) {
+			in.PaymentRef = &PaymentRef{Type: "other.rail", Value: "x", Qualifiers: map[string]string{"assetCode": testPayer}}
+			in.AccountIDs = []string{testPayer}
+		},
 		"account in the ref": func(in *Terms) {
 			in.PaymentRef.Value = "to " + testPayer
 			in.AccountIDs = []string{testPayer}
@@ -229,6 +239,31 @@ func TestPayerObservedX402Refusals(t *testing.T) {
 
 // An account only the payment payload names (the buyer's wallet) is guarded
 // too: it enters the leg nowhere in clear.
+func TestPayloadRules(t *testing.T) {
+	failed := buyerPayment()
+	failed.SettleResponse = []byte(strings.Replace(string(failed.SettleResponse), "true", "false", 1))
+	failed.PaymentPayload = []byte(testPayload)
+	_, err := PayerObservedX402(failed)
+	assert.ErrorContains(t, err, "live authorization", "a payload of a payment that did not settle is never kept")
+
+	other := buyerPayment()
+	other.PaymentPayload = []byte(`{"accepted":{"scheme":"upto"},"payload":{}}`)
+	_, err = PayerObservedX402(other)
+	assert.ErrorContains(t, err, "another scheme")
+}
+
+func TestPayerObservedX402OnANonEVMNetwork(t *testing.T) {
+	in := buyerPayment()
+	in.SettleResponse = []byte(`{"success":true,"transaction":"5Sig","network":"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"}`)
+	in.Requirements = []byte(`{"scheme":"exact","network":"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp","amount":"100","asset":"MintAddr","payTo":"PayToAddr"}`)
+	scale := 6
+	in.AssetScale = &scale
+	b, err := PayerObservedX402(in)
+	require.NoError(t, err)
+	assert.Equal(t, "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/token:MintAddr", b.Member["amount"].(map[string]any)["assetCode"])
+	assert.Equal(t, "5Sig", b.Member["payment_ref"].(map[string]any)["value"], "only EVM hashes are lowercased")
+}
+
 func TestPayloadOnlyAccountIsGuarded(t *testing.T) {
 	in := buyerPayment()
 	in.PaymentPayload = []byte(`{"payload":{"authorization":{"from":"0x9999999999999999999999999999999999999ccc"}}}`)
