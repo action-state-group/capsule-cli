@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.1.0-rc49
+
+- docs(readme): how to keep `cll checkpoint cadence --wait-up-to D` running from cron, launchd, a systemd timer or a container entrypoint loop; capsulectl adds no scheduler or daemon (#600, part 1).
+
+## v0.1.0-rc48
+
+- **Added:** the vendored Evidence Result v0 schema carries aac #658's optional claim member `reason` (spec section 4.4, aac `ecaddb17`), so `capsulectl result build` and the book plugin's `book result build` seal a Result whose claim names why it is unavailable or why its grade stopped short of countersigned. It is display-only: nothing in capsulectl reads it, and the schema still refuses it on a countersigned met or not_met claim and on a calibration, close or reconcile claim (capsule-cli#611).
+
+## v0.1.0-rc47
+
+- **Plugins:** the core no longer names a company plugin outside the values written into bundles. The placeholder that answered `capsulectl deal` with "provided by the capsulectl-deal plugin, which is not installed" is gone (a verb no installed plugin provides is an unknown command, and that message now says how a plugin is installed); a `get` miss on a plugin-owned store points to `capsulectl <owner> --help` instead of a deal command; the help, README, release and plugin docs and the capsulectl skill name "the plugin" and "the book/deal plugin", not a launcher or repository; a test fails when a core file names a company plugin outside a short, reasoned allowlist (capsule-cli#428).
+- **Commitment:** `commitment publish` has no default `--binding` any more: it was `evidencebook/respond`, which put one library's name into every signed commitment. Pass the binding the node answers on (for example `--binding acme/respond`); commitments already signed with the old default still verify (capsule-cli#428, Sherlock2's recommendation).
+
+- **Verify:** the `NOT_CHECKED` note on an x-deal-v1 report no longer reads as if the deal plugin is missing: it says this verifier does not run the report rule, that a verifier for that profile does, and gives `capsulectl deal verify --bundle <file>` with `capsulectl-deal` installed as an example (capsule-cli#599).
+- **Docs:** the deal plugin and the deal skill now ship from the one evidencebook `capsulectl/vX` release, with capsulectl-book; `docs/RELEASING.md`, `docs/HARNESS.md` and the README no longer point at evidencebook-deal (capsule-cli#599, evidencebook#610).
+
+- **Tests:** the x402 settlement leg is pinned to carry no `counterparty_class` (a rail cannot tell a person agent from a business agent, so the deal stays counted and shows in the card's `class_missing` tally), and a leg that adds one fails the structure check, since the leg's `settlement` member is closed (Standard History §7, SH-8). No behavior change (capsule-cli#484).
+
+### Fixed
+
+- `verify --bundle` accepts the standalone report of a real x-deal-v1 deal-book bundle. A deal step in a book's bundle has no embedded `evidence_record_header`; its header is the record's disclosed `agent_input`, and the report check now reads it from there, only when it matches the digest the record's Capsule commits. Before this, every such bundle failed with `sealed_report_unverified` (capsule-cli#604).
+
 ## v0.1.0-rc46
 
 - **Fixed:** the x-deal-v1 report rule hook (`cli.SetDealV1ReportVerifier`, capsule-cli#587) now hands the rule the bundle's `x-deal-v1` extension (`{sealed_report, book: {agreement, relied_on}}`, evidencebook design note 461 §9 and PROFILE §10) with the report pair, where rc44 and rc45 handed it a pair built from the bundle's seq 1 record, which lacked the payload and so could not pass `VerifyBook` for a real bundle. The hook's second argument changes meaning, from the first record's pair to the extension; a plugin that registers the hook must update its callback to take the extension. `verify --bundle` no longer refuses an `x-deal-v1` section that has members besides `sealed_report`; without a registered rule such a report is still only neutral-checked (`report_rule_not_checked`).

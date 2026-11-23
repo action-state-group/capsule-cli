@@ -1,2 +1,0 @@
-- **Verify:** the `NOT_CHECKED` note on an x-deal-v1 report no longer reads as if the deal plugin is missing: it says this verifier does not run the report rule, that a verifier for that profile does, and gives `capsulectl deal verify --bundle <file>` with `capsulectl-deal` installed as an example (capsule-cli#599).
-- **Docs:** the deal plugin and the deal skill now ship from the one evidencebook `capsulectl/vX` release, with capsulectl-book; `docs/RELEASING.md`, `docs/HARNESS.md` and the README no longer point at evidencebook-deal (capsule-cli#599, evidencebook#610).
