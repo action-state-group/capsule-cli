@@ -14,7 +14,7 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 )
 
-// RefusalSignatureProfile names the one refusal signature form this CLI
+// WholeRefusalProfile names the one refusal signature form this CLI
 // checks. The Evidence Request draft leaves the format to the deployment; a
 // refusal in any other form is reported signature_unverified, never failed.
 //
@@ -22,29 +22,29 @@ import (
 // 64 lowercase hex) and `signature` (an Ed25519 signature, 128 lowercase hex)
 // over the UTF-8 JCS serialization of the refusal object without `signature`
 // (so request_digest, reason, issued_at and key_id are all signed).
-const RefusalSignatureProfile = "ed25519-jcs"
+const WholeRefusalProfile = "whole-refusal/v1"
 
 var (
 	refusalKeyRE       = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	refusalSignatureRE = regexp.MustCompile(`^[0-9a-f]{128}$`)
 )
 
-// EvidenceBookRefusalProfile names the second refusal form this CLI checks:
-// the one `respond` sends (the book library's Refusal). It carries `key_id` and
+// ThreeMemberRefusalProfile names the second refusal form this CLI checks:
+// a refusal signed over three members only. It carries `key_id` and
 // `sig` (an Ed25519 signature, 128 lowercase hex) over the UTF-8 JCS
 // serialization of {request_digest, reason, issued_at} only.
-const EvidenceBookRefusalProfile = "evidencebook-refusal"
+const ThreeMemberRefusalProfile = "three-member-refusal/v1"
 
-// verifyRefusalSignature checks a carried refusal under RefusalSignatureProfile,
+// verifyRefusalSignature checks a carried refusal under WholeRefusalProfile,
 // or, when it carries `sig` and no `signature`, under
-// EvidenceBookRefusalProfile. A refusal carrying no signature member is not
+// ThreeMemberRefusalProfile. A refusal carrying no signature member is not
 // in either form (unverified); one carrying a key without its signature, or
 // whose signature does not verify, is invalid.
 func verifyRefusalSignature(refusal map[string]interface{}) string {
 	rawKey, hasKey := refusal["key_id"]
 	rawSignature, hasSignature := refusal["signature"]
-	if refusalProfile(refusal) == EvidenceBookRefusalProfile {
-		return verifyEvidenceBookRefusal(refusal, rawKey, refusal["sig"])
+	if refusalProfile(refusal) == ThreeMemberRefusalProfile {
+		return verifyThreeMemberRefusal(refusal, rawKey, refusal["sig"])
 	}
 	if !hasKey && !hasSignature {
 		return aacbundle.RefusalSignatureUnverified
@@ -73,17 +73,17 @@ func verifyRefusalSignature(refusal map[string]interface{}) string {
 }
 
 // refusalProfile is the profile a carried refusal is checked under: a
-// refusal carrying `sig` and no `signature` is in EvidenceBookRefusalProfile.
+// refusal carrying `sig` and no `signature` is in ThreeMemberRefusalProfile.
 func refusalProfile(refusal map[string]interface{}) string {
 	_, hasSig := refusal["sig"]
 	if _, hasSignature := refusal["signature"]; hasSig && !hasSignature {
-		return EvidenceBookRefusalProfile
+		return ThreeMemberRefusalProfile
 	}
-	return RefusalSignatureProfile
+	return WholeRefusalProfile
 }
 
-// verifyEvidenceBookRefusal checks a refusal under EvidenceBookRefusalProfile.
-func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig interface{}) string {
+// verifyThreeMemberRefusal checks a refusal under ThreeMemberRefusalProfile.
+func verifyThreeMemberRefusal(refusal map[string]interface{}, rawKey, rawSig interface{}) string {
 	key, keyOK := rawKey.(string)
 	sig, sigOK := rawSig.(string)
 	if !keyOK || !sigOK || !refusalKeyRE.MatchString(key) || !refusalSignatureRE.MatchString(sig) {
@@ -109,13 +109,13 @@ func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig in
 	return aacbundle.RefusalSignatureVerified
 }
 
-// ResponseSignatureProfile names the first form this CLI checks an artifact
-// member's carried response in: the book library's signed artifact response
-// without its artifact bytes. It carries `key_id` and `sig` (an Ed25519
+// DigestBoundResponseProfile names the first form this CLI checks an artifact
+// member's carried response in: a signed artifact response without its
+// artifact bytes. It carries `key_id` and `sig` (an Ed25519
 // signature, 128 lowercase hex) over the response's signing body, which
 // names the artifact by artifact_digest only, so it verifies without the
 // artifact.
-const ResponseSignatureProfile = "evidencebook-artifact-response"
+const DigestBoundResponseProfile = "digest-bound-artifact-response/v1"
 
 // InteropResponseProfile names the second form: an evidence-interop envelope
 // (interop profile §6.2, evidence-interop/0 or /1) as received, minus its
@@ -130,7 +130,7 @@ func responseProfile(response map[string]interface{}) string {
 	if _, ok := response["responder"]; ok {
 		return InteropResponseProfile
 	}
-	return ResponseSignatureProfile
+	return DigestBoundResponseProfile
 }
 
 // responseKey is the key a carried response is signed under, in its form.
@@ -331,7 +331,7 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			// draw the refused case (PageGate). The signature check binds the
 			// refusal to the key it carries, so, as for a carried response,
 			// any other key fails the member (INVALID). Under the
-			// book-library profile key_id is outside the signed body, so the
+			// three-member profile key_id is outside the signed body, so the
 			// attribution rests on the composed block as carried (as every
 			// observer comparison here does), not on the signature alone;
 			// trusted keys are deployment policy and are not pinned here.
@@ -349,9 +349,9 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			}
 		}
 		if m.RefusalSignature != "" {
-			profile := RefusalSignatureProfile
-			if refusal, ok := composedMemberRefusal(container, m.ID); ok && refusalProfile(refusal) == EvidenceBookRefusalProfile {
-				profile = EvidenceBookRefusalProfile
+			profile := WholeRefusalProfile
+			if refusal, ok := composedMemberRefusal(container, m.ID); ok && refusalProfile(refusal) == ThreeMemberRefusalProfile {
+				profile = ThreeMemberRefusalProfile
 			}
 			member["refusal_signature"] = map[string]any{"status": m.RefusalSignature, "profile": profile}
 		}
@@ -450,7 +450,7 @@ func composedMemberBody(container map[string]interface{}, id, key string) (map[s
 const artifactResponseType = "evidence-artifact-response/v1"
 
 // ArtifactResponseSigningBody is the exact bytes a signed artifact response
-// (ResponseSignatureProfile) covers: its context and the five members that
+// (DigestBoundResponseProfile) covers: its context and the five members that
 // name the request, the anchor and the artifact by digest. The deal plugin
 // signs this body; verify --bundle checks a composed member's carried
 // response over it.

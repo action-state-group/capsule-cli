@@ -228,7 +228,7 @@ func TestVerifyBundleComposedRefusalMember(t *testing.T) {
 	assert.Equal(t, "pass", extensionStatus, composed["findings"])
 	member := composed["members"].([]interface{})[1].(map[string]interface{})
 	assert.Equal(t, "refusal", member["outcome"])
-	assert.Equal(t, map[string]interface{}{"status": "verified", "profile": "ed25519-jcs"}, member["refusal_signature"])
+	assert.Equal(t, map[string]interface{}{"status": "verified", "profile": WholeRefusalProfile}, member["refusal_signature"])
 	assert.NotContains(t, member, "bundle")
 	join := composed["joins"].([]interface{})[0].(map[string]interface{})
 	assert.Equal(t, "one_sided", join["derived"])
@@ -268,10 +268,10 @@ func TestPageGateAgreesWithVerifyOnComposedBundles(t *testing.T) {
 	assert.Len(t, cases, 4)
 }
 
-// A refusal in evidencebook's form (`sig` over request_digest, reason and
-// issued_at) verifies under EvidenceBookRefusalProfile; an edited member or
+// A refusal in the three-member form (`sig` over request_digest, reason and
+// issued_at) verifies under ThreeMemberRefusalProfile; an edited member or
 // a signature without its key does not.
-func TestEvidenceBookRefusalSignature(t *testing.T) {
+func TestThreeMemberRefusalSignature(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	refusal := map[string]interface{}{"request_digest": strings.Repeat("a", 64), "reason": "coverage_unsatisfiable", "issued_at": "2026-10-11T00:00:00Z", "key_id": hex.EncodeToString(public)}
@@ -320,7 +320,7 @@ func TestVerifyBundleComposedProducerSelectedMember(t *testing.T) {
 }
 
 // sampleRefusalBundle loads testdata/composed-refusal-sample.json (the
-// caps-196 deal: a refusal member signed under the evidencebook-refusal
+// caps-196 deal: a refusal member signed under the three-member-refusal/v1
 // profile and an absence member, in a checkpointed bundle) with its refusal
 // edited by mutate and the member and composed digests recomputed, so only the
 // signature state differs.

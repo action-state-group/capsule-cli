@@ -1057,7 +1057,7 @@ agent-action-capsule Go library (v0.7.0). Its `extensions` entry has `status`
   `mismatch` or `not_shown`), and, for a carried member bundle, `bundle`: that
   bundle's own full report (its own verdict and claims, never merged with the
   containing bundle's). A refusal's signature is checked when it carries
-  `key_id` and `signature` (`ed25519-jcs`: Ed25519 over the JCS of the refusal
+  `key_id` and `signature` (`whole-refusal/v1`: Ed25519 over the JCS of the refusal
   without `signature`); any other refusal is `signature_unverified`, not failed;
 - `composition_closure`: `pass`, `withheld` (`declared_incomplete`) or `fail`;
 - `joins`: each join's `declared` and re-`derived` state and `result`

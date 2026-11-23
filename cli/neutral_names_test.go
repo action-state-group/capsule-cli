@@ -32,12 +32,9 @@ var (
 // checked. A new entry is a decision, not a convenience: the issue allows only
 // these.
 var neutralNamesAllowed = map[string][]*regexp.Regexp{
-	// Sealed vocabulary: written into bundles that core verify checks without the plugin.
-	"cli/composed.go": {regexp.MustCompile(`EvidenceBookRefusalProfile|verifyEvidenceBookRefusal|"evidencebook-(refusal|artifact-response)"|book-library profile`)}, // signature profile ids sealed in composed bundles
 	// The neutrality guards name what they guard against.
 	".github/workflows/ci.yml":      {regexp.MustCompile(`grep -n evidencebook go.mod|requires evidencebook`)},
 	"scripts/check-neutral-deps.sh": {regexp.MustCompile(`company-OSS module \(evidencebook`)},
-	"scripts/test-weights":          {regexp.MustCompile(`TestEvidenceBookRefusalSignature`)}, // a test name
 }
 
 // attributionInCode matches, in a code comment, a person's name, a Buzz message id,

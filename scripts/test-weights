@@ -185,7 +185,7 @@
 0.03 TestEveryFallbackIsMarked
 0.51 TestEverySettlementVectorDerivesItsStatedExpectation
 0.06 TestEveryWordingKeyTheCodeNamesIsInThePack
-0.00 TestEvidenceBookRefusalSignature
+0.00 TestThreeMemberRefusalSignature
 0.03 TestEvidenceRequestCommandChecks
 0.00 TestEvidenceRespondCommandNeedsOutput
 0.01 TestExcludesAudienceIsTheResolversAudienceCondition
