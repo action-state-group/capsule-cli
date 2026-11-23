@@ -76,9 +76,9 @@ A receipt that verifies, holds a sealed Hold and carries the sealed install
 check is a pass for what those commands read. **This harness does not check
 that the receipt is witnessed, or its deal section:** `verify --bundle` lists
 them as not checked here, and no reader command for them exists until the
-core verifies the neutral `parent-log-witness/v1` form of the chain
-(capsule-cli#608) or the deal plugin ships a reader verb. Until then a
-witnessed receipt is not a harness criterion. **No
+deal receipt carries the neutral `parent-log-witness/v1` form of the chain
+(which `verify --bundle` reads, capsule-cli#608) or the deal plugin ships a
+reader verb. Until then a witnessed receipt is not a harness criterion. **No
 receipt for the day is the alarm**: the deal never reached its end, whatever
 the reason. This half is the only place a deal that never started can show.
 

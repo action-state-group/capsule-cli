@@ -133,7 +133,7 @@ func TestAssessBundleWithNoReaderIsTheCoresOwn(t *testing.T) {
 // its claims gate.
 func TestAssessBundleCallsAReaderForTheExtensionsTheCoreLeaves(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	value := bundleWithExtensions(t, "x-vendor/1", "x-vendor/2", aacbundle.ParentLogWitnessKind)
+	value := bundleWithExtensions(t, "x-vendor/1", "x-vendor/2")
 	fail := aacbundle.ClaimResult{Status: "fail", Findings: []string{"vendor_rule_failed"}}
 	reader := &fakeReader{name: "vendor-reader", read: map[string]fakeRead{
 		"x-vendor/1": {entry: map[string]any{"status": "pass", "kind": "ignored"}},
@@ -153,8 +153,25 @@ func TestAssessBundleCallsAReaderForTheExtensionsTheCoreLeaves(t *testing.T) {
 	assert.Equal(t, "pass", byKind["x-vendor/1"]["status"])
 	assert.Equal(t, "vendor-reader", byKind["x-vendor/1"]["read_by"])
 	assert.Equal(t, "x-vendor/1", byKind["x-vendor/1"]["kind"], "the core sets the kind")
-	assert.Equal(t, "uninterpreted", byKind[aacbundle.ParentLogWitnessKind]["status"], "a core-read kind stays the core's")
-	assert.NotContains(t, byKind[aacbundle.ParentLogWitnessKind], "read_by")
+}
+
+// An extension the core reads itself is never offered to a reader.
+func TestAssessBundleNeverOffersACoreReadKind(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := bundleWithExtensions(t, "x-vendor/1", aacbundle.ParentLogWitnessKind)
+	reader := &fakeReader{name: "vendor-reader", read: map[string]fakeRead{
+		aacbundle.ParentLogWitnessKind: {entry: map[string]any{"status": "pass"}},
+		"x-vendor/1":                   {entry: map[string]any{"status": "pass"}},
+	}}
+	_, _, report, err := assessWith(t, value, reader)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"x-vendor/1"}, reader.reads)
+	for _, x := range report["extensions"].([]map[string]any) {
+		if x["kind"] == aacbundle.ParentLogWitnessKind {
+			assert.Contains(t, x, "parent_witness", "the core's own reading stays")
+			assert.NotContains(t, x, "read_by")
+		}
+	}
 }
 
 // A reader adds to the core's result and never weakens it.

@@ -193,7 +193,7 @@ func withSelection(value map[string]interface{}, result aacbundle.VerificationRe
 // something not shown makes it INCOMPLETE.
 func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, env *assessEnv) (map[string]any, string, string) {
 	directory := env.directory
-	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions, WitnessDirectory: directory})
 	result = withSelection(value, result, strict)
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
@@ -258,6 +258,20 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	extensions := make([]map[string]any, 0, len(result.Extensions))
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		if x.Kind == aacbundle.ParentLogWitnessKind && strict.ParentWitness != nil {
+			// The neutral witness chain (Evidence Bundle -03), as AAC's strict
+			// reading computed it against the witness directory this run was
+			// given: its claim and the extent it covers, never read from the
+			// block (capsule-cli#608).
+			parent := *strict.ParentWitness
+			entry["status"] = parent.Status
+			entry["parent_witness"] = parentWitnessReport(parent)
+			// As for the checkpoint's own receipts, only a failing chain
+			// changes the verdict (a withheld one is shown, not gating).
+			if parent.Status == "fail" {
+				claims = append(claims, aacbundle.ClaimResult{Status: parent.Status, Findings: parent.Findings})
+			}
+		}
 		if x.Composed != nil {
 			composed, memberVerdicts, served := composedOutput(value, x.Composed, env)
 			entry["composed"] = composed
@@ -452,4 +466,15 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// parentWitnessReport is a parent-log-witness/v1 result in the report's
+// shape: its status, findings and receipts, and the covered extent when it
+// passed (whole when entries equals of).
+func parentWitnessReport(r aacbundle.ParentWitnessResult) map[string]any {
+	out := map[string]any{"status": r.Status, "findings": nonNilStrings(r.Findings), "receipts": receiptEntries(r.Receipts)}
+	if r.Extent != nil {
+		out["extent"] = map[string]any{"entries": r.Extent.Entries, "of": r.Extent.Of, "whole": r.Extent.Entries == r.Extent.Of}
+	}
+	return out
 }

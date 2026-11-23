@@ -1009,8 +1009,9 @@ These are the only values today, and the set is closed; a new value is a new rel
 Each member bundle of a `composed/v1` block carries the same `checked_against`.
 
 It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
-(composed digest, each member, closure, joins) and counts toward the verdict; any other
-extension, and any countersignature, is listed as carried but not checked. Exit codes:
+(composed digest, each member, closure, joins) and counts toward the verdict, and so does a
+`parent-log-witness/v1` chain, whose `withheld` result (no directory, no receipts) is shown
+and does not gate; any other extension, and any countersignature, is listed as carried but not checked. Exit codes:
 
 - 0: every claim passed;
 - 3: nothing failed, but something is not shown (no checkpoint signature, an
@@ -1026,7 +1027,11 @@ and the line printed with it, on any verdict and for the member bundles of a
 composed bundle too, names the kinds: "Not checked here: KIND, which this tool
 does not interpret; check these with the tool that defines them." Whatever
 defines the extension checks it; a witness chain carried only in such an
-extension adds no witness claim here. Page writing (`bundle --html`,
+extension adds no witness claim here. The neutral form of such a chain, a
+`parent-log-witness/v1` extension (Evidence Bundle -03), is read: its
+`extensions` entry carries a `parent_witness` object (status, findings, receipts
+and, when it passed, the extent it covers, whole when `entries` equals `of`), and
+a failing chain makes the bundle INVALID. Page writing (`bundle --html`,
 `disclose --html`, `presentation build`) follows the same generic verdict, so
 a page for such a bundle shows the uninterpreted content unchecked;
 `presentation list` reads a bundle with capsule-viewer's own check, not this verdict.
