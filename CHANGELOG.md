@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A log backend plugin may declare extra log ids for a profile (`LogIDOwner.OwnsLogID`, ids of the form `<log_id>/<suffix>`). `cll checkpoint status`, `cll checkpoint publish` and `cll proof verify` then accept their checkpoints, with the signature, trusted-key and size checks unchanged. `status`/`publish` print `log_id` and `proof verify` prints `checkpoint_log_id`, the checkpoint's own log. A checkpoint of an undeclared log id is still a conflict (#622).
+
 ## v0.1.0-rc50
 
 - `settlement` builds the buyer's side of the shared exchange record's required core (capsule-cli#617, #428-p2): `TermsPayer` (the terms leg), `PayerObservedX402` (payer_observed, from the buyer's x402 settlement response and payment requirements, exact scheme only, status from the facilitator's response alone, the signed payment payload wrapped by digest and never carried) and `DeliveredReceived` (delivered, direction `received`), beside `PayeeObservedX402` and `DeliveredSent`. Every leg passes agent-action-capsule's structure checks and the account-identifier guard, and a round trip through `settlement.Verify` reads the buyer's and the seller's legs as one agreed, matched exchange. `NeverEnters` now exempts an `assetCode` only in the amount, routing_fee, received and receive_fee members, and `Delivery` gains `AccountIDs`; `DeliveredSent` and the payee builder otherwise behave as before; no capsulectl verb or deal-plugin change.
