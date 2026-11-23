@@ -1,11 +1,17 @@
 package cli
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/store/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -271,4 +277,80 @@ func TestNewRefusalsOfOwnerlessAndCoreKeptProfiles(t *testing.T) {
 	_, err = invoke(t, "", "bundle", "--profile", q.Name, "--root", strings.Repeat("ab", 32))
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "owned by this plugin")
+}
+
+type ownerBackend struct {
+	LogBackend
+	owned string
+}
+
+func (b ownerBackend) OwnsLogID(_ Profile, logID string) bool { return logID == b.owned }
+
+// mintCheckpoint returns a checkpoint of logID signed by the fixture's
+// checkpoint key.
+func mintCheckpoint(t *testing.T, key ed25519.PrivateKey, logID string) []byte {
+	t.Helper()
+	backend := memory.New()
+	defer func() { require.NoError(t, backend.Close()) }()
+	_, e := backend.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{1}, 32), AppendedAt: time.Now().UTC()})
+	require.NoError(t, e)
+	signer, e := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, e)
+	cfg := checkpoint.DefaultRunnerConfig(logID)
+	cfg.Cadence.CadenceEntries = 1
+	runner, e := checkpoint.NewRunner(cfg, backend, signer)
+	require.NoError(t, e)
+	_, e = runner.RunOnce(t.Context(), time.Now().UTC())
+	require.NoError(t, e)
+	state, e := backend.LoadCLL(t.Context())
+	require.NoError(t, e)
+	require.NotNil(t, state.Checkpoint)
+	return state.Checkpoint.Bytes
+}
+
+// A backend that declares extra log ids gets their checkpoints accepted with
+// every other check unchanged; without the declaration the rule is today's.
+func TestVerifyCheckpointAcceptsABackendsDeclaredLogID(t *testing.T) {
+	p, key := profileFixture(t)
+	p.Type, p.Log = "jsonl", "ledger"
+	const child = "test-log/2026-11"
+	raw := mintCheckpoint(t, key, child)
+	t.Cleanup(func() { delete(logBackends, "ledger") })
+
+	_, e := VerifyCheckpoint(p, raw)
+	require.ErrorIs(t, e, ErrConflict, "no backend in this process")
+	RegisterLogBackend("ledger", fakeBackend{})
+	_, e = VerifyCheckpoint(p, raw)
+	require.ErrorIs(t, e, ErrConflict, "a backend without OwnsLogID keeps today's rule")
+	assert.Contains(t, e.Error(), `neither the profile's log_id "test-log" nor a log under it`)
+
+	RegisterLogBackend("ledger", ownerBackend{owned: child})
+	r, e := VerifyCheckpoint(p, raw)
+	require.NoError(t, e)
+	assert.Equal(t, child, r.LogID)
+
+	RegisterLogBackend("ledger", ownerBackend{owned: "test-log/2026-12"})
+	_, e = VerifyCheckpoint(p, raw)
+	require.ErrorIs(t, e, ErrConflict, "an undeclared log id is refused")
+
+	foreign := mintCheckpoint(t, key, "other-profile-log")
+	RegisterLogBackend("ledger", ownerBackend{owned: "other-profile-log"})
+	_, e = VerifyCheckpoint(p, foreign)
+	require.ErrorIs(t, e, ErrConflict, "a declared id outside <log_id>/ is refused")
+
+	for _, id := range []string{"test-log/", "test-log2/x"} {
+		RegisterLogBackend("ledger", ownerBackend{owned: id})
+		_, e = VerifyCheckpoint(p, mintCheckpoint(t, key, id))
+		require.ErrorIs(t, e, ErrConflict, "%q is not <log_id>/<suffix>", id)
+	}
+
+	RegisterLogBackend("ledger", ownerBackend{owned: child})
+	p.Checkpoint.TrustedKeys = []string{strings.Repeat("00", 32)}
+	_, e = VerifyCheckpoint(p, raw)
+	require.Error(t, e, "a declared log still needs a trusted signer")
+	assert.NotErrorIs(t, e, ErrConflict)
+
+	p, _ = profileFixture(t)
+	_, e = VerifyCheckpoint(p, raw)
+	require.ErrorIs(t, e, ErrConflict, "the core's own profile has no declared logs")
 }
