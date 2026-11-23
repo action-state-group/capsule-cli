@@ -452,7 +452,9 @@ the install wrote it:
 - launchd (macOS): a LaunchAgent whose `ProgramArguments` are that command without the
   redirect (launchd runs no shell, so give the absolute path), whose `StartInterval` is
   300, and whose `StandardOutPath` and `StandardErrorPath` name the log file.
-- systemd (Linux): a user `.service` that runs that command, and a `.timer` with
+- systemd (Linux): a user `.service` that runs that command without the redirect
+  (`ExecStart=` runs no shell; `%h` is the home directory, and the output goes to
+  `journalctl --user -u NAME`), and a `.timer` with
   `OnActiveSec=0`, `OnUnitActiveSec=5min` and `[Install] WantedBy=timers.target`,
   enabled with `systemctl --user enable --now NAME.timer`
   (`loginctl enable-linger` keeps it running when you log out).
