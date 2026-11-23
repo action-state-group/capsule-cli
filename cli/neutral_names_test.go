@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,10 +40,10 @@ var neutralNamesAllowed = map[string][]*regexp.Regexp{
 	"scripts/test-weights":          {regexp.MustCompile(`TestEvidenceBookRefusalSignature`)}, // a test name
 }
 
-// attributionInCode matches a person's or an agent's name, a Buzz message id or an
-// internal unit id cited in a code comment: the code cites a spec section or an
-// issue instead, so nothing in it points at a private conversation.
-var attributionInCode = regexp.MustCompile(`(?i)\bsherlock2?\b|\bbuzz [0-9a-f]{6,}|\bu\d{3}\b|\(steven\b`)
+// attributionInCode matches, in a code comment, a person's name, a Buzz message id,
+// an ops id or an internal unit id: the code cites a spec section or an issue
+// instead, so nothing in it points at a private conversation.
+var attributionInCode = regexp.MustCompile(`(?i)\bsherlock2?\b|\bsteven\b|\bethan\b|\bbuzz [0-9a-f]{6,}|\bops[ -][0-9a-f]{4,}|\bu\d{3,4}\b`)
 
 func lineAllowed(rel, line string) bool {
 	for _, re := range neutralNamesAllowed[rel] {
@@ -66,9 +68,12 @@ func TestNeutralNamesPatternsCatchTheShapes(t *testing.T) {
 	}
 	assert.True(t, communityNames.MatchString("--community is one of mesh-llm, muse or goose"))
 	assert.False(t, communityNames.MatchString("a museum of goosebumps"))
-	assert.True(t, attributionInCode.MatchString("// (Sherlock2, Buzz 71efdf5a)"))
-	assert.True(t, attributionInCode.MatchString("// INCOMPLETE (Steven, u947 (3))"))
-	assert.False(t, attributionInCode.MatchString("// REGISTRY.md and history-frame-v0 §6, capsule-cli#511"))
+	for _, cite := range []string{"Sherlock2", "Sherlock", "Steven requested this", "(Steven's ruling)", "Ethan, see below", "Buzz 71efdf5a", "ops-123abc", "ops c2438a45", "u947", "u1000"} {
+		assert.True(t, attributionInCode.MatchString("// "+cite), cite)
+	}
+	for _, ok := range []string{"REGISTRY.md and history-frame-v0 §6, capsule-cli#511", "a Buzz message", "stevenson and ethanol", "buses", "a unit of 12", "u12"} {
+		assert.False(t, attributionInCode.MatchString("// "+ok), ok)
+	}
 	for _, line := range []string{`"capsulectl-" + name`, `Kind: "deal"`} {
 		assert.False(t, companyPluginNames.MatchString(line) || shortNameDispatch.MatchString(line), line)
 	}
@@ -103,9 +108,6 @@ func TestCoreNamesNoCompanyPlugin(t *testing.T) {
 			if m := companyPluginNames.FindString(line); m != "" && !lineAllowed(rel, line) {
 				assert.Failf(t, "company plugin name in the core", "%s:%d names %q; the core is neutral (capsule-cli#428): say \"a plugin\" or add the file to neutralNamesAllowed with a reason", rel, i+1, m)
 			}
-			if (strings.HasPrefix(rel, "cli/") || strings.HasPrefix(rel, "settlement/")) && strings.HasSuffix(rel, ".go") && attributionInCode.MatchString(line) {
-				assert.Failf(t, "private attribution in code", "%s:%d cites %q: cite a spec section or an issue", rel, i+1, attributionInCode.FindString(line))
-			}
 			if strings.HasPrefix(rel, "cli/") && strings.HasSuffix(rel, ".go") && communityNames.MatchString(line) {
 				assert.Failf(t, "community named in the core", "%s:%d names a community (%q)", rel, i+1, communityNames.FindString(line))
 			}
@@ -121,4 +123,49 @@ func TestCoreNamesNoCompanyPlugin(t *testing.T) {
 		_, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
 		assert.NoError(t, err, "allowlisted file %s exists", rel)
 	}
+}
+
+// The comments of the core's Go files, tests included, cite a spec section or an
+// issue and never a person, a Buzz message, an ops id or an internal unit id.
+// Only comment text is read: a string or an identifier is not a citation.
+func TestCodeCommentsCitePrivateConversationsNowhere(t *testing.T) {
+	checked := 0
+	for _, dir := range []string{"../cli", "../settlement"} {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		require.NoError(t, err)
+		for _, file := range files {
+			if filepath.Base(file) == "neutral_names_test.go" { // its samples are the patterns
+				continue
+			}
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
+			require.NoError(t, err)
+			for _, group := range f.Comments {
+				for _, c := range group.List {
+					for i, line := range strings.Split(c.Text, "\n") {
+						checked++
+						if m := attributionInCode.FindString(line); m != "" {
+							assert.Failf(t, "private attribution in a comment", "%s:%d cites %q: cite a spec section or an issue", file, fset.Position(c.Pos()).Line+i, m)
+						}
+					}
+				}
+			}
+		}
+	}
+	assert.Greater(t, checked, 1000, "the scan read the comments of the core's Go files")
+}
+
+func TestAttributionGuardReadsOnlyComments(t *testing.T) {
+	src := "package p\n\nconst id = \"u947\" // a Sherlock2 cite\nconst name = \"Steven\"\n"
+	f, err := parser.ParseFile(token.NewFileSet(), "p.go", src, parser.ParseComments)
+	require.NoError(t, err)
+	var hits int
+	for _, g := range f.Comments {
+		for _, c := range g.List {
+			if attributionInCode.MatchString(c.Text) {
+				hits++
+			}
+		}
+	}
+	assert.Equal(t, 1, hits, "the string literals are not read, the comment is")
 }

@@ -178,7 +178,7 @@ func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	assert.Equal(t, ProfileWording{}, p.Wording)
 }
 
-// The merge gate of capsule-cli#428 step 3 (Steven's door (c) ruling): the
+// The merge gate of capsule-cli#428 step 3: the
 // terms line lives in a plugin's pack, and a pinned pack that could hide a
 // term from it is still refused by the core, which reads the plugin's pack
 // from its handshake in another process. A pack made from the core's pack
