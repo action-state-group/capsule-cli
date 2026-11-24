@@ -10,8 +10,8 @@ github.com/action-state-group/agent-action-capsule/go v0.23.0 h1:+ZPH5oesjCwOguL
 github.com/action-state-group/agent-action-capsule/go v0.23.0/go.mod h1:RENcdbZODNLaxDuPUeEeGjqCg+CdebARCA3ORaG8mZc=
 github.com/action-state-group/capsule-emit/go v0.3.0 h1:DEFDSHktFQoUxWScjeIbMKfET/4Kjgm/ZQsWJp4AI+Y=
 github.com/action-state-group/capsule-emit/go v0.3.0/go.mod h1:TKXiVniDy7RlksGjEAF6k9rj5NcwvwdQ6EGajzhghuo=
-github.com/action-state-group/capsule-viewer/go v0.19.2 h1:Rqz5HKRSDRQRoiEDoHjJQeWX3aq7IFytFTuug+WJub4=
-github.com/action-state-group/capsule-viewer/go v0.19.2/go.mod h1:D6U6Q9b4cEFb8McPyqInxANbVPCaoDFCM0KJk3CTwG4=
+github.com/action-state-group/capsule-viewer/go v0.23.1 h1:I5X8SqtuJdjbEL01bldgZCXZdck5AC9y+VriMBRdp/c=
+github.com/action-state-group/capsule-viewer/go v0.23.1/go.mod h1:D6U6Q9b4cEFb8McPyqInxANbVPCaoDFCM0KJk3CTwG4=
 github.com/action-state-group/checkpointed-local-log/go v0.4.0 h1:AcIdYJq6vkhzBMQGsXm/AmfAqGLNAVLaNHXfambPVf0=
 github.com/action-state-group/checkpointed-local-log/go v0.4.0/go.mod h1:zyHyXVNqA4pMTJ14xtcRoDHZF0n4QyjS5KMDD3KwQ2Q=
 github.com/btcsuite/btcd/btcec/v2 v2.5.1 h1:zDnj4h0PTlFz69xIhoGGXYkkkYxPgTv/AfjBxQQLlnE=
