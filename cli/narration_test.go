@@ -172,7 +172,7 @@ func TestAPackLackingAKeyPinsWithANoticeAndSpeaksBuiltIn(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, incomplete, p.Wording.Path)
 	assert.Contains(t, notice, "lacks keys this release uses: say.verify.unchanged")
-	assert.Contains(t, notice, "uses the built-in wording until the pack is updated")
+	assert.Contains(t, notice, "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
 	w, problem := ActiveWording(p)
 	assert.Equal(t, "built-in", w.Source)
 	assert.Contains(t, problem, "say.verify.unchanged")
@@ -245,7 +245,7 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	out, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", coreOnly)
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own")
-	assert.Contains(t, out, "uses the built-in wording until the pack is updated")
+	assert.Contains(t, out, "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
 	assert.Contains(t, out, `"wording_notice"`)
 	// Missing terms keys are a missing key, not a hidden term: the pack is
 	// pinned, and the install check warns without failing.
@@ -256,7 +256,7 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	warnings, _ := check["warnings"].([]any)
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition")
-	assert.Contains(t, warnings[0], "uses the built-in wording until the pack is updated")
+	assert.Contains(t, warnings[0], "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
 	assert.NotContains(t, check["issues"], warnings[0], "a warning is not an issue")
 	out, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", "")
 	require.NoError(t, err, out)

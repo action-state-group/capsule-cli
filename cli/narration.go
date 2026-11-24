@@ -380,7 +380,7 @@ func pinWording(p *Profile, path string) (notice string, err error) {
 // lackingPrefix starts every line lacking returns.
 const lackingPrefix = "the pinned wording pack lacks"
 
-const builtinUntilUpdated = "This profile uses the built-in wording until the pack is updated."
+const builtinUntilUpdated = "This profile uses the built-in wording for everything, not just the missing keys, until the pack is updated."
 
 // lacking is why w cannot be used with b, when it lacks keys, or "". Shared
 // by the pin and the run time so the two never say different things.
