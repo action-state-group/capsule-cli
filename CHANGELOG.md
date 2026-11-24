@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc52
+
+- `profile update --wording` accepts a wording pack that lacks keys this release uses (a plugin built before a key was added) instead of refusing it, so an older plugin keeps installing on a newer core. The pin behaves as at run time: the whole built-in pack is used, never a mix. The output carries a `wording_notice` naming the missing keys and saying the profile uses the built-in wording for everything until the pack is updated, and `doctor --install-check` adds a `warnings` list with the same line (`ok` and the exit code are unchanged). A pack whose `card.terms.*` entries could hide a term is still refused (#627, evidencebook#834).
+
 ## v0.1.0-rc51
 
 - A log backend plugin may declare extra log ids for a profile (`LogIDOwner.OwnsLogID`, ids of the form `<log_id>/<suffix>`). `cll checkpoint status`, `cll checkpoint publish` and `cll proof verify` then accept their checkpoints, with the signature, trusted-key and size checks unchanged. `status`/`publish` print `log_id` and `proof verify` prints `checkpoint_log_id`, the checkpoint's own log. A checkpoint of an undeclared log id is still a conflict (#622).
