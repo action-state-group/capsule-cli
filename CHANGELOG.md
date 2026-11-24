@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc53
+
+- capsule-viewer/go moves from v0.19.2 to v0.23.1 (capsule-cli#630), so `capsulectl presentation build` draws a report sealed with `eu-ai-act-obligations-report/v2` (the eu-ai-act-obligations 0.3.0 findings, `{id, observed, owner_due}`) through the contract-report card, where v0.19.2 left that block uninterpreted. A test builds a v2 report page and, with `CAPSULECTL_CHROME` set, opens it and reads the finding drawn.
+
 ## v0.1.0-rc52
 
 - `profile update --wording` accepts a wording pack that lacks keys this release uses (a plugin built before a key was added) instead of refusing it, so an older plugin keeps installing on a newer core. The pin behaves as at run time: the whole built-in pack is used, never a mix. The output carries a `wording_notice` naming the missing keys and saying the profile uses the built-in wording for everything until the pack is updated, and `doctor --install-check` adds a `warnings` list with the same line (`ok` and the exit code are unchanged). A pack whose `card.terms.*` entries could hide a term is still refused (#627, evidencebook#834).
