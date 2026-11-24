@@ -377,6 +377,9 @@ func pinWording(p *Profile, path string) (notice string, err error) {
 
 // builtinUntilUpdated closes every notice and warning about a pack that
 // lacks keys: what the user hears meanwhile and what fixes it.
+// lackingPrefix starts every line lacking returns.
+const lackingPrefix = "the pinned wording pack lacks"
+
 const builtinUntilUpdated = "This profile speaks the built-in wording until the plugin is updated."
 
 // lacking is why w cannot be used with b, when it lacks keys, or "". Shared
@@ -385,7 +388,7 @@ func (b builtinPacks) lacking(w Wording) string {
 	core, own := b.missing(w)
 	switch {
 	case len(core) > 0:
-		return "the pinned wording pack lacks keys this release uses: " + strings.Join(core, ", ")
+		return lackingPrefix + " keys this release uses: " + strings.Join(core, ", ")
 	case len(own) > 0:
 		return "the pinned wording pack " + b.lacksOwn(own)
 	}

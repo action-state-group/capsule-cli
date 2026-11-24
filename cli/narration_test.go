@@ -183,6 +183,32 @@ func TestAPackLackingAKeyPinsWithANoticeAndSpeaksBuiltIn(t *testing.T) {
 	assert.Empty(t, notice)
 }
 
+// An install-check warning says "until the plugin is updated" only for a
+// pack that lacks keys, and a core-only profile is checked too.
+func TestInstallCheckWarnsOnlyAboutKeysAPluginUpdateCures(t *testing.T) {
+	pluginRoot(t)
+	skills := t.TempDir()
+	p := ownedProfile(t, "jsonl", "cll")
+	p.Operator = "op"
+	incomplete := writePack(t, nil, func(e map[string]string) { delete(e, "say.verify.unchanged") })
+	_, err := pinWording(&p, incomplete)
+	require.NoError(t, err)
+	require.NoError(t, SaveProfile(p, true))
+	check, _ := installCheckOf(t, p.Name, skills)
+	warnings, _ := check["warnings"].([]any)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "lacks keys this release uses: say.verify.unchanged")
+	assert.Contains(t, warnings[0], "until the plugin is updated")
+
+	// A pack changed since it was pinned has its own fix, not a plugin update.
+	require.NoError(t, os.WriteFile(p.Wording.Path, []byte(`{}`), 0o600))
+	check, _ = installCheckOf(t, p.Name, skills)
+	warnings, _ = check["warnings"].([]any)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "changed since it was pinned")
+	assert.NotContains(t, warnings[0], "until the plugin is updated")
+}
+
 func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	var p Profile
 	complete := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })

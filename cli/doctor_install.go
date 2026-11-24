@@ -111,7 +111,12 @@ func installCheck(c *cobra.Command) error {
 		// speaks instead, which the warning says.
 		if p.Wording.Path != "" {
 			if _, problem, _ := profileWording(p); problem != "" {
-				warnings = append(warnings, "profile "+name+": "+problem+". "+builtinUntilUpdated)
+				warning := "profile " + name + ": " + problem
+				// Only a pack that lacks keys is cured by updating the plugin.
+				if strings.HasPrefix(problem, lackingPrefix) {
+					warning += ". " + builtinUntilUpdated
+				}
+				warnings = append(warnings, warning)
 			}
 		}
 		if plugin := profilePlugin(p); plugin != "" {
