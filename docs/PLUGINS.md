@@ -163,9 +163,14 @@ through and adds nothing to it.
   or don't use exactly the built-in placeholders (so a card could hide a term
   a yes agrees to), whichever pack holds them, is not used: the whole
   built-in pack speaks, the result carries `"wording": "built-in"` and
-  `doctor` names the problem. `profile update --wording` refuses such a pack
-  up front, checking the plugin's keys from its handshake, and refuses to
-  pin when that plugin is not installed. `doctor` checks a pin the same way;
+  `doctor` names the problem. `profile update --wording` refuses a pack whose
+  `card.terms.*` entries could hide a term, and refuses to pin when the
+  plugin is not installed. A pack that only lacks keys (a plugin built before
+  a key was added) is pinned, so the older plugin keeps installing: the
+  output carries a `wording_notice` naming the missing keys and saying the
+  profile speaks the built-in wording until the plugin is updated, and
+  `doctor --install-check` adds the same line to `warnings` (not `issues`:
+  `ok` and the exit code are unchanged). `doctor` checks a pin the same way;
   with the plugin gone it reports the pack the core's commands still speak
   and a `notice` that the plugin's keys were not checked.
 - A failed command that printed nothing gets one error object on stdout

@@ -639,7 +639,7 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
-		f.String("wording", "", "The wording pack this profile speaks with: a complete aac.wording-pack/v0 JSON file holding every key of the core's built-in pack and, on a profile whose log a plugin keeps, of that plugin's pack, pinned by its SHA-256; empty to go back to the built-in neutral pack")
+		f.String("wording", "", "The wording pack this profile speaks with: an aac.wording-pack/v0 JSON file, pinned by its SHA-256; a pack that lacks a key of the core's built-in pack or of the plugin's is pinned with a notice and the whole built-in pack speaks until the plugin is updated; empty to go back to the built-in neutral pack")
 		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\", \"kind\": \"deal\"} (or \"definition_digests\": [\"...\", ...], a set of rulesets any of which it may report; \"roles\": {\"buyer\": {\"pack\": \"...\", \"definition_digest\": \"...\"}, \"seller\": {...}} pins a pack per deal role, the flat digests staying the default for a role not listed; restate every role, since the file replaces the whole pin), \"kind\" states the pack's kind (admission, live, after_the_fact, deal or conduct; only a deal pack's id and digest are shared with a counterparty), its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
@@ -787,11 +787,14 @@ func profileCommands() *cobra.Command {
 					return e
 				}
 			}
+			var wordingNotice string
 			if c.Flags().Changed("wording") {
 				path, _ := c.Flags().GetString("wording")
-				if e := pinWording(&p, path); e != nil {
+				n, e := pinWording(&p, path)
+				if e != nil {
 					return e
 				}
+				wordingNotice = n
 			}
 			// The log's owner is declared when the profile is made, and a jsonl
 			// profile with a log_id must say it (the core guesses neither a plugin
@@ -819,7 +822,11 @@ func profileCommands() *cobra.Command {
 			if e := SaveProfile(p, update); e != nil {
 				return e
 			}
-			return Output(c, map[string]string{"profile": p.Name, "status": "saved"})
+			result := map[string]string{"profile": p.Name, "status": "saved"}
+			if wordingNotice != "" {
+				result["wording_notice"] = wordingNotice
+			}
+			return Output(c, result)
 		}
 		group.AddCommand(c)
 	}
