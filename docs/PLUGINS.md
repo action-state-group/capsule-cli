@@ -168,7 +168,7 @@ through and adds nothing to it.
   plugin is not installed. A pack that only lacks keys (a plugin built before
   a key was added) is pinned, so the older plugin keeps installing: the
   output carries a `wording_notice` naming the missing keys and saying the
-  profile speaks the built-in wording until the plugin is updated, and
+  profile uses the built-in wording until the pack is updated, and
   `doctor --install-check` adds the same line to `warnings` (not `issues`:
   `ok` and the exit code are unchanged). `doctor` checks a pin the same way;
   with the plugin gone it reports the pack the core's commands still speak
