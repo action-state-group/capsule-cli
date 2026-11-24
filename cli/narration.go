@@ -307,7 +307,11 @@ func (b builtinPacks) hidingTerms(w Wording) string {
 		if !strings.HasPrefix(k, "card.terms.") {
 			continue
 		}
-		got := w.Entries[k]
+		// An absent entry is a missing key, which missing reports.
+		got, ok := w.Entries[k]
+		if !ok {
+			continue
+		}
 		if strings.TrimSpace(got) == "" || !slices.Equal(placeholders(got), placeholders(builtin[k])) {
 			return k
 		}
@@ -334,42 +338,61 @@ type ProfileWording struct {
 }
 
 // pinWording pins the pack at path on p, or removes the pin for "". A pack
-// that is not valid, or not complete for the core and the plugin that keeps
-// p's log, is refused.
-func pinWording(p *Profile, path string) error {
+// that is not valid, cannot be checked against the plugin that keeps p's log
+// or could hide a term a yes agrees to is refused. A pack that only lacks
+// keys is pinned, as ActiveWording accepts it at run time: the whole built-in
+// pack speaks, and notice says so (empty for a complete pack), so a plugin
+// built before a key was added keeps installing on a newer core.
+func pinWording(p *Profile, path string) (notice string, err error) {
 	if path == "" {
 		p.Wording = ProfileWording{}
-		return nil
+		return "", nil
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return InputError("--wording needs a readable file path")
+		return "", InputError("--wording needs a readable file path")
 	}
 	raw, err := ReadInput(abs)
 	if err != nil {
-		return err
+		return "", err
 	}
 	w, err := parseWording(raw)
 	if err != nil {
-		return InputError("--wording " + path + " is " + err.Error())
+		return "", InputError("--wording " + path + " is " + err.Error())
 	}
 	b, err := profilePacks(*p)
 	if err != nil {
 		// err names a plugin and a key or locale, never a secret.
-		return InputError(fmt.Sprintf("--wording %s cannot be checked against the words of the plugin that keeps this profile's log: %v", path, err))
+		return "", InputError(fmt.Sprintf("--wording %s cannot be checked against the words of the plugin that keeps this profile's log: %v", path, err))
 	}
+	if k := b.hidingTerms(w); k != "" {
+		return "", InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and use exactly the built-in entry's placeholders", path, k))
+	}
+	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
+	if lacks := b.lacking(w); lacks != "" {
+		return lacks + ". " + builtinUntilUpdated, nil
+	}
+	return "", nil
+}
+
+// builtinUntilUpdated closes every notice and warning about a pack that
+// lacks keys: what the user hears meanwhile and what fixes it.
+// lackingPrefix starts every line lacking returns.
+const lackingPrefix = "the pinned wording pack lacks"
+
+const builtinUntilUpdated = "This profile uses the built-in wording for everything, not just the missing keys, until the pack is updated."
+
+// lacking is why w cannot be used with b, when it lacks keys, or "". Shared
+// by the pin and the run time so the two never say different things.
+func (b builtinPacks) lacking(w Wording) string {
 	core, own := b.missing(w)
 	switch {
 	case len(core) > 0:
-		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(core), core[0]))
+		return lackingPrefix + " keys this release uses: " + strings.Join(core, ", ")
 	case len(own) > 0:
-		return InputError(fmt.Sprintf("--wording %s is not complete: it %s", path, b.lacksOwn(own)))
+		return "the pinned wording pack " + b.lacksOwn(own)
 	}
-	if k := b.hidingTerms(w); k != "" {
-		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and use exactly the built-in entry's placeholders", path, k))
-	}
-	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
-	return nil
+	return ""
 }
 
 // ActiveWording is the pack p speaks with in this process, and why the
@@ -411,12 +434,8 @@ func activeWording(p Profile, b builtinPacks) (Wording, string) {
 	if err != nil {
 		return BuiltinWording(), "the pinned wording pack is " + err.Error()
 	}
-	core, own := b.missing(w)
-	switch {
-	case len(core) > 0:
-		return BuiltinWording(), "the pinned wording pack lacks keys this release uses: " + strings.Join(core, ", ")
-	case len(own) > 0:
-		return BuiltinWording(), "the pinned wording pack " + b.lacksOwn(own)
+	if lacks := b.lacking(w); lacks != "" {
+		return BuiltinWording(), lacks
 	}
 	if k := b.hidingTerms(w); k != "" {
 		return BuiltinWording(), "the pinned wording pack could hide a term a yes agrees to: " + k

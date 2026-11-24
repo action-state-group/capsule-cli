@@ -154,10 +154,65 @@ func acmeProfile(t *testing.T, pack []byte) Profile {
 	return p
 }
 
+// pinErr is pinWording for a test that only asks whether the pin was refused.
+func pinErr(p *Profile, path string) error {
+	_, err := pinWording(p, path)
+	return err
+}
+
+// A pack that lacks a key is pinned with a notice, and the whole built-in
+// pack speaks, never a mix (evidencebook#834).
+func TestAPackLackingAKeyPinsWithANoticeAndSpeaksBuiltIn(t *testing.T) {
+	var p Profile
+	incomplete := writePack(t, nil, func(e map[string]string) {
+		e["say.verify.checked"] = "Product words."
+		delete(e, "say.verify.unchanged")
+	})
+	notice, err := pinWording(&p, incomplete)
+	require.NoError(t, err)
+	assert.Equal(t, incomplete, p.Wording.Path)
+	assert.Contains(t, notice, "lacks keys this release uses: say.verify.unchanged")
+	assert.Contains(t, notice, "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
+	w, problem := ActiveWording(p)
+	assert.Equal(t, "built-in", w.Source)
+	assert.Contains(t, problem, "say.verify.unchanged")
+	assert.NotEqual(t, "Product words.", w.Line("say.verify.checked", nil), "no per-key mix")
+
+	notice, err = pinWording(&p, "")
+	require.NoError(t, err)
+	assert.Empty(t, notice)
+}
+
+// An install-check warning says "until the pack is updated" only for a
+// pack that lacks keys, and a core-only profile is checked too.
+func TestInstallCheckWarnsOnlyAboutKeysAPluginUpdateCures(t *testing.T) {
+	pluginRoot(t)
+	skills := t.TempDir()
+	p := ownedProfile(t, "jsonl", "cll")
+	p.Operator = "op"
+	incomplete := writePack(t, nil, func(e map[string]string) { delete(e, "say.verify.unchanged") })
+	_, err := pinWording(&p, incomplete)
+	require.NoError(t, err)
+	require.NoError(t, SaveProfile(p, true))
+	check, _ := installCheckOf(t, p.Name, skills)
+	warnings, _ := check["warnings"].([]any)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "lacks keys this release uses: say.verify.unchanged")
+	assert.Contains(t, warnings[0], "until the pack is updated")
+
+	// A pack changed since it was pinned has its own fix, not a plugin update.
+	require.NoError(t, os.WriteFile(p.Wording.Path, []byte(`{}`), 0o600))
+	check, _ = installCheckOf(t, p.Name, skills)
+	warnings, _ = check["warnings"].([]any)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "changed since it was pinned")
+	assert.NotContains(t, warnings[0], "until the pack is updated")
+}
+
 func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	var p Profile
 	complete := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })
-	require.NoError(t, pinWording(&p, complete))
+	require.NoError(t, pinErr(&p, complete))
 	assert.Equal(t, complete, p.Wording.Path)
 	assert.Regexp(t, `^[0-9a-f]{64}$`, p.Wording.SHA256)
 	w, problem := ActiveWording(p)
@@ -165,16 +220,16 @@ func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	assert.Equal(t, "pinned", w.Source)
 	assert.Equal(t, "Product words.", w.Line("say.verify.unchanged", nil))
 
-	incomplete := writePack(t, nil, func(e map[string]string) { delete(e, "say.verify.unchanged") })
-	assert.ErrorContains(t, pinWording(&p, incomplete), "is not complete: it lacks 1 of the built-in pack's keys, first say.verify.unchanged")
-	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
+	notice, err := pinWording(&p, complete)
+	require.NoError(t, err)
+	assert.Empty(t, notice, "a complete pack pins with no notice")
 
 	invalid := filepath.Join(t.TempDir(), "bad.json")
 	require.NoError(t, os.WriteFile(invalid, []byte(`{"entries":{}}`), 0o600))
-	assert.ErrorContains(t, pinWording(&p, invalid), "not a valid aac.wording-pack/v0")
-	assert.ErrorIs(t, pinWording(&p, invalid), ErrInput)
+	assert.ErrorContains(t, pinErr(&p, invalid), "not a valid aac.wording-pack/v0")
+	assert.ErrorIs(t, pinErr(&p, invalid), ErrInput)
 
-	require.NoError(t, pinWording(&p, ""))
+	require.NoError(t, pinErr(&p, ""))
 	assert.Equal(t, ProfileWording{}, p.Wording)
 }
 
@@ -187,9 +242,25 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	p := acmeProfile(t, acmePackJSON(t))
 
 	coreOnly := writePack(t, nil, func(map[string]string) {})
-	_, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", coreOnly)
-	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, SafeError(err), "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own")
+	out, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", coreOnly)
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition: a pack that plugin speaks with holds the core's keys and its own")
+	assert.Contains(t, out, "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
+	assert.Contains(t, out, `"wording_notice"`)
+	// Missing terms keys are a missing key, not a hidden term: the pack is
+	// pinned, and the install check warns without failing.
+	skills := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(skills, "acme"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(skills, "acme", "SKILL.md"), []byte("---\nname: acme\n---\n"), 0o644))
+	check, _ := installCheckOf(t, p.Name, skills)
+	warnings, _ := check["warnings"].([]any)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "lacks 6 of the capsulectl-acme plugin's keys, first card.terms.condition")
+	assert.Contains(t, warnings[0], "uses the built-in wording for everything, not just the missing keys, until the pack is updated")
+	assert.NotContains(t, check["issues"], warnings[0], "a warning is not an issue")
+	out, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", "")
+	require.NoError(t, err, out)
+	assert.NotContains(t, out, "wording_notice")
 
 	for key, text := range map[string]string{
 		"card.terms.label":          "Saying yes also agrees.",
@@ -211,7 +282,7 @@ func TestPinningChecksThePluginsPackAcrossProcesses(t *testing.T) {
 	assert.Empty(t, saved.Wording.Path, "a refused pin pins nothing")
 
 	complete := writePack(t, acmeWording, func(e map[string]string) { e["say.acme.done"] = "All set." })
-	out, err := invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", complete)
+	out, err = invoke(t, "", "profile", "update", "--profile", p.Name, "--wording", complete)
 	require.NoError(t, err, out)
 	saved, err = LoadProfile(p.Name)
 	require.NoError(t, err)
@@ -255,7 +326,7 @@ func TestPinningRefusesAPluginPackItCannotCheck(t *testing.T) {
 	pack := writePack(t, acmeWording, func(map[string]string) {})
 	p := acmeProfile(t, acmePackJSON(t))
 	require.NoError(t, os.Remove(filepath.Join(os.Getenv("CAPSULECTL_PLUGIN_ROOTS"), "capsulectl-acme")))
-	err := pinWording(&p, pack)
+	err := pinErr(&p, pack)
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "cannot be checked against the words of the plugin that keeps this profile's log: this needs the capsulectl-acme plugin, which is not installed")
 
@@ -272,14 +343,14 @@ func TestPinningRefusesAPluginPackItCannotCheck(t *testing.T) {
 		raw, err := json.Marshal(doc)
 		require.NoError(t, err)
 		p := acmeProfile(t, raw)
-		err = pinWording(&p, pack)
+		err = pinErr(&p, pack)
 		require.ErrorIs(t, err, ErrInput, name)
 		assert.Contains(t, SafeError(err), "capsulectl-acme: the plugin's wording pack "+name, name)
 	}
 
 	// A plugin whose handshake carries no pack speaks with the core's words.
 	p = acmeProfile(t, nil)
-	require.NoError(t, pinWording(&p, writePack(t, nil, func(map[string]string) {})))
+	require.NoError(t, pinErr(&p, writePack(t, nil, func(map[string]string) {})))
 }
 
 // The handshake carries the pack a plugin registered, as that plugin's
@@ -333,7 +404,7 @@ func TestRegisterWordingRefusesALateCallOrABadPack(t *testing.T) {
 func TestAnUnusablePinnedPackFallsBackToTheWholeBuiltInPack(t *testing.T) {
 	path := writePack(t, nil, func(e map[string]string) { e["say.verify.unchanged"] = "Product words." })
 	var p Profile
-	require.NoError(t, pinWording(&p, path))
+	require.NoError(t, pinErr(&p, path))
 
 	changed := p
 	changed.Wording.SHA256 = strings.Repeat("0", 64)

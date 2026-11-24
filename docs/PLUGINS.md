@@ -152,20 +152,25 @@ through and adds nothing to it.
 - `say`: one string, lines joined by `\n`, spoken verbatim. It never holds
   an id, a digest, a rule id, a flag or a UTC time.
 - Words come from a wording pack in the published `aac.wording-pack/v0`
-  format: the built-in packs, or the complete pack a profile pins with
+  format: the built-in packs, or the pack a profile pins with
   `profile update --wording FILE`. The built-in words are the core's neutral
   pack plus the plugin's own pack, which a plugin adds to its process with
   `cli.RegisterWording` (once, before anything speaks) and which its
-  handshake carries as `wording`. A pinned pack holds every key of the
+  handshake carries as `wording`. A pinned pack should hold every key of the
   core's pack and, for a profile whose log a plugin keeps, every key of that
   plugin's pack: one pack is never mixed with another. A pinned pack that is
   missing, changed or incomplete, or whose `card.terms.*` entries are blank
   or don't use exactly the built-in placeholders (so a card could hide a term
   a yes agrees to), whichever pack holds them, is not used: the whole
   built-in pack speaks, the result carries `"wording": "built-in"` and
-  `doctor` names the problem. `profile update --wording` refuses such a pack
-  up front, checking the plugin's keys from its handshake, and refuses to
-  pin when that plugin is not installed. `doctor` checks a pin the same way;
+  `doctor` names the problem. `profile update --wording` refuses a pack whose
+  `card.terms.*` entries could hide a term, and refuses to pin when the
+  plugin is not installed. A pack that only lacks keys (a plugin built before
+  a key was added) is pinned, so the older plugin keeps installing: the
+  output carries a `wording_notice` naming the missing keys and saying the
+  profile uses the built-in wording for everything, not just the missing keys, until the pack is updated, and
+  `doctor --install-check` adds the same line to `warnings` (not `issues`:
+  `ok` and the exit code are unchanged). `doctor` checks a pin the same way;
   with the plugin gone it reports the pack the core's commands still speak
   and a `notice` that the plugin's keys were not checked.
 - A failed command that printed nothing gets one error object on stdout

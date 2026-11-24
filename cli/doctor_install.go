@@ -39,7 +39,7 @@ func installCheck(c *cobra.Command) error {
 	if wantVersion == "" || wantCommit == "" || skillsDir == "" || name == "" {
 		return InputError("--install-check needs --expect-version, --expect-commit, --skills-dir and --profile")
 	}
-	var issues []string
+	var issues, warnings []string
 	report := map[string]any{"binary_version": CLIVersion, "binary_commit": CLICommit, "expected_version": wantVersion, "expected_commit": wantCommit}
 	// Before the plugin check, so it sees the root as healed. A refusal adds
 	// no issue of its own: the plugin check fails when the profile's plugin
@@ -106,6 +106,19 @@ func installCheck(c *cobra.Command) error {
 				issues = append(issues, "profile "+name+" pins no definition digest for the "+role+" role: rerun capsulectl profile update --profile "+name+" --rules-checker FILE, with FILE's roles."+role+" holding a pack and a definition_digest and restating every other role (the flag replaces the whole pin)")
 			}
 		}
+		// A pinned pack the profile cannot speak with (typically one that lacks
+		// a key this release uses) is not a failed install: the built-in pack
+		// speaks instead, which the warning says.
+		if p.Wording.Path != "" {
+			if _, problem, _ := profileWording(p); problem != "" {
+				warning := "profile " + name + ": " + problem
+				// Only a pack that lacks keys is cured by updating the plugin.
+				if strings.HasPrefix(problem, lackingPrefix) {
+					warning += ". " + builtinUntilUpdated
+				}
+				warnings = append(warnings, warning)
+			}
+		}
 		if plugin := profilePlugin(p); plugin != "" {
 			check, issue := pluginInstallCheck(plugin)
 			report["plugin"] = check
@@ -118,7 +131,10 @@ func installCheck(c *cobra.Command) error {
 	if issues == nil {
 		issues = []string{}
 	}
-	report["ok"], report["issues"] = len(issues) == 0, issues
+	if warnings == nil {
+		warnings = []string{}
+	}
+	report["ok"], report["issues"], report["warnings"] = len(issues) == 0, issues, warnings
 	if evidenceOut != "" {
 		// The body `deal note --kind evidence --input FILE` seals as is: the
 		// object below, as one line, is the detail.
