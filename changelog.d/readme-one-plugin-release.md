@@ -1,2 +1,0 @@
-- **Changed:** the README's plugin install text says one plugin release may carry several plugins and files read beside a launcher, and checks the downloads with `sha256sum --ignore-missing -c`, since a release's `SHA256SUMS` also names other platforms' files.
-- **Changed:** the README says `gh attestation` needs GitHub CLI v2.49.0 or later, and that an older `gh` (Ubuntu 24.04's packaged 2.45) counts as not installed for the provenance check (#634).
