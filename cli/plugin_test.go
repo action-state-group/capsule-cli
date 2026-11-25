@@ -453,6 +453,9 @@ func TestDiscoverySkipsAPresentationDirectory(t *testing.T) {
 	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 	require.NoError(t, os.Mkdir(filepath.Join(root, "capsulectl-guard.d"), 0o755))
 	require.NoError(t, os.Mkdir(filepath.Join(root, "capsulectl-orphan.d"), 0o755))
+	// A presentation directory linked in from elsewhere is skipped too.
+	elsewhere := t.TempDir()
+	require.NoError(t, os.Symlink(elsewhere, filepath.Join(root, "capsulectl-linked.d")))
 	notALauncher := filepath.Join(root, "capsulectl-dir")
 	require.NoError(t, os.Mkdir(notALauncher, 0o755))
 
