@@ -260,8 +260,12 @@ const WitnessTimedOut = "witness reached but did not answer in time; response de
 
 // WitnessTimedOutText is the pending text of a delivery that timed out after
 // reaching the witness. It names no network consent: the connection was
-// made. Which side was slow, the witness or the network after the
-// connection, cannot be told from here.
+// made. "Reached" means a connection to the witness's host with its TLS
+// certificate verified (traceConnection's GotConn), never a bare TCP
+// connect. Which side was slow, the witness or the network after the
+// connection, cannot be told from here. A host proxy that terminated TLS
+// with its own trusted certificate and then held the request for consent
+// would also read as reached: this split cannot tell that case apart.
 func WitnessTimedOutText() string {
 	return "pending: the witness was reached but its answer did not come in time, so the witness or the network to it is slow; " + WitnessRetryText()
 }
