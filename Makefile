@@ -11,9 +11,8 @@ install:
 test:
 	bash scripts/test.sh
 
-# Before every push: the quality checks and both test passes, the race pass
-# sampled (scripts/check.sh). check-full runs every race case and the report
-# page in Chrome, as the nightly does.
+# Before every push: the quality checks and both test passes (scripts/check.sh).
+# check-full is check plus the report page in Chrome.
 check:
 	bash scripts/check.sh
 

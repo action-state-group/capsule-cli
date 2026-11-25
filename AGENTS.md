@@ -14,9 +14,9 @@ This repository will contain a CLI wrapper over emit, artifact storage, and CLL.
   holding the entry for `## Unreleased` (see `changelog.d/README.md`), so parallel pull
   requests never conflict there.
 - Before every push: `make check` (about 4 min on an Apple-silicon Mac; needs Docker).
-  Before pushing a change that adds goroutines, locks or shared state under `cli/` or
-  `settlement/`, or touches `cli/race_sample_test.go`, also `make check-full` (about 4 min;
-  needs Docker and Chrome). Pull requests run only the fast set; the eight race shards run
-  nightly and on main.
+  Before pushing a change to `scripts/check-html-render.sh`, `scripts/lib/` or the report
+  page, also `make check-full`: `make check` plus the report page (about 4 min; needs Docker
+  and Chrome). Pull requests run only the fast set; the eight race shards run nightly and
+  on main.
 - Before an authorized commit, format, tidy modules, run tests and vet. Use DCO
   sign-off and conventional commit messages. Never commit secrets or local plans.

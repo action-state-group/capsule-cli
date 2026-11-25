@@ -2,12 +2,13 @@
 # check.sh -- the local check before every push (`make check`, `make check-full`).
 #
 #   scripts/check.sh          the quality job's checks, then scripts/test.sh with
-#                             both passes: the race pass sampled as pull requests
-#                             ran it before they stopped running it, then every
-#                             case without the race detector
-#   scripts/check.sh --full   the same with every case under the race detector
-#                             (CAPSULE_TEST_RACE_FULL=1, as the nightly runs it),
-#                             then the report page in headless Chrome
+#                             both passes as CI runs them: the race pass, then
+#                             every case without the race detector
+#   scripts/check.sh --full   the same, then the report page in headless Chrome.
+#                             It also sets CAPSULE_TEST_RACE_FULL=1 as the nightly
+#                             does; that adds no race coverage today, because the
+#                             sampling helpers in cli/race_sample_test.go have no
+#                             callers
 #
 # Pull requests run only the quality job, the plain test shards and the report
 # page; the race shards run on push to main and on the nightly. Needs Go and
@@ -52,11 +53,10 @@ make build
 
 if [[ "$full" == true ]]; then
   export CAPSULE_TEST_RACE_FULL=1
-  step "tests: race pass (every case), then plain pass"
 else
   unset CAPSULE_TEST_RACE_FULL
-  step "tests: race pass (sampled), then plain pass"
 fi
+step "tests: race pass, then plain pass"
 CAPSULE_TEST_PASS=all CAPSULE_TEST_SHARD=1/1 bash scripts/test.sh
 
 if [[ "$full" == true ]]; then
