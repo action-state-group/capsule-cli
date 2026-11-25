@@ -25,9 +25,10 @@ var witnessProbeTimeout = 3 * time.Second
 // path the service does not serve, can be answered 405 by a witness that is
 // up, and that is not a witness that works).
 //
-// A probe that got a connection to the witness but no answer before its
-// deadline also reports timed_out: the witness is slow, which is not a
-// network-consent problem (traceConnection).
+// reachable means the witness answered. A probe that got a connection to
+// the witness but no answer before its deadline is not reachable and also
+// reports timed_out: the witness or the network to it is slow, which is not
+// a network-consent problem (traceConnection).
 func checkpointReachability(ctx context.Context, endpoint string) map[string]any {
 	ctx, cancel := context.WithTimeout(ctx, witnessProbeTimeout)
 	defer cancel()
@@ -232,11 +233,11 @@ func doctorCommand() *cobra.Command {
 			default:
 				witness := checkpointReachability(c.Context(), witnessHTTPS(p.Checkpoint.Endpoint))
 				switch {
-				case witness["timed_out"] == true:
-					// Reached, so no consent text: the connection was made.
-				case witness["reachable"] != true:
+				case witness["reachable"] != true && witness["timed_out"] != true:
 					witness["consent"] = WitnessConsentText(p.Checkpoint.Endpoint)
 				default:
+					// Answered, or connected and then slow: the connection
+					// was made, so the text says reached, not consent.
 					witness["consent"] = WitnessConsentReached(p.Checkpoint.Endpoint)
 				}
 				if issue := witnessKeyIssue(p); issue != "" {
@@ -256,7 +257,7 @@ func doctorCommand() *cobra.Command {
 				witness["ok"] = witness["reachable"] == true && status >= 200 && status < 300
 				switch {
 				case witness["timed_out"] == true:
-					witness["issue"] = fmt.Sprintf("the checkpoint endpoint was reached but did not answer the probe within %s: the witness is slow or busy", witnessProbeTimeout)
+					witness["issue"] = fmt.Sprintf("the checkpoint endpoint was reached but did not answer the probe within %s: the witness or the network to it is slow", witnessProbeTimeout)
 				case witness["reachable"] != true:
 					witness["issue"] = "the checkpoint endpoint did not answer the probe: check the URL and the network"
 				case witness["ok"] != true:

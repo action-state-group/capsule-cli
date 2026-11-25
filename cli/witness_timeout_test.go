@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -107,7 +108,7 @@ func TestWitnessTimeoutAfterConnectingIsSlowNotConsent(t *testing.T) {
 			assert.NotContains(t, saved.LastError, WitnessNotReached)
 			reason, text := WitnessPendingReason(saved, testWitness)
 			assert.Equal(t, "witness_timeout", reason)
-			assert.Equal(t, "pending: the witness was reached but did not answer in time, so it is slow or busy; "+WitnessRetryText(), text)
+			assert.Equal(t, "pending: the witness was reached but its answer did not come in time, so the witness or the network to it is slow; it is tried again on a later capsulectl run, after a wait that grows up to an hour.", text)
 			assert.NotContains(t, text, "consent")
 		})
 	}
@@ -249,8 +250,13 @@ func TestDoctorWitnessProbeTimeoutIsNotConsent(t *testing.T) {
 	witnessProbeTimeout = stallTimeout
 	t.Cleanup(func() { witnessProbeTimeout = saved })
 	release := make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
-	defer server.Close()
+	// Cleanups run last-in first-out: release the handler, then close, so a
+	// failed assertion cannot leave Close waiting on it.
+	t.Cleanup(server.Close)
+	t.Cleanup(unblock)
 	p, _ := profileFixture(t)
 	p.Checkpoint.Endpoint = server.URL
 	p.Checkpoint.PublicKey = p.TrustedKeys[0]
@@ -261,12 +267,13 @@ func TestDoctorWitnessProbeTimeoutIsNotConsent(t *testing.T) {
 	assert.Equal(t, true, w["timed_out"])
 	assert.Equal(t, false, w["reachable"])
 	assert.Equal(t, false, w["ok"])
-	assert.NotContains(t, w, "consent")
-	assert.Equal(t, "the checkpoint endpoint was reached but did not answer the probe within 200ms: the witness is slow or busy", w["issue"])
+	assert.Equal(t, WitnessConsentReached(p.Checkpoint.Endpoint), w["consent"], "reached: the grant statement, no consent-missing claim")
+	assert.NotContains(t, w["consent"], "consent needed")
+	assert.Equal(t, "the checkpoint endpoint was reached but did not answer the probe within 200ms: the witness or the network to it is slow", w["issue"])
 
 	// Not reached at all: the consent text, as before. Release the held
 	// handler first, or Close waits on it.
-	close(release)
+	unblock()
 	server.Close()
 	report = doctorReport(t, "--profile", p.Name, "--check-witness")
 	w, _ = report["witness"].(map[string]any)

@@ -140,8 +140,11 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 // handshake, or a kept-alive connection reused. A timeout before that point
 // (DNS, dial, a proxy holding CONNECT, a handshake that never finishes) is
 // what a host waiting on network consent looks like from here; a timeout
-// after it is a witness that is slow to answer. The witness client builds
-// its requests from ctx, so the trace reaches them.
+// after it is a witness, or the network to it, slow to answer. The flag
+// stays set once any request of the submission connected (a SCRAPI POST
+// before its polls, say): the host let the site through, so consent is not
+// what is missing. The witness client builds its requests from ctx, so the
+// trace reaches them.
 func traceConnection(ctx context.Context) (context.Context, *atomic.Bool) {
 	connected := new(atomic.Bool)
 	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
@@ -256,9 +259,11 @@ const WitnessNotReached = "witness not reached; response details suppressed"
 const WitnessTimedOut = "witness reached but did not answer in time; response details suppressed"
 
 // WitnessTimedOutText is the pending text of a delivery that timed out after
-// reaching the witness. It names no network consent: the connection was made.
+// reaching the witness. It names no network consent: the connection was
+// made. Which side was slow, the witness or the network after the
+// connection, cannot be told from here.
 func WitnessTimedOutText() string {
-	return "pending: the witness was reached but did not answer in time, so it is slow or busy; " + WitnessRetryText()
+	return "pending: the witness was reached but its answer did not come in time, so the witness or the network to it is slow; " + WitnessRetryText()
 }
 
 // witnessSite is the site an agent host's per-site network grant names for
