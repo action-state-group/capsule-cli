@@ -1,1 +1,1 @@
-- **Changed:** the README's plugin install text names the one plugin release: the book and deal launchers ship together in evidencebook's `capsulectl/$V` release, at the version of the capsulectl release it pairs with, and the README links evidencebook's install steps for it (evidencebook#610).
+- **Changed:** the README's plugin install text says one plugin release may carry several plugins and files read beside a launcher, and checks the downloads with `sha256sum --ignore-missing -c`, since a release's `SHA256SUMS` also names other platforms' files.

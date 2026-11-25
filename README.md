@@ -3,8 +3,7 @@
 Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
 artifact SDK and `cll-go`. Plugins extend it: the first-party ones,
 the book plugin (an evidence book) and the deal plugin (a deal store), build
-in [evidencebook](https://github.com/action-state-group/evidencebook) and ship
-in one release there ([docs/PLUGINS.md](docs/PLUGINS.md)).
+and release from their own repositories ([docs/PLUGINS.md](docs/PLUGINS.md)).
 The core builds without either. Applications import their libraries, not this CLI: the `cli`
 package is the plugins' host package, with no compatibility promise before
 v1. This repository is a command-line tool, not an SDK.
@@ -108,16 +107,19 @@ mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
-The evidence book and the deal store are plugins. Both ship in one release of
-[evidencebook](https://github.com/action-state-group/evidencebook), tagged
-`capsulectl/$V` with the version of the capsulectl release it pairs with, so
-one version names the whole install. Not every capsulectl pre-release has one
-(there is none for `v0.1.0-rc47` or `v0.1.0-rc51`): install the core version
-[actionstate.ai/install](https://actionstate.ai/install) names, or another
-that has a `capsulectl/$V` release. evidencebook's
-[capsulectl/README.md, "Install a release"](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/README.md#install-a-release)
-gives the downloads, the checks, the two archives the plugins read beside
-their launchers, and the `capsulectl plugin install` commands.
+The evidence book and the deal store are plugins, released apart from the core
+(see [docs/PLUGINS.md](docs/PLUGINS.md)). A plugin release is built for one
+capsulectl release; one release may carry several plugins, and files a plugin
+reads beside its launcher, which its release notes name. Download the plugin
+files built for this capsulectl release, check them as you checked the binary
+(`sha256sum --ignore-missing -c SHA256SUMS`, since a release's list also names
+other platforms' files, and `gh attestation verify` against the plugin's own
+repository), then install each launcher:
+
+```bash
+# PLUGIN, PV: a plugin's name and its release built for $V.
+capsulectl plugin install ./capsulectl-$PLUGIN-$PV-$OS-$ARCH   # the plugin's verbs appear under capsulectl $PLUGIN ...
+```
 
 Install runs the plugin's handshake, checks it is built for this capsulectl
 release, and puts it in `~/.local/lib/capsulectl/plugins`. Its output lists
