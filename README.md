@@ -56,9 +56,14 @@ attestation up on GitHub, which needs `gh` signed in.
 
 Which check applies (`gh auth status` tells signed in from not):
 
+`gh attestation` first shipped in GitHub CLI v2.49.0; an older `gh` (Ubuntu
+24.04's packaged `gh` is 2.45) has no `attestation` command, so read it as
+"not installed" below, or install a current `gh` from
+[cli.github.com](https://cli.github.com).
+
 | `gh` | What to run |
 |---|---|
-| not installed | Compare your binary with `SHA256SUMS`. For linux/amd64, also compare it with the SHA-256 the install page publishes; for the other platforms, `SHA256SUMS` is the only check. |
+| not installed, or older than v2.49.0 | Compare your binary with `SHA256SUMS`. For linux/amd64, also compare it with the SHA-256 the install page publishes; for the other platforms, `SHA256SUMS` is the only check. |
 | installed, not signed in | Never sign in for this. Use `--bundle` (`v0.1.0-rc4` and later); for `v0.1.0-rc3`, the SHA-256 is the only check. |
 | installed and signed in | `--bundle` (preferred, same as above), or without it: `gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml` |
 
@@ -107,11 +112,14 @@ mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
-The evidence book and the deal store are plugins, each with its own release
-(see [docs/PLUGINS.md](docs/PLUGINS.md)). Download the plugin file
-built for this capsulectl release, check it as you checked the binary
-(`sha256sum -c SHA256SUMS`, and `gh attestation verify` against the plugin's
-own repository), then install the file:
+The evidence book and the deal store are plugins, released apart from the core
+(see [docs/PLUGINS.md](docs/PLUGINS.md)). A plugin release is built for one
+capsulectl release; one release may carry several plugins, and files a plugin
+reads beside its launcher, which its release notes name. Download the plugin
+files built for this capsulectl release, check them as you checked the binary
+(`sha256sum --ignore-missing -c SHA256SUMS`, since a release's list also names
+other platforms' files, and `gh attestation verify` against the plugin's own
+repository), then install each launcher:
 
 ```bash
 # PLUGIN, PV: a plugin's name and its release built for $V.
