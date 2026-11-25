@@ -444,3 +444,21 @@ func TestALauncherFoundInOneRootResolvingIntoAnother(t *testing.T) {
 	require.NoError(t, os.Chmod(hop, 0o775))
 	assert.ErrorIs(t, VerifyTrustedPath(launcher), errWritable)
 }
+
+// A plugin's presentation directory beside its launcher is not a launcher:
+// discovery neither lists nor refuses it (capsule-cli#635). Any other
+// directory named like a launcher is still refused.
+func TestDiscoverySkipsAPresentationDirectory(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
+	require.NoError(t, os.Mkdir(filepath.Join(root, "capsulectl-guard.d"), 0o755))
+	require.NoError(t, os.Mkdir(filepath.Join(root, "capsulectl-orphan.d"), 0o755))
+	notALauncher := filepath.Join(root, "capsulectl-dir")
+	require.NoError(t, os.Mkdir(notALauncher, 0o755))
+
+	plugins, refused := discoverPluginsAndRefusals()
+	require.Len(t, plugins, 1)
+	assert.Equal(t, "guard", plugins[0].Name)
+	require.Len(t, refused, 1)
+	assert.Equal(t, notALauncher, refused[0].Path)
+}

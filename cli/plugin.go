@@ -539,6 +539,12 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 			if !strings.HasPrefix(base, pluginLauncherPrefix) {
 				continue
 			}
+			// A capsulectl-NAME.d directory holds a plugin's presentation
+			// files beside its launcher (docs/PLUGINS.md); it is never a
+			// launcher, so it is neither listed nor refused.
+			if entry.IsDir() && strings.HasSuffix(base, ".d") {
+				continue
+			}
 			name := strings.TrimPrefix(base, pluginLauncherPrefix)
 			if name == "" || seen[name] {
 				continue

@@ -1,0 +1,1 @@
+- **Fixed:** `capsulectl plugin ls` no longer lists a plugin's `capsulectl-NAME.d/` presentation directory under `refused` as "not a regular file"; discovery skips it, as it is never a launcher (#635).
