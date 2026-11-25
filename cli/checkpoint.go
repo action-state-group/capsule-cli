@@ -7,10 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/publicsuffix"
@@ -127,20 +130,49 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 type safeSubmitter struct{ client *witness.Client }
 
 func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
+	ctx, connected := traceConnection(ctx)
 	r, e := s.client.Submit(ctx, b)
-	return r, classifySubmitError(e)
+	return r, classifySubmitError(e, connected.Load())
 }
 
-// classifySubmitError is how a delivery records a witness client's error.
-func classifySubmitError(e error) error {
+// traceConnection notes on ctx whether a request made with it got a
+// connection to the witness: after any proxy tunnel and the verified TLS
+// handshake, or a kept-alive connection reused. A timeout before that point
+// (DNS, dial, a proxy holding CONNECT, a handshake that never finishes) is
+// what a host waiting on network consent looks like from here; a timeout
+// after it is a witness that is slow to answer. The witness client builds
+// its requests from ctx, so the trace reaches them.
+func traceConnection(ctx context.Context) (context.Context, *atomic.Bool) {
+	connected := new(atomic.Bool)
+	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
+	return httptrace.WithClientTrace(ctx, trace), connected
+}
+
+// timedOut reports a request ended by its deadline: the HTTP client's
+// timeout or a context deadline.
+func timedOut(e error) bool {
+	var network net.Error
+	return errors.Is(e, context.DeadlineExceeded) || errors.As(e, &network) && network.Timeout()
+}
+
+// classifySubmitError is how a delivery records a witness client's error;
+// connected says whether the request got a connection to the witness
+// (traceConnection).
+func classifySubmitError(e error, connected bool) error {
 	if e != nil {
-		// A request that got no answer from the witness at all (refused,
-		// unresolved, timed out, or stopped by a proxy asking for
-		// authorization) is recorded as not reached, so it can be shown as
-		// such: on an agent host that asks before network access, that is
-		// what a missing consent looks like from here.
 		var answered *witness.HTTPError
-		if !errors.As(e, &answered) || answered.StatusCode == http.StatusProxyAuthRequired {
+		// A request that reached the witness and then ran out of time is a
+		// slow witness, not a network gate: it is recorded as timed out.
+		if !errors.As(e, &answered) && connected && timedOut(e) {
+			return &witness.HTTPError{StatusCode: 503, Body: WitnessTimedOut}
+		}
+		// A request that got no answer and no connection to the witness
+		// (refused, unresolved, timed out before connecting, or stopped by
+		// a proxy asking for authorization) is recorded as not reached, so
+		// it can be shown as such: on an agent host that asks before
+		// network access, that is what a missing consent looks like from
+		// here.
+		if answered == nil || answered.StatusCode == http.StatusProxyAuthRequired {
 			return &witness.HTTPError{StatusCode: 503, Body: WitnessNotReached}
 		}
 		// A 403 may come from a network gate on this host rather than the
@@ -214,9 +246,20 @@ func RearmRefusedLog(ctx context.Context, log cll.Backend, service string, now t
 	return nil
 }
 
-// witnessNotReached marks a delivery whose request never got an answer from
-// the witness.
+// witnessNotReached marks a delivery whose request got neither an answer
+// nor a connection to the witness.
 const WitnessNotReached = "witness not reached; response details suppressed"
+
+// WitnessTimedOut marks a delivery whose request got a connection to the
+// witness but no complete answer before its deadline. It must not contain
+// WitnessNotReached, which WitnessPendingReason matches as a substring.
+const WitnessTimedOut = "witness reached but did not answer in time; response details suppressed"
+
+// WitnessTimedOutText is the pending text of a delivery that timed out after
+// reaching the witness. It names no network consent: the connection was made.
+func WitnessTimedOutText() string {
+	return "pending: the witness was reached but did not answer in time, so it is slow or busy; " + WitnessRetryText()
+}
 
 // witnessSite is the site an agent host's per-site network grant names for
 // a witness endpoint: its registrable domain (witness.example.org ->
@@ -276,6 +319,9 @@ func WitnessRetryText() string {
 func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
 	if strings.Contains(state.LastError, WitnessNotReached) {
 		return "network_consent_needed", WitnessConsentText(endpoint)
+	}
+	if strings.Contains(state.LastError, WitnessTimedOut) {
+		return "witness_timeout", WitnessTimedOutText()
 	}
 	if state.Attempts == 0 {
 		return "not_attempted", "pending: not sent yet; it goes at the next tick."
