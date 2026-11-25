@@ -1,0 +1,1 @@
+- **Changed:** the README's plugin install text names the one plugin release: the book and deal launchers ship together in evidencebook's `capsulectl/$V` release, at the same version as this capsulectl release (evidencebook#610, evidencebook#895).

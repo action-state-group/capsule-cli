@@ -3,7 +3,8 @@
 Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
 artifact SDK and `cll-go`. Plugins extend it: the first-party ones,
 the book plugin (an evidence book) and the deal plugin (a deal store), build
-and release from their own repositories ([docs/PLUGINS.md](docs/PLUGINS.md)).
+in [evidencebook](https://github.com/action-state-group/evidencebook) and ship
+in one release there ([docs/PLUGINS.md](docs/PLUGINS.md)).
 The core builds without either. Applications import their libraries, not this CLI: the `cli`
 package is the plugins' host package, with no compatibility promise before
 v1. This repository is a command-line tool, not an SDK.
@@ -107,15 +108,20 @@ mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
-The evidence book and the deal store are plugins, each with its own release
-(see [docs/PLUGINS.md](docs/PLUGINS.md)). Download the plugin file
-built for this capsulectl release, check it as you checked the binary
-(`sha256sum -c SHA256SUMS`, and `gh attestation verify` against the plugin's
-own repository), then install the file:
+The evidence book and the deal store are plugins. Both ship in one release of
+[evidencebook](https://github.com/action-state-group/evidencebook), tagged
+`capsulectl/$V` with the same version as this capsulectl release, so one
+version names the whole install (evidencebook's
+[capsulectl/RELEASING.md](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/RELEASING.md)).
+Download the two launchers, `capsulectl-book` and `capsulectl-deal`, from
+that release, check them as you checked the binary (`sha256sum -c SHA256SUMS`,
+and `gh attestation verify` with `--repo action-state-group/evidencebook` and
+`--signer-workflow action-state-group/evidencebook/.github/workflows/release.yml`),
+then install each file:
 
 ```bash
-# PLUGIN, PV: a plugin's name and its release built for $V.
-capsulectl plugin install ./capsulectl-$PLUGIN-$PV-$OS-$ARCH   # the plugin's verbs appear under capsulectl $PLUGIN ...
+# PLUGIN: book or deal. The release is evidencebook's capsulectl/$V.
+capsulectl plugin install ./capsulectl-$PLUGIN-$V-$OS-$ARCH   # the plugin's verbs appear under capsulectl $PLUGIN ...
 ```
 
 Install runs the plugin's handshake, checks it is built for this capsulectl
