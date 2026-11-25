@@ -22,7 +22,7 @@ type historyInstance struct {
 	// staple marks a stapled history_card/1 (verify_history_staple.go).
 	staple bool
 	// reader evaluates an instance whose inputs and pins are its own flags.
-	reader func(c *cobra.Command, raw []byte, holderKeys []string) (frameReport, error)
+	reader func(c *cobra.Command, raw []byte, holderKeys []string) (FrameReport, error)
 }
 
 var historyInstances = map[string]historyInstance{
@@ -106,10 +106,10 @@ func anchorWitnessed(anchor string, receipts [][]byte, policy witness.AnchorWitn
 	return anchorWitnessedView{Status: r.Status, Witness: r.Witness, WitnessedTime: r.WitnessedTime, Receipts: r.Receipts}
 }
 
-// frameReport is `verify --history` for an instance other than the Basic
-// level: that instance's own properties, never summed with another's, and
-// no score (frame §4.6).
-type frameReport struct {
+// FrameReport is `verify --history`'s report for an instance other than
+// the Basic level, and StapleVerdict's: that instance's own properties,
+// never summed with another's, and no score (frame §4.6).
+type FrameReport struct {
 	Kind            string               `json:"kind"`
 	Verdict         string               `json:"verdict"`
 	Reason          string               `json:"reason,omitempty"`
@@ -118,7 +118,7 @@ type frameReport struct {
 	Responder       any                  `json:"responder,omitempty"`
 	AnchorWitnessed *anchorWitnessedView `json:"anchor_witnessed,omitempty"`
 	Findings        []string             `json:"findings"`
-	Staples         []stapleRow          `json:"staples,omitempty"`
+	Staples         []StapleRow          `json:"staples,omitempty"`
 	// Detail is the instance's own report members (coverage, claims, ...).
 	Detail map[string]any `json:"detail,omitempty"`
 	NotRun []string       `json:"not_run,omitempty"`
@@ -222,8 +222,8 @@ func printedOctets(v json.RawMessage) (string, bool) {
 // checked with AAC's standardhistory.CheckAs; the policy, anchor and deal
 // entries are verifier inputs this file does not carry, so the properties
 // that need them stay NOT_CHECKED.
-func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, holderKeys []string) (frameReport, error) {
-	r := frameReport{Kind: derivation, Findings: []string{}, NotRun: []string{
+func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, holderKeys []string) (FrameReport, error) {
+	r := FrameReport{Kind: derivation, Findings: []string{}, NotRun: []string{
 		"window_from_policy, as_of and counts_recompute need the policy, the anchor time and the deal entries, which a served answer does not carry",
 		"anchor_inclusion: no verification material kind exists for a derivation's artifact",
 	}}
@@ -307,6 +307,6 @@ func verifyStandardHistory(c *cobra.Command, derivation string, raw []byte, hold
 }
 
 // notEvaluable is the report for an instance this verifier cannot check.
-func notEvaluable(kind, reason string) frameReport {
-	return frameReport{Kind: kind, Verdict: "not_evaluable", Reason: reason, Findings: []string{}}
+func notEvaluable(kind, reason string) FrameReport {
+	return FrameReport{Kind: kind, Verdict: "not_evaluable", Reason: reason, Findings: []string{}}
 }

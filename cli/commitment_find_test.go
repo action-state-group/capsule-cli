@@ -529,7 +529,7 @@ func TestDeriveWitnessLabel(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, anchor)
-	rows := []cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: anchor, responder: "k"}}
+	rows := []cardRow{{StapleRow: StapleRow{Stream: "s"}, anchor: anchor, responder: "k"}}
 
 	got := deriveWitness(rows, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
 	assert.Equal(t, "witnessed since "+got.Since, got.Label)
@@ -544,14 +544,14 @@ func TestDeriveWitnessLabel(t *testing.T) {
 	assert.Equal(t, "unwitnessed", unknown.Label, "a receipt by a witness the asker's policy does not list counts for nothing")
 	assert.Contains(t, unknown.Reason, "policy")
 
-	other := deriveWitness([]cardRow{{stapleRow: stapleRow{Stream: "s"}, anchor: strings.Repeat("0", 64), responder: "k"}}, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
+	other := deriveWitness([]cardRow{{StapleRow: StapleRow{Stream: "s"}, anchor: strings.Repeat("0", 64), responder: "k"}}, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
 	assert.Equal(t, "unwitnessed", other.Label, "a receipt over another anchor is not this card's")
 
 	foreign := deriveWitness(rows, "someone-else", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]})
 	assert.Equal(t, "unwitnessed", foreign.Label, "a card another key signed earns this key no label")
 	assert.Contains(t, foreign.Reason, "another key")
 
-	late := append(rows, cardRow{stapleRow: stapleRow{Stream: "t"}, anchor: anchor, responder: "k"})
+	late := append(rows, cardRow{StapleRow: StapleRow{Stream: "t"}, anchor: anchor, responder: "k"})
 	assert.Equal(t, "witnessed since "+got.Since, deriveWitness(late, "k", findInput{Receipts: [][]byte{receipt}, Policy: file.Policies["default"]}).Label)
 }
 
@@ -693,7 +693,7 @@ func TestFindWithoutAnyKeyBindsNothing(t *testing.T) {
 
 func TestStapleFailuresIgnoreAnotherStreamsAnchor(t *testing.T) {
 	row := func(anchor string) cardRow {
-		return cardRow{stapleRow: stapleRow{Properties: map[string]string{"commitment_anchor": anchor}, Findings: []string{}}}
+		return cardRow{StapleRow: StapleRow{Properties: map[string]string{"commitment_anchor": anchor}, Findings: []string{}}}
 	}
 	assert.Empty(t, stapleFailures([]cardRow{row("PASS"), row("FAIL")}), "the checkpoint is one stream's")
 	assert.Empty(t, stapleFailures([]cardRow{row("FAIL"), row("FAIL")}), "the top-level checkpoint is read for its digest and nothing else (ECC V3)")
@@ -939,7 +939,7 @@ func TestAnnouncedAttributionIsStickyThroughGather(t *testing.T) {
 }
 
 func TestStapleFailureTextOfAnotherStreamsAnchorIsDropped(t *testing.T) {
-	rows := []cardRow{{stapleRow: stapleRow{Properties: map[string]string{"commitment_anchor": "FAIL"}, Findings: []string{"commitment_anchor FAIL: the commitment's checkpoint is not the card's anchor"}}}}
+	rows := []cardRow{{StapleRow: StapleRow{Properties: map[string]string{"commitment_anchor": "FAIL"}, Findings: []string{"commitment_anchor FAIL: the commitment's checkpoint is not the card's anchor"}}}}
 	assert.Empty(t, stapleFailures(rows))
 	assert.Empty(t, rows[0].Findings)
 }

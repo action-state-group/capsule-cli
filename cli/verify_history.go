@@ -328,7 +328,7 @@ func addAnchorWitnessed(c *cobra.Command, r *historyReport) error {
 // other than personal_history_basic/1.
 func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []string) error {
 	inst, known := historyInstances[id]
-	var r frameReport
+	var r FrameReport
 	switch {
 	case !known:
 		r = notEvaluable(id, "unknown History instance")

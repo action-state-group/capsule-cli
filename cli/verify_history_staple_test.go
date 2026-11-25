@@ -33,7 +33,7 @@ type stapleOut struct {
 	AnchorWitnessed struct {
 		Status string `json:"status"`
 	} `json:"anchor_witnessed"`
-	Staples []stapleRow `json:"staples"`
+	Staples []StapleRow `json:"staples"`
 	raw     string
 }
 

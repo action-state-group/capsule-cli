@@ -65,8 +65,8 @@ func decodeDefinition(raw json.RawMessage) (any, error) {
 // (ISH §8): the exchange under the interop profile and the History
 // properties of the answer against the definition. The log, witness and
 // peer keys are the reader's pins (ISH §9).
-func verifyInferenceHistory(c *cobra.Command, raw []byte, holderKeys []string) (frameReport, error) {
-	r := frameReport{Kind: inferenceInstance, Findings: []string{}}
+func verifyInferenceHistory(c *cobra.Command, raw []byte, holderKeys []string) (FrameReport, error) {
+	r := FrameReport{Kind: inferenceInstance, Findings: []string{}}
 	var f struct {
 		Definition json.RawMessage `json:"definition"`
 		Request    carried         `json:"request"`
@@ -150,8 +150,8 @@ type outcomePolicy struct {
 // §8): each exchange, the History properties, each outcome claim and the
 // requirements the reader holds, with no adapter: a native object's check
 // is NOT_CHECKED.
-func verifyOutcomeHistory(c *cobra.Command, raw []byte, holderKeys []string) (frameReport, error) {
-	r := frameReport{Kind: outcomeInstance, Findings: []string{}, NotRun: []string{
+func verifyOutcomeHistory(c *cobra.Command, raw []byte, holderKeys []string) (FrameReport, error) {
+	r := FrameReport{Kind: outcomeInstance, Findings: []string{}, NotRun: []string{
 		"native objects (adapter checks) are NOT_CHECKED: this verifier loads no adapter",
 	}}
 	var f struct {

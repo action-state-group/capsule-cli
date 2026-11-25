@@ -53,8 +53,8 @@ const (
 // octets only, so a commitment is never ACCEPTED: it reports what it can and says why.
 var stapleMustPass = []string{"envelope_signature", "responder_trust", "request_binding", "card_form", "subject_scope", "checkpoint_anchor", "checkpoint_signature", "checkpoint_key", "checkpoint_consistency"}
 
-// stapleRow is one stapled card's checks.
-type stapleRow struct {
+// StapleRow is one stapled card's checks, as the report prints them.
+type StapleRow struct {
 	Stream     string            `json:"stream,omitempty"`
 	Properties map[string]string `json:"properties"`
 	Findings   []string          `json:"findings"`
@@ -108,8 +108,8 @@ type stapleInput struct {
 }
 
 // stapleReport is a staple's report before any check.
-func stapleReport() frameReport {
-	return frameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
+func stapleReport() FrameReport {
+	return FrameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
 		"the staple's nonce and freshness (min_freshness) are the reader's policy",
 		"no History property and no count: a history card carries neither",
 	}}
@@ -118,7 +118,7 @@ func stapleReport() frameReport {
 // stapleChecked is a staple's report with its outcome applied
 // (stapleOutcome), and each stapled card's derivation in report order.
 type stapleChecked struct {
-	report      frameReport
+	report      FrameReport
 	outcome     error
 	derivations []string
 }
@@ -140,7 +140,7 @@ func checkStaple(raw []byte, in stapleInput) (stapleChecked, error) {
 }
 
 // stapleChecks is checkStaple's report before its outcome.
-func stapleChecks(raw []byte, in stapleInput) (r frameReport, derivations []string, err error) {
+func stapleChecks(raw []byte, in stapleInput) (r FrameReport, derivations []string, err error) {
 	r = stapleReport()
 	counterparty, ckKeys, receipts, policy := in.counterparty, in.checkpointKeys, in.receipts, in.policy
 	var head struct {
@@ -164,7 +164,7 @@ func stapleChecks(raw []byte, in stapleInput) (r frameReport, derivations []stri
 		}
 		cards := len(rows)
 		for _, row := range rows {
-			r.Staples = append(r.Staples, row.stapleRow)
+			r.Staples = append(r.Staples, row.StapleRow)
 			anchors = append(anchors, row.anchor)
 			derivations = append(derivations, row.derivation)
 		}
@@ -196,7 +196,7 @@ func stapleChecks(raw []byte, in stapleInput) (r frameReport, derivations []stri
 			}
 		}
 		callerInvariance(&row, counterparty, evidencerequest.Exchange{Request: req, Replies: []evidencerequest.Message{rep}}, others)
-		r.Staples = append(r.Staples, row.stapleRow)
+		r.Staples = append(r.Staples, row.StapleRow)
 		anchors = append(anchors, row.anchor)
 		derivations = append(derivations, row.derivation)
 	default:
@@ -226,9 +226,9 @@ func stapleChecks(raw []byte, in stapleInput) (r frameReport, derivations []stri
 	return r, derivations, nil
 }
 
-// cardRow is a stapleRow plus the anchor the card's envelope names.
+// cardRow is a StapleRow plus the anchor the card's envelope names.
 type cardRow struct {
-	stapleRow
+	StapleRow
 	anchor string
 	// stream is the card's own evidence_stream; derivation is the envelope's.
 	stream     string
@@ -253,7 +253,7 @@ func (r *cardRow) set(property, status, finding string) {
 // the counterparty key the reader holds, the card's form, and the
 // checkpoints it names. request is nil when the staple carries none.
 func cardChecks(octets []byte, request *evidencerequest.Message, counterparty string, ckKeys []string) cardRow {
-	row := cardRow{stapleRow: stapleRow{Properties: map[string]string{}, Findings: []string{}}}
+	row := cardRow{StapleRow: StapleRow{Properties: map[string]string{}, Findings: []string{}}}
 	reply, err := evidencerequest.ParseReply(evidencerequest.Message{Octets: octets, MediaType: evidencerequest.MediaTypeJSON})
 	if err != nil || reply.Envelope == nil {
 		row.set("envelope_signature", statusFail, "the staple is not a signed envelope")
@@ -454,7 +454,7 @@ func checkpointChecks(row *cardRow, anchor string, statements, proofs [][]byte, 
 // commitment under his own key matches its own key_id, so the key comes from
 // the reader and not from the commitment.
 func commitmentChecks(raw []byte, counterparty string) cardRow {
-	row := cardRow{stapleRow: stapleRow{Properties: map[string]string{}, Findings: []string{}}}
+	row := cardRow{StapleRow: StapleRow{Properties: map[string]string{}, Findings: []string{}}}
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		row.set("commitment_signature", statusFail, err.Error())
@@ -711,7 +711,7 @@ func (e errChecksNotRun) Is(target error) bool { return target == ErrPartial }
 // request is stapled) and caller_invariance NOT_CHECKED (one answer, no
 // copies to compare), the card checks out but answers no request of the
 // reader's (ErrHistoryAnswersNoRequest).
-func stapleOutcome(r *frameReport) error {
+func stapleOutcome(r *FrameReport) error {
 	// The report line points at the top-level findings, so each staple's
 	// are copied up, prefixed; staples[].findings stays as it is.
 	for i, row := range r.Staples {
@@ -766,7 +766,7 @@ func stapleOutcome(r *frameReport) error {
 type StapleResult struct {
 	// Report is the report `verify --history` prints for the staple. Its
 	// kind is history_card/1 for any commitment; Derivations names the cards.
-	Report frameReport
+	Report FrameReport
 	// Outcome is what `verify --history` exits with: nil when the staple is
 	// ACCEPTED; else ErrHistoryAnswersNoRequest when every check passed but
 	// the card answers no request of the reader's (a commitment staples the

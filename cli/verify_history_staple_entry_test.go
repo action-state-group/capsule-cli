@@ -18,7 +18,9 @@ import (
 var zeroKey = hex.EncodeToString(make([]byte, 32))
 
 // A staple answers under one key: given several, StapleVerdict returns the
-// result under the key the staple is answered with, whatever the order.
+// result under the key the staple is answered with, whatever the order, and
+// names that key. A caller whose deal is with the other listed key (zeroKey
+// here) sees the staple is not its counterparty's (#638 review).
 func TestStapleVerdictTakesSeveralCounterpartyKeys(t *testing.T) {
 	path := filepath.Join("testdata", "goose-commitment-v1", "commitment.json")
 	raw := checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256)
