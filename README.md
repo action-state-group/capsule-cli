@@ -1470,16 +1470,18 @@ Only set that variable yourself for a disposable test database, never a
 production tunnel. Missing Docker or unavailable MySQL fails the run rather
 than skipping integration tests.
 
-GitHub Actions runs on pull requests, pushes to `main` and a 06:00 UTC nightly,
-with manual dispatch also available. It checks formatting, module-file consistency, vet, and the CLI
-build. It also builds the report above and opens its page in headless Chrome
+GitHub Actions runs on pull requests, pushes to `main` (except ones touching
+only `docs/design/`), a 06:00 UTC nightly, with manual dispatch also available.
+It checks formatting, module-file consistency, vet, and the CLI build. It also
+builds the report above and opens its page in headless Chrome
 (`scripts/check-html-render.sh`): the page must render the report and say it
 verified, and a copy with one payload edited must say it failed. The
 committed presentation fixtures, deal copies among them, are verified offline
 with the core alone (`TestPresentationFixturesVerifyOffline`); the deal
-plugin's own checks of a shared copy run in its repository. Tests run against a disposable MySQL 8.4 service:
-every case without the race detector on every run, and under the race detector
-on `main` and the nightly only. `make check` runs the quality checks and both
+plugin's own checks of a shared copy run in its repository. Tests run against
+a disposable MySQL 8.4 service: every case without the race detector on every
+run, and under the race detector on pushes to `main`, the nightly and manual
+runs, not on pull requests. `make check` runs the quality checks and both
 passes locally; `make check-full` is `make check` plus the report page.
 `CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
 No production credentials or database tunnels are used.

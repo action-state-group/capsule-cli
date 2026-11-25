@@ -2,9 +2,9 @@
 
 Commits are signed off (`git commit -s`, the Developer Certificate of Origin).
 CI checks formatting, module files, vet and the build, and runs every case
-without the race detector. The suite under the race detector runs on push to
-`main` and nightly, not on pull requests, so run `make check` before every
-push: it runs both passes as CI does. `make check-full` is `make check` plus
+without the race detector. The suite under the race detector runs on pushes
+to `main`, the nightly and manual runs, not on pull requests, so run
+`make check` before every push: it runs both passes as CI does. `make check-full` is `make check` plus
 the report page in Chrome. See "Tests" and "Continuous integration" in the README.
 
 ## Changelog
