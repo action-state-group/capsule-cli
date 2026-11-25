@@ -775,6 +775,11 @@ type StapleResult struct {
 	// else ErrHistoryNotAccepted (Report.Findings say why). Test
 	// ErrHistoryAnswersNoRequest before ErrPartial, which it also matches.
 	Outcome error
+	// CounterpartyKey is the listed counterparty key the result is under
+	// ("" when none was given). A caller that binds the staple to one party
+	// checks it is that party's key: with several keys listed, an outcome
+	// under one does not attribute the staple to another.
+	CounterpartyKey string
 	// NotRun names the checks that could not run when Outcome is that
 	// ErrPartial, such as checkpoint_key when no checkpoint key was given.
 	NotRun []string
@@ -790,38 +795,46 @@ type StapleResult struct {
 // a plugin's staple command prints it. counterpartyKeys and checkpointKeys
 // are the keys the reader's deployment policy accepts, never keys read
 // from the staple (attack F). The error is an input error (ErrInput, its
-// message naming the verb's flags) when raw is not a staple or a key is not
-// 64 lowercase hex characters; the staple's own outcome is in the result.
+// message naming the verb's flags) when raw is not a staple, as the verb
+// reads its kind, or a key is not 64 lowercase hex characters; the staple's
+// own outcome is in the result.
 //
 // A staple answers under one key, so with several counterparty keys it is
 // checked under each and the result under the key it does best with is
-// returned (ACCEPTED, then answers no request, then a check not run), the
-// first key's on a tie: exactly what `verify --history` gives with that one
-// key. Witness receipts and other served copies are the verb's only
+// returned, in this order: ACCEPTED (Outcome nil), then
+// ErrHistoryAnswersNoRequest, then ErrPartial, then ErrHistoryNotAccepted;
+// the earlier listed key wins a tie. That result is exactly what `verify
+// --history` gives with that one key, and CounterpartyKey names it. Witness receipts and other served copies are the verb's only
 // (--receipt, --also-served): anchor_witnessed is NOT_PRESENT and
 // caller_invariance NOT_CHECKED.
 func StapleVerdict(raw []byte, counterpartyKeys, checkpointKeys []string) (StapleResult, error) {
 	for _, k := range append(slices.Clone(counterpartyKeys), checkpointKeys...) {
 		if !lowerHex64.MatchString(k) {
-			return StapleResult{}, InputError("a counterparty or checkpoint key is 64 lowercase hex characters")
+			return StapleResult{}, InputError("--counterparty-key and --checkpoint-key are 64 lowercase hex characters")
 		}
 	}
 	raw = readPrintedStaple(raw)
+	// The kind is chosen as the verb chooses it (history before profile), so
+	// a file the verb reads as another History is never checked as a staple.
+	if id, named := historyInstanceOf(raw); !named || !historyInstances[id].staple {
+		return StapleResult{}, InputError("--history is not a stapled history card: want an evidence-commitment/1 or {history: \"history_card/1\" or \"history_card/2\", request, reply}")
+	}
 	keys := counterpartyKeys
 	if len(keys) == 0 {
 		keys = []string{""}
 	}
 	var best stapleChecked
+	bestKey := ""
 	for i, key := range keys {
 		checked, err := checkStaple(raw, stapleInput{counterparty: key, checkpointKeys: checkpointKeys})
 		if err != nil {
 			return StapleResult{}, err
 		}
 		if i == 0 || stapleRank(checked.outcome) < stapleRank(best.outcome) {
-			best = checked
+			best, bestKey = checked, key
 		}
 	}
-	result := StapleResult{Report: best.report, Outcome: best.outcome, Derivations: best.derivations}
+	result := StapleResult{Report: best.report, Outcome: best.outcome, CounterpartyKey: bestKey, Derivations: best.derivations}
 	var notRun errChecksNotRun
 	if errors.As(best.outcome, &notRun) {
 		result.NotRun = notRun.checks

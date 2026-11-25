@@ -30,11 +30,13 @@ func TestStapleVerdictTakesSeveralCounterpartyKeys(t *testing.T) {
 		assert.Equal(t, "PASS", got.Report.Staples[0].Properties["responder_trust"])
 		assert.Equal(t, "NOT_PRESENT", got.Report.Staples[0].Properties["request_binding"])
 		assert.Equal(t, []string{"history_card/1"}, got.Derivations)
+		assert.Equal(t, gooseNodeKey, got.CounterpartyKey, "the result names the key the staple answered under")
 		assert.Empty(t, got.NotRun)
 	}
 	got, err := StapleVerdict(raw, []string{zeroKey}, []string{key})
 	require.NoError(t, err)
 	assert.ErrorIs(t, got.Outcome, ErrHistoryNotAccepted, "no listed key answered the staple")
+	assert.Equal(t, zeroKey, got.CounterpartyKey)
 	assert.NotErrorIs(t, got.Outcome, ErrPartial)
 	assert.NotEmpty(t, got.Report.Findings)
 }
@@ -98,10 +100,32 @@ func TestStapleVerdictRefusesWhatIsNotAStaple(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInput, name)
 	}
 	raw := checkedFile(t, "goose-commitment-v1/commitment.json", gooseCommitmentSHA256)
+
+	// A clean commitment that also names another History kind is that kind
+	// to the verb, so the entry does not read it as a staple either.
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	doc["history"] = "unknown/1"
+	conflicting, err := json.Marshal(doc)
+	require.NoError(t, err)
+	_, err = StapleVerdict(conflicting, []string{gooseNodeKey}, []string{checkpointKeyOf(t, filepath.Join("testdata", "goose-commitment-v1", "commitment.json"))})
+	assert.ErrorIs(t, err, ErrInput, "the verb reads it as unknown/1")
+	out, verr := invoke(t, "", "verify", "--history", writeHistory(t, conflicting))
+	assert.NotContains(t, out, `"staples"`, "nor does the verb check it as a staple")
+	assert.ErrorIs(t, verr, ErrHistoryNotAccepted)
+
 	for _, keys := range [][]string{{""}, {strings.ToUpper(gooseNodeKey)}, {"abc"}} {
 		_, err := StapleVerdict(raw, keys, nil)
 		assert.ErrorIs(t, err, ErrInput, "counterparty %q", keys)
 		_, err = StapleVerdict(raw, []string{gooseNodeKey}, keys)
 		assert.ErrorIs(t, err, ErrInput, "checkpoint %q", keys)
 	}
+}
+
+// A malformed key is refused with the verb's own words (the invoke parity
+// hook compares them).
+func TestStapleVerdictKeyErrorIsTheVerbs(t *testing.T) {
+	path := filepath.Join("testdata", "goose-commitment-v1", "commitment.json")
+	_, err := invoke(t, "", "verify", "--history", path, "--counterparty-key", strings.ToUpper(gooseNodeKey))
+	assert.ErrorIs(t, err, ErrInput)
 }
