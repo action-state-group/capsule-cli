@@ -1,9 +1,12 @@
 # Contributing to capsule-cli
 
 Commits are signed off (`git commit -s`, the Developer Certificate of Origin).
-CI checks formatting, module files, vet, the build, and the suite under the
-race detector (slow single-goroutine case loops sampled), then every case
-without it; see "Tests" and "Continuous integration" in the README.
+CI checks formatting, module files, vet and the build, and runs every case
+without the race detector. The suite under the race detector (slow
+single-goroutine case loops sampled) runs on push to `main` and nightly (every
+case), not on pull requests, so run `make check` before every push: it runs
+both passes as CI does. `make check-full` runs every race case and the report
+page in Chrome. See "Tests" and "Continuous integration" in the README.
 
 ## Changelog
 
