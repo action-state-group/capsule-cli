@@ -110,19 +110,14 @@ export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc 
 
 The evidence book and the deal store are plugins. Both ship in one release of
 [evidencebook](https://github.com/action-state-group/evidencebook), tagged
-`capsulectl/$V` with the same version as this capsulectl release, so one
-version names the whole install (evidencebook's
-[capsulectl/RELEASING.md](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/RELEASING.md)).
-Download the two launchers, `capsulectl-book` and `capsulectl-deal`, from
-that release, check them as you checked the binary (`sha256sum -c SHA256SUMS`,
-and `gh attestation verify` with `--repo action-state-group/evidencebook` and
-`--signer-workflow action-state-group/evidencebook/.github/workflows/release.yml`),
-then install each file:
-
-```bash
-# PLUGIN: book or deal. The release is evidencebook's capsulectl/$V.
-capsulectl plugin install ./capsulectl-$PLUGIN-$V-$OS-$ARCH   # the plugin's verbs appear under capsulectl $PLUGIN ...
-```
+`capsulectl/$V` with the version of the capsulectl release it pairs with, so
+one version names the whole install. Not every capsulectl pre-release has one
+(there is none for `v0.1.0-rc47` or `v0.1.0-rc51`): install the core version
+[actionstate.ai/install](https://actionstate.ai/install) names, or another
+that has a `capsulectl/$V` release. evidencebook's
+[capsulectl/README.md, "Install a release"](https://github.com/action-state-group/evidencebook/blob/main/capsulectl/README.md#install-a-release)
+gives the downloads, the checks, the two archives the plugins read beside
+their launchers, and the `capsulectl plugin install` commands.
 
 Install runs the plugin's handshake, checks it is built for this capsulectl
 release, and puts it in `~/.local/lib/capsulectl/plugins`. Its output lists
