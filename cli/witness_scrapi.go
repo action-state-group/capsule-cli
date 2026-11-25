@@ -82,15 +82,16 @@ func witnessVerifier(p Profile) (witness.Verifier, error) {
 type scrapiSubmitter struct{ client *witness.SCRAPIClient }
 
 func (s scrapiSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
+	ctx, connected := traceConnection(ctx)
 	r, e := s.client.Submit(ctx, b)
-	return r, classifySCRAPI(e)
+	return r, classifySCRAPI(e, connected.Load())
 }
 
-func classifySCRAPI(e error) error {
+func classifySCRAPI(e error, connected bool) error {
 	if errors.Is(e, witness.ErrSCRAPIPending) {
 		return &witness.HTTPError{StatusCode: http.StatusServiceUnavailable, Body: WitnessFailureBody(http.StatusAccepted)}
 	}
-	return classifySubmitError(e)
+	return classifySubmitError(e, connected)
 }
 
 // anchorVerifier checks a SCRAPI Receipt with agent-action-capsule's

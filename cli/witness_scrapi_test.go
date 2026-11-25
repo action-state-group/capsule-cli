@@ -213,7 +213,7 @@ func TestWitnessEndpointBindings(t *testing.T) {
 // A registration still pending after the client's poll budget is retried
 // like an outage, recording the 202 it answered.
 func TestSCRAPIPendingIsRetried(t *testing.T) {
-	err := classifySCRAPI(witness.ErrSCRAPIPending)
+	err := classifySCRAPI(witness.ErrSCRAPIPending, true)
 	assert.True(t, witness.IsRetryable(err))
 	assert.Contains(t, err.Error(), "answered HTTP 202")
 }

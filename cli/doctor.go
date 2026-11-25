@@ -13,6 +13,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// witnessProbeTimeout bounds doctor's witness probe.
+var witnessProbeTimeout = 3 * time.Second
+
 // checkpointReachability is a doctor-only best-effort probe: an unauthenticated
 // GET of the witness's health endpoint (<endpoint>/health), read-only, with
 // no Authorization header attached (doctor never carries a token onto the
@@ -21,9 +24,15 @@ import (
 // witness that answers is reachable; only a 2xx answer is ok (a HEAD, or a
 // path the service does not serve, can be answered 405 by a witness that is
 // up, and that is not a witness that works).
+//
+// reachable means the witness answered. A probe that got a connection to
+// the witness but no answer before its deadline is not reachable and also
+// reports timed_out: the witness or the network to it is slow, which is not
+// a network-consent problem (traceConnection).
 func checkpointReachability(ctx context.Context, endpoint string) map[string]any {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, witnessProbeTimeout)
 	defer cancel()
+	ctx, connected := traceConnection(ctx)
 	url := strings.TrimRight(endpoint, "/") + "/health"
 	request := map[string]any{"method": http.MethodGet, "url": url}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -32,6 +41,9 @@ func checkpointReachability(ctx context.Context, endpoint string) map[string]any
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if connected.Load() && timedOut(err) {
+			return map[string]any{"checked": true, "request": request, "reachable": false, "timed_out": true}
+		}
 		return map[string]any{"checked": true, "request": request, "reachable": false}
 	}
 	defer resp.Body.Close()
@@ -220,9 +232,12 @@ func doctorCommand() *cobra.Command {
 				report["witness"] = map[string]any{"checked": false, "reason": "profile has no checkpoint.endpoint configured"}
 			default:
 				witness := checkpointReachability(c.Context(), witnessHTTPS(p.Checkpoint.Endpoint))
-				if witness["reachable"] != true {
+				switch {
+				case witness["reachable"] != true && witness["timed_out"] != true:
 					witness["consent"] = WitnessConsentText(p.Checkpoint.Endpoint)
-				} else {
+				default:
+					// Answered, or connected and then slow: the connection
+					// was made, so the text says reached, not consent.
 					witness["consent"] = WitnessConsentReached(p.Checkpoint.Endpoint)
 				}
 				if issue := witnessKeyIssue(p); issue != "" {
@@ -241,6 +256,8 @@ func doctorCommand() *cobra.Command {
 				status, _ := witness["status_code"].(int)
 				witness["ok"] = witness["reachable"] == true && status >= 200 && status < 300
 				switch {
+				case witness["timed_out"] == true:
+					witness["issue"] = fmt.Sprintf("the checkpoint endpoint was reached but did not answer the probe within %s: the witness or the network to it is slow", witnessProbeTimeout)
 				case witness["reachable"] != true:
 					witness["issue"] = "the checkpoint endpoint did not answer the probe: check the URL and the network"
 				case witness["ok"] != true:
