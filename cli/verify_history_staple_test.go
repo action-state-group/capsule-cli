@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,7 @@ type stapleOut struct {
 	AnchorWitnessed struct {
 		Status string `json:"status"`
 	} `json:"anchor_witnessed"`
-	Staples []stapleRow `json:"staples"`
+	Staples []StapleRow `json:"staples"`
 	raw     string
 }
 
@@ -450,4 +451,62 @@ func TestVerifyHistoryStapledCardAsPrinted(t *testing.T) {
 		return
 	}
 	t.Fatal("no passing history_card/1 vector")
+}
+
+// stapleParity requires StapleVerdict, given the bytes and keys of a
+// `verify --history` run on a staple, to return the report the verb printed
+// and the outcome it exited with (#567). invoke calls it on every such run,
+// so every staple test case is also one of the entry's. Runs with flags the
+// entry does not take (--receipt, --anchor-witness-policy, --also-served,
+// --holder-key, a file on stdin) and files that are not staples are skipped.
+func stapleParity(t *testing.T, path string, args []string, out string, err error) {
+	t.Helper()
+	var counterparty, checkpoint []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--receipt", "--anchor-witness-policy", "--also-served", "--holder-key", "--log-key", "--witness-key", "--peer-key", "--outcome-policy":
+			return
+		case "--counterparty-key":
+			i++
+			counterparty = append(counterparty, args[i])
+		case "--checkpoint-key":
+			i++
+			checkpoint = append(checkpoint, args[i])
+		}
+	}
+	raw, rerr := os.ReadFile(path)
+	if rerr != nil {
+		return
+	}
+	if id, named := historyInstanceOf(readPrintedStaple(raw)); !named || !historyInstances[id].staple {
+		return
+	}
+	result, lerr := StapleVerdict(raw, counterparty, checkpoint)
+	if errors.Is(err, ErrInput) {
+		require.ErrorIs(t, lerr, ErrInput, "verb %v", err)
+		assert.Equal(t, SafeError(err), SafeError(lerr))
+		return
+	}
+	require.NoError(t, lerr)
+	for _, class := range []error{ErrHistoryAnswersNoRequest, ErrPartial, ErrHistoryNotAccepted} {
+		assert.Equal(t, errors.Is(err, class), errors.Is(result.Outcome, class), "outcome %v: verb %v, entry %v", class, err, result.Outcome)
+	}
+	assert.Equal(t, err == nil, result.Outcome == nil, "verb %v, entry %v", err, result.Outcome)
+	var notRun errChecksNotRun
+	if errors.As(err, &notRun) {
+		assert.Equal(t, notRun.checks, result.NotRun)
+	} else {
+		assert.Empty(t, result.NotRun)
+	}
+	assert.Len(t, result.Derivations, len(result.Report.Staples))
+	var printed, returned map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &printed), out)
+	delete(printed, "spec_version")
+	delete(printed, "say")
+	delete(printed, "voice")
+	data, merr := json.Marshal(result.Report)
+	require.NoError(t, merr)
+	require.NoError(t, json.Unmarshal(data, &returned))
+	assert.Equal(t, printed, returned, "the entry's report is the one the verb prints")
+	return
 }

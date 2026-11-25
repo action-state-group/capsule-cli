@@ -127,7 +127,7 @@ type nodeVerdict struct {
 	Witness    witnessView       `json:"witness"`
 	Pin        []string          `json:"pin,omitempty"`
 	Live       string            `json:"live_consistency"`
-	Staples    []stapleRow       `json:"staples,omitempty"`
+	Staples    []StapleRow       `json:"staples,omitempty"`
 	Findings   []string          `json:"findings"`
 }
 
@@ -535,7 +535,7 @@ func judgeNode(in findInput, now time.Time, docs []*commitmentDoc) (nodeVerdict,
 	chains := make([]cardChain, 0, len(cardRows))
 	streams := map[string]bool{}
 	for _, row := range cardRows {
-		nv.Staples = append(nv.Staples, row.stapleRow)
+		nv.Staples = append(nv.Staples, row.StapleRow)
 		if streams[row.Stream] {
 			fail("staple_stream", "two cards claim the stream "+row.Stream)
 			continue
