@@ -1,0 +1,1 @@
+- **Fixed:** `capsulectl plugin ls` no longer lists a plugin's `capsulectl-NAME.d/` presentation directory under `refused` as "not a regular file"; discovery skips an entry named like one, a directory or a link to one, since no plugin name has a dot (#635).
