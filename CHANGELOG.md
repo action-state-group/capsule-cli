@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.1.0-rc54
+
+- **Fixed:** `capsulectl plugin ls` no longer lists a plugin's `capsulectl-NAME.d/` presentation directory under `refused` as "not a regular file"; discovery skips an entry named like one, a directory or a link to one, since no plugin name has a dot (#635, #636).
+
+- **Changed:** the README's plugin install text says one plugin release may carry several plugins and files read beside a launcher, and checks the downloads with `sha256sum --ignore-missing -c`, since a release's `SHA256SUMS` also names other platforms' files (#633).
+- **Changed:** the README says `gh attestation` needs GitHub CLI v2.49.0 or later, and that an older `gh` (Ubuntu 24.04's packaged 2.45) counts as not installed for the provenance check (#634, #633).
+
 ## v0.1.0-rc53
 
 - capsule-viewer/go moves from v0.19.2 to v0.23.1 (capsule-cli#630), so `capsulectl presentation build` draws a report sealed with `eu-ai-act-obligations-report/v2` (the eu-ai-act-obligations 0.3.0 findings, `{id, observed, owner_due}`) through the contract-report card, where v0.19.2 left that block uninterpreted. A test builds a v2 report page and, with `CAPSULECTL_CHROME` set, opens it and reads the finding drawn.
