@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.0-rc55
+
+- **Added:** `cli.StapleVerdict(raw, counterpartyKeys, checkpointKeys)` checks a stapled `history_card/1` or `history_card/2` (an `evidence-commitment/1`, a `{history, request, reply}` file or a printed staple) without a command, as `verify --history` does, and returns its report, outcome, the checks it could not run and each card's derivation; several counterparty keys are each tried, and the result names the key it is under. `verify --history` output is unchanged (#567, #638).
+
 ## v0.1.0-rc54
 
 - **Fixed:** `capsulectl plugin ls` no longer lists a plugin's `capsulectl-NAME.d/` presentation directory under `refused` as "not a regular file"; discovery skips an entry named like one, a directory or a link to one, since no plugin name has a dot (#635, #636).
