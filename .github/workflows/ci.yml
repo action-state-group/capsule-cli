@@ -3,6 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
+    # The race shards' inputs, which cover every other job's: the tests read
+    # nearly the whole tree (TestCoreNamesNoCompanyPlugin walks it, skipping
+    # design directories). CHANGELOG.md and changelog.d stay in: the commit a
+    # release tags only cuts the changelog and needs a green run on main
+    # (docs/RELEASING.md, B).
+    paths:
+      - "**"
+      - "!docs/design/**"
   pull_request:
   workflow_dispatch:
   schedule:
@@ -13,10 +21,11 @@ permissions:
   contents: read
 
 concurrency:
-  # The nightly run has a group of its own: a push to main must not cancel it
-  # (pushes and PRs still cancel their own superseded runs).
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
-  cancel-in-progress: true
+  # A pull request's newer push cancels its older run. Runs on main, the
+  # nightly and manual runs each get a group of their own, so none is ever
+  # cancelled or replaced.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
@@ -78,20 +87,14 @@ jobs:
     # race shards and one plain job, the plugin package grew past the race
     # shard's 15 minutes and the plain pass's 10 (capsule-cli#403). Cut by
     # name, six race shards still ran at 14 minutes (capsule-cli#407).
+    # Pull requests run the two plain shards only; the eight race shards run
+    # on push to main and on the nightly, four at a time
+    # (asg-agent-team-ethan#409). `make check` runs both passes locally.
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
-        part:
-          - { pass: race, shard: 1/8 }
-          - { pass: race, shard: 2/8 }
-          - { pass: race, shard: 3/8 }
-          - { pass: race, shard: 4/8 }
-          - { pass: race, shard: 5/8 }
-          - { pass: race, shard: 6/8 }
-          - { pass: race, shard: 7/8 }
-          - { pass: race, shard: 8/8 }
-          - { pass: plain, shard: 1/2 }
-          - { pass: plain, shard: 2/2 }
+        part: ${{ fromJSON(github.event_name == 'pull_request' && '[{"pass":"plain","shard":"1/2"},{"pass":"plain","shard":"2/2"}]' || '[{"pass":"race","shard":"1/8"},{"pass":"race","shard":"2/8"},{"pass":"race","shard":"3/8"},{"pass":"race","shard":"4/8"},{"pass":"race","shard":"5/8"},{"pass":"race","shard":"6/8"},{"pass":"race","shard":"7/8"},{"pass":"race","shard":"8/8"},{"pass":"plain","shard":"1/2"},{"pass":"plain","shard":"2/2"}]') }}
     name: test (${{ matrix.part.pass }} ${{ matrix.part.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -127,7 +130,8 @@ jobs:
         run: bash scripts/test.sh
 
   test:
-    # One result under the job name checks and the PR capsule already use.
+    # One result under the job name checks and the PR capsule already use:
+    # the plain shards on a pull request, every shard elsewhere.
     if: always()
     needs: [tests]
     runs-on: ubuntu-latest
@@ -191,3 +195,23 @@ jobs:
           checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}
           checkpoint-trusted-key: ${{ vars.CAPSULE_CHECKPOINT_TRUSTED_KEY }}
           witness-public-key: ${{ vars.CAPSULE_WITNESS_PUBLIC_KEY }}
+
+  report-failure:
+    # A red run on main or the nightly opens or comments on one ci-red issue
+    # (.github/scripts/report-failure.sh); a manual run on a branch does not.
+    if: failure() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule')
+    needs: [quality, tests, test, report-page]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Report the failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "CI failed on main or nightly"
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ASSIGNEE: ${{ vars.CI_FAILURE_ASSIGNEE }}
+        run: bash .github/scripts/report-failure.sh
