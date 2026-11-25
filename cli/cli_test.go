@@ -59,6 +59,9 @@ func invoke(t *testing.T, input string, args ...string) (string, error) {
 	c.SetErr(&out)
 	c.SetArgs(args)
 	e := c.ExecuteContext(t.Context())
+	if len(args) > 2 && args[0] == "verify" && args[1] == "--history" {
+		stapleParity(t, args[2], args[3:], out.String(), e)
+	}
 	return out.String(), e
 }
 

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -74,20 +75,74 @@ func stapleKeys(c *cobra.Command) (counterparty string, checkpointKeys []string,
 	return counterparty, checkpointKeys, nil
 }
 
-// verifyStaple reads a stapled history_card/1 or history_card/2 file.
-func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
-	r := frameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
-		"the staple's nonce and freshness (min_freshness) are the reader's policy",
-		"no History property and no count: a history card carries neither",
-	}}
+// verifyStaple reads a stapled history_card/1 or history_card/2 file:
+// `verify --history` reads the keys and witness inputs from its flags, then
+// checks the staple as StapleVerdict does.
+func verifyStaple(c *cobra.Command, raw []byte) (stapleChecked, error) {
 	counterparty, ckKeys, err := stapleKeys(c)
 	if err != nil {
-		return r, err
+		return stapleChecked{}, err
 	}
 	receipts, policy, err := loadWitnessInputs(c)
 	if err != nil {
-		return r, err
+		return stapleChecked{}, err
 	}
+	given, _ := c.Flags().GetStringArray("also-served")
+	return checkStaple(raw, stapleInput{
+		counterparty: counterparty, checkpointKeys: ckKeys, receipts: receipts, policy: policy,
+		alsoServedGiven: len(given) > 0, alsoServed: func() ([]evidencerequest.Exchange, error) { return alsoServed(c) },
+	})
+}
+
+// stapleInput is what a staple is checked against, every key from the
+// reader and none from the staple (attack F).
+type stapleInput struct {
+	counterparty   string
+	checkpointKeys []string
+	receipts       [][]byte
+	policy         witness.AnchorWitnessPolicy
+	// alsoServedGiven is whether other served copies were named;
+	// alsoServed reads them, and is nil when there are none to read.
+	alsoServedGiven bool
+	alsoServed      func() ([]evidencerequest.Exchange, error)
+}
+
+// stapleReport is a staple's report before any check.
+func stapleReport() frameReport {
+	return frameReport{Kind: stapleCard, Findings: []string{}, NotRun: []string{
+		"the staple's nonce and freshness (min_freshness) are the reader's policy",
+		"no History property and no count: a history card carries neither",
+	}}
+}
+
+// stapleChecked is a staple's report with its outcome applied
+// (stapleOutcome), and each stapled card's derivation in report order.
+type stapleChecked struct {
+	report      frameReport
+	outcome     error
+	derivations []string
+}
+
+// checkStaple checks a stapled history_card/1 or history_card/2 file
+// against in, with no flag read, for `verify --history` and StapleVerdict:
+// the report the verb prints and the outcome it exits with. Its input
+// errors name `verify --history`'s flags.
+func checkStaple(raw []byte, in stapleInput) (stapleChecked, error) {
+	r, derivations, err := stapleChecks(raw, in)
+	if err != nil {
+		return stapleChecked{}, err
+	}
+	checked := stapleChecked{report: r, derivations: derivations}
+	if r.Verdict != "ACCEPTED" {
+		checked.outcome = stapleOutcome(&checked.report)
+	}
+	return checked, nil
+}
+
+// stapleChecks is checkStaple's report before its outcome.
+func stapleChecks(raw []byte, in stapleInput) (r frameReport, derivations []string, err error) {
+	r = stapleReport()
+	counterparty, ckKeys, receipts, policy := in.counterparty, in.checkpointKeys, in.receipts, in.policy
 	var head struct {
 		Profile string  `json:"profile"`
 		History string  `json:"history"`
@@ -95,53 +150,57 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		Reply   carried `json:"reply"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return r, InputError("--history is not a stapled history card: " + err.Error())
+		return r, nil, InputError("--history is not a stapled history card: " + err.Error())
 	}
 	var anchors []string
 	switch {
 	case head.Profile == stapleCommitment:
-		if given, _ := c.Flags().GetStringArray("also-served"); len(given) > 0 {
-			return r, InputError("--also-served goes with a {history, request, reply} staple; a commitment staples one answer with no request to compare")
+		if in.alsoServedGiven {
+			return r, nil, InputError("--also-served goes with a {history, request, reply} staple; a commitment staples one answer with no request to compare")
 		}
 		rows, err := commitmentStapleRows(raw, counterparty, ckKeys)
 		if err != nil {
-			return r, err
+			return r, nil, err
 		}
 		cards := len(rows)
 		for _, row := range rows {
 			r.Staples = append(r.Staples, row.stapleRow)
 			anchors = append(anchors, row.anchor)
+			derivations = append(derivations, row.derivation)
 		}
 		if cards == 0 {
-			return r, InputError("--history commitment staples no history_card/1 or history_card/2")
+			return r, nil, InputError("--history commitment staples no history_card/1 or history_card/2")
 		}
 		if cards > 1 && len(receipts) > 0 {
-			return r, InputError("--receipt witnesses one anchor; this commitment staples several cards, so give it a commitment with one")
+			return r, nil, InputError("--receipt witnesses one anchor; this commitment staples several cards, so give it a commitment with one")
 		}
 		r.NotRun = append(r.NotRun, "request_binding: a commitment staples the reply octets only, with no request or nonce")
 	case isStapleCard(head.History):
 		r.Kind = head.History
 		req, err := head.Request.message()
 		if err != nil {
-			return r, InputError("--history request: " + err.Error())
+			return r, nil, InputError("--history request: " + err.Error())
 		}
 		rep, err := head.Reply.message()
 		if err != nil {
-			return r, InputError("--history reply: " + err.Error())
+			return r, nil, InputError("--history reply: " + err.Error())
 		}
 		if req.MediaType != evidencerequest.MediaTypeJSON || rep.MediaType != evidencerequest.MediaTypeJSON {
-			return r, InputError("--history a stapled history card is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
+			return r, nil, InputError("--history a stapled history card is JSON: its request and reply are media_type " + evidencerequest.MediaTypeJSON)
 		}
 		row := cardChecks(rep.Octets, &req, counterparty, ckKeys)
-		others, err := alsoServed(c)
-		if err != nil {
-			return r, err
+		var others []evidencerequest.Exchange
+		if in.alsoServed != nil {
+			if others, err = in.alsoServed(); err != nil {
+				return r, nil, err
+			}
 		}
 		callerInvariance(&row, counterparty, evidencerequest.Exchange{Request: req, Replies: []evidencerequest.Message{rep}}, others)
 		r.Staples = append(r.Staples, row.stapleRow)
 		anchors = append(anchors, row.anchor)
+		derivations = append(derivations, row.derivation)
 	default:
-		return r, InputError("--history is not a stapled history card: want an evidence-commitment/1 or {history: \"history_card/1\" or \"history_card/2\", request, reply}")
+		return r, nil, InputError("--history is not a stapled history card: want an evidence-commitment/1 or {history: \"history_card/1\" or \"history_card/2\", request, reply}")
 	}
 	r.Verdict = "ACCEPTED"
 	for _, row := range r.Staples {
@@ -164,15 +223,16 @@ func verifyStaple(c *cobra.Command, raw []byte) (frameReport, error) {
 		// line never points at an empty list.
 		r.Findings = append(r.Findings, "anchor_witnessed FAIL: "+cmp.Or(w.Reason, "a --receipt does not witness the anchor"))
 	}
-	return r, nil
+	return r, derivations, nil
 }
 
 // cardRow is a stapleRow plus the anchor the card's envelope names.
 type cardRow struct {
 	stapleRow
 	anchor string
-	// stream is the card's own evidence_stream.
-	stream string
+	// stream is the card's own evidence_stream; derivation is the envelope's.
+	stream     string
+	derivation string
 	// responder is the card envelope's responder key; octets are the card's
 	// bytes as stapled (set for a commitment's staples).
 	responder string
@@ -200,6 +260,7 @@ func cardChecks(octets []byte, request *evidencerequest.Message, counterparty st
 		return row
 	}
 	e := reply.Envelope
+	row.derivation = e.Derivation
 	row.anchor = e.Anchor.Digest
 	row.responder = e.Responder
 	if err := e.Verify(); err != nil {
@@ -699,4 +760,85 @@ func stapleOutcome(r *frameReport) error {
 		return ErrHistoryAnswersNoRequest
 	}
 	return ErrHistoryNotAccepted
+}
+
+// StapleResult is what StapleVerdict found in a stapled card.
+type StapleResult struct {
+	// Report is the report `verify --history` prints for the staple. Its
+	// kind is history_card/1 for any commitment; Derivations names the cards.
+	Report frameReport
+	// Outcome is what `verify --history` exits with: nil when the staple is
+	// ACCEPTED; else ErrHistoryAnswersNoRequest when every check passed but
+	// the card answers no request of the reader's (a commitment staples the
+	// reply octets only, so request_binding is NOT_PRESENT); else ErrPartial
+	// when nothing failed but a check could not run (NotRun names them);
+	// else ErrHistoryNotAccepted (Report.Findings say why). Test
+	// ErrHistoryAnswersNoRequest before ErrPartial, which it also matches.
+	Outcome error
+	// NotRun names the checks that could not run when Outcome is that
+	// ErrPartial, such as checkpoint_key when no checkpoint key was given.
+	NotRun []string
+	// Derivations is the derivation each stapled card's envelope names, in
+	// Report.Staples order: history_card/1 or history_card/2 for a card
+	// whose card_form passes, and "" for one that is not a signed envelope.
+	Derivations []string
+}
+
+// StapleVerdict is `verify --history` for a stapled history_card/1 or
+// history_card/2, without a command. raw is the file as received: an
+// evidence-commitment/1, a {history, request, reply} file, or a staple as
+// a plugin's staple command prints it. counterpartyKeys and checkpointKeys
+// are the keys the reader's deployment policy accepts, never keys read
+// from the staple (attack F). The error is an input error (ErrInput, its
+// message naming the verb's flags) when raw is not a staple or a key is not
+// 64 lowercase hex characters; the staple's own outcome is in the result.
+//
+// A staple answers under one key, so with several counterparty keys it is
+// checked under each and the result under the key it does best with is
+// returned (ACCEPTED, then answers no request, then a check not run), the
+// first key's on a tie: exactly what `verify --history` gives with that one
+// key. Witness receipts and other served copies are the verb's only
+// (--receipt, --also-served): anchor_witnessed is NOT_PRESENT and
+// caller_invariance NOT_CHECKED.
+func StapleVerdict(raw []byte, counterpartyKeys, checkpointKeys []string) (StapleResult, error) {
+	for _, k := range append(slices.Clone(counterpartyKeys), checkpointKeys...) {
+		if !lowerHex64.MatchString(k) {
+			return StapleResult{}, InputError("a counterparty or checkpoint key is 64 lowercase hex characters")
+		}
+	}
+	raw = readPrintedStaple(raw)
+	keys := counterpartyKeys
+	if len(keys) == 0 {
+		keys = []string{""}
+	}
+	var best stapleChecked
+	for i, key := range keys {
+		checked, err := checkStaple(raw, stapleInput{counterparty: key, checkpointKeys: checkpointKeys})
+		if err != nil {
+			return StapleResult{}, err
+		}
+		if i == 0 || stapleRank(checked.outcome) < stapleRank(best.outcome) {
+			best = checked
+		}
+	}
+	result := StapleResult{Report: best.report, Outcome: best.outcome, Derivations: best.derivations}
+	var notRun errChecksNotRun
+	if errors.As(best.outcome, &notRun) {
+		result.NotRun = notRun.checks
+	}
+	return result, nil
+}
+
+// stapleRank orders outcomes from best: ACCEPTED, answers no request, a
+// check not run, not accepted.
+func stapleRank(outcome error) int {
+	switch {
+	case outcome == nil:
+		return 0
+	case errors.Is(outcome, ErrHistoryAnswersNoRequest):
+		return 1
+	case errors.Is(outcome, ErrPartial):
+		return 2
+	}
+	return 3
 }

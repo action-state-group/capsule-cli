@@ -338,10 +338,14 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 			return err
 		}
 	case inst.staple:
-		var err error
-		if r, err = verifyStaple(c, raw); err != nil {
+		checked, err := verifyStaple(c, raw)
+		if err != nil {
 			return err
 		}
+		if err := outputInOrder(c, checked.report); err != nil {
+			return err
+		}
+		return checked.outcome
 	default:
 		var err error
 		if r, err = verifyStandardHistory(c, id, raw, holderKeys); err != nil {
@@ -351,10 +355,7 @@ func verifyOtherInstance(c *cobra.Command, id string, raw []byte, holderKeys []s
 	exit := error(nil)
 	if r.Verdict != "ACCEPTED" {
 		exit = ErrHistoryNotAccepted
-		switch {
-		case inst.staple:
-			exit = stapleOutcome(&r)
-		case len(r.Findings) == 0 && r.Reason != "":
+		if len(r.Findings) == 0 && r.Reason != "" {
 			// The failure line points at the findings, so never at none.
 			r.Findings = append(r.Findings, r.Reason)
 		}

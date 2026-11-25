@@ -121,7 +121,7 @@ and 6's sealing tests drop out and the member is read by the notice run only.
 |---|---|---|
 | `received_history` member and its limits, result schema descriptions | evidencebook (`dealprofile/x-deal-v0/`) | additive optional member; descriptions state the limits positively |
 | Reading `--history`, verifying, attributing, building the input, sealing the digests, withholding from shares | evidencebook-deal (`deal check`, `rulesInput`, `deal_share.go`) | new flags, input member, sealed member |
-| Verifying a History file or a stapled card | capsule-cli core (`cli/verify_history*.go`), over AAC `go/personalhistory`, `go/standardhistory` | a library entry for the staple path: `verifyStaple` takes a `*cobra.Command` and `stapleOutcome` is unexported, so evidencebook-deal cannot call it today; `HistoryVerdict` is already exported |
+| Verifying a History file or a stapled card | capsule-cli core (`cli/verify_history*.go`), over AAC `go/personalhistory`, `go/standardhistory` | a library entry for the staple path: `StapleVerdict` (capsule-cli#567; before it `verifyStaple` took a `*cobra.Command` and `stapleOutcome` was unexported); `HistoryVerdict` is already exported |
 | The named folds over the member | capsule-engine `go/admission` (its closed predicate list, `pack.go`), and packs that use it, such as Muse's | the predicates in section 5.5; their behaviour tests |
 
 No AAC digest or signature rule is reimplemented: verification is AAC's
