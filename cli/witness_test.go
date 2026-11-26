@@ -217,15 +217,16 @@ func TestRearmRefusedDelivery(t *testing.T) {
 	require.NoError(t, e)
 	assert.Equal(t, saved, again)
 
-	// A conflict the witness answered stays failed for good, and says so.
-	conflict := saved
-	conflict.Receipt, conflict.Permanent, conflict.LastError = nil, true, "witness returned HTTP 400: "+WitnessFailureBody(409)
-	kept, e := RearmRefused(t.Context(), store, conflict, now)
+	// Another error the witness answered stays failed for good, and says so
+	// (a continuity refusal, 409, is re-armed once: witness_continuity_test.go).
+	invalid := saved
+	invalid.Receipt, invalid.Permanent, invalid.LastError = nil, true, "witness returned HTTP 400: "+WitnessFailureBody(422)
+	kept, e := RearmRefused(t.Context(), store, invalid, now)
 	require.NoError(t, e)
 	assert.True(t, kept.Permanent)
-	reason, text := WitnessPendingReason(conflict, testWitness)
+	reason, text := WitnessPendingReason(invalid, testWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.", text)
+	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 422); this delivery is not retried.", text)
 }
 
 // cll checkpoint publish (DeliverWitness) re-arms its own refused row
