@@ -277,9 +277,19 @@ func withRearmed(lastError string) string {
 	return lastError + witnessRearmed
 }
 
+// continuityRetryGap is the least time between a continuity refusal and the
+// one retry RearmRefused gives it. The refusal a witness gives before its
+// own tip has moved on clears within moments; a delivery call made in the
+// same tick (evidencebook's cadence delivers each pending row in turn, each
+// call re-arming first) must not spend the retry on a witness that has not
+// caught up yet.
+const continuityRetryGap = time.Minute
+
 // RearmRefused makes a rearmable delivery due again. A 403 is re-armed once:
 // it is now stored as retryable, so no build writes another. A 409 is
-// re-armed once and marked, so a second refusal stays.
+// re-armed once and marked, so a second refusal stays; it is due no sooner
+// than continuityRetryGap after the time the refusal stored (at or after the
+// refusal), and later rows wait behind it meanwhile.
 func RearmRefused(ctx context.Context, store cll.WitnessStateStore, state cll.WitnessState, now time.Time) (cll.WitnessState, error) {
 	if !rearmable(state) {
 		return state, nil
@@ -292,6 +302,9 @@ func RearmRefused(ctx context.Context, store cll.WitnessStateStore, state cll.Wi
 	// Whole seconds: a store that rounds the time it keeps must not move
 	// it past now, or a delivery run at now would skip the row.
 	next.NextAttemptAt = now.Truncate(time.Second)
+	if due := state.NextAttemptAt.Add(continuityRetryGap); answeredStatus(state) == "409" && due.After(now) {
+		next.NextAttemptAt = due.Truncate(time.Second)
+	}
 	if e := store.CommitWitness(ctx, state.Attempts, next); e != nil {
 		return state, e
 	}
@@ -408,8 +421,8 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 		// next tick (RearmRefused), so it is retried either way.
 		return "refused", "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; " + WitnessRetryText() + " " + WitnessGrantText(endpoint)
 	}
-	if status == "409" && rearmable(state) {
-		return "witness_error", "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at the next capsulectl run."
+	if status == "409" && (rearmable(state) || !state.Permanent && strings.Contains(state.LastError, witnessRearmed)) {
+		return "witness_error", "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at a later capsulectl run, a minute or more after the refusal."
 	}
 	if status == "409" && state.Permanent {
 		return "witness_error", WitnessNotDelivered + "the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); this delivery is not retried."
@@ -695,17 +708,27 @@ func addCheckpointCommands(logs *cobra.Command) {
 			if e = Output(c, result); e != nil {
 				return e
 			}
-			if publish && state.Permanent {
-				return errors.New("checkpoint delivery permanently failed")
-			}
-			if publish && state.Receipt == nil {
-				return ErrPending
+			if publish {
+				return deliveryOutcome(state)
 			}
 			return nil
 		}}
 		cmd.Flags().Uint64("checkpoint", 0, "CLL checkpoint MMR size (not entry count)")
 		group.AddCommand(cmd)
 	}
+}
+
+// deliveryOutcome is how cll checkpoint publish ends for a delivery's state:
+// done with a receipt, pending while it is retried (a continuity refusal due
+// for its re-arm included), failed when it never will be.
+func deliveryOutcome(state cll.WitnessState) error {
+	switch {
+	case state.Receipt != nil:
+		return nil
+	case state.Permanent && !rearmable(state):
+		return errors.New("checkpoint delivery permanently failed")
+	}
+	return ErrPending
 }
 
 // cutCheckpoint signs a checkpoint at the current log tip and returns it after

@@ -122,13 +122,15 @@ func TestAContinuityRefusalIsSentAgainAtTheNextCall(t *testing.T) {
 	assert.Nil(t, got.Receipt)
 	reason, text := WitnessPendingReason(got, testWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at the next capsulectl run.", text)
+	assert.Equal(t, continuityPending, text)
 	assert.NotContains(t, text, "not retried")
 	assert.Equal(t, "pending", witnessResult(testWitness, got)["state"])
+	assert.ErrorIs(t, deliveryOutcome(got), ErrPending, "publish ends pending, not failed")
 
-	got, e = deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, now.Add(time.Minute), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, now.Add(2*time.Minute), time.Time{})
 	require.NoError(t, e)
 	require.NotNil(t, got.Receipt)
+	assert.NoError(t, deliveryOutcome(got))
 	assert.Equal(t, []uint64{rows[0].CheckpointSize, rows[0].CheckpointSize}, w.sent)
 }
 
@@ -152,6 +154,57 @@ func TestAContinuityRefusalIsReArmedOnce(t *testing.T) {
 	assert.Equal(t, "witness_error", reason)
 	assert.Equal(t, "not delivered: the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); this delivery is not retried.", text)
 	assert.Equal(t, "failed", witnessResult(testWitness, got)["state"])
+	assert.EqualError(t, deliveryOutcome(got), "checkpoint delivery permanently failed")
+}
+
+// continuityPending is the status of a continuity refusal due for its one
+// retry.
+const continuityPending = "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at a later capsulectl run, a minute or more after the refusal."
+
+// A delivery call made right after the refusal, in the same tick, re-arms
+// the row but does not spend its retry yet, and the later row it was called
+// for waits behind it: evidencebook's cadence delivers each pending row in
+// turn, and each call re-arms first.
+func TestTheRetryComesAMinuteAfterTheRefusal(t *testing.T) {
+	store, rows := checkpointRows(t, 2)
+	first, second := rows[0].CheckpointSize, rows[1].CheckpointSize
+	w := newTipWitness(t)
+	w.refuse[first] = 1
+	now := time.Now().UTC().Add(time.Hour)
+
+	got, e := deliverSelected(t.Context(), store, "service-test", first, w, acceptAll{}, now, time.Time{})
+	require.NoError(t, e)
+	require.True(t, rearmable(got))
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now, time.Time{})
+	require.NoError(t, e)
+	assert.Zero(t, got.Attempts, "the later row waits")
+	assert.False(t, got.Permanent)
+	assert.Equal(t, []uint64{first}, w.sent, "the refused row is not sent again in the same tick")
+	held := row(t, store, first)
+	assert.False(t, held.Permanent, "re-armed")
+	assert.True(t, held.NextAttemptAt.After(now), "but not due yet")
+	_, text := WitnessPendingReason(held, testWitness)
+	assert.Equal(t, continuityPending, text)
+	assert.ErrorIs(t, deliveryOutcome(held), ErrPending)
+
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now.Add(2*time.Minute), time.Time{})
+	require.NoError(t, e)
+	require.NotNil(t, got.Receipt)
+	assert.Equal(t, []uint64{first, first, second}, w.sent)
+}
+
+// A row an older build stored as failed for good after a 409, long ago, is
+// due at once when re-armed.
+func TestAnOldContinuityRefusalIsDueAtOnce(t *testing.T) {
+	store, rows := checkpointRows(t, 1)
+	now := time.Now().UTC().Add(time.Hour)
+	old := rows[0]
+	old.Attempts, old.Permanent, old.NextAttemptAt = 1, true, now.Add(-24*time.Hour)
+	old.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 409); response details suppressed"
+	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, old))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, newTipWitness(t), acceptAll{}, now, time.Time{})
+	require.NoError(t, e)
+	assert.NotNil(t, got.Receipt)
 }
 
 // The re-arm mark outlives a retry that ends otherwise: 409, re-arm, a
