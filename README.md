@@ -1056,9 +1056,16 @@ agent-action-capsule Go library (v0.7.0). Its `extensions` entry has `status`
   `body` (`carried`, `declared_missing` or `absent`), `digest` (`reproduced`,
   `mismatch` or `not_shown`), and, for a carried member bundle, `bundle`: that
   bundle's own full report (its own verdict and claims, never merged with the
-  containing bundle's). A refusal's signature is checked when it carries
-  `key_id` and `signature` (`whole-refusal/v1`: Ed25519 over the JCS of the refusal
-  without `signature`); any other refusal is `signature_unverified`, not failed;
+  containing bundle's). A refusal's signature is checked in
+  agent-action-capsule's carried signature profiles, with strict Ed25519 (a
+  small-order key or R never verifies): `three-member-refusal/v1` when it carries
+  `sig` and no `signature` (`sig` over the JCS of `issued_at`, `reason` and
+  `request_digest`), `whole-refusal/v1` otherwise (`signature` over the JCS of the
+  refusal without `signature`); the member's `refusal_signature` gives its `status`
+  (`verified`, `invalid` or `signature_unverified`) and `profile`. A refusal that
+  carries no signature, or a three-member refusal that also carries
+  `policy_digest`, is `signature_unverified`, not failed, and the latter names no
+  `profile`; a signature that does not verify is `invalid`;
 - `composition_closure`: `pass`, `withheld` (`declared_incomplete`) or `fail`;
 - `joins`: each join's `declared` and re-`derived` state and `result`
   (`derived_matches`, `join_state_mismatch` or `not_derivable`), with each

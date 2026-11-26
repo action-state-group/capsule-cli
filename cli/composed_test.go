@@ -359,6 +359,9 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 		"verified": {func(map[string]interface{}) {}, "INCOMPLETE", true, true, nil},
 		"unsigned": {func(r map[string]interface{}) { delete(r, "key_id"); delete(r, "sig") }, "INCOMPLETE", false, false, nil},
 		"invalid":  {func(r map[string]interface{}) { r["reason"] = "coverage_unsatisfiable" }, "INVALID", false, false, nil},
+		// A three-member refusal that also carries policy_digest is in no
+		// carried signature profile: unverified, never served, no page.
+		"policy_digest": {func(r map[string]interface{}) { r["policy_digest"] = strings.Repeat("a", 64) }, "INCOMPLETE", false, false, nil},
 		// A served refusal does not excuse another unmet claim.
 		"verified, no checkpoint": {func(map[string]interface{}) {}, "INCOMPLETE", true, false, func(v map[string]interface{}) { delete(v, "checkpoint") }},
 		// Nor another refusal that is not signed (capsule-cli#513).
@@ -418,6 +421,9 @@ func TestComposedRefusalMemberPageByItsSignature(t *testing.T) {
 			member := composed["members"].([]interface{})[0].(map[string]interface{})
 			assert.Equal(t, "INCOMPLETE", member["reads_as"])
 			assert.Equal(t, c.served, member["served_answer"] == true)
+			if name == "policy_digest" {
+				assert.Equal(t, map[string]interface{}{"status": aacbundle.RefusalSignatureUnverified}, member["refusal_signature"], "no profile is named")
+			}
 			if c.pageable {
 				assert.NoError(t, PageGate(value))
 			} else {
