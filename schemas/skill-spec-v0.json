@@ -71,7 +71,7 @@
       "properties": {
         "five_verb": {
           "enum": ["check", "record", "ask", "verify", "show"],
-          "description": "Which of the five verbs this command carries out: check before acting, record what was done, ask for evidence or answer a request, verify what was received, show a record or report."
+          "description": "Which of the five verbs this command carries out: check before acting, record what was done, ask for evidence or answer a request, verify what you get, show a record or report."
         }
       },
       "unevaluatedProperties": false

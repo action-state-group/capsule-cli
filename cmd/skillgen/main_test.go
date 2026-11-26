@@ -194,6 +194,9 @@ func TestCapsulectlSkillTeachesOnlyTheFiveVerbs(t *testing.T) {
 		"publish": "record", "cll append": "record", "result build": "record",
 		"verify": "verify", "cll list": "show", "get": "show",
 	}, taught)
+	assert.Equal(t, "record, verify and show", taughtFiveVerbs(spec.Verbs))
+	assert.Equal(t, "verify", taughtFiveVerbs(spec.Verbs[3:4]))
+
 	var expert []string
 	for _, v := range spec.ExpertVerbs {
 		expert = append(expert, v.Name)

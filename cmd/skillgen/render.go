@@ -118,12 +118,30 @@ func expertTable(verbs []Verb) string {
 	return b.String()
 }
 
+// taughtFiveVerbs names, in the ruling's order, each of the five verbs that
+// at least one taught command carries out: "record, verify and show".
+func taughtFiveVerbs(verbs []Verb) string {
+	var names []string
+	for _, five := range []string{"check", "record", "ask", "verify", "show"} {
+		for _, v := range verbs {
+			if v.FiveVerb == five {
+				names = append(names, five)
+				break
+			}
+		}
+	}
+	if len(names) <= 1 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 func fiveVerbsSection(spec Spec) string {
 	var b strings.Builder
-	b.WriteString("This skill teaches five verbs and nothing else: **check** before you act,\n" +
-		"**record** what was done, **ask** for evidence or answer a request, **verify**\n" +
-		"what you get, and **show** a record or report. Each row maps a verb to the\n" +
-		"command that carries it out.\n\n")
+	b.WriteString("Agent work uses five verbs: **check** before you act, **record** what was\n" +
+		"done, **ask** for evidence or answer a request, **verify** what you get, and\n" +
+		"**show** a record or report.\n")
+	fmt.Fprintf(&b, "This skill has commands for %s; the rows below map\neach to its command.\n\n", taughtFiveVerbs(spec.Verbs))
 	b.WriteString(fiveVerbTable(spec.Verbs))
 	if spec.FiveVerbsElsewhere != "" {
 		b.WriteString("\n" + spec.FiveVerbsElsewhere + "\n")

@@ -39,10 +39,11 @@ Every consequential action taken by this skill must produce an evidence record. 
 
 ## The five verbs
 
-This skill teaches five verbs and nothing else: **check** before you act,
-**record** what was done, **ask** for evidence or answer a request, **verify**
-what you get, and **show** a record or report. Each row maps a verb to the
-command that carries it out.
+Agent work uses five verbs: **check** before you act, **record** what was
+done, **ask** for evidence or answer a request, **verify** what you get, and
+**show** a record or report.
+This skill has commands for record, verify and show; the rows below map
+each to its command.
 
 | Verb | Command | Args | When | Emits | How |
 |---|---|---|---|---|---|
