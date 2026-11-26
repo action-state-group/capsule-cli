@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,112 +9,41 @@ import (
 	"slices"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
 )
 
-// WholeRefusalProfile names the one refusal signature form this CLI
-// checks. The Evidence Request draft leaves the format to the deployment; a
-// refusal in any other form is reported signature_unverified, never failed.
-//
-// Form: the refusal carries `key_id` (the responder's raw Ed25519 public key,
-// 64 lowercase hex) and `signature` (an Ed25519 signature, 128 lowercase hex)
-// over the UTF-8 JCS serialization of the refusal object without `signature`
-// (so request_digest, reason, issued_at and key_id are all signed).
-const WholeRefusalProfile = "whole-refusal/v1"
-
-var (
-	refusalKeyRE       = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	refusalSignatureRE = regexp.MustCompile(`^[0-9a-f]{128}$`)
+// The carried signature forms this CLI checks are agent-action-capsule's
+// composed/v1 carried signature profiles (draft-mih-zhang-agent-disclosure-bundle-03,
+// "Carried Signature Profiles"): the forms, their signing inputs and strict
+// Ed25519 (a small-order key or R never verifies) are AAC's, and the CLI only
+// names them in its report.
+const (
+	// WholeRefusalProfile signs the whole refusal without `signature`.
+	WholeRefusalProfile = aacbundle.WholeRefusalProfile
+	// ThreeMemberRefusalProfile signs a refusal's issued_at, reason and
+	// request_digest with `sig`.
+	ThreeMemberRefusalProfile = aacbundle.ThreeMemberRefusalProfile
+	// DigestBoundResponseProfile signs an artifact response without its
+	// artifact bytes, naming the artifact by artifact_digest.
+	DigestBoundResponseProfile = aacbundle.DigestBoundArtifactResponseProfile
 )
 
-// ThreeMemberRefusalProfile names the second refusal form this CLI checks:
-// a refusal signed over three members only. It carries `key_id` and
-// `sig` (an Ed25519 signature, 128 lowercase hex) over the UTF-8 JCS
-// serialization of {request_digest, reason, issued_at} only.
-const ThreeMemberRefusalProfile = "three-member-refusal/v1"
+// interopSigRE is the form of an interop envelope's `sig`: an Ed25519
+// signature as 128 lowercase hex.
+var interopSigRE = regexp.MustCompile(`^[0-9a-f]{128}$`)
 
-// verifyRefusalSignature checks a carried refusal under WholeRefusalProfile,
-// or, when it carries `sig` and no `signature`, under
-// ThreeMemberRefusalProfile. A refusal carrying no signature member is not
-// in either form (unverified); one carrying a key without its signature, or
-// whose signature does not verify, is invalid.
+// verifyRefusalSignature checks a carried refusal in the profile AAC reads it
+// in (aacbundle.VerifyCarriedRefusal).
 func verifyRefusalSignature(refusal map[string]interface{}) string {
-	rawKey, hasKey := refusal["key_id"]
-	rawSignature, hasSignature := refusal["signature"]
-	if refusalProfile(refusal) == ThreeMemberRefusalProfile {
-		return verifyThreeMemberRefusal(refusal, rawKey, refusal["sig"])
-	}
-	if !hasKey && !hasSignature {
-		return aacbundle.RefusalSignatureUnverified
-	}
-	key, keyOK := rawKey.(string)
-	signature, signatureOK := rawSignature.(string)
-	if !keyOK || !signatureOK || !refusalKeyRE.MatchString(key) || !refusalSignatureRE.MatchString(signature) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	unsigned := make(map[string]interface{}, len(refusal))
-	for name, member := range refusal {
-		if name != "signature" {
-			unsigned[name] = member
-		}
-	}
-	message, err := canonical.JCS(unsigned)
-	if err != nil {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	keyBytes, _ := hex.DecodeString(key)
-	signatureBytes, _ := hex.DecodeString(signature)
-	if !ed25519.Verify(ed25519.PublicKey(keyBytes), message, signatureBytes) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	return aacbundle.RefusalSignatureVerified
+	return aacbundle.VerifyCarriedRefusal(refusal)
 }
 
-// refusalProfile is the profile a carried refusal is checked under: a
-// refusal carrying `sig` and no `signature` is in ThreeMemberRefusalProfile.
+// refusalProfile is the profile a carried refusal is read in, "" for one AAC
+// reads in none of its profiles (a three-member refusal that also carries
+// policy_digest), whose signature stays unverified.
 func refusalProfile(refusal map[string]interface{}) string {
-	_, hasSig := refusal["sig"]
-	if _, hasSignature := refusal["signature"]; hasSig && !hasSignature {
-		return ThreeMemberRefusalProfile
-	}
-	return WholeRefusalProfile
+	return aacbundle.CarriedRefusalProfile(refusal)
 }
-
-// verifyThreeMemberRefusal checks a refusal under ThreeMemberRefusalProfile.
-func verifyThreeMemberRefusal(refusal map[string]interface{}, rawKey, rawSig interface{}) string {
-	key, keyOK := rawKey.(string)
-	sig, sigOK := rawSig.(string)
-	if !keyOK || !sigOK || !refusalKeyRE.MatchString(key) || !refusalSignatureRE.MatchString(sig) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	signed := map[string]interface{}{}
-	for _, name := range []string{"request_digest", "reason", "issued_at"} {
-		member, ok := refusal[name].(string)
-		if !ok {
-			return aacbundle.RefusalSignatureInvalid
-		}
-		signed[name] = member
-	}
-	message, err := canonical.JCS(signed)
-	if err != nil {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	keyBytes, _ := hex.DecodeString(key)
-	sigBytes, _ := hex.DecodeString(sig)
-	if !ed25519.Verify(ed25519.PublicKey(keyBytes), message, sigBytes) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	return aacbundle.RefusalSignatureVerified
-}
-
-// DigestBoundResponseProfile names the first form this CLI checks an artifact
-// member's carried response in: a signed artifact response without its
-// artifact bytes. It carries `key_id` and `sig` (an Ed25519
-// signature, 128 lowercase hex) over the response's signing body, which
-// names the artifact by artifact_digest only, so it verifies without the
-// artifact.
-const DigestBoundResponseProfile = "digest-bound-artifact-response/v1"
 
 // InteropResponseProfile names the second form: an evidence-interop envelope
 // (interop profile §6.2, evidence-interop/0 or /1) as received, minus its
@@ -143,41 +71,15 @@ func responseKey(response map[string]interface{}) (string, bool) {
 	return key, ok
 }
 
-// verifyResponseSignature checks a carried response in its form. A response
-// carrying none of `key_id`, `responder` and `sig` is in neither form
-// (unverified); any other that does not verify is invalid.
+// verifyResponseSignature checks a carried response in its form: an interop
+// envelope by the interop profile's reader, any other in AAC's
+// DigestBoundResponseProfile (aacbundle.VerifyDigestBoundArtifactResponse,
+// strict Ed25519).
 func verifyResponseSignature(response map[string]interface{}) string {
 	if responseProfile(response) == InteropResponseProfile {
 		return verifyInteropResponse(response)
 	}
-	rawKey, hasKey := response["key_id"]
-	rawSig, hasSig := response["sig"]
-	if !hasKey && !hasSig {
-		return aacbundle.RefusalSignatureUnverified
-	}
-	key, keyOK := rawKey.(string)
-	sig, sigOK := rawSig.(string)
-	if !keyOK || !sigOK || !refusalKeyRE.MatchString(key) || !refusalSignatureRE.MatchString(sig) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	fields := map[string]string{}
-	for _, name := range []string{"request_digest", "anchor", "artifact_kind", "artifact_digest", "issued_at"} {
-		member, ok := response[name].(string)
-		if !ok {
-			return aacbundle.RefusalSignatureInvalid
-		}
-		fields[name] = member
-	}
-	body, err := ArtifactResponseSigningBody(fields["request_digest"], fields["anchor"], fields["artifact_kind"], fields["artifact_digest"], fields["issued_at"])
-	if err != nil {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	keyBytes, _ := hex.DecodeString(key)
-	sigBytes, _ := hex.DecodeString(sig)
-	if !ed25519.Verify(ed25519.PublicKey(keyBytes), body, sigBytes) {
-		return aacbundle.RefusalSignatureInvalid
-	}
-	return aacbundle.RefusalSignatureVerified
+	return aacbundle.VerifyDigestBoundArtifactResponse(response)
 }
 
 // verifyInteropResponse checks a carried response under
@@ -193,7 +95,7 @@ func verifyInteropResponse(response map[string]interface{}) string {
 		return aacbundle.RefusalSignatureInvalid
 	}
 	envelope, ok := interopEnvelope(response)
-	if !ok || !slices.Contains(evidencerequest.Profiles, envelope.Profile) || !refusalSignatureRE.MatchString(envelope.Sig) {
+	if !ok || !slices.Contains(evidencerequest.Profiles, envelope.Profile) || !interopSigRE.MatchString(envelope.Sig) {
 		return aacbundle.RefusalSignatureInvalid
 	}
 	body, err := envelope.SigningBody()
@@ -349,11 +251,17 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			}
 		}
 		if m.RefusalSignature != "" {
+			// The profile AAC read the refusal in; a refusal in none of its
+			// profiles stays unverified and names none.
+			entry := map[string]any{"status": m.RefusalSignature}
 			profile := WholeRefusalProfile
-			if refusal, ok := composedMemberRefusal(container, m.ID); ok && refusalProfile(refusal) == ThreeMemberRefusalProfile {
-				profile = ThreeMemberRefusalProfile
+			if refusal, ok := composedMemberRefusal(container, m.ID); ok {
+				profile = refusalProfile(refusal)
 			}
-			member["refusal_signature"] = map[string]any{"status": m.RefusalSignature, "profile": profile}
+			if profile != "" {
+				entry["profile"] = profile
+			}
+			member["refusal_signature"] = entry
 		}
 		members = append(members, member)
 	}
@@ -445,20 +353,12 @@ func composedMemberBody(container map[string]interface{}, id, key string) (map[s
 	return nil, false
 }
 
-// artifactResponseType is the context member of an artifact response's
-// signing body, so its signature cannot be read as any other statement.
-const artifactResponseType = "evidence-artifact-response/v1"
-
 // ArtifactResponseSigningBody is the exact bytes a signed artifact response
 // (DigestBoundResponseProfile) covers: its context and the five members that
-// name the request, the anchor and the artifact by digest. The deal plugin
-// signs this body; verify --bundle checks a composed member's carried
-// response over it.
+// name the request, the anchor and the artifact by digest: AAC's
+// aacbundle.ArtifactResponseSigningInput, kept here for a plugin that signs it.
 func ArtifactResponseSigningBody(requestDigest, anchor, artifactKind, artifactDigest, issuedAt string) ([]byte, error) {
-	return canonical.JCS(map[string]interface{}{
-		"type": artifactResponseType, "request_digest": requestDigest, "anchor": anchor,
-		"artifact_kind": artifactKind, "artifact_digest": artifactDigest, "issued_at": issuedAt,
-	})
+	return aacbundle.ArtifactResponseSigningInput(requestDigest, anchor, artifactKind, artifactDigest, issuedAt)
 }
 
 // BytesDigest is the lowercase hex SHA-256 of data.
