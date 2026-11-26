@@ -288,8 +288,9 @@ const continuityRetryGap = time.Minute
 // RearmRefused makes a rearmable delivery due again. A 403 is re-armed once:
 // it is now stored as retryable, so no build writes another. A 409 is
 // re-armed once and marked, so a second refusal stays; it is due no sooner
-// than continuityRetryGap after the time the refusal stored (at or after the
-// refusal), and later rows wait behind it meanwhile.
+// than continuityRetryGap after the next-attempt time the refusal stored,
+// which is at or after the refusal (selectedWitness.CommitWitness), and
+// later rows wait behind it meanwhile.
 func RearmRefused(ctx context.Context, store cll.WitnessStateStore, state cll.WitnessState, now time.Time) (cll.WitnessState, error) {
 	if !rearmable(state) {
 		return state, nil
@@ -479,8 +480,16 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 // CommitWitness is how the runner records a delivery. A row re-armed after a
 // continuity refusal keeps its witnessRearmed mark through every later
 // failure, a timeout or an unreached witness included, so it is re-armed
-// once however its retries end.
+// once however its retries end. A first continuity refusal is stored with a
+// next-attempt time no earlier than the moment it is recorded: the runner
+// counts its backoff from the start of its pass, which may be long before
+// the answer, and RearmRefused counts continuityRetryGap from that time.
 func (s selectedWitness) CommitWitness(ctx context.Context, expectedAttempts uint32, next cll.WitnessState) error {
+	if rearmable(next) && answeredStatus(next) == "409" {
+		if at := ceilSecond(witnessClock()); at.After(next.NextAttemptAt) {
+			next.NextAttemptAt = at
+		}
+	}
 	if next.Receipt == nil && !strings.Contains(next.LastError, witnessRearmed) {
 		current, e := s.WitnessStateStore.GetWitness(ctx, next.WitnessID, next.CheckpointSize)
 		if e != nil && !errors.Is(e, cll.ErrNotFound) {
@@ -491,6 +500,19 @@ func (s selectedWitness) CommitWitness(ctx context.Context, expectedAttempts uin
 		}
 	}
 	return s.WitnessStateStore.CommitWitness(ctx, expectedAttempts, next)
+}
+
+// witnessClock is the time a delivery's outcome is recorded; a variable so
+// tests can move it.
+var witnessClock = time.Now
+
+// ceilSecond is t rounded up to a whole second, so a store that keeps whole
+// seconds never moves it earlier.
+func ceilSecond(t time.Time) time.Time {
+	if r := t.Truncate(time.Second); !r.Equal(t) {
+		return r.Add(time.Second)
+	}
+	return t
 }
 
 // GetWitness is what the runner's predecessor gate reads. A predecessor

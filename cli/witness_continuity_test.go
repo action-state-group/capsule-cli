@@ -193,6 +193,56 @@ func TestTheRetryComesAMinuteAfterTheRefusal(t *testing.T) {
 	assert.Equal(t, []uint64{first, first, second}, w.sent)
 }
 
+// The gap is counted from the refusal, not from the start of the delivery
+// run: a run whose earlier rows took minutes before the refusal still waits
+// a minute after it.
+func TestTheRetryGapCountsFromTheRefusal(t *testing.T) {
+	store, rows := checkpointRows(t, 2)
+	first, second := rows[0].CheckpointSize, rows[1].CheckpointSize
+	start := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	clock := start
+	witnessClock = func() time.Time { return clock }
+	t.Cleanup(func() { witnessClock = time.Now })
+	w := newTipWitness(t)
+	w.refuse[second] = 1
+	slow := &slowWitness{inner: w, before: map[uint64]time.Duration{second: 5 * time.Minute}, clock: &clock}
+
+	got, e := deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start, time.Time{})
+	require.NoError(t, e)
+	require.True(t, rearmable(got))
+	assert.False(t, got.NextAttemptAt.Before(start.Add(5*time.Minute)), "stored at the refusal, not the run's start")
+
+	// One minute after the run started, but well before a minute after the
+	// refusal: re-armed, not sent.
+	_, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start.Add(time.Minute), time.Time{})
+	require.NoError(t, e)
+	assert.Equal(t, []uint64{first, second}, w.sent)
+	got, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start.Add(7*time.Minute), time.Time{})
+	require.NoError(t, e)
+	require.NotNil(t, got.Receipt)
+}
+
+// slowWitness moves clock on by before[size] before it answers that size.
+type slowWitness struct {
+	inner  *tipWitness
+	before map[uint64]time.Duration
+	clock  *time.Time
+}
+
+func (s *slowWitness) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
+	record, e := checkpoint.ParseRecord(b)
+	require.NoError(s.inner.t, e)
+	*s.clock = s.clock.Add(s.before[record.MMRSize])
+	s.before[record.MMRSize] = 0
+	return s.inner.Submit(ctx, b)
+}
+
+func TestCeilSecond(t *testing.T) {
+	at := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	assert.Equal(t, at, ceilSecond(at))
+	assert.Equal(t, at.Add(time.Second), ceilSecond(at.Add(time.Millisecond)))
+}
+
 // A row an older build stored as failed for good after a 409, long ago, is
 // due at once when re-armed.
 func TestAnOldContinuityRefusalIsDueAtOnce(t *testing.T) {
