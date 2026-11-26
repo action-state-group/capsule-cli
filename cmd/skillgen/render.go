@@ -137,35 +137,53 @@ func fiveVerbsSection(spec Spec) string {
 	return b.String()
 }
 
+// modeBullets explains each emission mechanism that at least one of verbs
+// uses, naming those verbs; a mechanism none of them uses is not described.
+func modeBullets(verbs []Verb) string {
+	var b strings.Builder
+	if v := verbsWithMode(verbs, "self-sealing"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **self-sealing** — the verb has its own `--seal-output` flag (%s,\n  mandated by the binary itself). Nothing further is needed.\n", verbNames(v))
+	}
+	if v := verbsWithMode(verbs, "primary-action"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **primary action** — the verb's entire job already is creating or persisting\n  a capsule (%s). Running it\n  satisfies the invariant by itself; nothing wraps it.\n", verbNames(v))
+	}
+	if v := verbsWithMode(verbs, "not-consequential"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **not consequential** — %s: each runs, and that is the end of it —\n  **no wrapper seal, no synthetic evidence record.**\n", verbNames(v))
+	}
+	return b.String()
+}
+
+// emissionSection covers the taught verbs only; the expert verbs' mechanisms
+// are in references/expert.md, so the skill file teaches none of their flags.
 func emissionSection(spec Spec) string {
-	all := allVerbs(spec)
-	return `**Capsules are for consequential actions only** (see Evidence policy
+	var b strings.Builder
+	b.WriteString(`**Capsules are for consequential actions only** (see Evidence policy
 under Guardrails, above). A capsule is never manufactured for ` + "`verify`" + `
 or any other local validation — reading, checking, validating or opening
 something is not a consequential action, and this skill produces no capsule
-for it. The How column above, and in [references/expert.md](references/expert.md),
-says which of the two real mechanisms applies to an actually-consequential verb:
+for it. The How column above says which mechanism applies to each verb:
 
-- **self-sealing** — the verb has its own ` + "`--seal-output`" + ` flag (` + verbNames(verbsWithMode(all, "self-sealing")) + `,
-  mandated by the binary itself). Nothing further is needed.
-- **primary action** — the verb's entire job already is creating or persisting
-  a capsule (` + verbNames(verbsWithMode(all, "primary-action")) + `). Running it
-  satisfies the invariant by itself; nothing wraps it.
-
-Every other verb this skill calls (` + verbNames(verbsWithMode(all, "not-consequential")) + `)
-is ` + "`not-consequential`" + `: it runs, and
-that is the end of it — **no wrapper seal, no synthetic evidence record.**
-
+`)
+	b.WriteString(modeBullets(spec.Verbs))
+	if len(spec.ExpertVerbs) > 0 {
+		b.WriteString("\nThe expert verbs follow the same policy; [references/expert.md](references/expert.md)\nsays how each one does.\n")
+	}
+	b.WriteString(`
 See [references/capsule-cli.md](references/capsule-cli.md) for the ` + "`publish`" + `/
 ` + "`cll append`" + ` request shape and the Chain/Relation fields, and for the bare
 ` + "`capsulectl seal`" + ` command this skill does not use (it exists for a skill
-whose verb surface actually needs it — this one does not).`
+whose verb surface actually needs it — this one does not).`)
+	return b.String()
 }
 
 func exerciseSection(spec Spec) string {
 	all := allVerbs(spec)
+	where := "verb above"
+	if len(spec.ExpertVerbs) > 0 {
+		where = "verb above and in [references/expert.md](references/expert.md)"
+	}
 	return `[scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
-verb above and in [references/expert.md](references/expert.md) against a
+` + where + ` against a
 throwaway sqlite profile in a temp directory: the
 consequential actions (` + verbNames(verbsWithMode(all, "self-sealing", "primary-action")) + `) each seal or persist a capsule and every one of those is
 verified; the not-consequential
@@ -228,6 +246,8 @@ before the actions they name. This file is generated from `+"`spec.yaml`"+`
 
 `, spec.Skill.Name)
 	b.WriteString(expertTable(spec.ExpertVerbs))
+	b.WriteString("\n## Capsule emission\n\nThe skill's evidence policy applies here as it does to the five verbs:\n\n")
+	b.WriteString(modeBullets(spec.ExpertVerbs))
 	b.WriteString(`
 [capsule-cli.md](capsule-cli.md) gives the full contract of the commands it
 documents, with their output and exit codes; ` + "`capsulectl <command> --help`" + `

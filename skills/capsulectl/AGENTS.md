@@ -63,18 +63,16 @@ them as they bind the five.
 under Guardrails, above). A capsule is never manufactured for `verify`
 or any other local validation — reading, checking, validating or opening
 something is not a consequential action, and this skill produces no capsule
-for it. The How column above, and in [references/expert.md](references/expert.md),
-says which of the two real mechanisms applies to an actually-consequential verb:
+for it. The How column above says which mechanism applies to each verb:
 
-- **self-sealing** — the verb has its own `--seal-output` flag (`discover`,
-  mandated by the binary itself). Nothing further is needed.
 - **primary action** — the verb's entire job already is creating or persisting
   a capsule (`publish`, `cll append`, `result build`). Running it
   satisfies the invariant by itself; nothing wraps it.
+- **not consequential** — `verify`, `cll list`, `get`: each runs, and that is the end of it —
+  **no wrapper seal, no synthetic evidence record.**
 
-Every other verb this skill calls (`verify`, `cll list`, `get`, `contract validate`, `contract diff`, `plugin ls`, `judge pin`, `judge drift pin`, `judge drift reports`, `calibration summarize`)
-is `not-consequential`: it runs, and
-that is the end of it — **no wrapper seal, no synthetic evidence record.**
+The expert verbs follow the same policy; [references/expert.md](references/expert.md)
+says how each one does.
 
 See [references/capsule-cli.md](references/capsule-cli.md) for the `publish`/
 `cll append` request shape and the Chain/Relation fields, and for the bare

@@ -169,10 +169,13 @@ func TestSchemaHoldsTheFiveVerbSplit(t *testing.T) {
 		assert.Error(t, err, name)
 	}
 
-	// Without expert verbs no reference is rendered, so none is written or checked.
+	// Without expert verbs no reference is rendered, so none is written or
+	// checked, and nothing links to it.
 	spec, err := loadSpec(writeSpec(t, dir, "d"), fixtureSchemaPath)
 	require.NoError(t, err)
 	assert.Len(t, renderedFiles(spec, "S", "A", "E"), 2)
+	assert.NotContains(t, renderSkillMD(spec), "expert.md")
+	assert.NotContains(t, renderAgentsMD(spec), "expert.md")
 }
 
 // TestCapsulectlSkillTeachesOnlyTheFiveVerbs holds issue #650's split: the
@@ -211,6 +214,16 @@ func TestCapsulectlSkillTeachesOnlyTheFiveVerbs(t *testing.T) {
 				rows = append(rows, cells[0][2:]+" "+strings.Trim(cells[1], "`"))
 			}
 		}
+		// The emission section teaches the five verbs' mechanisms only; an
+		// expert verb's (discover's --seal-output, say) is in the reference.
+		emission := between(t, text, "## Capsule emission\n", "\n## Exercise this skill")
+		assert.NotContains(t, emission, "--seal-output", "%s teaches an expert verb's flag", file)
+		for _, v := range spec.ExpertVerbs {
+			assert.NotContains(t, emission, "`"+v.Name+"`", "%s: emission section names expert verb %q", file, v.Name)
+			assert.Contains(t, expertMD, "`"+v.Name+"`")
+		}
+		assert.Contains(t, expertMD, "self-sealing** — the verb has its own `--seal-output` flag (`discover`")
+
 		var want []string
 		for _, v := range spec.Verbs {
 			want = append(want, v.FiveVerb+" "+v.Name)

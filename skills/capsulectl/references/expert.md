@@ -18,6 +18,15 @@ before the actions they name. This file is generated from `spec.yaml`
 | `judge drift reports` | `FILE_A FILE_B` | Compare two evaluation-report/v1 sets by case_id and show drift as a real delta (pin mismatch, label mismatch, or both) — never as a silent disagreement the skill quietly drops. | (no capsule — this is local comparison, not a consequential action) | not consequential — no capsule |
 | `calibration summarize` | `REPORTS_FILE RATINGS_FILE` | Fold an evaluation-report/v1 set and a human-rating/v1 set into k-of-n agreement per judge_pin_digest before citing the result into a calibration-summary/v1 the skill is about to seal. | (no capsule — this is a pure computation over caller-supplied input) | not consequential — no capsule |
 
+## Capsule emission
+
+The skill's evidence policy applies here as it does to the five verbs:
+
+- **self-sealing** — the verb has its own `--seal-output` flag (`discover`,
+  mandated by the binary itself). Nothing further is needed.
+- **not consequential** — `contract validate`, `contract diff`, `plugin ls`, `judge pin`, `judge drift pin`, `judge drift reports`, `calibration summarize`: each runs, and that is the end of it —
+  **no wrapper seal, no synthetic evidence record.**
+
 [capsule-cli.md](capsule-cli.md) gives the full contract of the commands it
 documents, with their output and exit codes; `capsulectl <command> --help`
 gives every flag of each.
