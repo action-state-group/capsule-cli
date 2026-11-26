@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
@@ -32,6 +33,11 @@ import (
 
 // witnessReanchored marks a refused delivery whose checkpoint was re-anchored.
 const witnessReanchored = "; re-anchored from the checkpoint the witness last accepted, receipt not kept"
+
+// witnessResent marks a refused delivery whose stored statement was sent
+// once more because the witness's tip had become the checkpoint it chains
+// on. selectedWitness.CommitWitness keeps it, so it is sent so once.
+const witnessResent = "; sent again once the witness took its predecessor"
 
 // witnessNotReanchored starts the mark of a refused delivery that is not
 // re-anchored; a short reason follows it, ending with a period.
@@ -69,6 +75,12 @@ func reanchorDue(state cll.WitnessState) bool {
 	}
 	_, _, ok := witnessTipOf(state)
 	return ok
+}
+
+// withTip is a delivery error naming the witness's tip as size and root, in
+// place of any tip it named before.
+func withTip(lastError string, size uint64, root string) string {
+	return withMark(witnessTip.ReplaceAllString(lastError, ""), fmt.Sprintf("; the witness last accepted mmr_size %d root %s", size, root))
 }
 
 // reanchored reports a delivery whose checkpoint was re-anchored.
@@ -136,13 +148,16 @@ func reproveCheckpoint(ctx context.Context, p Profile, log cll.CheckpointStateSt
 	if tipSize == 0 || tipSize >= record.MMRSize {
 		return nil, notReanchored("the witness's last accepted checkpoint is not an earlier one")
 	}
+	// A key that cannot be read now (an unset variable, a file not
+	// readable) may be readable at a later run: it fails this call and
+	// leaves the row due.
 	key, e := PrivateKey(p.Checkpoint.Signing)
 	if e != nil {
-		return nil, notReanchored("the profile's checkpoint signing key is not usable")
+		return nil, fmt.Errorf("re-anchor a refused checkpoint: %w", e)
 	}
 	signer, e := checkpoint.NewEd25519Signer(key)
 	if e != nil {
-		return nil, notReanchored("the profile's checkpoint signing key is not usable")
+		return nil, fmt.Errorf("re-anchor a refused checkpoint: %w", e)
 	}
 	if !strings.EqualFold(signer.KeyID(), record.KeyID) {
 		return nil, notReanchored("it was signed with another key than the profile's checkpoint key")
@@ -184,14 +199,24 @@ func reproveCheckpoint(ctx context.Context, p Profile, log cll.CheckpointStateSt
 	return signer.SignCheckpoint(ctx, body, peaks, prevPeaks, &proof)
 }
 
-// reanchorRefused re-anchors the oldest refused row of service, up to the
-// selection at size, that is due for it (reanchorDue), and reports whether
-// it did. It sends at most one re-anchor. A row that cannot be re-anchored,
-// or that the witness refuses, is marked so and holds later rows no longer;
-// a re-anchor that did not get an answer (a timeout, an unreached witness, a
-// spent budget) leaves the row as it was, to be tried at a later call. With
-// no reprover (a store that keeps no tree here), each due row is marked.
-func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, prove reprover, submitter witness.Submitter, verifier witness.Verifier) (bool, error) {
+// reanchorRefused takes the oldest refused row of service, up to the
+// selection at size, that is due for a re-anchor (reanchorDue), one step on,
+// and reports whether it did:
+//   - When the witness's tip, as the row's latest refusal names it, is the
+//     checkpoint the row's stored statement chains on, the stored statement
+//     continues it as it is: the row is made due again, once
+//     (witnessResent), so it can get its own receipt.
+//   - Otherwise the row is re-anchored from that tip. A re-anchor refused
+//     with a newer tip (the witness moved on since the refusal, as after
+//     an earlier row's re-anchor) records that tip on the row for the next
+//     step; refused otherwise, or one that cannot be made, it is marked so
+//     and holds later rows no longer.
+//
+// A re-anchor that got no answer (a timeout, an unreached witness, a spent
+// budget) leaves the row as it was, for a later call, and is no step. It
+// sends at most one statement. With no reprover (a store that keeps no tree
+// here), each due row is marked.
+func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, prove reprover, submitter witness.Submitter, verifier witness.Verifier, now time.Time) (bool, error) {
 	rows, e := witnessRows(ctx, store, service, size)
 	if e != nil {
 		return false, e
@@ -201,6 +226,7 @@ func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service s
 		if row.WitnessID != service || row.CheckpointSize > size || !reanchorDue(row) {
 			continue
 		}
+		tipSize, tipRoot, _ := witnessTipOf(row)
 		reason := ""
 		var statement []byte
 		switch {
@@ -208,8 +234,13 @@ func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service s
 			reason = "this log's store keeps no tree that capsulectl can prove it from"
 		case slices.ContainsFunc(rows[i+1:], func(r cll.WitnessState) bool { return r.WitnessID == service && (r.Receipt != nil || reanchored(r)) }):
 			reason = "a later checkpoint was delivered"
+		case !strings.Contains(row.LastError, witnessResent) && chainsOn(row, tipSize, tipRoot):
+			next := row
+			next.Permanent = false
+			next.NextAttemptAt = now.Truncate(time.Second)
+			next.LastError = withMark(row.LastError, witnessResent)
+			return true, store.CommitWitness(ctx, row.Attempts, next)
 		default:
-			tipSize, tipRoot, _ := witnessTipOf(row)
 			statement, e = prove(ctx, row, tipSize, tipRoot)
 			var no notReanchored
 			if errors.As(e, &no) {
@@ -231,6 +262,14 @@ func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service s
 		var answered *witness.HTTPError
 		switch {
 		case e != nil && errors.As(e, &answered) && !witness.IsRetryable(e):
+			if m := witnessTip.FindStringSubmatch(e.Error()); m != nil {
+				if newer, err := strconv.ParseUint(m[1], 10, 64); err == nil && newer > tipSize {
+					next := row
+					next.Attempts++
+					next.LastError = withTip(row.LastError, newer, m[2])
+					return true, store.CommitWitness(ctx, row.Attempts, next)
+				}
+			}
 			status := answeredStatusOf(e.Error())
 			return false, markReanchor(ctx, store, row, witnessNotReanchored+"the witness refused the re-anchor (HTTP "+status+").")
 		case e != nil:
@@ -242,6 +281,13 @@ func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service s
 		return true, markReanchor(ctx, store, row, witnessReanchored)
 	}
 	return false, nil
+}
+
+// chainsOn reports whether the stored statement of row names size and root
+// as its predecessor.
+func chainsOn(row cll.WitnessState, size uint64, root string) bool {
+	record, e := checkpoint.ParseRecord(row.Checkpoint)
+	return e == nil && record.PrevSize == size && record.PrevRoot == root
 }
 
 // markReanchor records a re-anchor's end on its row: an attempt, still

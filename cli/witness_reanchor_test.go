@@ -6,7 +6,6 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -26,10 +25,12 @@ import (
 // consistency proof bridges its tip to the new root; any other is refused
 // with a continuity 409 naming its tip. A statement it already took is
 // answered with its earlier receipt before any continuity check, as
-// capsule-anchor answers a resubmission. Its receipt binds the statement's
-// bytes (bindingVerifier).
+// capsule-anchor answers a resubmission. Its receipts are COSE receipts over
+// the statement's entry hash, signed by key, which the production verifier
+// checks (recordingVerifier).
 type chainWitness struct {
 	t        *testing.T
+	key      ed25519.PrivateKey
 	size     uint64
 	root     string
 	accepted map[[32]byte]witness.Receipt
@@ -43,7 +44,17 @@ type chainWitness struct {
 }
 
 func newChainWitness(t *testing.T) *chainWitness {
-	return &chainWitness{t: t, accepted: map[[32]byte]witness.Receipt{}, lose: map[uint64]int{}}
+	_, key, e := ed25519.GenerateKey(nil)
+	require.NoError(t, e)
+	return &chainWitness{t: t, key: key, accepted: map[[32]byte]witness.Receipt{}, lose: map[uint64]int{}}
+}
+
+// verifier is the production receipt verifier pinned to this witness's key,
+// recording each statement it checks in checked.
+func (w *chainWitness) verifier(checked *[][]byte) recordingVerifier {
+	v, e := witness.NewReceiptVerifier(w.key.Public().(ed25519.PublicKey))
+	require.NoError(w.t, e)
+	return recordingVerifier{inner: v, checked: checked}
 }
 
 func (w *chainWitness) Submit(_ context.Context, b []byte) (witness.Receipt, error) {
@@ -72,7 +83,9 @@ func (w *chainWitness) Submit(_ context.Context, b []byte) (witness.Receipt, err
 		}
 	}
 	w.size, w.root = record.MMRSize, record.Root
-	r := witness.Receipt{Bytes: key[:], EntryHash: hex.EncodeToString(key[:]), EntryHashScheme: "legacy", LeafIndex: 0, TreeSize: 1}
+	entry, e := record.EntryHash()
+	require.NoError(w.t, e)
+	r := witness.Receipt{Bytes: mintReceipt(w.t, entry, w.key), EntryHash: hex.EncodeToString(entry), EntryHashScheme: witness.EntryHashSchemeCheckpointDigest, LeafIndex: 0, TreeSize: 1}
 	w.accepted[key] = r
 	if w.lose[record.MMRSize] > 0 {
 		w.lose[record.MMRSize]--
@@ -104,19 +117,27 @@ func (w *chainWitness) sentCount(b []byte) int {
 	return n
 }
 
-// bindingVerifier accepts only a receipt chainWitness gave for the very
-// statement it is checked against.
-type bindingVerifier struct{ checked *[][]byte }
+// recordingVerifier is a production receipt verifier that records what it
+// checks.
+type recordingVerifier struct {
+	inner   witness.Verifier
+	checked *[][]byte
+}
 
-func (v bindingVerifier) Verify(statement []byte, r witness.Receipt) error {
+func (v recordingVerifier) Verify(statement []byte, r witness.Receipt) error {
 	if v.checked != nil {
 		*v.checked = append(*v.checked, append([]byte(nil), statement...))
 	}
-	key := sha256.Sum256(statement)
-	if !bytes.Equal(r.Bytes, key[:]) {
-		return errors.New("receipt is not for this statement")
-	}
-	return nil
+	return v.inner.Verify(statement, r)
+}
+
+// receiptOf is a stored receipt as the verifier reads it.
+func receiptOf(t *testing.T, w cll.WitnessState) witness.Receipt {
+	t.Helper()
+	require.NotNil(t, w.Receipt)
+	require.NotNil(t, w.Receipt.LeafIndex)
+	require.NotNil(t, w.Receipt.TreeSize)
+	return witness.Receipt{Bytes: w.Receipt.Bytes, EntryHash: w.Receipt.EntryHash, EntryHashScheme: w.Receipt.EntryHashScheme, LeafIndex: *w.Receipt.LeafIndex, TreeSize: *w.Receipt.TreeSize}
 }
 
 // reanchorLog is a log whose checkpoint key is the profile's, cut one entry
@@ -181,7 +202,7 @@ func TestAPersistentContinuityRefusalIsReanchored(t *testing.T) {
 	l := newReanchorLog(t)
 	w := newChainWitness(t)
 	var checked [][]byte
-	v := bindingVerifier{checked: &checked}
+	v := w.verifier(&checked)
 	for n := 0; n < 2; n++ {
 		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
 	}
@@ -207,7 +228,7 @@ func TestAPersistentContinuityRefusalIsReanchored(t *testing.T) {
 	for _, size := range l.sizes[3:] {
 		later := row(t, l.store, size)
 		require.NotNil(t, later.Receipt, "checkpoint %d has its receipt", size)
-		assert.NoError(t, bindingVerifier{}.Verify(later.Checkpoint, witness.Receipt{Bytes: later.Receipt.Bytes}), "for its own statement")
+		assert.NoError(t, v.Verify(later.Checkpoint, receiptOf(t, later)), "for its own statement")
 	}
 	assert.Equal(t, l.sizes[len(l.sizes)-1], w.size, "the witness's tip is the last checkpoint")
 	assert.Equal(t, 2, w.sentCount(got.Checkpoint), "the stored checkpoint was sent, refused, sent again and refused")
@@ -237,6 +258,10 @@ func TestAPersistentContinuityRefusalIsReanchored(t *testing.T) {
 	assert.Equal(t, first.Root, r.PrevRoot)
 	assert.Equal(t, first.NewPeaks, r.PrevPeaks)
 	assert.Contains(t, checked, reanchor)
+	key := sha256.Sum256(reanchor)
+	receipt := w.accepted[key]
+	assert.NoError(t, v.Verify(reanchor, receipt), "the re-anchor's receipt is for the re-anchor")
+	assert.Error(t, v.Verify(got.Checkpoint, receipt), "and not for the stored statement")
 }
 
 // A witness whose last accepted checkpoint is not this log's (a fork) is
@@ -244,7 +269,7 @@ func TestAPersistentContinuityRefusalIsReanchored(t *testing.T) {
 func TestAForkIsNeverReanchored(t *testing.T) {
 	l := newReanchorLog(t)
 	w := newChainWitness(t)
-	v := bindingVerifier{}
+	v := w.verifier(nil)
 	require.NotNil(t, l.deliver(0, l.cut(0), w, v).Receipt)
 	w.root = hex.EncodeToString(bytes.Repeat([]byte{7}, 32))
 	refused := l.cut(1)
@@ -272,7 +297,7 @@ func TestAForkIsNeverReanchored(t *testing.T) {
 func TestAReanchorThatTimesOutHoldsLaterRows(t *testing.T) {
 	l := newReanchorLog(t)
 	w := newChainWitness(t)
-	v := bindingVerifier{}
+	v := w.verifier(nil)
 	for n := 0; n < 2; n++ {
 		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
 	}
@@ -306,7 +331,7 @@ func TestAReanchorThatTimesOutHoldsLaterRows(t *testing.T) {
 	for _, size := range l.sizes[3:] {
 		later := row(t, l.store, size)
 		require.NotNil(t, later.Receipt, "checkpoint %d", size)
-		assert.NoError(t, bindingVerifier{}.Verify(later.Checkpoint, witness.Receipt{Bytes: later.Receipt.Bytes}))
+		assert.NoError(t, v.Verify(later.Checkpoint, receiptOf(t, later)), "for its own statement")
 	}
 }
 
@@ -315,7 +340,7 @@ func TestAReanchorThatTimesOutHoldsLaterRows(t *testing.T) {
 func TestALostReanchorAnswerIsAnsweredOnItsRetry(t *testing.T) {
 	l := newReanchorLog(t)
 	w := newChainWitness(t)
-	v := bindingVerifier{}
+	v := w.verifier(nil)
 	for n := 0; n < 2; n++ {
 		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
 	}
@@ -344,7 +369,7 @@ func TestALostReanchorAnswerIsAnsweredOnItsRetry(t *testing.T) {
 func TestAReanchorRefusalEndsIt(t *testing.T) {
 	l := newReanchorLog(t)
 	w := newChainWitness(t)
-	v := bindingVerifier{}
+	v := w.verifier(nil)
 	for n := 0; n < 2; n++ {
 		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
 	}
@@ -437,9 +462,103 @@ func TestARowBehindADeliveredOneIsNotReanchored(t *testing.T) {
 	require.True(t, reanchorDue(row(t, l.store, l.sizes[0])))
 
 	w := newChainWitness(t)
-	moved, e := reanchorRefused(t.Context(), l.store, "service-test", l.sizes[1], newReprover(l.p, l.store), w, bindingVerifier{})
+	moved, e := reanchorRefused(t.Context(), l.store, "service-test", l.sizes[1], newReprover(l.p, l.store), w, w.verifier(nil), l.at(2))
 	require.NoError(t, e)
 	assert.False(t, moved)
 	assert.Empty(t, w.sent)
 	assert.Contains(t, row(t, l.store, l.sizes[0]).LastError, "; not re-anchored: a later checkpoint was delivered.")
+}
+
+// A log from before re-anchoring can hold several checkpoints each refused
+// for good with the same old tip. Once the oldest is re-anchored, the next
+// one's re-anchor is refused naming the new tip, which is the checkpoint it
+// chains on, so its stored statement is sent as it is and gets its own
+// receipt; the one after it the same. The witness ends at the last one.
+func TestABacklogOfRefusedCheckpointsIsCleared(t *testing.T) {
+	l := newReanchorLog(t)
+	w := newChainWitness(t)
+	v := w.verifier(nil)
+	require.NotNil(t, l.deliver(0, l.cut(0), w, v).Receipt)
+	tip := l.record(l.sizes[0])
+	for n := 1; n < 4; n++ {
+		l.cut(n)
+	}
+	refusal := withRearmed(w.refusal().Error())
+	for _, size := range l.sizes[1:] {
+		r := row(t, l.store, size)
+		next := r
+		next.Attempts, next.Permanent, next.LastError = 2, true, refusal
+		require.NoError(t, l.store.CommitWitness(t.Context(), r.Attempts, next))
+	}
+	w.size, w.root = tip.MMRSize, tip.Root
+	// The witness lost nothing: its tip is the first checkpoint, and the
+	// second chains on it, so the second is sent as it is first.
+	l.deliver(4, l.sizes[3], w, v)
+
+	for _, size := range l.sizes[1:] {
+		got := row(t, l.store, size)
+		require.NotNil(t, got.Receipt, "checkpoint %d", size)
+		assert.NoError(t, v.Verify(got.Checkpoint, receiptOf(t, got)), "checkpoint %d, for its own statement", size)
+	}
+	assert.Equal(t, l.sizes[3], w.size)
+}
+
+// The same backlog behind a witness that lost one checkpoint: the oldest is
+// re-anchored, and the later ones follow on the tip it gives.
+func TestABacklogBehindALostCheckpointIsCleared(t *testing.T) {
+	l := newReanchorLog(t)
+	w := newChainWitness(t)
+	v := w.verifier(nil)
+	for n := 0; n < 2; n++ {
+		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
+	}
+	tip := l.record(l.sizes[0])
+	w.size, w.root = tip.MMRSize, tip.Root
+	for n := 2; n < 5; n++ {
+		l.cut(n)
+	}
+	refusal := withRearmed(w.refusal().Error())
+	for _, size := range l.sizes[2:] {
+		r := row(t, l.store, size)
+		next := r
+		next.Attempts, next.Permanent, next.LastError = 2, true, refusal
+		require.NoError(t, l.store.CommitWitness(t.Context(), r.Attempts, next))
+	}
+	l.deliver(5, l.sizes[4], w, v)
+
+	assert.True(t, reanchored(row(t, l.store, l.sizes[2])), "the oldest is re-anchored")
+	for _, size := range l.sizes[3:] {
+		got := row(t, l.store, size)
+		require.NotNil(t, got.Receipt, "checkpoint %d", size)
+		assert.NoError(t, v.Verify(got.Checkpoint, receiptOf(t, got)), "checkpoint %d, for its own statement", size)
+	}
+	assert.Equal(t, l.sizes[4], w.size)
+}
+
+// A signing key that cannot be read now fails the call and leaves the row
+// due, so a later run with the key re-anchors it.
+func TestAnUnreadableKeyLeavesTheReanchorDue(t *testing.T) {
+	l := newReanchorLog(t)
+	w := newChainWitness(t)
+	v := w.verifier(nil)
+	for n := 0; n < 2; n++ {
+		require.NotNil(t, l.deliver(n, l.cut(n), w, v).Receipt)
+	}
+	first := l.record(l.sizes[0])
+	w.size, w.root = first.MMRSize, first.Root
+	refused := l.cut(2)
+	l.deliver(2, refused, w, v)
+
+	seed := l.p.Checkpoint.Signing.Value
+	unset := l.p
+	unset.Checkpoint.Signing = Secret{Env: "CAPSULE_TEST_REANCHOR_KEY"}
+	t.Setenv("CAPSULE_TEST_REANCHOR_KEY", "")
+	_, e := deliverSelected(t.Context(), l.store, "service-test", refused, w, v, newReprover(unset, l.store), l.at(3), time.Time{})
+	require.Error(t, e)
+	assert.True(t, reanchorDue(row(t, l.store, refused)), "still due")
+
+	t.Setenv("CAPSULE_TEST_REANCHOR_KEY", seed)
+	_, e = deliverSelected(t.Context(), l.store, "service-test", refused, w, v, newReprover(unset, l.store), l.at(4), time.Time{})
+	require.NoError(t, e)
+	assert.True(t, reanchored(row(t, l.store, refused)))
 }

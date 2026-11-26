@@ -504,13 +504,16 @@ func (s selectedWitness) CommitWitness(ctx context.Context, expectedAttempts uin
 			next.NextAttemptAt = at
 		}
 	}
-	if next.Receipt == nil && !strings.Contains(next.LastError, witnessRearmed) {
+	if next.Receipt == nil {
 		current, e := s.WitnessStateStore.GetWitness(ctx, next.WitnessID, next.CheckpointSize)
 		if e != nil && !errors.Is(e, cll.ErrNotFound) {
 			return e
 		}
 		if e == nil && strings.Contains(current.LastError, witnessRearmed) {
 			next.LastError = withRearmed(next.LastError)
+		}
+		if e == nil && strings.Contains(current.LastError, witnessResent) {
+			next.LastError = withMark(next.LastError, witnessResent)
 		}
 	}
 	return s.WitnessStateStore.CommitWitness(ctx, expectedAttempts, next)
@@ -937,18 +940,21 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	selected, e := runSelected(ctx, runCtx, runner, store, view, service, size, now)
-	if e != nil {
-		return selected, e
-	}
-	moved, e := reanchorRefused(ctx, store, service, size, prove, submitter, verifier)
-	if e != nil || !moved {
-		if e == nil {
-			selected, e = store.GetWitness(ctx, service, size)
+	// Each re-anchor step changes a row for good, so the steps end; the bound
+	// is a safety net only.
+	for step := 0; ; step++ {
+		selected, e := runSelected(ctx, runCtx, runner, store, view, service, size, now)
+		if e != nil || step == maxDeliveryPasses {
+			return selected, e
 		}
-		return selected, e
+		moved, e := reanchorRefused(ctx, store, service, size, prove, submitter, verifier, now)
+		if e != nil {
+			return selected, e
+		}
+		if !moved {
+			return store.GetWitness(ctx, service, size)
+		}
 	}
-	return runSelected(ctx, runCtx, runner, store, view, service, size, now)
 }
 
 // runSelected runs the delivery runner for deliverSelected and returns the
