@@ -110,7 +110,7 @@ func TestDeliverWitnessByIsOneBudgetPerCall(t *testing.T) {
 	store, rows := checkpointRows(t, 2)
 	submitter := &stallSubmitter{delay: 500 * time.Millisecond, inner: &continuitySubmitter{t: t}}
 	start := time.Now()
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), start.Add(700*time.Millisecond))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, nil, time.Now().UTC().Add(time.Hour), start.Add(700*time.Millisecond))
 	elapsed := time.Since(start)
 	require.NoError(t, e)
 	assert.Less(t, elapsed, time.Second, "a bound per row would take 1.2 s")
@@ -131,7 +131,7 @@ func TestDeliverWitnessByLeavesARowPastTheFloor(t *testing.T) {
 		shortBudgetFloor(t, time.Second)
 		store, rows := checkpointRows(t, 1)
 		submitter := &recordingSubmitter{}
-		got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Now().Add(500*time.Millisecond))
+		got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, nil, time.Now().UTC().Add(time.Hour), time.Now().Add(500*time.Millisecond))
 		require.NoError(t, e)
 		assert.Empty(t, submitter.submitted)
 		assert.Equal(t, rows[0], got, "the row is left as it was")
@@ -144,7 +144,7 @@ func TestDeliverWitnessByLeavesARowPastTheFloor(t *testing.T) {
 		refused.LastError = "witness returned HTTP 400: " + WitnessFailureBody(http.StatusForbidden)
 		require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, refused))
 		submitter := &recordingSubmitter{}
-		got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Now())
+		got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, nil, time.Now().UTC().Add(time.Hour), time.Now())
 		require.NoError(t, e)
 		assert.Empty(t, submitter.submitted)
 		assert.Equal(t, uint32(1), got.Attempts, "no attempt is recorded")
@@ -155,7 +155,7 @@ func TestDeliverWitnessByLeavesARowPastTheFloor(t *testing.T) {
 		shortBudgetFloor(t, 300*time.Millisecond)
 		store, rows := checkpointRows(t, 2)
 		submitter := &stallSubmitter{delay: 300 * time.Millisecond, inner: &continuitySubmitter{t: t}}
-		got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Now().Add(500*time.Millisecond))
+		got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, nil, time.Now().UTC().Add(time.Hour), time.Now().Add(500*time.Millisecond))
 		require.NoError(t, e)
 		assert.Equal(t, 1, submitter.submitted, "the selection is not sent")
 		older, e := store.GetWitness(t.Context(), "service-test", rows[0].CheckpointSize)
@@ -181,7 +181,7 @@ func (d *deadlineSubmitter) Submit(ctx context.Context, b []byte) (witness.Recei
 func TestDeliverWitnessDefaultHasNoDeadline(t *testing.T) {
 	store, rows := checkpointRows(t, 1)
 	submitter := &deadlineSubmitter{inner: &continuitySubmitter{t: t}}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, nil, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.NotNil(t, got.Receipt)
 	assert.False(t, submitter.hasDeadline)
