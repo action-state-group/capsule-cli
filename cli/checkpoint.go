@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -186,11 +187,40 @@ func classifySubmitError(e error, connected bool) error {
 			status = 503
 		}
 		// The answered status (never the body) is kept, so a pending
-		// delivery can say what came back.
-		return &witness.HTTPError{StatusCode: status, Body: WitnessFailureBody(answered.StatusCode)}
+		// delivery can say what came back. A continuity refusal also keeps
+		// the witness's own last-accepted size and root, parsed strictly,
+		// which a re-proof from the witness's tip needs (capsule-cli#647).
+		body := WitnessFailureBody(answered.StatusCode)
+		if answered.StatusCode == http.StatusConflict {
+			if size, root, ok := lastAccepted(answered.Body); ok {
+				body += fmt.Sprintf("; the witness last accepted mmr_size %d root %s", size, root)
+			}
+		}
+		return &witness.HTTPError{StatusCode: status, Body: body}
 	}
 	return nil
 }
+
+// lastAccepted reads the witness's last-accepted checkpoint from a
+// continuity refusal's body (capsule-anchor router.py, the
+// ContinuityMismatchError detail): an unsigned size and a 32-byte root as
+// hex. Nothing else in the body is read, and anything not of that shape is
+// not kept.
+func lastAccepted(body string) (uint64, string, bool) {
+	var wire struct {
+		Detail struct {
+			Size *uint64 `json:"last_accepted_mmr_size"`
+			Root string  `json:"last_accepted_root"`
+		} `json:"detail"`
+	}
+	if json.Unmarshal([]byte(body), &wire) != nil || wire.Detail.Size == nil || !hexRoot.MatchString(wire.Detail.Root) {
+		return 0, "", false
+	}
+	return *wire.Detail.Size, strings.ToLower(wire.Detail.Root), true
+}
+
+// hexRoot is an MMR root as the witness writes it: 32 bytes as hex.
+var hexRoot = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 
 // witnessFailureBody is what a delivery answered with an error records: its
 // HTTP status, never its body. Rows stored before capsule-cli#335 read "the
@@ -212,19 +242,70 @@ func answeredStatus(state cll.WitnessState) string {
 	return ""
 }
 
-// RearmRefused makes a delivery that a build before capsule-cli#335 stored
-// as failed for good after a 403 due again, so a host that has since granted
-// the witness's site delivers it. Such a row is re-armed once: a 403 is now
-// stored as retryable, so no build writes another.
+// witnessRearmed marks a delivery re-armed after a continuity refusal
+// (HTTP 409). selectedWitness.CommitWitness keeps it through every later
+// failure of the row, so the row is re-armed once, never again.
+const witnessRearmed = "; re-armed once after a continuity refusal"
+
+// rearmable reports a delivery stored as failed for good that RearmRefused
+// makes due again: a 403 a build before capsule-cli#335 stored, or a
+// continuity refusal (409) not yet re-armed. A witness may refuse a valid
+// checkpoint once, before its own continuity tip has moved on
+// (capsule-cli#647), so a 409 is never final on its first answer.
+func rearmable(state cll.WitnessState) bool {
+	if !state.Permanent || state.Receipt != nil {
+		return false
+	}
+	switch answeredStatus(state) {
+	case "403":
+		return true
+	case "409":
+		return !strings.Contains(state.LastError, witnessRearmed)
+	}
+	return false
+}
+
+// withRearmed is a delivery error carrying the witnessRearmed mark, within
+// the stored error's bound.
+func withRearmed(lastError string) string {
+	if strings.Contains(lastError, witnessRearmed) {
+		return lastError
+	}
+	if len(lastError)+len(witnessRearmed) > cll.MaxReasonBytes {
+		lastError = WitnessFailureBody(http.StatusConflict)
+	}
+	return lastError + witnessRearmed
+}
+
+// continuityRetryGap is the least time between a continuity refusal and the
+// one retry RearmRefused gives it. The refusal a witness gives before its
+// own tip has moved on clears within moments; a delivery call made in the
+// same tick (a plugin's cadence delivers each pending row in turn, each
+// call re-arming first) must not spend the retry on a witness that has not
+// caught up yet.
+const continuityRetryGap = time.Minute
+
+// RearmRefused makes a rearmable delivery due again. A 403 is re-armed once:
+// it is now stored as retryable, so no build writes another. A 409 is
+// re-armed once and marked, so a second refusal stays; it is due no sooner
+// than continuityRetryGap after the next-attempt time the refusal stored,
+// which is at or after the refusal (selectedWitness.CommitWitness), and
+// later rows wait behind it meanwhile.
 func RearmRefused(ctx context.Context, store cll.WitnessStateStore, state cll.WitnessState, now time.Time) (cll.WitnessState, error) {
-	if !state.Permanent || state.Receipt != nil || answeredStatus(state) != "403" {
+	if !rearmable(state) {
 		return state, nil
 	}
 	next := state
+	if answeredStatus(state) == "409" {
+		next.LastError = withRearmed(state.LastError)
+	}
 	next.Permanent = false
 	// Whole seconds: a store that rounds the time it keeps must not move
 	// it past now, or a delivery run at now would skip the row.
 	next.NextAttemptAt = now.Truncate(time.Second)
+	if due := state.NextAttemptAt.Add(continuityRetryGap); answeredStatus(state) == "409" && due.After(now) {
+		next.NextAttemptAt = due.Truncate(time.Second)
+	}
 	if e := store.CommitWitness(ctx, state.Attempts, next); e != nil {
 		return state, e
 	}
@@ -341,6 +422,12 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 		// next tick (RearmRefused), so it is retried either way.
 		return "refused", "pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; " + WitnessRetryText() + " " + WitnessGrantText(endpoint)
 	}
+	if status == "409" && (rearmable(state) || !state.Permanent && strings.Contains(state.LastError, witnessRearmed)) {
+		return "witness_error", "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at a later capsulectl run, a minute or more after the refusal."
+	}
+	if status == "409" && state.Permanent {
+		return "witness_error", WitnessNotDelivered + "the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); this delivery is not retried."
+	}
 	if state.Permanent {
 		if status != "" {
 			return "witness_error", WitnessNotDelivered + "the witness answered with an error (HTTP " + status + "); this delivery is not retried."
@@ -390,8 +477,49 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 	return out, nil
 }
 
-// GetWitness is what the runner's predecessor gate reads. A predecessor that
-// failed for good is never delivered again, so holding the selection for it
+// CommitWitness is how the runner records a delivery. A row re-armed after a
+// continuity refusal keeps its witnessRearmed mark through every later
+// failure, a timeout or an unreached witness included, so it is re-armed
+// once however its retries end. A first continuity refusal is stored with a
+// next-attempt time no earlier than the moment it is recorded: the runner
+// counts its backoff from the start of its pass, which may be long before
+// the answer, and RearmRefused counts continuityRetryGap from that time.
+func (s selectedWitness) CommitWitness(ctx context.Context, expectedAttempts uint32, next cll.WitnessState) error {
+	if rearmable(next) && answeredStatus(next) == "409" {
+		if at := ceilSecond(witnessClock()); at.After(next.NextAttemptAt) {
+			next.NextAttemptAt = at
+		}
+	}
+	if next.Receipt == nil && !strings.Contains(next.LastError, witnessRearmed) {
+		current, e := s.WitnessStateStore.GetWitness(ctx, next.WitnessID, next.CheckpointSize)
+		if e != nil && !errors.Is(e, cll.ErrNotFound) {
+			return e
+		}
+		if e == nil && strings.Contains(current.LastError, witnessRearmed) {
+			next.LastError = withRearmed(next.LastError)
+		}
+	}
+	return s.WitnessStateStore.CommitWitness(ctx, expectedAttempts, next)
+}
+
+// witnessClock is the time a delivery's outcome is recorded; a variable so
+// tests can move it.
+var witnessClock = time.Now
+
+// ceilSecond is t rounded up to a whole second, so a store that keeps whole
+// seconds never moves it earlier.
+func ceilSecond(t time.Time) time.Time {
+	if r := t.Truncate(time.Second); !r.Equal(t) {
+		return r.Add(time.Second)
+	}
+	return t
+}
+
+// GetWitness is what the runner's predecessor gate reads. A predecessor
+// stored as failed for good but due again at the next call (rearmable) holds
+// the selection, so one continuity refusal is not followed by refusals of
+// every later row in the same pass. A predecessor that failed for good is
+// never delivered again, so holding the selection for it
 // would leave the selection pending for ever; it is shown as absent and the
 // witness decides, as the spec lets it: a witness holding state for the log
 // refuses a checkpoint whose predecessor it did not register (a permanent
@@ -400,7 +528,7 @@ func (s selectedWitness) PendingWitnessesFor(ctx context.Context, id string, now
 // (draft-mih-scitt-checkpointed-local-log-02, lines 388-393 at checkpointed-local-log 89a80fd).
 func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
 	r, e := s.WitnessStateStore.GetWitness(ctx, id, size)
-	if e == nil && r.Permanent && r.Receipt == nil && !(id == s.id && size == s.size) {
+	if e == nil && r.Permanent && r.Receipt == nil && !rearmable(r) && !(id == s.id && size == s.size) {
 		return cll.WitnessState{}, cll.ErrNotFound
 	}
 	return r, e
@@ -411,7 +539,7 @@ func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64)
 // witness endpoint and so names its binding.
 func witnessResult(endpoint string, state cll.WitnessState) map[string]any {
 	status := "pending"
-	if state.Permanent {
+	if state.Permanent && !rearmable(state) {
 		status = "failed"
 	}
 	if state.Receipt != nil {
@@ -602,17 +730,27 @@ func addCheckpointCommands(logs *cobra.Command) {
 			if e = Output(c, result); e != nil {
 				return e
 			}
-			if publish && state.Permanent {
-				return errors.New("checkpoint delivery permanently failed")
-			}
-			if publish && state.Receipt == nil {
-				return ErrPending
+			if publish {
+				return deliveryOutcome(state)
 			}
 			return nil
 		}}
 		cmd.Flags().Uint64("checkpoint", 0, "CLL checkpoint MMR size (not entry count)")
 		group.AddCommand(cmd)
 	}
+}
+
+// deliveryOutcome is how cll checkpoint publish ends for a delivery's state:
+// done with a receipt, pending while it is retried (a continuity refusal due
+// for its re-arm included), failed when it never will be.
+func deliveryOutcome(state cll.WitnessState) error {
+	switch {
+	case state.Receipt != nil:
+		return nil
+	case state.Permanent && !rearmable(state):
+		return errors.New("checkpoint delivery permanently failed")
+	}
+	return ErrPending
 }
 
 // cutCheckpoint signs a checkpoint at the current log tip and returns it after
@@ -754,7 +892,8 @@ func (b budgetSubmitter) Submit(ctx context.Context, statement []byte) (witness.
 // makes progress, since one pass handles at most cll.MaxWitnesses rows. A
 // non-zero deadline bounds the witness requests (DeliverWitnessBy).
 func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time, deadline time.Time) (cll.WitnessState, error) {
-	// A store that cannot list its rows (a plugin's) re-arms only the selection.
+	// A store that cannot list its rows (a plugin's) re-arms the selection
+	// and the predecessors it chains on (witnessChain).
 	rows := []cll.WitnessState(nil)
 	if log, ok := store.(cll.CheckpointStateStore); ok {
 		state, e := log.LoadCLL(ctx)
@@ -762,10 +901,11 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 			return cll.WitnessState{}, e
 		}
 		rows = state.Witnesses
-	} else if w, e := store.GetWitness(ctx, service, size); e == nil {
-		rows = []cll.WitnessState{w}
-	} else if !errors.Is(e, cll.ErrNotFound) {
-		return cll.WitnessState{}, e
+	} else {
+		var e error
+		if rows, e = witnessChain(ctx, store, service, size); e != nil {
+			return cll.WitnessState{}, e
+		}
 	}
 	for _, w := range rows {
 		if w.WitnessID == service && w.CheckpointSize <= size {
@@ -817,6 +957,32 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 		}
 	}
 	return cll.WitnessState{}, fmt.Errorf("witness delivery to %q made no end after %d passes", service, maxDeliveryPasses)
+}
+
+// witnessChain is the row at size and the rows it chains on through each
+// checkpoint's signed prev size, newest first, down to the first row with a
+// receipt or with no row: the rows the runner's predecessor gate reads for
+// the selection. It reads them one by one, for a store that cannot list its
+// rows.
+func witnessChain(ctx context.Context, store cll.WitnessStateStore, service string, size uint64) ([]cll.WitnessState, error) {
+	var rows []cll.WitnessState
+	for size > 0 {
+		w, e := store.GetWitness(ctx, service, size)
+		if errors.Is(e, cll.ErrNotFound) {
+			break
+		}
+		if e != nil {
+			return nil, e
+		}
+		rows = append(rows, w)
+		record, e := checkpoint.ParseRecord(w.Checkpoint)
+		// Each step goes to a smaller size, so the walk ends.
+		if w.Receipt != nil || e != nil || record.PrevSize >= size {
+			break
+		}
+		size = record.PrevSize
+	}
+	return rows, nil
 }
 
 // maxDeliveryPasses bounds deliverSelected's loop.
