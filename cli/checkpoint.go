@@ -425,8 +425,19 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 	if status == "409" && (rearmable(state) || !state.Permanent && strings.Contains(state.LastError, witnessRearmed)) {
 		return "witness_error", "pending: the witness refused it as not continuing the checkpoint it last accepted (HTTP 409); it is sent once more at a later capsulectl run, a minute or more after the refusal."
 	}
+	if status == "409" && reanchorDue(state) {
+		return "witness_error", "pending: the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); capsulectl proves it again from that checkpoint at a later capsulectl run, and later checkpoints wait for it."
+	}
+	if status == "409" && reanchored(state) {
+		size, _, _ := witnessTipOf(state)
+		return "witness_error", WitnessNotDelivered + fmt.Sprintf("the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); capsulectl re-anchored it, proving it again from that checkpoint (mmr_size %d), so later checkpoints are delivered; the receipt for the re-anchor is not kept.", size)
+	}
 	if status == "409" && state.Permanent {
-		return "witness_error", WitnessNotDelivered + "the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); this delivery is not retried."
+		text := WitnessNotDelivered + "the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); "
+		if i := strings.Index(state.LastError, witnessNotReanchored); i >= 0 {
+			text += "it was not re-anchored: " + strings.TrimSuffix(state.LastError[i+len(witnessNotReanchored):], ".") + "; "
+		}
+		return "witness_error", text + "this delivery is not retried."
 	}
 	if state.Permanent {
 		if status != "" {
@@ -450,6 +461,9 @@ type selectedWitness struct {
 	cll.WitnessStateStore
 	id   string
 	size uint64
+	// reanchors is set when this delivery re-anchors a refused row
+	// (reanchorRefused), so a row due for it holds later rows.
+	reanchors bool
 }
 
 // PendingWitnessesFor is the method the delivery runner calls; the embedded
@@ -490,13 +504,16 @@ func (s selectedWitness) CommitWitness(ctx context.Context, expectedAttempts uin
 			next.NextAttemptAt = at
 		}
 	}
-	if next.Receipt == nil && !strings.Contains(next.LastError, witnessRearmed) {
+	if next.Receipt == nil {
 		current, e := s.WitnessStateStore.GetWitness(ctx, next.WitnessID, next.CheckpointSize)
 		if e != nil && !errors.Is(e, cll.ErrNotFound) {
 			return e
 		}
 		if e == nil && strings.Contains(current.LastError, witnessRearmed) {
 			next.LastError = withRearmed(next.LastError)
+		}
+		if e == nil && strings.Contains(current.LastError, witnessResent) {
+			next.LastError = withMark(next.LastError, witnessResent)
 		}
 	}
 	return s.WitnessStateStore.CommitWitness(ctx, expectedAttempts, next)
@@ -528,7 +545,7 @@ func ceilSecond(t time.Time) time.Time {
 // (draft-mih-scitt-checkpointed-local-log-02, lines 388-393 at checkpointed-local-log 89a80fd).
 func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64) (cll.WitnessState, error) {
 	r, e := s.WitnessStateStore.GetWitness(ctx, id, size)
-	if e == nil && r.Permanent && r.Receipt == nil && !rearmable(r) && !(id == s.id && size == s.size) {
+	if e == nil && r.Permanent && r.Receipt == nil && !rearmable(r) && !(s.reanchors && reanchorDue(r)) && !(id == s.id && size == s.size) {
 		return cll.WitnessState{}, cll.ErrNotFound
 	}
 	return r, e
@@ -539,7 +556,10 @@ func (s selectedWitness) GetWitness(ctx context.Context, id string, size uint64)
 // witness endpoint and so names its binding.
 func witnessResult(endpoint string, state cll.WitnessState) map[string]any {
 	status := "pending"
-	if state.Permanent && !rearmable(state) {
+	switch {
+	case reanchored(state):
+		status = "re-anchored"
+	case state.Permanent && !rearmable(state) && !reanchorDue(state):
 		status = "failed"
 	}
 	if state.Receipt != nil {
@@ -741,13 +761,14 @@ func addCheckpointCommands(logs *cobra.Command) {
 }
 
 // deliveryOutcome is how cll checkpoint publish ends for a delivery's state:
-// done with a receipt, pending while it is retried (a continuity refusal due
-// for its re-arm included), failed when it never will be.
+// done with a receipt or re-anchored (the witness has moved on to it),
+// pending while it is retried (a continuity refusal due for its re-arm or
+// its re-anchor included), failed when it never will be.
 func deliveryOutcome(state cll.WitnessState) error {
 	switch {
-	case state.Receipt != nil:
+	case state.Receipt != nil, reanchored(state):
 		return nil
-	case state.Permanent && !rearmable(state):
+	case state.Permanent && !rearmable(state) && !reanchorDue(state):
 		return errors.New("checkpoint delivery permanently failed")
 	}
 	return ErrPending
@@ -851,7 +872,7 @@ func DeliverWitnessBy(ctx context.Context, p Profile, store cll.WitnessStateStor
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	return deliverSelected(ctx, store, service, size, client, verifier, time.Now().UTC(), deadline)
+	return deliverSelected(ctx, store, service, size, client, verifier, newReprover(p, store), time.Now().UTC(), deadline)
 }
 
 // witnessBudgetFloor is the least time left before a DeliverWitnessBy
@@ -890,22 +911,15 @@ func (b budgetSubmitter) Submit(ctx context.Context, statement []byte) (witness.
 // witness needs first (selectedWitness). Older refused rows are re-armed so
 // they are not skipped out of order, and the runner is repeated while it
 // makes progress, since one pass handles at most cll.MaxWitnesses rows. A
+// row refused again after its retry is then re-anchored (reanchorRefused),
+// and after a re-anchor the rows it held are delivered in the same call. A
 // non-zero deadline bounds the witness requests (DeliverWitnessBy).
-func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time, deadline time.Time) (cll.WitnessState, error) {
+func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, prove reprover, now time.Time, deadline time.Time) (cll.WitnessState, error) {
 	// A store that cannot list its rows (a plugin's) re-arms the selection
 	// and the predecessors it chains on (witnessChain).
-	rows := []cll.WitnessState(nil)
-	if log, ok := store.(cll.CheckpointStateStore); ok {
-		state, e := log.LoadCLL(ctx)
-		if e != nil {
-			return cll.WitnessState{}, e
-		}
-		rows = state.Witnesses
-	} else {
-		var e error
-		if rows, e = witnessChain(ctx, store, service, size); e != nil {
-			return cll.WitnessState{}, e
-		}
+	rows, e := witnessRows(ctx, store, service, size)
+	if e != nil {
+		return cll.WitnessState{}, e
 	}
 	for _, w := range rows {
 		if w.WitnessID == service && w.CheckpointSize <= size {
@@ -921,21 +935,40 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 		defer stop(nil)
 		submitter = budgetSubmitter{inner: submitter, deadline: deadline, stop: stop}
 	}
-	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: submitter}, map[string]witness.Verifier{service: verifier})
+	view := selectedWitness{WitnessStateStore: store, id: service, size: size, reanchors: prove != nil}
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), view, map[string]witness.Submitter{service: submitter}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	view := selectedWitness{WitnessStateStore: store, id: service, size: size}
+	// Each re-anchor step changes a row for good, so the steps end; the bound
+	// is a safety net only.
+	for step := 0; ; step++ {
+		selected, e := runSelected(ctx, runCtx, runner, store, view, service, size, now)
+		if e != nil || step == maxDeliveryPasses {
+			return selected, e
+		}
+		moved, e := reanchorRefused(ctx, store, service, size, prove, submitter, verifier, now)
+		if e != nil {
+			return selected, e
+		}
+		if !moved {
+			return store.GetWitness(ctx, service, size)
+		}
+	}
+}
+
+// runSelected runs the delivery runner for deliverSelected and returns the
+// selection's state. The runner handles one page per pass and counts only
+// receipts, so the loop does not use its count. It runs until the selection
+// has been attempted (a receipt, a permanent failure, or one more attempt
+// than at the start) or until a whole pass leaves the due rows exactly as
+// they were, which is a held or finished pass. At most one pass per row of
+// the witness's backlog is possible, so the bound is a safety net only.
+func runSelected(ctx, runCtx context.Context, runner *witness.DeliveryRunner, store cll.WitnessStateStore, view selectedWitness, service string, size uint64, now time.Time) (cll.WitnessState, error) {
 	start, e := store.GetWitness(ctx, service, size)
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	// The runner handles one page per pass and counts only receipts, so the
-	// loop does not use its count. It runs until the selection has been
-	// attempted (a receipt, a permanent failure, or one more attempt than at
-	// the start) or until a whole pass leaves the due rows exactly as they
-	// were, which is a held or finished pass. At most one pass per row of the
-	// witness's backlog is possible, so the bound is a safety net only.
 	for pass := 0; pass < maxDeliveryPasses; pass++ {
 		before, e := dueState(ctx, view, service, now)
 		if e != nil {

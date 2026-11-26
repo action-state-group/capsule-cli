@@ -116,7 +116,7 @@ func TestAContinuityRefusalIsSentAgainAtTheNextCall(t *testing.T) {
 	w.refuse[rows[0].CheckpointSize] = 1
 	now := time.Now().UTC().Add(time.Hour)
 
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, now, time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, nil, now, time.Time{})
 	require.NoError(t, e)
 	assert.True(t, got.Permanent)
 	assert.Nil(t, got.Receipt)
@@ -127,7 +127,7 @@ func TestAContinuityRefusalIsSentAgainAtTheNextCall(t *testing.T) {
 	assert.Equal(t, "pending", witnessResult(testWitness, got)["state"])
 	assert.ErrorIs(t, deliveryOutcome(got), ErrPending, "publish ends pending, not failed")
 
-	got, e = deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, now.Add(2*time.Minute), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, nil, now.Add(2*time.Minute), time.Time{})
 	require.NoError(t, e)
 	require.NotNil(t, got.Receipt)
 	assert.NoError(t, deliveryOutcome(got))
@@ -142,7 +142,7 @@ func TestAContinuityRefusalIsReArmedOnce(t *testing.T) {
 	w.refuse[rows[0].CheckpointSize] = 3
 	now := time.Now().UTC().Add(time.Hour)
 	for tick := 0; tick < 3; tick++ {
-		_, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, now.Add(time.Duration(tick)*time.Hour), time.Time{})
+		_, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, w, acceptAll{}, nil, now.Add(time.Duration(tick)*time.Hour), time.Time{})
 		require.NoError(t, e)
 	}
 	assert.Len(t, w.sent, 2, "sent, then sent once more, then left")
@@ -152,7 +152,7 @@ func TestAContinuityRefusalIsReArmedOnce(t *testing.T) {
 	assert.Contains(t, got.LastError, "last accepted mmr_size 0")
 	reason, text := WitnessPendingReason(got, testWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "not delivered: the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); this delivery is not retried.", text)
+	assert.Equal(t, "not delivered: the witness refused it again after a retry, as not continuing the checkpoint it last accepted (HTTP 409); it was not re-anchored: this log's store keeps no tree that capsulectl can prove it from; this delivery is not retried.", text, "no reprover here: re-anchoring is witness_reanchor_test.go's")
 	assert.Equal(t, "failed", witnessResult(testWitness, got)["state"])
 	assert.EqualError(t, deliveryOutcome(got), "checkpoint delivery permanently failed")
 }
@@ -172,10 +172,10 @@ func TestTheRetryComesAMinuteAfterTheRefusal(t *testing.T) {
 	w.refuse[first] = 1
 	now := time.Now().UTC().Add(time.Hour)
 
-	got, e := deliverSelected(t.Context(), store, "service-test", first, w, acceptAll{}, now, time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", first, w, acceptAll{}, nil, now, time.Time{})
 	require.NoError(t, e)
 	require.True(t, rearmable(got))
-	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now, time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, nil, now, time.Time{})
 	require.NoError(t, e)
 	assert.Zero(t, got.Attempts, "the later row waits")
 	assert.False(t, got.Permanent)
@@ -187,7 +187,7 @@ func TestTheRetryComesAMinuteAfterTheRefusal(t *testing.T) {
 	assert.Equal(t, continuityPending, text)
 	assert.ErrorIs(t, deliveryOutcome(held), ErrPending)
 
-	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now.Add(2*time.Minute), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, nil, now.Add(2*time.Minute), time.Time{})
 	require.NoError(t, e)
 	require.NotNil(t, got.Receipt)
 	assert.Equal(t, []uint64{first, first, second}, w.sent)
@@ -207,17 +207,17 @@ func TestTheRetryGapCountsFromTheRefusal(t *testing.T) {
 	w.refuse[second] = 1
 	slow := &slowWitness{inner: w, before: map[uint64]time.Duration{second: 5 * time.Minute}, clock: &clock}
 
-	got, e := deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start, time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, nil, start, time.Time{})
 	require.NoError(t, e)
 	require.True(t, rearmable(got))
 	assert.False(t, got.NextAttemptAt.Before(start.Add(5*time.Minute)), "stored at the refusal, not the run's start")
 
 	// One minute after the run started, but well before a minute after the
 	// refusal: re-armed, not sent.
-	_, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start.Add(time.Minute), time.Time{})
+	_, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, nil, start.Add(time.Minute), time.Time{})
 	require.NoError(t, e)
 	assert.Equal(t, []uint64{first, second}, w.sent)
-	got, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, start.Add(7*time.Minute), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", second, slow, acceptAll{}, nil, start.Add(7*time.Minute), time.Time{})
 	require.NoError(t, e)
 	require.NotNil(t, got.Receipt)
 }
@@ -252,7 +252,7 @@ func TestAnOldContinuityRefusalIsDueAtOnce(t *testing.T) {
 	old.Attempts, old.Permanent, old.NextAttemptAt = 1, true, now.Add(-24*time.Hour)
 	old.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 409); response details suppressed"
 	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, old))
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, newTipWitness(t), acceptAll{}, now, time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, newTipWitness(t), acceptAll{}, nil, now, time.Time{})
 	require.NoError(t, e)
 	assert.NotNil(t, got.Receipt)
 }
@@ -267,7 +267,7 @@ func TestTheReArmMarkOutlivesATimeout(t *testing.T) {
 	timeout := classifySubmitError(context.DeadlineExceeded, true)
 	now := time.Now().UTC().Add(time.Hour)
 	tick := func(n int) cll.WitnessState {
-		got, e := deliverSelected(t.Context(), store, "service-test", size, w, acceptAll{}, now.Add(time.Duration(n)*24*time.Hour), time.Time{})
+		got, e := deliverSelected(t.Context(), store, "service-test", size, w, acceptAll{}, nil, now.Add(time.Duration(n)*24*time.Hour), time.Time{})
 		require.NoError(t, e)
 		return got
 	}
@@ -296,7 +296,7 @@ func TestATimeoutBeforeTheFirstRefusalLeavesNoMark(t *testing.T) {
 	w.refuse[size] = 1
 	now := time.Now().UTC().Add(time.Hour)
 	for n := 0; n < 3; n++ {
-		_, e := deliverSelected(t.Context(), store, "service-test", size, w, acceptAll{}, now.Add(time.Duration(n)*24*time.Hour), time.Time{})
+		_, e := deliverSelected(t.Context(), store, "service-test", size, w, acceptAll{}, nil, now.Add(time.Duration(n)*24*time.Hour), time.Time{})
 		require.NoError(t, e)
 	}
 	got := row(t, store, size)
@@ -313,19 +313,19 @@ func TestALaterCheckpointIsHeldBehindAReArmedRow(t *testing.T) {
 	w.refuse[first] = 1
 	now := time.Now().UTC().Add(time.Hour)
 
-	got, e := deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now, time.Time{})
+	got, e := deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, nil, now, time.Time{})
 	require.NoError(t, e)
 	assert.Zero(t, got.Attempts, "held behind the refused row")
 	assert.Equal(t, []uint64{first}, w.sent)
 
 	// The re-armed retry does not reach the witness: still held.
 	w.fail[first] = []error{classifySubmitError(context.DeadlineExceeded, false)}
-	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now.Add(time.Hour), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, nil, now.Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.Zero(t, got.Attempts)
 	assert.Equal(t, []uint64{first, first}, w.sent)
 
-	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, now.Add(48*time.Hour), time.Time{})
+	got, e = deliverSelected(t.Context(), store, "service-test", second, w, acceptAll{}, nil, now.Add(48*time.Hour), time.Time{})
 	require.NoError(t, e)
 	require.NotNil(t, got.Receipt)
 	assert.NotNil(t, row(t, store, first).Receipt)
@@ -346,7 +346,7 @@ func TestAStoreWithoutListingReArmsTheRefusedPredecessor(t *testing.T) {
 	w.refuse[rows[1].CheckpointSize] = 1
 	now := time.Now().UTC().Add(time.Hour)
 	for n := 0; n < 2; n++ {
-		_, e := deliverSelected(t.Context(), store, "service-test", rows[2].CheckpointSize, w, acceptAll{}, now.Add(time.Duration(n)*time.Hour), time.Time{})
+		_, e := deliverSelected(t.Context(), store, "service-test", rows[2].CheckpointSize, w, acceptAll{}, nil, now.Add(time.Duration(n)*time.Hour), time.Time{})
 		require.NoError(t, e)
 	}
 	for _, r := range rows {
@@ -390,7 +390,7 @@ func TestOneTransientContinuityRefusalMidRun(t *testing.T) {
 				w.refuse[state.Checkpoint.Size] = 1
 			}
 		}
-		_, e = deliverSelected(t.Context(), store, "service-test", sizes[len(sizes)-1], w, acceptAll{}, at, time.Time{})
+		_, e = deliverSelected(t.Context(), store, "service-test", sizes[len(sizes)-1], w, acceptAll{}, nil, at, time.Time{})
 		require.NoError(t, e)
 	}
 	for _, size := range sizes {
