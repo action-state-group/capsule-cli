@@ -684,9 +684,26 @@ func CutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 	return nil, ErrPending
 }
 
-// deliverWitness makes one delivery attempt of the checkpoint at size to the
-// profile's witness service and returns the resulting persisted state.
+// DeliverWitness makes one delivery attempt of the checkpoint at size to the
+// profile's witness service and returns the resulting persisted state. Each
+// witness request has the client's own 30 s bound; DeliverWitnessBy lets a
+// caller end the delivery sooner.
 func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
+	return DeliverWitnessBy(ctx, p, store, service, size, time.Time{})
+}
+
+// DeliverWitnessBy is DeliverWitness with a deadline for the witness
+// requests of this call; the zero time is no deadline beyond each request's
+// 30 s. A request still running at the deadline is ended and recorded like
+// any timed-out delivery: witness_timeout when it had reached the witness
+// (capsule-cli#644). A row whose request would start with less than
+// witnessBudgetFloor left is not sent and its row is left as it was, so a
+// nearly spent budget is never recorded as a failed attempt or as a network
+// consent wait; it goes at a later call. ctx stays the context of the
+// store reads and writes, so cancelling ctx ends the call without recording
+// the attempt (the CLL runner returns ctx.Err() before it commits), while
+// the deadline ends only the witness requests and their attempts are kept.
+func DeliverWitnessBy(ctx context.Context, p Profile, store cll.WitnessStateStore, service string, size uint64, deadline time.Time) (cll.WitnessState, error) {
 	token, e := p.Checkpoint.Token.resolve()
 	if e != nil {
 		return cll.WitnessState{}, e
@@ -695,14 +712,47 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	return deliverSelected(ctx, store, service, size, client, verifier, time.Now().UTC())
+	return deliverSelected(ctx, store, service, size, client, verifier, time.Now().UTC(), deadline)
+}
+
+// witnessBudgetFloor is the least time left before a DeliverWitnessBy
+// deadline at which a witness request is still started: enough for DNS, TCP
+// and TLS to a witness on a working network, so a request ended before it
+// connects still says what #644 reads it as. A variable so tests can shorten
+// it.
+var witnessBudgetFloor = 2 * time.Second
+
+// errBudgetSpent is the cause deliverSelected's runner context is cancelled
+// with when a row would start after the budget's floor (budgetSubmitter).
+var errBudgetSpent = errors.New("witness delivery budget spent")
+
+// budgetSubmitter bounds a submitter's requests by one deadline shared by
+// every row of a deliverSelected call. A request it does not start cancels
+// the runner's context first, so the runner returns before it records
+// anything (it checks its context right after Submit) and no store write is
+// cut short: the cancel happens while the runner waits on Submit.
+type budgetSubmitter struct {
+	inner    witness.Submitter
+	deadline time.Time
+	stop     context.CancelCauseFunc
+}
+
+func (b budgetSubmitter) Submit(ctx context.Context, statement []byte) (witness.Receipt, error) {
+	if time.Until(b.deadline) < witnessBudgetFloor {
+		b.stop(errBudgetSpent)
+		return witness.Receipt{}, errBudgetSpent
+	}
+	ctx, cancel := context.WithDeadline(ctx, b.deadline)
+	defer cancel()
+	return b.inner.Submit(ctx, statement)
 }
 
 // deliverSelected delivers the checkpoint at size and the older rows the
 // witness needs first (selectedWitness). Older refused rows are re-armed so
 // they are not skipped out of order, and the runner is repeated while it
-// makes progress, since one pass handles at most cll.MaxWitnesses rows.
-func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time) (cll.WitnessState, error) {
+// makes progress, since one pass handles at most cll.MaxWitnesses rows. A
+// non-zero deadline bounds the witness requests (DeliverWitnessBy).
+func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, submitter witness.Submitter, verifier witness.Verifier, now time.Time, deadline time.Time) (cll.WitnessState, error) {
 	// A store that cannot list its rows (a plugin's) re-arms only the selection.
 	rows := []cll.WitnessState(nil)
 	if log, ok := store.(cll.CheckpointStateStore); ok {
@@ -722,6 +772,13 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 				return cll.WitnessState{}, e
 			}
 		}
+	}
+	runCtx := ctx
+	if !deadline.IsZero() {
+		var stop context.CancelCauseFunc
+		runCtx, stop = context.WithCancelCause(ctx)
+		defer stop(nil)
+		submitter = budgetSubmitter{inner: submitter, deadline: deadline, stop: stop}
 	}
 	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: submitter}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
@@ -743,7 +800,10 @@ func deliverSelected(ctx context.Context, store cll.WitnessStateStore, service s
 		if e != nil {
 			return cll.WitnessState{}, e
 		}
-		if _, e = runner.RunOnce(ctx, now, cll.MaxWitnesses); e != nil {
+		if _, e = runner.RunOnce(runCtx, now, cll.MaxWitnesses); e != nil {
+			if ctx.Err() == nil && errors.Is(context.Cause(runCtx), errBudgetSpent) {
+				return store.GetWitness(ctx, service, size)
+			}
 			return cll.WitnessState{}, e
 		}
 		selected, e := store.GetWitness(ctx, service, size)
