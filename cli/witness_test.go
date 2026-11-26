@@ -465,7 +465,7 @@ func TestDeliverSelectedRearmsOlderRefusedRow(t *testing.T) {
 	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, refused))
 
 	submitter := &continuitySubmitter{t: t}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.NotNil(t, got.Receipt)
 	assert.Equal(t, [][]byte{rows[0].Checkpoint, rows[1].Checkpoint}, submitter.accepted)
@@ -477,7 +477,7 @@ func TestDeliverSelectedPastOnePage(t *testing.T) {
 	n := 2*cll.MaxWitnesses + 3
 	store, rows := checkpointRows(t, n)
 	submitter := &continuitySubmitter{t: t}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-2].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-2].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.NotNil(t, got.Receipt)
 	assert.Len(t, submitter.accepted, n-1)
@@ -496,7 +496,7 @@ func TestDeliverSelectedHeldByOlderRowInBackoff(t *testing.T) {
 	require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, backoff))
 
 	submitter := &continuitySubmitter{t: t}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, now)
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, now, time.Time{})
 	require.NoError(t, e)
 	assert.Nil(t, got.Receipt)
 	assert.Zero(t, got.Attempts)
@@ -508,7 +508,7 @@ func TestDeliverSelectedHeldByOlderRowInBackoff(t *testing.T) {
 func TestDeliverSelectedStopsAtRetryableOlderFailure(t *testing.T) {
 	store, rows := checkpointRows(t, 2)
 	submitter := &recordingSubmitter{}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.Nil(t, got.Receipt)
 	assert.Zero(t, got.Attempts)
@@ -533,7 +533,7 @@ func TestDeliverSelectedPastPageOfPermanentFailures(t *testing.T) {
 	n := 2*cll.MaxWitnesses + 2
 	store, rows := checkpointRows(t, n)
 	submitter := &failFirstSubmitter{failures: 2 * cll.MaxWitnesses, inner: &continuitySubmitter{t: t}}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[n-1].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.NotZero(t, got.Attempts, "the selection was attempted after the failed page")
 }
@@ -557,7 +557,7 @@ func (f *failFirstSubmitter) Submit(ctx context.Context, b []byte) (witness.Rece
 func TestDeliverSelectedFirstRow(t *testing.T) {
 	store, rows := checkpointRows(t, 4)
 	submitter := &continuitySubmitter{t: t}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour))
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Time{})
 	require.NoError(t, e)
 	assert.NotNil(t, got.Receipt)
 	assert.Equal(t, [][]byte{rows[0].Checkpoint}, submitter.accepted)
@@ -580,7 +580,7 @@ func TestDeliverSelectedAllOlderRowsInBackoff(t *testing.T) {
 		require.NoError(t, store.CommitWitness(t.Context(), r.Attempts, held))
 	}
 	submitter := &continuitySubmitter{t: t}
-	got, e := deliverSelected(t.Context(), store, "service-test", rows[4].CheckpointSize, submitter, acceptAll{}, now)
+	got, e := deliverSelected(t.Context(), store, "service-test", rows[4].CheckpointSize, submitter, acceptAll{}, now, time.Time{})
 	require.NoError(t, e)
 	assert.Nil(t, got.Receipt)
 	assert.Zero(t, got.Attempts)
