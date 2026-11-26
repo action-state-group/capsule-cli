@@ -4,6 +4,11 @@
 # `go run ../../cmd/skillgen`. Edit this file, then regenerate — see
 # ../SKILL-SPEC.md for the contract.
 #
+# Five verbs: the skill teaches check, record, ask, verify and show
+# (capsule-cli#650). `verbs` holds the six commands it teaches, each under
+# its `five_verb`; `expert_verbs` holds the setup and operator commands,
+# rendered with their instructions into references/expert.md.
+#
 # Verb surface note: the skill's scope names seven verbs as one flat list
 # (verify, contract validate, discover, plugin ls, cll, get, publish). `cll`
 # covers two distinct subcommands with different argument shapes and
@@ -91,7 +96,45 @@ evidence_policy: >-
   underlying action failed to occur.
 
 verbs:
+  - name: publish
+    five_verb: record
+    args:
+      - "--profile NAME --request FILE"
+    when: >-
+      Seal a capsule-seal-request/v1, persist its artifacts, and append it to
+      the CLL in one step — the primary way the skill records that it took an
+      action with a real, durable effect.
+    emits: (publish's own result IS the capsule; no wrapper)
+    emission_mode: primary-action
+
+  - name: cll append
+    five_verb: record
+    args:
+      - "--profile NAME --capsule FILE"
+    when: >-
+      Add an already-sealed, already-verified Capsule (one with no missing
+      original bindings) to the log as a new entry.
+    emits: (the appended Capsule itself is the record; no wrapper capsule)
+    emission_mode: primary-action
+
+  - name: result build
+    five_verb: record
+    args:
+      - "--profile NAME --result FILE"
+      - "--profile NAME --result FILE --contract REF --out FILE --capsule-out FILE"
+    when: >-
+      Seal a caller-supplied, schema-valid Evidence Result v0 into the
+      profile's log as the Capsule a Result page is rooted on, citing every
+      record its claims name. Refuses a document whose headline values do
+      not recompute from its claims, or that cites a record the profile's
+      log and artifact store do not hold. A repeat of the same document
+      seals nothing new.
+      On a book profile it is the book plugin's `book result build`.
+    emits: (the Result's Capsule itself; --capsule-out writes it for verify)
+    emission_mode: primary-action
+
   - name: verify
+    five_verb: verify
     args:
       - "--profile NAME"
       - "--capsule FILE"
@@ -104,6 +147,38 @@ verbs:
     emits: (no capsule — checking a bundle is local validation, not a consequential action)
     emission_mode: not-consequential
 
+  - name: cll list
+    five_verb: show
+    args:
+      - "--profile NAME"
+      - "--profile NAME --after N --through N --limit N"
+    when: >-
+      Read the profile's checkpointed log in sequence order — to find an
+      entry, to page through a range, or to confirm an append landed.
+    emits: (no capsule — reading the log is local inspection, not a consequential action)
+    emission_mode: not-consequential
+
+  - name: get
+    five_verb: show
+    args:
+      - "--profile NAME --capsule-id ID"
+      - "--profile NAME --capsule-id ID --raw --output FILE"
+    when: >-
+      Read an existing artifact SDK record by capsule_id — plain for
+      inspection, --raw when the exact bytes must be handed to verify.
+    emits: (no capsule — reading a record is local inspection, not a consequential action)
+    emission_mode: not-consequential
+
+five_verbs_elsewhere: >-
+  Check and ask have no command in this skill. Book and deal work, where an
+  agent checks before it acts and asks a party for evidence, is taught by the
+  agent skill that ships with the plugin adding those commands.
+
+# Expert verbs: setup and operator commands outside the five verbs, kept
+# with their instructions in a reference file (capsule-cli#650). Rendered
+# into references/expert.md, and by name into the skill file, which the
+# first `may` item ("call only the verbs listed in this file") needs.
+expert_verbs:
   - name: contract validate
     args:
       - "FILE --schema PATH_OR_URL"
@@ -149,45 +224,6 @@ verbs:
       install` or `plugin remove` yourself.
     emits: (no capsule — listing what is discovered is local inspection, not a consequential action)
     emission_mode: not-consequential
-
-  - name: cll list
-    args:
-      - "--profile NAME"
-      - "--profile NAME --after N --through N --limit N"
-    when: >-
-      Read the profile's checkpointed log in sequence order — to find an
-      entry, to page through a range, or to confirm an append landed.
-    emits: (no capsule — reading the log is local inspection, not a consequential action)
-    emission_mode: not-consequential
-
-  - name: cll append
-    args:
-      - "--profile NAME --capsule FILE"
-    when: >-
-      Add an already-sealed, already-verified Capsule (one with no missing
-      original bindings) to the log as a new entry.
-    emits: (the appended Capsule itself is the record; no wrapper capsule)
-    emission_mode: primary-action
-
-  - name: get
-    args:
-      - "--profile NAME --capsule-id ID"
-      - "--profile NAME --capsule-id ID --raw --output FILE"
-    when: >-
-      Read an existing artifact SDK record by capsule_id — plain for
-      inspection, --raw when the exact bytes must be handed to verify.
-    emits: (no capsule — reading a record is local inspection, not a consequential action)
-    emission_mode: not-consequential
-
-  - name: publish
-    args:
-      - "--profile NAME --request FILE"
-    when: >-
-      Seal a capsule-seal-request/v1, persist its artifacts, and append it to
-      the CLL in one step — the primary way the skill records that it took an
-      action with a real, durable effect.
-    emits: (publish's own result IS the capsule; no wrapper)
-    emission_mode: primary-action
 
   # The four verbs below are the book-verbs design's no-book-required
   # half: the deterministic remainder of the retired capsule-judge harness
@@ -236,18 +272,3 @@ verbs:
       calibration-summary/v1 the skill is about to seal.
     emits: (no capsule — this is a pure computation over caller-supplied input)
     emission_mode: not-consequential
-
-  - name: result build
-    args:
-      - "--profile NAME --result FILE"
-      - "--profile NAME --result FILE --contract REF --out FILE --capsule-out FILE"
-    when: >-
-      Seal a caller-supplied, schema-valid Evidence Result v0 into the
-      profile's log as the Capsule a Result page is rooted on, citing every
-      record its claims name. Refuses a document whose headline values do
-      not recompute from its claims, or that cites a record the profile's
-      log and artifact store do not hold. A repeat of the same document
-      seals nothing new.
-      On a book profile it is the book plugin's `book result build`.
-    emits: (the Result's Capsule itself; --capsule-out writes it for verify)
-    emission_mode: primary-action

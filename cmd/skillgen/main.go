@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 )
 
 func main() {
@@ -11,37 +13,50 @@ func main() {
 	schemaPath := flag.String("schema", "schemas/skill-spec-v0.json", "skill-spec/v0 JSON Schema")
 	skillMDPath := flag.String("skill-md", "skills/capsulectl/SKILL.md", "rendered Claude Code skill file")
 	agentsMDPath := flag.String("agents-md", "skills/capsulectl/AGENTS.md", "rendered Codex skill file")
+	expertMDPath := flag.String("expert-md", "skills/capsulectl/references/expert.md", "rendered expert-verbs reference, written only when the spec has expert_verbs")
 	check := flag.Bool("check", false, "fail if the rendered files on disk differ from what the spec renders now, instead of writing them")
 	flag.Parse()
 
-	if err := run(*specPath, *schemaPath, *skillMDPath, *agentsMDPath, *check); err != nil {
+	if err := run(*specPath, *schemaPath, *skillMDPath, *agentsMDPath, *expertMDPath, *check); err != nil {
 		fmt.Fprintln(os.Stderr, "skillgen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(specPath, schemaPath, skillMDPath, agentsMDPath string, check bool) error {
+func run(specPath, schemaPath, skillMDPath, agentsMDPath, expertMDPath string, check bool) error {
 	spec, err := loadSpec(specPath, schemaPath)
 	if err != nil {
 		return err
 	}
-	skillMD := renderSkillMD(spec)
-	agentsMD := renderAgentsMD(spec)
-
+	rendered := renderedFiles(spec, skillMDPath, agentsMDPath, expertMDPath)
 	if check {
-		return checkRendered(map[string]string{
-			skillMDPath:  skillMD,
-			agentsMDPath: agentsMD,
-		})
+		return checkRendered(rendered)
 	}
-	if err := os.WriteFile(skillMDPath, []byte(skillMD), 0o644); err != nil {
-		return fmt.Errorf("cannot write %s: %w", skillMDPath, err)
+	paths := make([]string, 0, len(rendered))
+	for path := range rendered {
+		paths = append(paths, path)
 	}
-	if err := os.WriteFile(agentsMDPath, []byte(agentsMD), 0o644); err != nil {
-		return fmt.Errorf("cannot write %s: %w", agentsMDPath, err)
+	sort.Strings(paths)
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte(rendered[path]), 0o644); err != nil {
+			return fmt.Errorf("cannot write %s: %w", path, err)
+		}
 	}
-	fmt.Printf("wrote %s and %s from %s\n", skillMDPath, agentsMDPath, specPath)
+	fmt.Printf("wrote %s from %s\n", strings.Join(paths, ", "), specPath)
 	return nil
+}
+
+// renderedFiles maps each generated file's path to what the spec renders for
+// it. The expert reference is included only when the spec has expert verbs.
+func renderedFiles(spec Spec, skillMDPath, agentsMDPath, expertMDPath string) map[string]string {
+	files := map[string]string{
+		skillMDPath:  renderSkillMD(spec),
+		agentsMDPath: renderAgentsMD(spec),
+	}
+	if expert := renderExpertMD(spec); expert != "" {
+		files[expertMDPath] = expert
+	}
+	return files
 }
 
 // checkRendered fails loudly, naming every stale or missing file, rather than
