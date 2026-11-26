@@ -136,6 +136,21 @@ func TestDeliverWitnessByLeavesARowPastTheFloor(t *testing.T) {
 		assert.Empty(t, submitter.submitted)
 		assert.Equal(t, rows[0], got, "the row is left as it was")
 	})
+	t.Run("refused row with the budget spent", func(t *testing.T) {
+		shortBudgetFloor(t, time.Second)
+		store, rows := checkpointRows(t, 1)
+		refused := rows[0]
+		refused.Attempts, refused.Permanent = 1, true
+		refused.LastError = "witness returned HTTP 400: " + WitnessFailureBody(http.StatusForbidden)
+		require.NoError(t, store.CommitWitness(t.Context(), rows[0].Attempts, refused))
+		submitter := &recordingSubmitter{}
+		got, e := deliverSelected(t.Context(), store, "service-test", rows[0].CheckpointSize, submitter, acceptAll{}, time.Now().UTC().Add(time.Hour), time.Now())
+		require.NoError(t, e)
+		assert.Empty(t, submitter.submitted)
+		assert.Equal(t, uint32(1), got.Attempts, "no attempt is recorded")
+		assert.False(t, got.Permanent, "re-armed as every call does")
+		assert.Equal(t, refused.LastError, got.LastError)
+	})
 	t.Run("budget spent by an older row", func(t *testing.T) {
 		shortBudgetFloor(t, 300*time.Millisecond)
 		store, rows := checkpointRows(t, 2)

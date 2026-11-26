@@ -697,9 +697,10 @@ func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 // 30 s. A request still running at the deadline is ended and recorded like
 // any timed-out delivery: witness_timeout when it had reached the witness
 // (capsule-cli#644). A row whose request would start with less than
-// witnessBudgetFloor left is not sent and its row is left as it was, so a
+// witnessBudgetFloor left is not sent and no attempt is recorded for it, so a
 // nearly spent budget is never recorded as a failed attempt or as a network
-// consent wait; it goes at a later call. ctx stays the context of the
+// consent wait; it goes at a later call. Refused rows are still re-armed
+// first (RearmRefused), as every call does. ctx stays the context of the
 // store reads and writes, so cancelling ctx ends the call without recording
 // the attempt (the CLL runner returns ctx.Err() before it commits), while
 // the deadline ends only the witness requests and their attempts are kept.
