@@ -213,8 +213,9 @@ func reproveCheckpoint(ctx context.Context, p Profile, log cll.CheckpointStateSt
 //     and holds later rows no longer.
 //
 // A re-anchor that got no answer (a timeout, an unreached witness, a spent
-// budget) leaves the row as it was, for a later call, and is no step. It
-// sends at most one statement. With no reprover (a store that keeps no tree
+// budget) leaves the row as it was, for a later call, and is no step. A row
+// still to be delivered or retried ahead of a due one holds it, so no step
+// is taken past it. It sends at most one statement. With no reprover (a store that keeps no tree
 // here), each due row is marked.
 func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service string, size uint64, prove reprover, submitter witness.Submitter, verifier witness.Verifier, now time.Time) (bool, error) {
 	rows, e := witnessRows(ctx, store, service, size)
@@ -223,7 +224,17 @@ func reanchorRefused(ctx context.Context, store cll.WitnessStateStore, service s
 	}
 	slices.SortFunc(rows, func(a, b cll.WitnessState) int { return cmp.Compare(a.CheckpointSize, b.CheckpointSize) })
 	for i, row := range rows {
-		if row.WitnessID != service || row.CheckpointSize > size || !reanchorDue(row) {
+		if row.WitnessID != service || row.CheckpointSize > size || row.Receipt != nil {
+			continue
+		}
+		// A row still to be delivered or retried (sent again after a
+		// resend that timed out, say) holds every later one here as the
+		// runner's predecessor gate does: a later row is never re-anchored
+		// past it.
+		if !reanchorDue(row) {
+			if !row.Permanent || rearmable(row) {
+				return false, nil
+			}
 			continue
 		}
 		tipSize, tipRoot, _ := witnessTipOf(row)

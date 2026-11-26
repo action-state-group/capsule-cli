@@ -562,3 +562,50 @@ func TestAnUnreadableKeyLeavesTheReanchorDue(t *testing.T) {
 	require.NoError(t, e)
 	assert.True(t, reanchored(row(t, l.store, refused)))
 }
+
+// In a backlog, a row sent again as it is whose answer does not come holds
+// the rows after it: none is re-anchored past it, and once it is delivered
+// each gets a receipt for its own statement.
+func TestABacklogWaitsForAResentRow(t *testing.T) {
+	l := newReanchorLog(t)
+	w := newChainWitness(t)
+	v := w.verifier(nil)
+	require.NotNil(t, l.deliver(0, l.cut(0), w, v).Receipt)
+	tip := l.record(l.sizes[0])
+	for n := 1; n < 4; n++ {
+		l.cut(n)
+	}
+	refusal := withRearmed(w.refusal().Error())
+	for _, size := range l.sizes[1:] {
+		r := row(t, l.store, size)
+		next := r
+		next.Attempts, next.Permanent, next.LastError = 2, true, refusal
+		require.NoError(t, l.store.CommitWitness(t.Context(), r.Attempts, next))
+	}
+	w.size, w.root = tip.MMRSize, tip.Root
+	resent := row(t, l.store, l.sizes[1]).Checkpoint
+	timeouts := 1
+	w.before = func(r checkpoint.Record) error {
+		if r.MMRSize == l.sizes[1] && timeouts > 0 {
+			timeouts--
+			return timedOutAnswer()
+		}
+		return nil
+	}
+	l.deliver(4, l.sizes[3], w, v)
+	assert.Equal(t, 1, w.sentCount(resent), "the second checkpoint was sent as it is, and timed out")
+	for _, s := range w.sent {
+		r, e := checkpoint.ParseRecord(s)
+		require.NoError(t, e)
+		assert.LessOrEqual(t, r.MMRSize, l.sizes[1], "nothing after it was sent")
+	}
+	assert.Nil(t, row(t, l.store, l.sizes[1]).Receipt)
+
+	l.deliver(6, l.sizes[3], w, v)
+	for _, size := range l.sizes[1:] {
+		got := row(t, l.store, size)
+		require.NotNil(t, got.Receipt, "checkpoint %d", size)
+		assert.NoError(t, v.Verify(got.Checkpoint, receiptOf(t, got)), "checkpoint %d, for its own statement", size)
+	}
+	assert.Equal(t, l.sizes[3], w.size)
+}
