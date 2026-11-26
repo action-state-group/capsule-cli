@@ -280,7 +280,7 @@ func withRearmed(lastError string) string {
 // continuityRetryGap is the least time between a continuity refusal and the
 // one retry RearmRefused gives it. The refusal a witness gives before its
 // own tip has moved on clears within moments; a delivery call made in the
-// same tick (evidencebook's cadence delivers each pending row in turn, each
+// same tick (a plugin's cadence delivers each pending row in turn, each
 // call re-arming first) must not spend the retry on a witness that has not
 // caught up yet.
 const continuityRetryGap = time.Minute

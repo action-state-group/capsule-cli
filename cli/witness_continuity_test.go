@@ -163,7 +163,7 @@ const continuityPending = "pending: the witness refused it as not continuing the
 
 // A delivery call made right after the refusal, in the same tick, re-arms
 // the row but does not spend its retry yet, and the later row it was called
-// for waits behind it: evidencebook's cadence delivers each pending row in
+// for waits behind it: a plugin's cadence delivers each pending row in
 // turn, and each call re-arms first.
 func TestTheRetryComesAMinuteAfterTheRefusal(t *testing.T) {
 	store, rows := checkpointRows(t, 2)
