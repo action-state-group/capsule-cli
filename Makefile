@@ -11,7 +11,7 @@ install:
 test:
 	bash scripts/test.sh
 
-# Before every push: every pull request job, both test passes included
-# (scripts/check.sh).
+# Before every push: every pull request job but seal-pr-capsule, both test
+# passes included (scripts/check.sh).
 check:
 	bash scripts/check.sh

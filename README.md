@@ -1487,8 +1487,8 @@ with the core alone (`TestPresentationFixturesVerifyOffline`); the deal
 plugin's own checks of a shared copy run in its repository. Tests run against
 a disposable MySQL 8.4 service: every case without the race detector on every
 run, and under the race detector on pushes to `main`, the nightly and manual
-runs, not on pull requests. `make check` runs every pull request job but the
-capsule seal locally, and both passes.
+runs, not on pull requests. Locally, `make check` runs every pull request job
+except the capsule seal, and both test passes.
 `CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
 No production credentials or database tunnels are used.
 
