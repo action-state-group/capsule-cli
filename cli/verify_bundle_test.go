@@ -461,22 +461,36 @@ func TestSignaturesClaimCarriesAStrictRefusal(t *testing.T) {
 	assert.Empty(t, states)
 }
 
+// crossCheckPython returns the python a Go/Python agreement test runs, after
+// running probe (Python source) in it. scripts/test.sh sets
+// CAPSULECTL_TEST_PYTHON to the verifiers pinned in
+// scripts/python-verifiers.txt, so there a probe that fails fails the test
+// rather than skipping it. Without CAPSULECTL_TEST_PYTHON (a plain go test),
+// python3 on PATH is tried and the test is skipped when it lacks the verifier.
+func crossCheckPython(t *testing.T, probe string) string {
+	t.Helper()
+	if python := os.Getenv("CAPSULECTL_TEST_PYTHON"); python != "" {
+		out, err := exec.Command(python, "-c", probe).CombinedOutput()
+		require.NoError(t, err, "CAPSULECTL_TEST_PYTHON=%s cannot run the cross-check: %s", python, out)
+		return python
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("CAPSULECTL_TEST_PYTHON unset and python3 not on PATH; skipping the Python cross-check")
+	}
+	if err := exec.Command(python, "-c", probe).Run(); err != nil {
+		t.Skip("CAPSULECTL_TEST_PYTHON unset and python3 lacks the verifier; skipping the Python cross-check")
+	}
+	return python
+}
+
 // TestVerifyBundleAgreesWithThePythonVerifier: a bundle this CLI produces,
 // and the same bundle unsigned, unanchored or edited, get the same verdict
 // from capsule-emit's offline verifier (capsule_emit.evidence_file) as from
-// verify --bundle. Runs where that verifier is importable
-// (CAPSULECTL_TEST_PYTHON, else python3 on PATH); skipped otherwise.
+// verify --bundle. scripts/test.sh runs it against the pinned verifier
+// (crossCheckPython).
 func TestVerifyBundleAgreesWithThePythonVerifier(t *testing.T) {
-	pythonPath := os.Getenv("CAPSULECTL_TEST_PYTHON")
-	if pythonPath == "" {
-		var err error
-		if pythonPath, err = exec.LookPath("python3"); err != nil {
-			t.Skip("python3 not on PATH; skipping the Python cross-check")
-		}
-	}
-	if err := exec.Command(pythonPath, "-c", "import capsule_emit.evidence_file").Run(); err != nil {
-		t.Skip("capsule_emit.evidence_file not importable; skipping the Python cross-check")
-	}
+	pythonPath := crossCheckPython(t, "import capsule_emit.evidence_file")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	script := `import json, sys
 from capsule_emit.evidence_file import check_evidence_file

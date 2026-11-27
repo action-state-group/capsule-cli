@@ -19,6 +19,9 @@ them). CI checks its format; the release folds it in. See `changelog.d/README.md
 make test    # MySQL; every case under the race detector, then every case without it
 ```
 
+`make test` needs Docker, Chrome or Chromium, and python3 with `venv`; it installs the pinned
+Python verifiers into `~/.cache/capsule-cli` on the first run (README, Continuous integration).
+
 If you call `go test -race` yourself, pass `-timeout=15m` as the script does.
 Without it, `go test` stops a package after 10 minutes and reports a failure.
 

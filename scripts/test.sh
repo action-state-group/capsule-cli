@@ -19,6 +19,27 @@ fi
 shard_index=${BASH_REMATCH[1]}
 shard_count=${BASH_REMATCH[2]}
 
+# The page tests open their pages in Chrome (CAPSULECTL_CHROME), and the
+# Go/Python agreement tests run the Python verifiers pinned in
+# scripts/python-verifiers.txt (CAPSULECTL_TEST_PYTHON). Both belong to the
+# complete suite: a run without them fails here, as one without Docker does,
+# rather than skipping those tests. A plain `go test` without the variables
+# still skips them.
+if [[ -z "${CAPSULECTL_CHROME:-}" ]]; then
+  # shellcheck source=scripts/lib/page-checks.sh
+  source scripts/lib/page-checks.sh
+  find_chrome || {
+    printf '%s\n' 'Chrome or Chromium is required for the complete test suite (set CAPSULECTL_CHROME).' >&2
+    exit 1
+  }
+  export CAPSULECTL_CHROME="$chrome"
+fi
+if [[ -z "${CAPSULECTL_TEST_PYTHON:-}" ]]; then
+  CAPSULECTL_TEST_PYTHON=$(bash scripts/python-verifiers.sh)
+  export CAPSULECTL_TEST_PYTHON
+fi
+printf 'Chrome: %s\nPython verifiers: %s\n' "$CAPSULECTL_CHROME" "$CAPSULECTL_TEST_PYTHON"
+
 # CI supplies an isolated MySQL service. Local runs create and clean up their
 # own container rather than silently skipping the SDK integration tests.
 container=""

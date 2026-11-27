@@ -59,6 +59,10 @@ jobs:
         run: bash scripts/check-moved-paths.sh --fail
       - name: The test sharding script splits every test once
         run: bash scripts/check-shard-tests.sh
+      - name: The contract case library's pins name the engine's files
+        # cli/testdata/contract/cases/SOURCE.json against the public
+        # capsule-engine commit it names (capsule-cli#658).
+        run: bash scripts/check-contract-source.sh
       - name: Vet
         run: go vet ./...
       - name: Check the rendered skill files match spec.yaml
@@ -77,7 +81,10 @@ jobs:
     # Pull requests run the two plain shards only; the eight race shards run
     # on push to main and on the nightly, four at a time
     # (asg-agent-team-ethan#409). `make check` runs both passes, and every
-    # other pull request job but seal-pr-capsule, locally.
+    # other pull request job but seal-pr-capsule, locally. scripts/test.sh
+    # finds the runner's google-chrome for the page tests and installs the
+    # pinned Python verifiers for the Go/Python agreement tests
+    # (capsule-cli#658).
     strategy:
       fail-fast: false
       max-parallel: 4

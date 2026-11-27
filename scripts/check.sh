@@ -13,9 +13,11 @@
 # seal-pr-capsule is the one pull request job not run here: it seals CI's result
 # with the repository's signing keys and tests nothing. Needs Go, Docker
 # (scripts/test.sh starts a disposable MySQL 8.4 unless
-# CAPSULE_CLI_TEST_MYSQL_PORT names one), Chrome or Chromium
-# (scripts/check-html-render.sh) and python3. Changes no tracked file; exits
-# non-zero on the first failing step.
+# CAPSULE_CLI_TEST_MYSQL_PORT names one), Chrome or Chromium (the page tests
+# and scripts/check-html-render.sh), python3 with venv, and network access to
+# github.com (scripts/check-contract-source.sh) and, on the first run, PyPI
+# (scripts/python-verifiers.sh). Changes no tracked file; exits non-zero on
+# the first failing step.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -41,6 +43,8 @@ step nothing points into the trees that moved out
 bash scripts/check-moved-paths.sh --fail
 step the test sharding script splits every test once
 bash scripts/check-shard-tests.sh
+step "the contract case library's pins name the engine's files"
+bash scripts/check-contract-source.sh
 step vet
 go vet ./...
 step rendered skill files match spec.yaml
