@@ -56,58 +56,156 @@ func emissionModeLabel(mode string) string {
 	}
 }
 
-func verbTable(verbs []Verb) string {
-	var b strings.Builder
-	b.WriteString("| Verb | Args | When | Emits | How |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+// verbNames renders names as a comma-separated list of code spans, in spec
+// order; the prose below computes its lists from the spec with it, so a verb
+// moved between lists or modes never leaves a stale name behind.
+func verbNames(verbs []Verb) string {
+	names := make([]string, len(verbs))
+	for i, v := range verbs {
+		names[i] = "`" + v.Name + "`"
+	}
+	return strings.Join(names, ", ")
+}
+
+func verbsWithMode(verbs []Verb, modes ...string) []Verb {
+	var out []Verb
 	for _, v := range verbs {
-		args := "_(none)_"
-		if len(v.Args) > 0 {
-			escaped := make([]string, len(v.Args))
-			for i, a := range v.Args {
-				escaped[i] = "`" + escapeCell(a) + "`"
+		for _, m := range modes {
+			if v.EmissionMode == m {
+				out = append(out, v)
 			}
-			args = strings.Join(escaped, "<br>")
 		}
-		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s |\n",
-			escapeCell(v.Name), args, escapeCell(v.When), escapeCell(v.Emits), emissionModeLabel(v.EmissionMode))
+	}
+	return out
+}
+
+func allVerbs(spec Spec) []Verb {
+	return append(append([]Verb{}, spec.Verbs...), spec.ExpertVerbs...)
+}
+
+func verbRow(b *strings.Builder, lead string, v Verb) {
+	args := "_(none)_"
+	if len(v.Args) > 0 {
+		escaped := make([]string, len(v.Args))
+		for i, a := range v.Args {
+			escaped[i] = "`" + escapeCell(a) + "`"
+		}
+		args = strings.Join(escaped, "<br>")
+	}
+	fmt.Fprintf(b, "| %s`%s` | %s | %s | %s | %s |\n",
+		lead, escapeCell(v.Name), args, escapeCell(v.When), escapeCell(v.Emits), emissionModeLabel(v.EmissionMode))
+}
+
+// fiveVerbTable lists the taught verbs, each under the one of the five verbs
+// it carries out, in spec order.
+func fiveVerbTable(verbs []Verb) string {
+	var b strings.Builder
+	b.WriteString("| Verb | Command | Args | When | Emits | How |\n")
+	b.WriteString("|---|---|---|---|---|---|\n")
+	for _, v := range verbs {
+		verbRow(&b, v.FiveVerb+" | ", v)
 	}
 	return b.String()
 }
 
-func emissionSection() string {
-	return `**Capsules are for consequential actions only** (see Evidence policy
+func expertTable(verbs []Verb) string {
+	var b strings.Builder
+	b.WriteString("| Command | Args | When | Emits | How |\n")
+	b.WriteString("|---|---|---|---|---|\n")
+	for _, v := range verbs {
+		verbRow(&b, "", v)
+	}
+	return b.String()
+}
+
+// taughtFiveVerbs names, in the ruling's order, each of the five verbs that
+// at least one taught command carries out: "record, verify and show".
+func taughtFiveVerbs(verbs []Verb) string {
+	var names []string
+	for _, five := range []string{"check", "record", "ask", "verify", "show"} {
+		for _, v := range verbs {
+			if v.FiveVerb == five {
+				names = append(names, five)
+				break
+			}
+		}
+	}
+	if len(names) <= 1 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+func fiveVerbsSection(spec Spec) string {
+	var b strings.Builder
+	b.WriteString("Agent work uses five verbs: **check** before you act, **record** what was\n" +
+		"done, **ask** for evidence or answer a request, **verify** what you get, and\n" +
+		"**show** a record or report.\n")
+	fmt.Fprintf(&b, "This skill has commands for %s; the rows below map\neach to its command.\n\n", taughtFiveVerbs(spec.Verbs))
+	b.WriteString(fiveVerbTable(spec.Verbs))
+	if spec.FiveVerbsElsewhere != "" {
+		b.WriteString("\n" + spec.FiveVerbsElsewhere + "\n")
+	}
+	if len(spec.ExpertVerbs) > 0 {
+		fmt.Fprintf(&b, "\n**Expert verbs.** %s are verbs of this file too, but are\n"+
+			"not taught here: read [references/expert.md](references/expert.md), which\n"+
+			"keeps each one's instructions, before you call one. The guardrails above bind\n"+
+			"them as they bind the five.\n", verbNames(spec.ExpertVerbs))
+	}
+	return b.String()
+}
+
+// modeBullets explains each emission mechanism that at least one of verbs
+// uses, naming those verbs; a mechanism none of them uses is not described.
+func modeBullets(verbs []Verb) string {
+	var b strings.Builder
+	if v := verbsWithMode(verbs, "self-sealing"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **self-sealing** — the verb has its own `--seal-output` flag (%s,\n  mandated by the binary itself). Nothing further is needed.\n", verbNames(v))
+	}
+	if v := verbsWithMode(verbs, "primary-action"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **primary action** — the verb's entire job already is creating or persisting\n  a capsule (%s). Running it\n  satisfies the invariant by itself; nothing wraps it.\n", verbNames(v))
+	}
+	if v := verbsWithMode(verbs, "not-consequential"); len(v) > 0 {
+		fmt.Fprintf(&b, "- **not consequential** — %s: each runs, and that is the end of it —\n  **no wrapper seal, no synthetic evidence record.**\n", verbNames(v))
+	}
+	return b.String()
+}
+
+// emissionSection covers the taught verbs only; the expert verbs' mechanisms
+// are in references/expert.md, so the skill file teaches none of their flags.
+func emissionSection(spec Spec) string {
+	var b strings.Builder
+	b.WriteString(`**Capsules are for consequential actions only** (see Evidence policy
 under Guardrails, above). A capsule is never manufactured for ` + "`verify`" + `
 or any other local validation — reading, checking, validating or opening
 something is not a consequential action, and this skill produces no capsule
-for it. The ` + "`emission_mode`" + ` column above says which of the two real
-mechanisms applies to an actually-consequential verb:
+for it. The How column above says which mechanism applies to each verb:
 
-- **self-sealing** — the verb has its own ` + "`--seal-output`" + ` flag (` + "`discover`" + `,
-  mandated by the binary itself). Nothing further is needed.
-- **primary action** — the verb's entire job already is creating or persisting
-  a capsule (` + "`publish`" + `, ` + "`cll append`" + `, ` + "`result build`" + `). Running it
-  satisfies the invariant by itself; nothing wraps it.
-
-Every other verb this skill calls (` + "`verify`" + `, ` + "`contract validate`" + `,
-` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `, the ` + "`judge`" + ` and ` + "`calibration`" + `
-computations) is ` + "`not-consequential`" + `: it runs, and
-that is the end of it — **no wrapper seal, no synthetic evidence record.**
-
+`)
+	b.WriteString(modeBullets(spec.Verbs))
+	if len(spec.ExpertVerbs) > 0 {
+		b.WriteString("\nThe expert verbs follow the same policy; [references/expert.md](references/expert.md)\nsays how each one does.\n")
+	}
+	b.WriteString(`
 See [references/capsule-cli.md](references/capsule-cli.md) for the ` + "`publish`" + `/
 ` + "`cll append`" + ` request shape and the Chain/Relation fields, and for the bare
 ` + "`capsulectl seal`" + ` command this skill does not use (it exists for a skill
-whose verb surface actually needs it — this one does not).`
+whose verb surface actually needs it — this one does not).`)
+	return b.String()
 }
 
-func exerciseSection() string {
+func exerciseSection(spec Spec) string {
+	all := allVerbs(spec)
+	where := "verb above"
+	if len(spec.ExpertVerbs) > 0 {
+		where = "verb above and in [references/expert.md](references/expert.md)"
+	}
 	return `[scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
-verb above against a throwaway sqlite profile in a temp directory: the
-consequential actions (` + "`discover`" + `, ` + "`publish`" + `, ` + "`cll append`" + `,
-` + "`result build`" + `) each seal or persist a capsule and every one of those is
+` + where + ` against a
+throwaway sqlite profile in a temp directory: the
+consequential actions (` + verbNames(verbsWithMode(all, "self-sealing", "primary-action")) + `) each seal or persist a capsule and every one of those is
 verified; the not-consequential
-actions (` + "`verify`" + `, ` + "`contract validate`" + `, ` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `,
-` + "`judge`" + `, ` + "`calibration`" + `)
+actions (` + verbNames(verbsWithMode(all, "not-consequential")) + `)
 run and produce no capsule at all — the script asserts both halves, not just
 that capsules exist. It never touches a real profile or a real CLL. It is a
 contributor check, run after any change to the verb surface or the emission
@@ -116,34 +214,71 @@ and this repository. Using the skill needs neither: install a release binary
 and this skill from the same tag (the repository README, "Agent skill").`
 }
 
-func referenceSection() string {
-	return `- [Capsule CLI contract](references/capsule-cli.md) — the full command
+func referenceSection(spec Spec) string {
+	expert := ""
+	if len(spec.ExpertVerbs) > 0 {
+		expert = `- [Expert verbs](references/expert.md) — the verbs this skill may call
+  but does not teach, each with its instructions.
+`
+	}
+	return expert + `- [Capsule CLI contract](references/capsule-cli.md) — the full command
   reference this skill is built against.
-- [skills/SKILL-SPEC.md](../SKILL-SPEC.md) — the spec format this skill's
+- [skills/SKILL-SPEC.md](https://github.com/action-state-group/capsule-cli/blob/main/skills/SKILL-SPEC.md) — the spec format this skill's
   ` + "`spec.yaml`" + ` is written against, and the regeneration contract that
   keeps this file and ` + "`AGENTS.md`" + ` byte-identical to what it renders.`
+}
+
+// body is the part SKILL.md and AGENTS.md share after their wrappers.
+func body(spec Spec) string {
+	var b strings.Builder
+	b.WriteString(boundaryPreamble)
+	b.WriteString("\n\n## Guardrails\n\n")
+	b.WriteString(guardrailsSection(spec))
+	b.WriteString("\n## The five verbs\n\n")
+	b.WriteString(fiveVerbsSection(spec))
+	b.WriteString("\n## Capsule emission\n\n")
+	b.WriteString(emissionSection(spec))
+	b.WriteString("\n\n## Exercise this skill\n\n")
+	b.WriteString(exerciseSection(spec))
+	b.WriteString("\n\n## Reference\n\n")
+	b.WriteString(referenceSection(spec))
+	b.WriteString("\n")
+	return b.String()
+}
+
+// renderExpertMD is the generated references/expert.md: the expert verbs with
+// their instructions, the same columns as the five-verb table minus the verb.
+// It returns "" when the spec has no expert verbs, and run then writes no file.
+func renderExpertMD(spec Spec) string {
+	if len(spec.ExpertVerbs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("# Expert verbs\n\n")
+	fmt.Fprintf(&b, `The %s skill ([SKILL.md](../SKILL.md); [AGENTS.md](../AGENTS.md) for
+Codex) teaches five verbs: check, record, ask, verify and show. The verbs here
+sit outside the five; their instructions are kept as they were taught before.
+The skill's guardrails bind them, and its approval points still stop you
+before the actions they name. This file is generated from `+"`spec.yaml`"+`
+(`+"`expert_verbs`"+`); never edit it by hand.
+
+`, spec.Skill.Name)
+	b.WriteString(expertTable(spec.ExpertVerbs))
+	b.WriteString("\n## Capsule emission\n\nThe skill's evidence policy applies here as it does to the five verbs:\n\n")
+	b.WriteString(modeBullets(spec.ExpertVerbs))
+	b.WriteString(`
+[capsule-cli.md](capsule-cli.md) gives the full contract of the commands it
+documents, with their output and exit codes; ` + "`capsulectl <command> --help`" + `
+gives every flag of each.
+`)
+	return b.String()
 }
 
 // renderSkillMD is the Claude Code shape: YAML frontmatter (name,
 // description only, matching this workspace's other installed skills), then
 // the shared body sections.
 func renderSkillMD(spec Spec) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "---\nname: %s\ndescription: %s\n---\n\n", spec.Skill.Name, spec.Skill.Description)
-	fmt.Fprintf(&b, "# %s\n\n", spec.Skill.Name)
-	b.WriteString(boundaryPreamble)
-	b.WriteString("\n\n## Guardrails\n\n")
-	b.WriteString(guardrailsSection(spec))
-	b.WriteString("\n## Verb surface\n\n")
-	b.WriteString(verbTable(spec.Verbs))
-	b.WriteString("\n## Capsule emission\n\n")
-	b.WriteString(emissionSection())
-	b.WriteString("\n\n## Exercise this skill\n\n")
-	b.WriteString(exerciseSection())
-	b.WriteString("\n\n## Reference\n\n")
-	b.WriteString(referenceSection())
-	b.WriteString("\n")
-	return b.String()
+	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n# %s\n\n", spec.Skill.Name, spec.Skill.Description, spec.Skill.Name) + body(spec)
 }
 
 // renderAgentsMD is the Codex shape: no YAML frontmatter, a plain heading
@@ -151,19 +286,5 @@ func renderSkillMD(spec Spec) string {
 // sections renderSkillMD uses — the two differ only in the wrapper, so a
 // spec edit changes both files together.
 func renderAgentsMD(spec Spec) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "# %s agent skill\n\n%s\n\n", spec.Skill.Name, spec.Skill.Description)
-	b.WriteString(boundaryPreamble)
-	b.WriteString("\n\n## Guardrails\n\n")
-	b.WriteString(guardrailsSection(spec))
-	b.WriteString("\n## Verb surface\n\n")
-	b.WriteString(verbTable(spec.Verbs))
-	b.WriteString("\n## Capsule emission\n\n")
-	b.WriteString(emissionSection())
-	b.WriteString("\n\n## Exercise this skill\n\n")
-	b.WriteString(exerciseSection())
-	b.WriteString("\n\n## Reference\n\n")
-	b.WriteString(referenceSection())
-	b.WriteString("\n")
-	return b.String()
+	return fmt.Sprintf("# %s agent skill\n\n%s\n\n", spec.Skill.Name, spec.Skill.Description) + body(spec)
 }

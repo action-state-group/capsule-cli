@@ -162,16 +162,22 @@ cp -r capsule-cli/skills/capsulectl /path/to/project/capsulectl-skill
 echo 'Before calling capsulectl, read and follow capsulectl-skill/AGENTS.md.' >> /path/to/project/AGENTS.md
 ```
 
-Verbs that take `--profile` (`discover`, `publish`, `cll append`, `get`, and
-the others) need a profile and an initialized store first; the
+The skill teaches five verbs: record (`publish`, `cll append`,
+`result build`), verify (`verify`) and show (`cll list`, `get`); check and ask
+belong to the agent skill of the plugin that adds book and deal commands. Setup and operator commands
+(`contract validate`, `contract diff`, `discover`, `plugin ls`, `judge pin`,
+`judge drift pin`, `judge drift reports`, `calibration summarize`) are expert
+verbs, kept with their instructions in `references/expert.md`. Verbs that take
+`--profile` need a profile and an initialized store first; the
 [Quickstart](#quickstart-no-database-server) below makes one in four commands.
 The skill never writes a scope file or a schema for you: `discover --scope`
 and `contract validate --schema` always name files you supply.
 
-The two renderings are generated, never edited by hand. `cmd/skillgen`, the
-repository's second binary, validates `skills/capsulectl/spec.yaml` against
-[`schemas/skill-spec-v0.json`](schemas/skill-spec-v0.json) and writes both
-files: run `go run ./cmd/skillgen` from the repository root after editing the
+The two renderings, and `references/expert.md`, are generated, never edited
+by hand. `cmd/skillgen`, the repository's second binary, validates
+`skills/capsulectl/spec.yaml` against
+[`schemas/skill-spec-v0.json`](schemas/skill-spec-v0.json) and writes the
+three files: run `go run ./cmd/skillgen` from the repository root after editing the
 spec, or `go run ./cmd/skillgen --check` to fail when the files on disk differ
 from what the spec renders. A test (`TestCapsulectlSkillMatchesItsSpec`) runs
 that comparison in CI. The format is described in

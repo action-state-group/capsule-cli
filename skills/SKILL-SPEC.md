@@ -55,10 +55,14 @@ check, a validation, or an "open") and what to do when producing one fails
 (report the failure, stop, and never infer that the underlying action did
 not happen because its evidence record could not be made).
 
-`verbs[]` — the skill's entire action surface, one entry per command the
-underlying tool actually implements **today**. Each entry:
+`verbs[]` — the verbs the skill teaches, one entry per command the
+underlying tool actually implements **today**, in the order the rendered
+five-verb table lists them. A skill teaches five verbs and nothing else:
+check, record, ask, verify and show (capsule-cli#650). Each entry:
 
-- `name` — the command as typed, e.g. `contract validate`.
+- `five_verb` — which of the five the command carries out: `check`,
+  `record`, `ask`, `verify` or `show`.
+- `name` — the command as typed, e.g. `cll list`.
 - `args[]` — one string per accepted invocation shape, in the tool's own flag
   syntax.
 - `when` — the single condition under which the skill calls it. A directive
@@ -83,21 +87,33 @@ underlying tool actually implements **today**. Each entry:
     for consequential actions only, and a thin skill must not manufacture
     evidence for a local check just because it *can*.
 
+`expert_verbs[]` — optional: the setup and operator commands the skill may
+call but does not teach. Same fields as a `verbs[]` entry except
+`five_verb`, which the schema refuses here. The generator renders them, with
+their instructions, into the skill's `references/expert.md`, and names them,
+without instructions, in the skill file, so a guardrail such as "call only
+the verbs listed in this file" still covers them.
+
+`five_verbs_elsewhere` — optional prose rendered under the five-verb table:
+where the verbs the skill has no command for are taught instead.
+
 ## The regeneration contract
 
 Given one spec, the generator (`cmd/skillgen`) must produce byte-identical
-output on every run: same spec in, same `SKILL.md` and `AGENTS.md` out, no
+output on every run: same spec in, same `SKILL.md` and `AGENTS.md` (and,
+when the spec has `expert_verbs`, `references/expert.md`) out, no
 timestamps or nondeterministic ordering baked into the rendered files. This
 is what lets CI enforce the only two moves that are ever legitimate on a
 generated skill:
 
-1. **Edit the spec, regenerate.** Both rendered files change together,
-   because both come from the same data.
+1. **Edit the spec, regenerate.** The rendered files change together,
+   because they come from the same data.
 2. **Edit a rendered file by hand.** `cmd/skillgen --check` fails, because
    the checked-in file no longer matches what the spec renders. Fix the spec
    instead, or the generator's template if the shape itself is wrong.
 
-There is no third move. A rendered `SKILL.md` or `AGENTS.md` is build output;
+There is no third move. A rendered `SKILL.md`, `AGENTS.md` or
+`references/expert.md` is build output;
 treat a hand-edit to one exactly like a hand-edit to a compiled binary.
 
 ## A minimal instance
@@ -113,11 +129,13 @@ approval_points: []
 evidence_policy: "TBD-HUMAN"
 verbs:
   - name: verify
+    five_verb: verify
     args: ["--profile NAME", "--capsule FILE"]
     when: Confirm a Capsule's identity, signature and bindings before trusting it.
     emits: (no capsule — checking a bundle is local validation)
     emission_mode: not-consequential
   - name: publish
+    five_verb: record
     args: ["--profile NAME --request FILE"]
     when: Seal, persist and append a Capsule in one durable step.
     emits: (publish's own result IS the capsule; no wrapper)

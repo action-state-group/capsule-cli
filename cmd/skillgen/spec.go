@@ -25,8 +25,10 @@ type SkillMeta struct {
 
 // Verb is one entry in the skill's action surface. EmissionMode names which
 // of the three mechanisms in skills/SKILL-SPEC.md satisfies "every
-// skill-driven action emits a capsule" for this verb.
+// skill-driven action emits a capsule" for this verb. FiveVerb is set only on
+// a taught verb (Spec.Verbs); the schema refuses it on an expert verb.
 type Verb struct {
+	FiveVerb     string   `yaml:"five_verb,omitempty" json:"five_verb,omitempty"`
 	Name         string   `yaml:"name" json:"name"`
 	Args         []string `yaml:"args" json:"args"`
 	When         string   `yaml:"when" json:"when"`
@@ -43,6 +45,9 @@ type Spec struct {
 	ApprovalPoints []string  `yaml:"approval_points" json:"approval_points"`
 	EvidencePolicy string    `yaml:"evidence_policy" json:"evidence_policy"`
 	Verbs          []Verb    `yaml:"verbs" json:"verbs"`
+	ExpertVerbs    []Verb    `yaml:"expert_verbs,omitempty" json:"expert_verbs,omitempty"`
+	// FiveVerbsElsewhere is prose rendered under the five-verb table.
+	FiveVerbsElsewhere string `yaml:"five_verbs_elsewhere,omitempty" json:"five_verbs_elsewhere,omitempty"`
 }
 
 // compileSchema mirrors the read pattern cli/contract.go uses for
