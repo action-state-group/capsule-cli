@@ -7,8 +7,9 @@
 # The venv lives under ${XDG_CACHE_HOME:-$HOME/.cache}/capsule-cli, named by a
 # digest of the lock file and the python3 version, so a changed pin or python
 # gets a new venv. It is built in a temporary directory and renamed into
-# place, so a failed or concurrent build never leaves a half-installed venv in
-# use, and one that no longer imports the verifiers is rebuilt. Installs with
+# place under a lock, so a failed or concurrent build never leaves a
+# half-installed venv in use, and one that no longer imports the verifiers is
+# rebuilt. Installs with
 # --require-hashes; needs python3 with venv, and access to PyPI on the first
 # run. To start over, delete that directory.
 set -euo pipefail
@@ -32,26 +33,25 @@ cache=${XDG_CACHE_HOME:-$HOME/.cache}/capsule-cli
 venv=$cache/python-verifiers-$key
 
 probe='import capsule_emit.evidence_file, agent_action_capsule.bundle'
-# A venv whose python no longer runs the probe (its base python was removed,
-# say) is rebuilt.
-if [[ -d "$venv" ]] && ! "$venv/bin/python" -c "$probe" 2>/dev/null; then
-  rm -rf "$venv"
-fi
-if [[ ! -d "$venv" ]]; then
+# Fast path: a venv that runs the probe is used without locking.
+if ! "$venv/bin/python" -c "$probe" 2>/dev/null; then
+  # Repair under an exclusive lock on fd 9, so one run never deletes a venv
+  # another run just built: flock holds while this shell keeps fd 9 open, and
+  # the probe is rerun once the lock is held. A venv that no longer runs the
+  # probe (its base python was removed, say) is rebuilt.
   mkdir -p "$cache"
-  build=$(mktemp -d "$cache/python-verifiers-build.XXXXXX")
-  trap 'rm -rf "$build"' EXIT
-  python3 -m venv "$build" >&2
-  "$build/bin/python" -m pip install --quiet --disable-pip-version-check \
-    --require-hashes -r "$lock" >&2
-  # os.rename refuses a non-empty target, so a venv another run placed first
-  # is kept and this one is discarded by the trap.
-  python3 -c 'import os, sys
-try:
-    os.rename(sys.argv[1], sys.argv[2])
-except OSError:
-    if not os.path.isdir(sys.argv[2]):
-        raise' "$build" "$venv"
+  exec 9>"$venv.lock"
+  python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX)'
+  if ! "$venv/bin/python" -c "$probe" 2>/dev/null; then
+    rm -rf "$venv"
+    build=$(mktemp -d "$cache/python-verifiers-build.XXXXXX")
+    trap 'rm -rf "$build"' EXIT
+    python3 -m venv "$build" >&2
+    "$build/bin/python" -m pip install --quiet --disable-pip-version-check \
+      --require-hashes -r "$lock" >&2
+    mv "$build" "$venv"
+  fi
+  exec 9>&-
 fi
 
 "$venv/bin/python" -c "$probe"

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -469,19 +470,64 @@ func TestSignaturesClaimCarriesAStrictRefusal(t *testing.T) {
 // python3 on PATH is tried and the test is skipped when it lacks the verifier.
 func crossCheckPython(t *testing.T, probe string) string {
 	t.Helper()
-	if python := os.Getenv("CAPSULECTL_TEST_PYTHON"); python != "" {
-		out, err := exec.Command(python, "-c", probe).CombinedOutput()
-		require.NoError(t, err, "CAPSULECTL_TEST_PYTHON=%s cannot run the cross-check: %s", python, out)
-		return python
-	}
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("CAPSULECTL_TEST_PYTHON unset and python3 not on PATH; skipping the Python cross-check")
-	}
-	if err := exec.Command(python, "-c", probe).Run(); err != nil {
-		t.Skip("CAPSULECTL_TEST_PYTHON unset and python3 lacks the verifier; skipping the Python cross-check")
+	python, skip, err := pickCrossCheckPython(os.Getenv("CAPSULECTL_TEST_PYTHON"), probe)
+	require.NoError(t, err)
+	if skip != "" {
+		t.Skip(skip)
 	}
 	return python
+}
+
+// pickCrossCheckPython is crossCheckPython's decision: the python to use, or
+// why the test skips, or why it fails. explicit is CAPSULECTL_TEST_PYTHON.
+func pickCrossCheckPython(explicit, probe string) (python, skip string, err error) {
+	if explicit != "" {
+		if out, err := exec.Command(explicit, "-c", probe).CombinedOutput(); err != nil {
+			return "", "", fmt.Errorf("CAPSULECTL_TEST_PYTHON=%s cannot run the cross-check: %w: %s", explicit, err, out)
+		}
+		return explicit, "", nil
+	}
+	python, err = exec.LookPath("python3")
+	if err != nil {
+		return "", "CAPSULECTL_TEST_PYTHON unset and python3 not on PATH; skipping the Python cross-check", nil
+	}
+	if err := exec.Command(python, "-c", probe).Run(); err != nil {
+		return "", "CAPSULECTL_TEST_PYTHON unset and python3 lacks the verifier; skipping the Python cross-check", nil
+	}
+	return python, "", nil
+}
+
+// TestPickCrossCheckPythonFailsAnExplicitBrokenPython: with
+// CAPSULECTL_TEST_PYTHON set, a python that is missing or cannot import the
+// verifier fails the agreement tests; only without it do they skip.
+func TestPickCrossCheckPythonFailsAnExplicitBrokenPython(t *testing.T) {
+	python3, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	const missing = "import capsule_cli_no_such_module"
+
+	_, skip, err := pickCrossCheckPython(filepath.Join(t.TempDir(), "python"), "pass")
+	assert.Error(t, err, "a missing explicit python fails")
+	assert.Empty(t, skip)
+
+	_, skip, err = pickCrossCheckPython(python3, missing)
+	assert.ErrorContains(t, err, "capsule_cli_no_such_module", "an explicit python without the verifier fails")
+	assert.Empty(t, skip)
+
+	got, skip, err := pickCrossCheckPython(python3, "pass")
+	require.NoError(t, err)
+	assert.Empty(t, skip)
+	assert.Equal(t, python3, got)
+
+	_, skip, err = pickCrossCheckPython("", missing)
+	require.NoError(t, err, "without CAPSULECTL_TEST_PYTHON a python3 lacking the verifier skips")
+	assert.Contains(t, skip, "lacks the verifier")
+
+	t.Setenv("PATH", t.TempDir())
+	_, skip, err = pickCrossCheckPython("", "pass")
+	require.NoError(t, err)
+	assert.Contains(t, skip, "not on PATH")
 }
 
 // TestVerifyBundleAgreesWithThePythonVerifier: a bundle this CLI produces,
