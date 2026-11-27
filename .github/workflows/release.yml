@@ -13,7 +13,8 @@ name: Release
 # What these prove, and what keeps a release nobody meant from reaching
 # users, is in docs/RELEASE-TRANSPARENCY.md.
 #
-# Nothing is published until a person approves the run (docs/RELEASING.md).
+# Nothing is published until a release reviewer, or their coordinating agent
+# on the reviewer's go, approves the run (docs/RELEASING.md).
 # A full release runs in the `release` environment and a pre-release (a tag
 # with a hyphen) in `release-candidate`; in both, a release reviewer approves
 # the run, and whoever pushed the tag may. Each environment only accepts tags

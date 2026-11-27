@@ -74,9 +74,9 @@ From v0.1.1 (2026-11-27), whoever pushed a full release's tag may approve its ru
 **A reviewer's coordinating agent may approve the run.** From v0.1.1 (2026-11-27), a release
 reviewer may have their coordinating agent approve a release run on the reviewer's go for that
 release, with the reviewer's own GitHub credentials. GitHub cannot tell that approval from the
-reviewer's, so the agent records it: the release issue names the run, who gave the go and when.
-No other agent approves a run: a release lane may cut the tag only on that go, watch the run and
-report that it waits, and no agent asks for credentials or a token with which it could approve.
+reviewer's, so the agent records it: the release issue names the run, who gave the go and the date.
+No other agent approves a run: any other agent may cut the tag only on that go, watch the run and
+report that it waits, and no other agent asks for credentials or a token with which it could approve.
 
 ## The cut
 
