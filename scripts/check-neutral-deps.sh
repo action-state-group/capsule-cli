@@ -28,4 +28,10 @@ while read -r mod; do
     *) echo "::error::the core's build graph includes $mod, which is not on the neutral list in scripts/check-neutral-deps.sh"; bad=1 ;;
   esac
 done < <(printf '%s\n' "$mods" | grep '^github.com/action-state-group/' | sort -u)
+# go.mod itself names no company-OSS module, not even in a line the build graph
+# above leaves out (a replace, an exclude or a comment).
+if grep -n evidencebook go.mod; then
+  echo "::error::the core go.mod requires evidencebook"
+  bad=1
+fi
 exit "$bad"

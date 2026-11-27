@@ -14,7 +14,8 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    # Nightly: every case under the race detector (see the tests job's env).
+    # Nightly: the race shards on main again, catching drift in the runner
+    # image or the mysql:8.4 tag with no commit.
     - cron: '0 6 * * *'
 
 permissions:
@@ -40,16 +41,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Refuse committed env files
-        run: |
-          # .gitignore excludes .env and .env.*; this catches one committed anyway (git add -f, a
-          # rename). Example files (*.example) are allowed. ls-files runs on its own line, so a
-          # failure fails the step instead of reading as "no env files".
-          tracked="$(git ls-files)"
-          bad="$(printf '%s\n' "$tracked" | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$' || true)"
-          if [ -n "$bad" ]; then
-            printf '::error::env file(s) committed; remove them from the repository and rotate any secret they held:\n%s\n' "$bad"
-            exit 1
-          fi
+        run: bash scripts/check-env-files.sh
       - name: Check formatting and module files
         run: |
           test -z "$(gofmt -l .)"
@@ -59,12 +51,7 @@ jobs:
         # The donatable core (capsule-cli#236, #326): every action-state-group
         # module in its build graph, tests included, is on the neutral list,
         # and its go.mod requires no company-OSS module.
-        run: |
-          bash scripts/check-neutral-deps.sh
-          if grep -n evidencebook go.mod; then
-            echo "::error::the core go.mod requires evidencebook"
-            exit 1
-          fi
+        run: bash scripts/check-neutral-deps.sh
       - name: Nothing points into the trees that moved out
         # The first-party plugins and the deal skill live in their own
         # repositories (capsule-cli#326): their trees are gone, and no
@@ -80,8 +67,8 @@ jobs:
         run: make build
 
   tests:
-    # The race detector (the slowest case loops sampled) split by measured test
-    # time across eight jobs, and every case without it across two: see
+    # The race detector split by measured test time across eight jobs, and
+    # every case without it across two: see
     # scripts/test.sh and scripts/test-weights.sh. One job running both
     # passes took 13-15 minutes and hit go test's 15-minute timeout on PR runs and on the nightly; at four
     # race shards and one plain job, the plugin package grew past the race
@@ -89,7 +76,8 @@ jobs:
     # name, six race shards still ran at 14 minutes (capsule-cli#407).
     # Pull requests run the two plain shards only; the eight race shards run
     # on push to main and on the nightly, four at a time
-    # (asg-agent-team-ethan#409). `make check` runs both passes locally.
+    # (asg-agent-team-ethan#409). `make check` runs both passes, and every
+    # other pull request job but seal-pr-capsule, locally.
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -114,8 +102,6 @@ jobs:
     env:
       # Explicitly enable integration tests against the disposable service.
       CAPSULE_CLI_TEST_MYSQL_PORT: "3306"
-      # The nightly run samples nothing: every case under the race detector.
-      CAPSULE_TEST_RACE_FULL: ${{ github.event_name == 'schedule' && '1' || '' }}
       CAPSULE_TEST_PASS: ${{ matrix.part.pass }}
       CAPSULE_TEST_SHARD: ${{ matrix.part.shard }}
     steps:
