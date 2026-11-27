@@ -60,7 +60,7 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
 cut a release. Steps marked "reviewer decision" are taken only on a release reviewer's go; every
 release is one.
 
-**A person approves every release run, in GitHub.** Pushing a tag starts
+**Every release run is approved in GitHub.** Pushing a tag starts
 [`release.yml`](../.github/workflows/release.yml), which waits in a deployment environment until a
 reviewer approves it. Nothing is built or published before that.
 
@@ -71,11 +71,12 @@ reviewer approves it. Nothing is built or published before that.
 
 From v0.1.1 (2026-11-27), whoever pushed a full release's tag may approve its run.
 
-**Agents never approve a release run.** A reviewer approves it in GitHub's web UI or mobile app.
-This is a rule, not a technical control: an agent working with a reviewer's GitHub credentials
-could call the approval API, and GitHub cannot tell it from the person. An agent may cut the tag,
-watch the run and report that it waits for approval; it never approves a deployment, and it
-never asks for credentials or a token with which it could.
+**A reviewer's coordinating agent may approve the run.** From v0.1.1 (2026-11-27), a release
+reviewer may have their coordinating agent approve a release run on the reviewer's go for that
+release, with the reviewer's own GitHub credentials. GitHub cannot tell that approval from the
+reviewer's, so the agent records it: the release issue names the run, who gave the go and the date.
+No other agent approves a run: any other agent may cut the tag only on that go, watch the run and
+report that it waits, and no other agent asks for credentials or a token with which it could approve.
 
 ## The cut
 

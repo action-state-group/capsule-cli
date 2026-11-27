@@ -408,7 +408,9 @@ Both new homes reuse what capsule-cli's `release.yml` and
 - `SHA256SUMS`, and a GitHub build provenance attestation with its bundle
   published as an asset;
 - a person approving every run in a deployment environment, with the same
-  two release reviewers, and agents never approving;
+  two release reviewers, and agents never approving (superseded from v0.1.1:
+  a reviewer's coordinating agent may approve on the reviewer's go, see
+  docs/RELEASING.md, "Who releases");
 - the release created as a draft, uploaded, then published, with a
   published release never changed;
 - tags that only maintainers can create and nobody can move, and immutable
