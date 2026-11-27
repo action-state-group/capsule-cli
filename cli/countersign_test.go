@@ -298,6 +298,7 @@ func TestCountersignVerifySelfSignatureNotIndependent(t *testing.T) {
 	assert.Equal(t, "not_independent", reports[0].State)
 	assert.False(t, *reports[0].Independent)
 	assert.Equal(t, "not_independent", summary)
+	assert.Empty(t, reports[0].SignerIndependentOf, "the producer's own key is never resolved against the directory")
 }
 
 func TestCountersignVerifyNoEntriesIsNone(t *testing.T) {
@@ -421,12 +422,17 @@ func TestCountersignVerifyResolvesAgainstADirectoryFile(t *testing.T) {
 	bundlePath := filepath.Join(dir, "bundle.json")
 	require.NoError(t, os.WriteFile(bundlePath, encoded, 0o600))
 
+	partyA, partyB := strings.Repeat("a1", 32), strings.Repeat("b2", 32)
 	for _, tc := range []struct {
-		list  string
-		state string
+		list          string
+		state         string
+		independentOf []interface{}
 	}{
-		{`[{"name":"Countersign Test Operator","key_ids":["` + signerKey + `"]}]`, "resolved"},
-		{`[{"name":"Someone Else","key_ids":["` + strings.Repeat("cd", 32) + `"]}]`, "unresolved_signer"},
+		{`[{"name":"Countersign Test Operator","key_ids":["` + signerKey + `"]}]`, "resolved", nil},
+		// The row's independent_of is reported as the row states it.
+		{`[{"name":"Countersign Test Operator","key_ids":["` + signerKey + `"],"independent_of":["` + partyA + `","` + partyB + `"]}]`, "resolved", []interface{}{partyA, partyB}},
+		// A list on another signer's row is never reported for this one.
+		{`[{"name":"Someone Else","key_ids":["` + strings.Repeat("cd", 32) + `"],"independent_of":["` + partyA + `"]}]`, "unresolved_signer", nil},
 	} {
 		listPath := filepath.Join(dir, "countersigners.json")
 		require.NoError(t, os.WriteFile(listPath, []byte(tc.list), 0o600))
@@ -435,7 +441,13 @@ func TestCountersignVerifyResolvesAgainstADirectoryFile(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(out), &result), out)
 		reports := result["countersignatures"].([]interface{})
 		require.Len(t, reports, 1)
-		assert.Equal(t, tc.state, reports[0].(map[string]interface{})["state"], tc.list)
+		report := reports[0].(map[string]interface{})
+		assert.Equal(t, tc.state, report["state"], tc.list)
+		if tc.independentOf == nil {
+			assert.NotContains(t, report, "signer_independent_of", tc.list)
+		} else {
+			assert.Equal(t, tc.independentOf, report["signer_independent_of"], tc.list)
+		}
 		if tc.state == "resolved" {
 			assert.NoError(t, err)
 		} else {
