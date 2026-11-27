@@ -466,15 +466,21 @@ func resolveSigner(dir countersignerDirectory, keyHex string) (countersignerDire
 // absent for a countersign/v1 entry (see verifyCountersignReceipt), with
 // ReceiptDetail naming why an unverified receipt did not verify.
 type CountersignatureReport struct {
-	State         string             `json:"state"`
-	Detail        string             `json:"detail,omitempty"`
-	Receipt       string             `json:"receipt,omitempty"`
-	ReceiptDetail string             `json:"receipt_detail,omitempty"`
-	Signer        CountersignSigner  `json:"signer"`
-	Independent   *bool              `json:"independent,omitempty"`
-	SignerName    string             `json:"signer_name,omitempty"`
-	Checks        []CountersignCheck `json:"checks,omitempty"`
-	RecomputedAt  string             `json:"recomputed_at,omitempty"`
+	State         string            `json:"state"`
+	Detail        string            `json:"detail,omitempty"`
+	Receipt       string            `json:"receipt,omitempty"`
+	ReceiptDetail string            `json:"receipt_detail,omitempty"`
+	Signer        CountersignSigner `json:"signer"`
+	Independent   *bool             `json:"independent,omitempty"`
+	SignerName    string            `json:"signer_name,omitempty"`
+	// SignerIndependentOf is, for a resolved entry, the independent_of list
+	// of the directory row that names the signer, as the row states it: the
+	// parties the directory says the signer is independent of. It is the
+	// directory's statement, carried for a caller to render; this core does
+	// not act on it.
+	SignerIndependentOf []string           `json:"signer_independent_of,omitempty"`
+	Checks              []CountersignCheck `json:"checks,omitempty"`
+	RecomputedAt        string             `json:"recomputed_at,omitempty"`
 }
 
 // verifyCountersignatures is countersign verify's testable core: it verifies
@@ -586,6 +592,7 @@ func VerifyCountersignatures(ctx context.Context, client *http.Client, directory
 		}
 		report.State = "resolved"
 		report.SignerName = row.Name
+		report.SignerIndependentOf = row.IndependentOf
 		reports = append(reports, report)
 	}
 	for _, report := range reports {
