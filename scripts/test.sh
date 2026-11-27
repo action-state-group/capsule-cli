@@ -58,10 +58,8 @@ if [[ -z "${CAPSULE_CLI_TEST_MYSQL_PORT:-}" ]]; then
   export CAPSULE_CLI_TEST_MYSQL_PORT
 fi
 
-# Arguments are passed to go test. Two passes: the race detector, under which the
-# slowest single-goroutine case loops run a fixed sample (see
-# cli/race_sample_test.go; CAPSULE_TEST_RACE_FULL=1 runs them all),
-# then every case without it.
+# Arguments are passed to go test. Two passes: every case under the race
+# detector, then every case without it.
 #
 # CI runs the passes as separate jobs and splits the race pass across several:
 #   CAPSULE_TEST_PASS=race|plain   one pass only (default: both)

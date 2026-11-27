@@ -1,36 +1,33 @@
 #!/usr/bin/env bash
-# check.sh -- the local check before every push (`make check`, `make check-full`).
+# check.sh -- the local check before every push (`make check`): every pull
+# request job, so a push never waits on GitHub CI to find a failure.
 #
-#   scripts/check.sh          the quality job's checks, then scripts/test.sh with
-#                             both passes as CI runs them: the race pass, then
-#                             every case without the race detector
-#   scripts/check.sh --full   the same, then the report page in headless Chrome.
-#                             It also sets CAPSULE_TEST_RACE_FULL=1 as the nightly
-#                             does; that adds no race coverage today, because the
-#                             sampling helpers in cli/race_sample_test.go have no
-#                             callers
+#   - the quality job's checks;
+#   - scripts/test.sh with both passes, unsharded: the race pass (which CI runs
+#     on push to main and the nightly), then every case without the race
+#     detector (CI's plain shards);
+#   - the report page in headless Chrome (CI's report-page job), on the
+#     capsulectl this check built;
+#   - the changelog-fragments workflow.
 #
-# Pull requests run only the quality job, the plain test shards and the report
-# page; the race shards run on push to main and on the nightly. Needs Go and
-# Docker (scripts/test.sh starts a disposable MySQL 8.4 unless
-# CAPSULE_CLI_TEST_MYSQL_PORT names one); --full also needs Chrome or Chromium
-# (scripts/check-html-render.sh). Changes no tracked file; exits non-zero on
-# the first failing step.
+# seal-pr-capsule is the one pull request job not run here: it seals CI's result
+# with the repository's signing keys and tests nothing. Needs Go, Docker
+# (scripts/test.sh starts a disposable MySQL 8.4 unless
+# CAPSULE_CLI_TEST_MYSQL_PORT names one), Chrome or Chromium
+# (scripts/check-html-render.sh) and python3. Changes no tracked file; exits
+# non-zero on the first failing step.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-full=false
-case "${1:-}" in
-  "") ;;
-  --full) full=true ;;
-  *)
-    echo "usage: scripts/check.sh [--full]" >&2
-    exit 2
-    ;;
-esac
+if (($# > 0)); then
+  echo "usage: scripts/check.sh" >&2
+  exit 2
+fi
 
 step() { printf '\n== check: %s ==\n' "$*"; }
 
+step no committed env files
+bash scripts/check-env-files.sh
 step formatting and module files
 unformatted=$(gofmt -l .)
 if [[ -n "$unformatted" ]]; then
@@ -51,16 +48,15 @@ go run ./cmd/skillgen --check
 step build
 make build
 
-if [[ "$full" == true ]]; then
-  export CAPSULE_TEST_RACE_FULL=1
-else
-  unset CAPSULE_TEST_RACE_FULL
-fi
+step changelog fragments
+python3 .github/changelog_fragments.py check
+(cd .github && python3 -m unittest test_changelog_fragments)
+
 step "tests: race pass, then plain pass"
 CAPSULE_TEST_PASS=all CAPSULE_TEST_SHARD=1/1 bash scripts/test.sh
 
-if [[ "$full" == true ]]; then
-  step report page renders and checks itself
-  bash scripts/check-html-render.sh
-fi
+step report page renders and checks itself
+# The binary make build just made, never one CAPSULECTL names from elsewhere.
+CAPSULECTL="$PWD/capsulectl" bash scripts/check-html-render.sh
+
 step passed

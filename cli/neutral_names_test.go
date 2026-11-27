@@ -35,8 +35,7 @@ var neutralNamesAllowed = map[string][]*regexp.Regexp{
 	// Sealed vocabulary: written into bundles that core verify checks without the plugin.
 	"cli/composed.go": {regexp.MustCompile(`EvidenceBookRefusalProfile|verifyEvidenceBookRefusal|"evidencebook-(refusal|artifact-response)"|book-library profile`)}, // signature profile ids sealed in composed bundles
 	// The neutrality guards name what they guard against.
-	".github/workflows/ci.yml":      {regexp.MustCompile(`grep -n evidencebook go.mod|requires evidencebook`)},
-	"scripts/check-neutral-deps.sh": {regexp.MustCompile(`company-OSS module \(evidencebook`)},
+	"scripts/check-neutral-deps.sh": {regexp.MustCompile(`company-OSS module \(evidencebook|grep -n evidencebook go.mod|requires evidencebook`)},
 	"scripts/test-weights":          {regexp.MustCompile(`TestEvidenceBookRefusalSignature`)}, // a test name
 }
 

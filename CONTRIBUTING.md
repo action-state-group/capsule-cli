@@ -4,8 +4,8 @@ Commits are signed off (`git commit -s`, the Developer Certificate of Origin).
 CI checks formatting, module files, vet and the build, and runs every case
 without the race detector. The suite under the race detector runs on pushes
 to `main`, the nightly and manual runs, not on pull requests, so run
-`make check` before every push: it runs both passes as CI does. `make check-full` is `make check` plus
-the report page in Chrome. See "Tests" and "Continuous integration" in the README.
+`make check` before every push: it runs every pull request job but the capsule
+seal, and both test passes. See "Tests" and "Continuous integration" in the README.
 
 ## Changelog
 
@@ -16,15 +16,8 @@ them). CI checks its format; the release folds it in. See `changelog.d/README.md
 ## Running the tests the way CI does
 
 ```bash
-make test                                    # MySQL; race detector, then every case without it
-CAPSULE_TEST_RACE_FULL=1 make test           # every case under the race detector
+make test    # MySQL; every case under the race detector, then every case without it
 ```
-
-Under the race detector the slowest single-goroutine case loops (random
-rewritings through the share gate, end-to-end runs over fixed case lists) run a
-fixed sample: the detector makes them about ten times slower and finds nothing
-in them. The second pass runs every case. `CAPSULE_TEST_RACE_FULL=1` runs every
-case under the race detector too; see `cli/race_sample_test.go`.
 
 If you call `go test -race` yourself, pass `-timeout=15m` as the script does.
 Without it, `go test` stops a package after 10 minutes and reports a failure.
