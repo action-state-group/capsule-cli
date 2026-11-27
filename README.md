@@ -20,8 +20,9 @@ produces it, not in this repository.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
-Releases are numbered `vX.Y.Z` from `v0.1.1` on; earlier ones are
-pre-releases (`v0.1.0-rcNN`). The install
+Releases are numbered `vX.Y.Z` from `v0.1.1` on. A tag with a hyphen is a
+pre-release; every release up to `v0.1.0-rc54` was one, and there is no final
+`v0.1.0` (the next release after `v0.1.0-rc54` is `v0.1.1`). The install
 page, [actionstate.ai/install](https://actionstate.ai/install), names the
 current release and publishes the SHA-256 of its linux/amd64 binary and of
 its attestation bundle (`capsulectl-$V.sigstore.json`). If you cannot

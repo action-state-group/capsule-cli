@@ -11,8 +11,8 @@
 #   1. Two deployment environments, each approved by one of REVIEWERS:
 #      `release` for full releases, accepting only v* tags, and
 #      `release-candidate` for pre-releases, accepting only v*-* tags. In both,
-#      whoever pushed the tag may approve the run (Ethan, 2026-11-27: "we
-#      approve these releases ourselves"). Admins cannot bypass either.
+#      whoever pushed the tag may approve the run (from v0.1.1, 2026-11-27).
+#      Admins cannot bypass either.
 #   2. Two tag rulesets on refs/tags/v*: only the maintain and admin roles may
 #      create a release tag, and nobody, admins included, may move, update or
 #      delete one.

@@ -69,9 +69,7 @@ reviewer approves it. Nothing is built or published before that.
 | a full release (`v0.1.1`) | `release` | either reviewer, including whoever pushed the tag |
 | a pre-release, with a hyphen (`v0.1.0-rcNN`, `v1.0.0-beta1`) | `release-candidate` | either reviewer, including whoever pushed the tag |
 
-Whoever pushed a full release's tag may approve its run too: Ethan, 2026-11-27 (coordinator chat),
-"我们自己批，这种发版本不用 steven 批。设置成我们自己也可以批自己的" (we approve these releases
-ourselves; they need no approval from Steven; set it so we can approve our own).
+From v0.1.1 (2026-11-27), whoever pushed a full release's tag may approve its run.
 
 **Agents never approve a release run.** A reviewer approves it in GitHub's web UI or mobile app.
 This is a rule, not a technical control: an agent working with a reviewer's GitHub credentials

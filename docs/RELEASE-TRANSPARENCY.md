@@ -32,6 +32,8 @@ What limits that is GitHub's own enforcement, set up as
 - only maintainers and admins can create a `v*` tag, and nobody, admins
   included, can move or delete one;
 - the release workflow waits for a named reviewer to approve the run.
+  Whoever pushed the tag may also approve the run, so one maintainer can
+  tag and publish a release alone.
 
 These are settings in GitHub, so they hold only as long as GitHub and the
 organisation's admins do. Someone who controls the organisation can change
