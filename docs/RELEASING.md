@@ -1,8 +1,9 @@
 # Releasing capsulectl
 
-How a release is cut, approved, verified and shipped. The examples use a release candidate,
-`v0.1.0-rcNN`; a full release follows the same steps under the stricter approval rule below. This is the procedure the rc9 and rc10 cuts
-followed, written down once and generalised to rcNN. The tag runs
+How a release is cut, approved, verified and shipped. Releases are numbered `vX.Y.Z` (`v0.1.1`,
+`v0.1.2`, ...); the examples use `vX.Y.Z`. Releases up to `v0.1.0-rc54` were pre-releases
+(`v0.1.0-rcNN`); a pre-release follows the same steps. This is the procedure the rc9 and rc10 cuts
+followed, written down once and generalised. The tag runs
 [`release.yml`](../.github/workflows/release.yml), which runs
 [`scripts/release-build.sh`](../scripts/release-build.sh). What each release proves, and how an
 outsider checks it, is in [RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md). This page does not
@@ -49,9 +50,9 @@ B. **CI on `main` is green.** In particular, these jobs block a release:
 C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tagged commit, first
    run `python3 .github/changelog_fragments.py fold` (it appends the pending `changelog.d/`
    fragments to `## Unreleased` and deletes them), then move
-   everything under `## Unreleased` under a new `## v0.1.0-rcNN` heading. Leave `## Unreleased`
+   everything under `## Unreleased` under a new `## vX.Y.Z` heading. Leave `## Unreleased`
    empty. A version shipped without this leaves its changes under Unreleased. Then the release
-   state has to be rebuilt from the tags (`git log v0.1.0-rcPREV..v0.1.0-rcNN`).
+   state has to be rebuilt from the tags (`git log vPREV..vX.Y.Z`).
 
 ## Who releases
 
@@ -65,8 +66,10 @@ reviewer approves it. Nothing is built or published before that.
 
 | Tag | Environment | Who may approve the run |
 | --- | --- | --- |
+| a full release (`v0.1.1`) | `release` | either reviewer, including whoever pushed the tag |
 | a pre-release, with a hyphen (`v0.1.0-rcNN`, `v1.0.0-beta1`) | `release-candidate` | either reviewer, including whoever pushed the tag |
-| a full release (`v1.0.0`) | `release` | the other reviewer: whoever pushed the tag cannot approve it |
+
+From v0.1.1 (2026-11-27), whoever pushed a full release's tag may approve its run.
 
 **Agents never approve a release run.** A reviewer approves it in GitHub's web UI or mobile app.
 This is a rule, not a technical control: an agent working with a reviewer's GitHub credentials
@@ -82,7 +85,7 @@ never asks for credentials or a token with which it could.
    ```sh
    git fetch origin && git checkout main && git pull --ff-only
    git rev-parse HEAD      # the merge commit to tag: record it
-   git tag -a v0.1.0-rcNN <merge-commit> -m "capsulectl v0.1.0-rcNN" && git push origin v0.1.0-rcNN
+   git tag -a vX.Y.Z <merge-commit> -m "capsulectl vX.Y.Z" && git push origin vX.Y.Z
    ```
 
    Only maintainers and admins can create a `v*` tag, and nobody can move or delete one once it is
@@ -90,13 +93,13 @@ never asks for credentials or a token with which it could.
    name and commit before pushing: a wrong tag stays, and the fix is the next version.
 2. **Approve the run** (reviewer decision). Open the run (Actions, Release, the run for the tag),
    check that its tag and commit are the ones recorded in step 1, and approve it under "Review
-   deployments". For a full release, the reviewer who did not push the tag approves.
+   deployments".
 3. **Release CI is green.** It builds, checks the version each binary reports, attests the
    binaries, and publishes the release (a pre-release for a tag with a hyphen).
 4. **Verify from the downloaded assets, not from the build.** In an empty directory:
 
    ```sh
-   V=v0.1.0-rcNN; R=action-state-group/capsule-cli
+   V=vX.Y.Z; R=action-state-group/capsule-cli
    gh release download "$V" --repo "$R"
    sha256sum -c SHA256SUMS
    for f in capsulectl-"$V"-*-*; do
@@ -144,9 +147,7 @@ in an older layout, confirm such a profile does not block the install.
   moved or deleted.
 - **A release workflow was re-run.** A published release cannot change, so a re-run of any
   release fails at the publish step; only a draft left by a run that died mid-upload is finished.
-  A full release re-run by anyone other than whoever pushed its tag stops even earlier, before it
-  builds: whoever re-runs a run counts as starting it, so the tag's pusher could otherwise approve
-  it. Cut the next version instead.
+  Cut the next version instead.
 
 ## Repository settings
 
@@ -156,9 +157,10 @@ print what it would set, `--apply` to set it, and `--show` to print what GitHub 
 
 - **Two deployment environments,** each with both release reviewers as required reviewers and no
   admin bypass:
-  - `release`, with prevent self-review on, accepting only tags matching `v*`;
-  - `release-candidate`, with prevent self-review off, accepting only tags matching `v*-*`, so a
-    full release cannot run in it.
+  - `release`, accepting only tags matching `v*`;
+  - `release-candidate`, accepting only tags matching `v*-*`, so a full release cannot run in it.
+
+  Both have prevent self-review off, so whoever pushed the tag may approve the run.
 - **Two tag rulesets on `refs/tags/v*`,** both active:
   - "release tags: maintainers create": only the maintain and admin roles may create a release tag;
   - "release tags: immutable": nobody may update, force-move or delete a release tag. It has no

@@ -20,12 +20,13 @@ produces it, not in this repository.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
-Every release so far is a pre-release (`v0.1.0-rcNN`); there is no final
-`v0.1.0` yet, so GitHub's "latest release" link does not resolve. The install
+Releases are numbered `vX.Y.Z` from `v0.1.1` on. A tag with a hyphen is a
+pre-release; every release up to `v0.1.0-rc54` was one, and there is no final
+`v0.1.0` (the next release after `v0.1.0-rc54` is `v0.1.1`). The install
 page, [actionstate.ai/install](https://actionstate.ai/install), names the
 current release and publishes the SHA-256 of its linux/amd64 binary and of
 its attestation bundle (`capsulectl-$V.sigstore.json`). If you cannot
-reach it, take the newest pre-release on the Releases page; for a while after
+reach it, take the release GitHub marks "Latest" on the Releases page; for a while after
 each tag, that one can be ahead of the install page while it is still being
 verified. Read the release's section of [CHANGELOG.md](CHANGELOG.md) before
 upgrading: some releases cannot be undone on an existing store.
@@ -90,7 +91,7 @@ compare.
 
 ```bash
 # V: the release https://actionstate.ai/install names. OS/ARCH: linux/amd64, linux/arm64 or darwin/arm64.
-V=v0.1.0-rcNN; OS=linux; ARCH=amd64
+V=vX.Y.Z; OS=linux; ARCH=amd64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/capsulectl-$V.sigstore.json" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
@@ -101,7 +102,7 @@ gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore
   --repo action-state-group/capsule-cli \
   --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0-rcNN (commit <40-hex commit>)
+capsulectl --version                        # capsulectl vX.Y.Z (commit <40-hex commit>)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory

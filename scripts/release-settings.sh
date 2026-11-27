@@ -9,10 +9,10 @@
 #
 # It sets:
 #   1. Two deployment environments, each approved by one of REVIEWERS:
-#      `release` for full releases, where whoever pushed the tag cannot approve
-#      the run (prevent self-review), accepting only v* tags; and
-#      `release-candidate` for pre-releases, where they can, accepting only
-#      v*-* tags. Admins cannot bypass either.
+#      `release` for full releases, accepting only v* tags, and
+#      `release-candidate` for pre-releases, accepting only v*-* tags. In both,
+#      whoever pushed the tag may approve the run (from v0.1.1, 2026-11-27).
+#      Admins cannot bypass either.
 #   2. Two tag rulesets on refs/tags/v*: only the maintain and admin roles may
 #      create a release tag, and nobody, admins included, may move, update or
 #      delete one.
@@ -137,7 +137,7 @@ ruleset() {
   fi
 }
 
-environment release true 'v*'
+environment release false 'v*'
 environment release-candidate false 'v*-*'
 
 # Repository role ids: 2 is maintain, 5 is admin.
@@ -155,7 +155,7 @@ fi
 
 if [ "$mode" = --apply ]; then
   show
-  check_environment release true 'v*'
+  check_environment release false 'v*'
   check_environment release-candidate false 'v*-*'
   if [ "$(gh api "repos/$REPO/immutable-releases" --jq .enabled)" != true ]; then
     echo "immutable releases are not enabled (see --show)" >&2

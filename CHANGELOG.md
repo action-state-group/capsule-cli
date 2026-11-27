@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## v0.1.1
+
+- **Changed:** the capsulectl agent skill (`skills/capsulectl`) teaches five verbs: record (`publish`, `cll append`, `result build`), verify (`verify`) and show (`cll list`, `get`); check and ask belong to the agent skill of the plugin that adds book and deal commands. `contract validate`, `contract diff`, `discover`, `plugin ls`, `judge pin`, `judge drift pin`, `judge drift reports` and `calibration summarize` become expert verbs, kept with their instructions in a generated `references/expert.md`. `skill-spec/v0` gains `five_verb`, `expert_verbs` and `five_verbs_elsewhere`; the scripted demo now also runs `contract diff` and verifies the Result capsule. No command changes (#650, #654).
+
+- **Added:** a resolved countersignature's report (`countersign verify`, `cli.VerifyCountersignatures`) carries `signer_independent_of`, the `independent_of` list of the directory row that names the signer, as the row states it. The verifier still decides nothing from it; a caller such as a receipt page renders it (action-state-group/evidencebook#1019, #655).
+
+- **Added:** `cli.StapleVerdict(raw, counterpartyKeys, checkpointKeys)` checks a stapled `history_card/1` or `history_card/2` (an `evidence-commitment/1`, a `{history, request, reply}` file or a printed staple) without a command, as `verify --history` does, and returns its report, outcome, the checks it could not run and each card's derivation; several counterparty keys are each tried, and the result names the key it is under. `verify --history` output is unchanged (#567, #638).
+
+- **Changed:** `make test`, `make check` and CI now run seven tests every run used to skip (capsule-cli#658). The four page tests open their pages in Chrome, which `scripts/test.sh` finds as `scripts/check-html-render.sh` does; the three tests that hold `verify --bundle` and `countersign` to the Python verifiers' verdicts run against capsule-emit 0.18.0 and agent-action-capsule 0.19.0, installed by hash from `scripts/python-verifiers.txt` into a cached venv, and fail rather than skip when `CAPSULECTL_TEST_PYTHON` names a python that lacks them. `TestContractSourcePinMatchesEngineCommit`, which needed a capsule-engine clone no run had, is replaced by `scripts/check-contract-source.sh`, run in `make check` and CI's quality job, which fetches the pinned capsule-engine commit and compares both pinned digests (#659).
+
+- **Fixed:** a checkpoint the witness refuses again after its retry, as not continuing the
+  checkpoint it last accepted (HTTP 409), no longer stops every later checkpoint (capsule-cli#647).
+  capsulectl re-anchors it once. It signs the same checkpoint again, with the witness's last
+  accepted checkpoint (named in the 409) as its predecessor and a consistency proof from it, and
+  sends that. Later checkpoints chain on it and get their own receipts. The refused delivery keeps
+  its stored checkpoint and gets no receipt. Its status reads "not delivered: ... capsulectl
+  re-anchored it ...; the receipt for the re-anchor is not kept.", `cll checkpoint publish` shows
+  `state: re-anchored`, and the command ends without error. A re-anchor is signed only for the
+  profile's own checkpoint, from a size and root of the log's own tree. capsulectl never re-proves
+  to a witness whose last accepted checkpoint is not this log's (a fork). A re-anchor that gets no
+  answer is tried again at a later run and holds later checkpoints meanwhile. A store that keeps
+  no tree here (a plugin's) does not re-anchor, and its status says so (#649).
+
+- **Fixed:** a witness's continuity refusal (HTTP 409) is no longer final on its first answer
+  (capsule-cli#647). A later delivery call, a minute or more after the refusal, sends the refused
+  checkpoint once more, and later checkpoints wait behind it instead of each being sent into a
+  refusal of its own. A checkpoint refused again after that retry stays failed, as before. Until
+  the retry its status reads "pending: the witness refused it as not continuing the checkpoint it
+  last accepted (HTTP 409); it is sent once more at a later capsulectl run, a minute or more after
+  the refusal.", it shows `state: pending`, and `cll checkpoint publish` ends pending rather than
+  "permanently failed". The delivery record keeps the witness's own last-accepted size and root
+  from the 409 body (nothing else from it). A store that cannot list its rows now re-arms the
+  refused checkpoints its selection chains on, not only the selection. A 403 an older build
+  stored as failed also shows `state: pending`, as it is re-armed at the next call (#648).
+
+- **Added:** `cli.DeliverWitnessBy` takes a deadline for one witness delivery call, so a library caller with a time budget (evidencebook's `deal tick`) no longer waits up to the client's 30 s on a witness that accepts and then hangs. A request still running at the deadline is recorded like any timed-out delivery (`witness_timeout` once it reached the witness), and the deadline is shared by every row the call sends. A row that would start with less than 2 s left is not sent and no attempt is recorded for it. `cli.DeliverWitness` is unchanged (#645, #646).
+
+- **Fixed:** a witness delivery that reached the witness but got no answer before its deadline is no longer worded as missing network consent. It is recorded as timed out, its pending reason is `witness_timeout` ("pending: the witness was reached but its answer did not come in time, so the witness or the network to it is slow; …"), and it is retried as before. A request that never got a connection to the witness (refused, unresolved, a proxy that holds or refuses the tunnel, a TLS handshake that never finishes) keeps `network_consent_needed`. `capsulectl doctor --check-witness` makes the same split: a probe that connected but timed out reports `timed_out: true` and `reachable: false`, since no answer came back, and says the witness or the network to it is slow, with the reached text rather than the consent-needed one (#643, #644).
+
 ## v0.1.0-rc54
 
 - **Fixed:** `capsulectl plugin ls` no longer lists a plugin's `capsulectl-NAME.d/` presentation directory under `refused` as "not a regular file"; discovery skips an entry named like one, a directory or a link to one, since no plugin name has a dot (#635, #636).

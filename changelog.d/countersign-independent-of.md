@@ -1,1 +1,0 @@
-- **Added:** a resolved countersignature's report (`countersign verify`, `cli.VerifyCountersignatures`) carries `signer_independent_of`, the `independent_of` list of the directory row that names the signer, as the row states it. The verifier still decides nothing from it; a caller such as a receipt page renders it (action-state-group/evidencebook#1019).
