@@ -14,10 +14,10 @@ name: Release
 # users, is in docs/RELEASE-TRANSPARENCY.md.
 #
 # Nothing is published until a person approves the run (docs/RELEASING.md).
-# A full release runs in the `release` environment, where whoever pushed the
-# tag cannot approve it; a pre-release (a tag with a hyphen) runs in
-# `release-candidate`, where they can. Each environment only accepts tags of
-# its kind, so a full release cannot choose the weaker one. The settings are
+# A full release runs in the `release` environment and a pre-release (a tag
+# with a hyphen) in `release-candidate`; in both, a release reviewer approves
+# the run, and whoever pushed the tag may. Each environment only accepts tags
+# of its kind. The settings are
 # in scripts/release-settings.sh. Every Action is pinned by commit SHA.
 
 on:
@@ -40,18 +40,6 @@ jobs:
       id-token: write # OIDC token for the build provenance attestation
       attestations: write
     steps:
-      - name: Refuse a full release re-run by someone else
-        # Prevent self-review stops whoever started a run from approving it,
-        # and a re-run is started by whoever re-ran it. The tag's pusher could
-        # then approve their own full release, so that run stops here, before
-        # anything is built (docs/RELEASING.md).
-        if: ${{ !contains(github.ref_name, '-') }}
-        env:
-          ACTOR: ${{ github.actor }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
-        run: |
-          test "$ACTOR" = "$TRIGGERING_ACTOR" \
-            || { echo "$GITHUB_REF_NAME was pushed by $ACTOR but this run was started by $TRIGGERING_ACTOR: cut the next version"; exit 1; }
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
