@@ -1474,7 +1474,16 @@ MySQL 8.4 container on a random loopback port and removes it when finished.
 CI supplies its own disposable service via `CAPSULE_CLI_TEST_MYSQL_PORT`.
 Only set that variable yourself for a disposable test database, never a
 production tunnel. Missing Docker or unavailable MySQL fails the run rather
-than skipping integration tests.
+than skipping integration tests. The run also needs Chrome or Chromium, for the
+page tests (`CAPSULECTL_CHROME` names one; otherwise the first of
+`google-chrome`, `chromium` or macOS's Google Chrome found), and python3 with
+`venv`, for the tests that check `verify --bundle` and `countersign` reach the
+same verdicts as the Python verifiers: `scripts/python-verifiers.sh` installs
+the versions pinned in `scripts/python-verifiers.txt`, hashes required, into a
+venv under `~/.cache/capsule-cli` (`$XDG_CACHE_HOME/capsule-cli`) on the first
+run and reuses it after; delete that directory to rebuild it. A missing Chrome
+or Python fails the run too. A plain `go test ./...` without
+`CAPSULECTL_CHROME` and `CAPSULECTL_TEST_PYTHON` skips those tests.
 
 GitHub Actions runs on pull requests, pushes to `main` (except ones touching
 only `docs/design/`), a 06:00 UTC nightly, with manual dispatch also available.

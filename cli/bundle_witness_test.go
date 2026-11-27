@@ -231,19 +231,10 @@ func TestVerifyBundleRefusesAWitnessDirectoryItCannotRead(t *testing.T) {
 
 // TestVerifyBundleWitnessVerdictsAgreeWithThePythonVerifier: given the same
 // witness directory, capsule-emit's offline verifier reaches the same
-// witness status and verdict. Runs where that verifier checks witnesses.
+// witness status and verdict. Runs where that verifier checks witnesses
+// (crossCheckPython).
 func TestVerifyBundleWitnessVerdictsAgreeWithThePythonVerifier(t *testing.T) {
-	pythonPath := os.Getenv("CAPSULECTL_TEST_PYTHON")
-	if pythonPath == "" {
-		var err error
-		if pythonPath, err = exec.LookPath("python3"); err != nil {
-			t.Skip("python3 not on PATH; skipping the Python cross-check")
-		}
-	}
-	probe := "import inspect\nfrom capsule_emit.evidence_file import check_evidence_file\nassert 'witness_directory' in inspect.signature(check_evidence_file).parameters"
-	if err := exec.Command(pythonPath, "-c", probe).Run(); err != nil {
-		t.Skip("capsule_emit.evidence_file does not check witnesses here; skipping the Python cross-check")
-	}
+	pythonPath := crossCheckPython(t, "import inspect\nfrom capsule_emit.evidence_file import check_evidence_file\nassert 'witness_directory' in inspect.signature(check_evidence_file).parameters")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)

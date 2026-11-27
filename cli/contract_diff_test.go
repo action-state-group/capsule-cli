@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,6 +25,8 @@ import (
 // TestContractCaseLibraryMatchesPinnedSource fails if the copy is edited, or
 // re-copied without updating the pin, and TestEmbeddedContractSchemaMatchesPin
 // fails if the embedded schema is not the pinned one.
+// scripts/check-contract-source.sh (make check and CI's quality job) holds
+// the two pinned digests to the engine's files at the pinned commit.
 const casesDir = "testdata/contract/cases"
 
 func sha256Hex(b []byte) string {
@@ -59,27 +60,6 @@ func TestEmbeddedContractSchemaMatchesPin(t *testing.T) {
 		"the embedded contract schema is not the one pinned in SOURCE.json")
 }
 
-// TestContractSourcePinMatchesEngineCommit checks both pins against the
-// engine repository itself, at the pinned commit: its contract schema and
-// its case library's SHA256SUMS. It needs a capsule-engine clone that has
-// that commit, named by CAPSULE_ENGINE_REPO, and is skipped otherwise.
-func TestContractSourcePinMatchesEngineCommit(t *testing.T) {
-	repo := os.Getenv("CAPSULE_ENGINE_REPO")
-	if repo == "" {
-		t.Skip("set CAPSULE_ENGINE_REPO to a capsule-engine clone to check the pins against the engine commit")
-	}
-	source := loadCasesSource(t)
-	show := func(path string) []byte {
-		out, e := exec.Command("git", "-C", repo, "show", source.Commit+":"+path).Output()
-		require.NoError(t, e, "git show %s:%s", source.Commit, path)
-		return out
-	}
-	assert.Equal(t, source.ContractSchemaSHA256, sha256Hex(show(source.ContractSchemaPath)),
-		"the pinned schema digest is not the engine's schema at the pinned commit")
-	assert.Equal(t, source.SHA256SUMSDigest, sha256Hex(show(source.Path+"/SHA256SUMS")),
-		"the pinned SHA256SUMS digest is not the engine's at the pinned commit")
-}
-
 func TestContractCaseLibraryMatchesPinnedSource(t *testing.T) {
 	source := loadCasesSource(t)
 
@@ -104,13 +84,6 @@ func TestContractCaseLibraryMatchesPinnedSource(t *testing.T) {
 		}
 	}
 	assert.Equal(t, listed, actual, "the copied library differs from the pinned SHA256SUMS")
-
-	// Optional: compare directly against a capsule-engine checkout.
-	if dir := os.Getenv("CAPSULE_ENGINE_CONTRACT_CASES"); dir != "" {
-		upstream, e := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
-		require.NoError(t, e)
-		assert.Equal(t, string(upstream), string(sums), "the copy differs from %s", dir)
-	}
 }
 
 type caseIndexEntry struct {

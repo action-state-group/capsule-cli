@@ -468,18 +468,10 @@ func mustDigest(t *testing.T, bundle map[string]interface{}) string {
 // canonicalization another one of our implementations also computes: the
 // same withheld bundle, verified independently by the Python bundle_verifier,
 // must reach the same digest and the same pass/withheld verdicts as the Go
-// side already asserts inside AssembleBundle. It skips (loudly) rather than
-// failing when python3 or the agent_action_capsule package is unavailable,
-// e.g. on a CI runner that has not been given a Python toolchain -- flagged
-// in cli-verbs-results.md, not concealed by a silent pass.
+// side already asserts inside AssembleBundle. scripts/test.sh runs it against
+// the pinned verifier (crossCheckPython).
 func TestCountersignBundleAgreesWithPythonVerifier(t *testing.T) {
-	pythonPath, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not on PATH; skipping the Python cross-check (see cli-verbs-results.md)")
-	}
-	if err := exec.Command(pythonPath, "-c", "import agent_action_capsule.bundle").Run(); err != nil {
-		t.Skip("agent_action_capsule not importable; skipping the Python cross-check (see cli-verbs-results.md)")
-	}
+	pythonPath := crossCheckPython(t, "import agent_action_capsule.bundle")
 
 	bundle, _, _ := withheldBundleFixture(t)
 	goResult := aacbundle.VerifyBundle(bundle)
