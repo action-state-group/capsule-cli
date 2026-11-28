@@ -43,7 +43,7 @@ import (
 // document and on a claim (spec section 8a, aac #297) and the optional
 // document member coverage_report (aac #157), the PROPOSED aggregate member
 // coverage_declaration (aac #312), and a claim's evidence[]
-// holding at least one record (aac #353), plus one later hunk: the optional
+// holding at least one record (aac #353), plus later hunks: the optional
 // document members plan_ref and dataset_ref, which appear together or not
 // at all (spec section 7.3, aac #443 at 8c673d1), and
 // the claim type `calibration` (aac #552 at 09c8b86: the ClaimType enum and
@@ -51,18 +51,23 @@ import (
 // the schema does not carry), and the optional claim member `reason` (aac
 // #658 at ecaddb17, spec section 4.4: the Reason definition and the three
 // allOf rules that bind it to the claims it may appear on; display-only, so
-// nothing here reads it). Only those hunks are taken from 8c673d1, 09c8b86
-// and ecaddb17. The rules aac added after 4b24505
+// nothing here reads it), and the optional claim member `subject_bundle`
+// (aac #674 at 4ed9a4c6, spec section 4.5: one property, a DigestRef naming
+// the bundle digest of the Evidence Bundle that shows the claim's subject;
+// display-only, so nothing here reads it, and it is not a citation: a
+// Result is sealed without that Bundle). Only those hunks are taken from
+// 8c673d1, 09c8b86, ecaddb17 and 4ed9a4c6. The rules aac added after 4b24505
 // (#363, #368, #402, #436, and the out_of_scope clause of #552: coverage per evaluation, out_of_scope and
 // applicability, requirements_covered, ECMA-262 patterns) are deliberately
 // not vendored: they need cross-checks this gate does not have, and arrive
 // with aac's own gate (capsule-cli#473). testdata/evidence-result holds
-// the vectors for those hunks (the calibration ones that need the checker's records are not copied). The pinned aac Go module does
-// not ship the schema (it lives outside the module's go/ directory), which
-// is why a copy is here at all. Refresh it by replacing the file, the digest
+// the vectors for those hunks (the calibration ones that need the checker's records are not copied). The pinned aac Go module
+// ships its schema too (evidenceresult.Schema), but whole, with the rules
+// held back above, which is why a copy is here until #473 adopts that gate.
+// Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's
 // testdata/result from the same commit (testdata/result/UPSTREAM);
-// TestResultSchemaIsPinned keeps them in step.
+// TestResultSchemaCompilesAtItsPin keeps them in step.
 //
 //go:embed schemas/evidence-result-v0.json
 var resultSchemaBytes []byte
@@ -71,9 +76,9 @@ const (
 	ResultVersion  = "evidence-result-v0"
 	resultSchemaID = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
-	ResultSchemaDigest = "9a30f49eedc1a6dc450e1d4018e102a6dce08714ebf1e1c02c8a3b2f78e4d3ca"
+	ResultSchemaDigest = "0c38ee9e698d9af4befe643c263895d7a29c86a2c3134e57195bbf4c37992ee3"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref and main@09c8b8668b59affa1e0e26275b5a4c1d1b4a849f's calibration claim type (aac #552) and main@ecaddb176a24a221147dcd7f2bacd0868ae1a385's optional claim member reason (aac #657, #658; spec section 4.4)"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json, with main@8c673d1aaf6e1418f8bb708c215362712f471e50's plan_ref and dataset_ref and main@09c8b8668b59affa1e0e26275b5a4c1d1b4a849f's calibration claim type (aac #552) and main@ecaddb176a24a221147dcd7f2bacd0868ae1a385's optional claim member reason (aac #657, #658; spec section 4.4) and main@4ed9a4c65c34a9d5f6eaa30c0aeeda7a77ca92a8's optional claim member subject_bundle (aac #673, #674; spec section 4.5)"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"

@@ -230,7 +230,11 @@
         "presentation": { "$ref": "#/$defs/Presentation" },
         "reconcile": { "$ref": "#/$defs/ReconcileClaim" },
         "close": { "$ref": "#/$defs/CloseClaim" },
-        "reason": { "$ref": "#/$defs/Reason" }
+        "reason": { "$ref": "#/$defs/Reason" },
+        "subject_bundle": {
+          "description": "spec/evidence-result-v0.md section 4.5 -- the producer's statement that the Evidence Bundle with this bundle digest (draft-mih-zhang-agent-disclosure-bundle, Bundle Digest) shows the claim's subject. Display-only: a verifier MUST NOT read it to derive or adjust sufficiency, verdict, tier, grade, support, a close state, coverage or buckets, and needs no Bundle to check a Result. A reader that shows a Bundle as the claim's compares its bundle digest with this one.",
+          "$ref": "#/$defs/DigestRef"
+        }
       },
       "allOf": [
         {
