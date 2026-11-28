@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.2
+
+- **Changed:** no command or library change since v0.1.1. This release exists so that evidencebook's `capsulectl/v0.1.2`, the one capsulectl release a person installs, can carry the book and deal plugins' changes since `capsulectl/v0.1.1`: its version is set by the capsule-cli release its `capsulectl/go.mod` requires (evidencebook `capsulectl/RELEASING.md`, "One release, one version"; action-state-group/evidencebook-skills#444). docs/RELEASING.md now says a release reviewer's coordinating agent may approve a release run on the reviewer's go (#663).
+
 ## v0.1.1
 
 - **Changed:** the capsulectl agent skill (`skills/capsulectl`) teaches five verbs: record (`publish`, `cll append`, `result build`), verify (`verify`) and show (`cll list`, `get`); check and ask belong to the agent skill of the plugin that adds book and deal commands. `contract validate`, `contract diff`, `discover`, `plugin ls`, `judge pin`, `judge drift pin`, `judge drift reports` and `calibration summarize` become expert verbs, kept with their instructions in a generated `references/expert.md`. `skill-spec/v0` gains `five_verb`, `expert_verbs` and `five_verbs_elsewhere`; the scripted demo now also runs `contract diff` and verifies the Result capsule. No command changes (#650, #654).
