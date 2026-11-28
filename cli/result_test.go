@@ -548,3 +548,69 @@ func TestResultSchemaAdmitsReasonOnlyOnARequirementClaim(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
 }
+
+// aac 4ed9a4c6's `subject_bundle` vectors (vectors/evidence-result, copied
+// to testdata/evidence-result): the positive passes the whole gate, each
+// negative fails the schema.
+func TestResultGateRunsTheSubjectBundleVectors(t *testing.T) {
+	for name, valid := range map[string]bool{
+		"pos-example-org-subject-bundle-result.json": true,
+		"neg-subject-bundle-extra-member.json":       false,
+		"neg-subject-bundle-list.json":               false,
+		"neg-subject-bundle-other-alg.json":          false,
+		"neg-subject-bundle-string.json":             false,
+		"neg-subject-bundle-uppercase.json":          false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "evidence-result", name))
+			require.NoError(t, err)
+			doc, err := DecodeResult(raw)
+			require.NoError(t, err)
+			_, err = CheckResult(doc, "")
+			if valid {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, ErrInput)
+			assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+			assert.Contains(t, SafeError(err), "subject_bundle")
+		})
+	}
+}
+
+// `subject_bundle` is display-only and no citation (aac spec section 4.5):
+// `result build` seals a Result naming a Bundle that is not in the log, keeps
+// the member in the sealed payload, and neither cites that digest nor lists
+// it among the Capsule's references.
+func TestResultBuildSealsASubjectBundleItDoesNotCite(t *testing.T) {
+	d := newDisclosureProfile(t)
+	day1 := d.publish("day-1", `{"report":"day one"}`)
+	bundle := strings.Repeat("b", 64)
+	claim := resultTestClaim("claim-1", "met", day1)
+	claim["subject_bundle"] = map[string]any{"digest_alg": "SHA-256", "digest": bundle}
+	out := filepath.Join(d.dir, "result.canonical.json")
+	capsuleOut := filepath.Join(d.dir, "result.record.json")
+
+	built, stdout, err := d.buildResult(resultTestDoc(claim), "--out", out, "--capsule-out", capsuleOut)
+	require.NoError(t, err, stdout)
+	assert.Equal(t, []string{day1}, built.Cites)
+
+	written, err := os.ReadFile(out)
+	require.NoError(t, err)
+	var sealed struct {
+		Claims []map[string]any `json:"claims"`
+	}
+	require.NoError(t, json.Unmarshal(written, &sealed))
+	require.Len(t, sealed.Claims, 1)
+	assert.Equal(t, map[string]any{"digest_alg": "SHA-256", "digest": bundle}, sealed.Claims[0]["subject_bundle"])
+
+	record, err := readRecord(capsuleOut)
+	require.NoError(t, err)
+	var capsule map[string]any
+	require.NoError(t, json.Unmarshal(record.Capsule, &capsule))
+	assert.Equal(t, []any{
+		map[string]any{"type": "agent-action-capsule", "digest_alg": "SHA-256", "digest": day1, "citation_purpose": "acted_on"},
+	}, capsule["references"])
+	require.Len(t, record.Artifacts, 1)
+	assert.Equal(t, written, []byte(record.Artifacts[0].Content), "the payload is the canonical Result, subject_bundle included")
+}
